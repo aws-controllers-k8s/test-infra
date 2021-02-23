@@ -1,17 +1,31 @@
-## My Project
+# AWS Controllers for Kubernetes Test Infrastructure
 
-TODO: Fill this README out!
+This repository contains a framework for functional integration (e2e) testing
+of AWS Controllers for Kubernetes (ACK) service controllers.
 
-Be sure to:
+Please [log issues][ack-issues] and feedback on the main AWS Controllers for
+Kubernetes Github project.
 
-* Change the title in this README
-* Edit your repository description on GitHub
+[ack-issues]: https://github.com/aws-controllers-k8s/community/issues
 
-## Security
+Get started by [setting up your local development environment][setup] for ACK
+`test-infra`.
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+[setup]: /docs/setup.md
+
+## Contributing
+
+We welcome community contributions and pull requests.
+
+See our [contribution guide](/CONTRIBUTING.md) for more information on how to
+report issues, set up a development environment, and submit code.
+
+We adhere to the [Amazon Open Source Code of Conduct][coc].
+
+You can also learn more about our [Governance](/GOVERNANCE.md) structure.
+
+[coc]: https://aws.github.io/code-of-conduct
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
-
+This project is [licensed](/LICENSE) under the Apache-2.0 License.
