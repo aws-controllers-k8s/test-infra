@@ -55,24 +55,6 @@ class CustomResourceReference:
     def to_long_resource_string(self):
         return f"{self.plural}.{self.version}.{self.group}/{self._printable_namespace}:{self.name}"
 
-def load_resource(service_name: str,
-                  spec_file: str,
-                  replacements: object):
-    """
-    Load a yaml spec to memory from root_test_path/{service}/resources and replace the values in replacement dict
-    
-    :param service_name: name of service
-    :param spec_file: Name of the spec file under resources directory of the service
-    :param replacements: A dictionary of values to be replaced
-
-    :return: spec as json object
-    """
-    spec = load_resource_file(
-        service_name, spec_file, additional_replacements=replacements
-    )
-    logging.debug(f"loaded spec: {spec}")
-    return spec
-
 def create_reference(crd_group: str,
                      crd_version: str,
                      resource_plural: str,
