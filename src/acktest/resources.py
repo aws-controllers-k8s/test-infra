@@ -37,10 +37,9 @@ def PLACEHOLDER_VALUES():
 root_test_path = Path(__file__).parent.parent
 
 
-def load_resource_file(service: str, resource_name: str,
+def load_resource_file(resources_directory: Path, resource_name: str,
                        additional_replacements: Dict[str, Any] = {}) -> dict:
-    path = root_test_path / service / "resources"
-    with open(path / f"{resource_name}.yaml", "r") as stream:
+    with open(resources_directory / f"{resource_name}.yaml", "r") as stream:
         resource_contents = stream.read()
         injected_contents = _replace_placeholder_values(
             resource_contents, PLACEHOLDER_VALUES)
