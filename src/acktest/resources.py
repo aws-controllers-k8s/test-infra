@@ -25,8 +25,7 @@ from typing import Any, Dict
 
 from .aws import identity
 
-@property
-def PLACEHOLDER_VALUES():
+def default_placeholder_values():
     """ Default placeholder values for loading any resource file.
     """
     return {
@@ -34,22 +33,19 @@ def PLACEHOLDER_VALUES():
         "AWS_REGION": identity.get_region(),
     }
 
-root_test_path = Path(__file__).parent.parent
-
-
 def load_resource_file(resources_directory: Path, resource_name: str,
                        additional_replacements: Dict[str, Any] = {}) -> dict:
     with open(resources_directory / f"{resource_name}.yaml", "r") as stream:
         resource_contents = stream.read()
         injected_contents = _replace_placeholder_values(
-            resource_contents, PLACEHOLDER_VALUES)
+            resource_contents, default_placeholder_values())
         injected_contents = _replace_placeholder_values(
             injected_contents, additional_replacements)
         return yaml.safe_load(injected_contents)
 
 
 def _replace_placeholder_values(
-        in_str: str, replacement_dictionary: Dict[str, Any] = PLACEHOLDER_VALUES) -> str:
+        in_str: str, replacement_dictionary: Dict[str, Any] = default_placeholder_values()) -> str:
     for placeholder, replacement in replacement_dictionary.items():
         in_str = in_str.replace(f"${placeholder}", replacement)
     return in_str

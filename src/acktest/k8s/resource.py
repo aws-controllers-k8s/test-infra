@@ -16,6 +16,7 @@ CustomResource APIs.
 
 import logging
 import base64
+from pathlib import Path
 from time import sleep
 from typing import Dict, Optional, Union
 from dataclasses import dataclass
@@ -90,7 +91,7 @@ def create_resource(reference: CustomResourceReference,
     resource = wait_resource_consumed_by_controller(reference)
     return resource
 
-def load_and_create_resource(service_name: str,
+def load_and_create_resource(resource_directory: Path,
                              crd_group: str,
                              crd_version: str,
                              resource_plural: str,
@@ -101,11 +102,11 @@ def load_and_create_resource(service_name: str,
     """
     Helper method to encapsulate the common methods used to create a resource.
     Load a spec file from disk, create an instance of CustomResourceReference and resource in K8s cluster.
-    See respective methods for paramater definitions and return types
+    See respective methods for parameter definitions and return types
 
     :returns: an instance of CustomResourceReference, spec loaded from disk, resource created from the reference
     """
-    spec = load_resource(service_name, spec_file_name, replacements)
+    spec = load_resource_file(resource_directory, spec_file_name, replacements)
     reference = create_reference(crd_group, crd_version, resource_plural, resource_name, namespace)
     resource = create_resource(reference, spec)
     return reference, spec, resource
