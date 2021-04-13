@@ -32,7 +32,7 @@ def copy_object(bucket_name: str, copy_source: object, key: str):
 
     https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Bucket.copy
     """
-    region = identity.get_aws_region()
+    region = identity.get_region()
     bucket = boto3.resource("s3", region_name=region).Bucket(bucket_name)
     bucket.copy(copy_source, key)
 
@@ -41,7 +41,7 @@ def delete_object(bucket_name: str, key: str):
 
     https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.delete_objects
     """
-    region = identity.get_aws_region()
+    region = identity.get_region()
     bucket = boto3.resource("s3", region_name=region).Bucket(bucket_name)
     bucket.delete_objects(
         Delete={
