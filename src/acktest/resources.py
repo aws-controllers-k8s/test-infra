@@ -25,28 +25,27 @@ from typing import Any, Dict
 
 from .aws import identity
 
-PLACEHOLDER_VALUES = {
-    "AWS_ACCOUNT_ID": identity.get_account_id(),
-    "AWS_REGION": identity.get_region(),
-}
+def default_placeholder_values():
+    """ Default placeholder values for loading any resource file.
+    """
+    return {
+        "AWS_ACCOUNT_ID": identity.get_account_id(),
+        "AWS_REGION": identity.get_region(),
+    }
 
-root_test_path = Path(__file__).parent.parent
-
-
-def load_resource_file(service: str, resource_name: str,
+def load_resource_file(resources_directory: Path, resource_name: str,
                        additional_replacements: Dict[str, Any] = {}) -> dict:
-    path = root_test_path / service / "resources"
-    with open(path / f"{resource_name}.yaml", "r") as stream:
+    with open(resources_directory / f"{resource_name}.yaml", "r") as stream:
         resource_contents = stream.read()
         injected_contents = _replace_placeholder_values(
-            resource_contents, PLACEHOLDER_VALUES)
+            resource_contents, default_placeholder_values())
         injected_contents = _replace_placeholder_values(
             injected_contents, additional_replacements)
         return yaml.safe_load(injected_contents)
 
 
 def _replace_placeholder_values(
-        in_str: str, replacement_dictionary: Dict[str, Any] = PLACEHOLDER_VALUES) -> str:
+        in_str: str, replacement_dictionary: Dict[str, Any] = default_placeholder_values()) -> str:
     for placeholder, replacement in replacement_dictionary.items():
         in_str = in_str.replace(f"${placeholder}", replacement)
     return in_str
@@ -60,15 +59,31 @@ def random_suffix_name(resource_name: str, max_length: int,
     return f"{resource_name}{delimiter}{rand}"
 
 
-def write_bootstrap_config(service: str, bootstrap: dict):
-    path = root_test_path / service / "bootstrap.yaml"
+def write_bootstrap_config(bootstrap: dict, output_path: Path, bootstrap_file_name: str = "bootstrap.yaml"):
+    """ Dumps the bootstrap object into a YAML file at a given path.
+
+    Args:
+        bootstrap: The bootstrap object.
+        output_path: The directory in which to dump the bootstrap yaml.
+        bootstrap_file_name: The name of the created bootstrap yaml file.
+    """
+    path =  output_path / bootstrap_file_name
     logging.info(f"Wrote bootstrap to {path}")
     with open(path, "w") as stream:
         yaml.safe_dump(bootstrap, stream)
 
 
-def read_bootstrap_config(service: str) -> dict:
-    path = root_test_path / service / "bootstrap.yaml"
+def read_bootstrap_config(config_dir: Path, bootstrap_file_name: str = "bootstrap.yaml") -> dict:
+    """ Reads a bootstrap dictionary from a given bootstrap file.
+
+    Args:
+        config_dir: The directory in which the bootstray yaml exists.
+        bootstrap_file_name: The name of the created bootstrap yaml file.
+
+    Returns:
+        dict: The bootstrap dictionary read from the file.
+    """
+    path = config_dir / bootstrap_file_name
     with open(path, "r") as stream:
         bootstrap = yaml.safe_load(stream)
     return bootstrap
