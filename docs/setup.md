@@ -45,7 +45,7 @@ From within the `SERVICE-controller/test/e2e/` directory (and within its
 respective Python environment!), first uninstall the current version of the 
 common test module:
 ```bash
-pip uninstall test-infra-aws-controllers-k8
+pip uninstall acktest
 ```
 
 Now install it, linking it as editable, from the source directory:
