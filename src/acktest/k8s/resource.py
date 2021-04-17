@@ -151,6 +151,21 @@ def patch_custom_resource(
     return _api.patch_namespaced_custom_object(
         reference.group, reference.version, reference.namespace, reference.plural, reference.name, custom_resource)
 
+def assert_delete_resource_successful(
+    reference: CustomResourceReference, wait_periods: int = 1, period_length: int = 5):
+    """Assert custom resource was deleted successfully from the cluster
+
+    :param reference: instance of CustomResourceReference which needs to be deleted
+    :param wait_periods, period_length: wait for resource to be removed by the server
+    for wait_periods * period_length seconds.
+
+    Returns:
+        bool: True if delete was successful, otherwise False
+    """
+    _, deleted = delete_custom_resource(reference, wait_periods, period_length)
+    return deleted
+
+
 def delete_custom_resource(
     reference: CustomResourceReference, wait_periods: int = 1, period_length: int = 5):
     """Delete custom resource from cluster and wait for it to be removed by the server
