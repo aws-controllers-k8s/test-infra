@@ -1,18 +1,8 @@
-kubernetes/community:
-- name: pull-community-verify  # convention: (job type)-(repo name)-(suite name)
-  annotations:
-    testgrid-dashboards: sig-contribex-community
-    testgrid-tab-name: pull-verify
-  branches:
-  - master
-  decorate: true
-  always_run: true
+periodics:
+- interval: 1m
+  agent: kubernetes
+  name: echo-test
   spec:
     containers:
-    - image: golang:1.12.5
-      command:
-      - /bin/bash
-      args:
-      - -c
-      # Add GOPATH/bin back to PATH to workaround #9469
-      - "export PATH=$GOPATH/bin:$PATH && make verify"
+    - image: alpine
+      command: ["/bin/date"]
