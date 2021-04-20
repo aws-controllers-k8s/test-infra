@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prow-jobs
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RedbackThomson/ack-test-infra.git
+    targetRevision: prow
+    path: prow/jobs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

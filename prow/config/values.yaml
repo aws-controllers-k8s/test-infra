@@ -1,0 +1,10 @@
+domain: example.com
+github:
+  organisation: aws-controllers-k8s
+
+buckets:
+  logs: ""
+
+deck:
+  service:
+    type: ClusterIP

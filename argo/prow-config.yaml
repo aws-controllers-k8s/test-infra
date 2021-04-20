@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prow-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RedbackThomson/ack-test-infra.git
+    targetRevision: prow
+    path: prow/config
+    helm:
+      parameters:
+      - name: "domain"
+        value: "ack.aws.dev"
+      - name: "deck.service.type"
+        value: "LoadBalancer"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
