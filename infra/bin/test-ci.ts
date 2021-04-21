@@ -22,5 +22,6 @@ new TestCIStack(app, 'TestCIStack', {
     botPersonalAccessToken: app.node.tryGetContext('bot_pat') || process.env.BOT_PAT,
     webhookHMACToken: app.node.tryGetContext('webhook_hmac') || process.env.WEBHOOK_HMAC,
     argoCDAdminPassword: app.node.tryGetContext('argo_password') || process.env.ARGO_PASSWORD
-  }
+  },
+  logsBucket: app.node.tryGetContext('logs_bucket') || process.env.LOGS_BUCKET
 });

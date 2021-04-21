@@ -23,6 +23,7 @@ Use the following command to deploy the stack with the included requirements:
 export BOT_PAT='<bot personal access token>'
 export WEBHOOK_HMAC='<webhook HMAC>'
 export ARGO_PASSWORD='<bcrypt encrypted password>'
+export LOGS_BUCKET='<S3 bucket name for logs>' # Optional
 cdk bootstrap
 AWS_DEFAULT_REGION=us-east-1 cdk deploy
 ```
