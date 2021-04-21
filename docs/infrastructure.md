@@ -1,4 +1,4 @@
-# ACK `Prow` test infrastructure
+# ACK `prow` test infrastructure
 
 ## Overview
 
@@ -26,6 +26,7 @@ The ACK team has to manage our own Helm chart for Prow because a) Prow does not 
 
 Some of the changes we have made to the manifests:
 
+* All of the secrets have been removed from the manifest. They are now installed when we create the cluster in CDK.
 * Added the `--job-config-path` container argument and associated configmap volume mounts to each of the deployments. This allows us to load the jobs from a separate configmap than the rest of the configuration.
 
 ## Prow Jobs
