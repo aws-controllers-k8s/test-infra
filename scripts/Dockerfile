@@ -14,7 +14,7 @@ ARG TEST_INFRA_PATH=./test-infra
 WORKDIR /${AWS_SERVICE}-controller/tests/e2e
 ENV PYTHONPATH=/${AWS_SERVICE}-controller/tests/e2e
 
-RUN apk add --no-cache git bash
+RUN apk add --no-cache git bash gcc libc-dev
 
 # Install python dependencies
 COPY ${CONTROLLER_E2E_PATH}/requirements.txt .
