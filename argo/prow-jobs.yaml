@@ -6,8 +6,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/RedbackThomson/ack-test-infra.git
-    targetRevision: prow
+    repoURL: https://github.com/aws-controllers-k8s/test-infra.git
+    targetRevision: HEAD
     path: prow/jobs
   destination:
     server: https://kubernetes.default.svc
