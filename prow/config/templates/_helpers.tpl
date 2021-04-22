@@ -29,34 +29,3 @@ Create chart name and version as used by the chart label.
 {{- define "prow-config.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
-
-{{/*
-Common labels
-*/}}
-{{- define "prow-config.labels" -}}
-helm.sh/chart: {{ include "prow-config.chart" . }}
-{{ include "prow-config.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-{{- end }}
-
-{{/*
-Selector labels
-*/}}
-{{- define "prow-config.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "prow-config.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
-
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "prow-config.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "prow-config.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
