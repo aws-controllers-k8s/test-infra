@@ -1,0 +1,100 @@
+# Copyright 2020 Amazon.com Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: prow
+  name: config
+data:
+  config.yaml: |
+    prowjob_namespace: {{ .Values.prowJobNamespace }}
+    pod_namespace: {{ .Values.podNamespace }}
+
+    sinker:
+      # defaults to 1 hour
+      resync_period: 2m
+      # defaults to 1 day
+      max_pod_age: 12h
+      # defaults to max_pod_age
+      terminated_pod_ttl: 5m
+
+    branch-protection:
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+      required_linear_history: true
+
+    deck:
+      branding:
+        background_color: '#FFFFFF'
+        favicon: 'https://distro.eks.amazonaws.com/assets/images/favicon.ico'
+        header_color: '#232F3E'
+        logo: 'https://distro.eks.amazonaws.com/assets/images/amazon-eks-distro-white-logo.png'
+
+      spyglass:
+        lenses:
+        - lens:
+            name: metadata
+          required_files:
+          - started.json|finished.json
+        - lens:
+            config:
+            name: buildlog
+          required_files:
+          - build-log.txt
+        - lens:
+            name: junit
+          required_files:
+          - .*/junit.*\.xml
+        - lens:
+            name: podinfo
+          required_files:
+          - podinfo.json
+
+    plank:
+      job_url_prefix_config:
+        "*": https://{{ .Values.prow.domain }}/view/
+      report_templates:
+        '*': >-
+            [Full PR test history](https://{{ .Values.prow.domain }}/pr-history?{{ "org={{.Spec.Refs.Org}}&repo={{.Spec.Refs.Repo}}&pr={{with index .Spec.Refs.Pulls 0}}{{.Number}}{{end}}" }}).
+            [Your PR dashboard](https://{{ .Values.prow.domain }}/pr?{{ "query=is:pr+state:open+author:{{with index .Spec.Refs.Pulls 0}}{{.Author}}{{end}}" }}).
+      default_decoration_configs:
+        "*":
+          censor_secrets: true
+          gcs_configuration:
+            bucket: s3://{{ .Values.prow.presubmitsBucketName }}
+            path_strategy: explicit
+          s3_credentials_secret: s3-credentials
+          utility_images:
+            clonerefs:  {{ .Values.utility_images.clonerefs }}
+            entrypoint: {{ .Values.utility_images.entrypoint }}
+            initupload: {{ .Values.utility_images.initupload }}
+            sidecar: {{ .Values.utility_images.sidecar }}
+
+    tide:
+      merge_method:
+        "*": "squash"
+      queries:
+      - labels:
+        - lgtm
+        - approved
+        missingLabels:
+        - needs-rebase
+        - do-not-merge/hold
+        - do-not-merge/work-in-progress
+        - do-not-merge/invalid-owners-file
+        orgs:
+        - {{ .Values.github.organisation }}
+
+    decorate_all_jobs: true

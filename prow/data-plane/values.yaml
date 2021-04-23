@@ -1,0 +1,37 @@
+region: 'us-west-2'
+
+crier:
+  serviceAccount:
+    name: ''
+
+deck:
+  serviceAccount:
+    name: ''
+
+hook:
+  serviceAccount:
+    name: ''
+
+horologium:
+  serviceAccount:
+    name: ''
+
+prowControllerManager:
+  serviceAccount:
+    name: ''
+
+sinker:
+  serviceAccount:
+    name: ''
+
+statusreconciler:
+  serviceAccount:
+    name: ''
+
+tide:
+  serviceAccount:
+    name: ''
+
+s3Credentials:
+  secret:
+    create: true

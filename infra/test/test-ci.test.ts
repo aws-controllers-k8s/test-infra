@@ -10,7 +10,8 @@ test('Empty Stack', () => {
         botPersonalAccessToken: "abc123",
         webhookHMACToken: "def456",
         argoCDAdminPassword: "mypassword"
-      }
+      },
+      logsBucketName: "my-log-bucket"
     });
     // THEN
     expectCDK(stack).to(matchTemplate({

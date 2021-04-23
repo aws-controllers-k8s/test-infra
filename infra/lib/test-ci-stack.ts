@@ -1,23 +1,36 @@
 import * as cdk from '@aws-cdk/core';
-import * as s3 from '@aws-cdk/aws-s3';
-import { CICluster, CIClusterProps } from './ci-cluster';
+import { CICluster, CIClusterCompileTimeProps } from './ci-cluster';
+import { LogBucket, LogBucketCompileProps } from './log-bucket';
+import { ProwServiceAccounts } from './prow-service-accounts';
 
 export const ARGOCD_NAMESPACE = "argocd";
 export const PROW_NAMESPACE = "prow";
+export const PROW_JOB_NAMESPACE = "test-pods";
 
-export type TestCIStackProps = cdk.StackProps & {
-  clusterConfig: CIClusterProps
-  logsBucket?: string
+export type TestCIStackProps = cdk.StackProps & LogBucketCompileProps & {
+  clusterConfig: CIClusterCompileTimeProps
 };
 
 export class TestCIStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props: TestCIStackProps) {
     super(scope, id, props);
 
-    new CICluster(this, 'ArgoCDCICluster', props.clusterConfig);
+    const logsBucket = new LogBucket(this, 'LogBucketConstruct', {
+      ...props,
+      account: this.account
+    })
 
-    new s3.Bucket(this, 'LogsBucket', {
-      bucketName: props.logsBucket || "ack-prow-logs-" + this.account
+    const testCluster = new CICluster(this, 'CIClusterConstruct', {
+      ...props.clusterConfig
     });
+
+    const prowServiceAccounts = new ProwServiceAccounts(this, 'ProwServiceAccountsConstruct', {
+      stackPartition: this.partition,
+      prowCluster: testCluster.testCluster,
+      tideStatusBucket: logsBucket.bucket,
+      presubmitsBucket: logsBucket.bucket,
+      postsubmitsBucket: logsBucket.bucket
+    });
+    prowServiceAccounts.node.addDependency(testCluster);
   }
 }
