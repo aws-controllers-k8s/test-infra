@@ -11,6 +11,8 @@ spec:
     path: prow/data-plane
     helm:
       parameters:
+      - name: "region"
+        value: "us-east-1"
       - name: "crier.serviceAccount.name"
         value: "prow-deployment-service-account"
       - name: "deck.serviceAccount.name"

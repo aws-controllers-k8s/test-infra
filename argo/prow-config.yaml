@@ -11,6 +11,8 @@ spec:
     path: prow/config
     helm:
       parameters:
+      - name: "region"
+        value: "us-east-1"
       - name: "prow.domain"
         value: "ack.aws.dev"
       - name: "deck.service.type"
