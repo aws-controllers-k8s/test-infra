@@ -3,7 +3,6 @@ import { CICluster, CIClusterCompileTimeProps } from './ci-cluster';
 import { LogBucket, LogBucketCompileProps } from './log-bucket';
 import { ProwServiceAccounts } from './prow-service-accounts';
 
-export const ARGOCD_NAMESPACE = "argocd";
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
 

@@ -1,15 +1,12 @@
 import * as cdk from '@aws-cdk/core';
 import * as eks from '@aws-cdk/aws-eks';
 import * as cdk8s from 'cdk8s';
-import * as s3 from '@aws-cdk/aws-s3';
-import {ArgoCDConfigurationChart, ArgoCDConfigurationChartProps} from './charts/argocd-configuration';
+import {FluxChart} from './charts/flux';
+import {FluxConfigurationChart} from './charts/flux-configuration';
 import {ProwSecretsChart, ProwSecretsChartProps} from './charts/prow-secrets';
 import {CommonNamespacesChart} from './charts/common-namespaces';
-import { ARGOCD_NAMESPACE } from './test-ci-stack';
 
-export type CIClusterCompileTimeProps = ProwSecretsChartProps & ArgoCDConfigurationChartProps &{
-  readonly argoCDAdminPassword: string;
-};
+export type CIClusterCompileTimeProps = ProwSecretsChartProps;
 
 export type CIClusterRuntimeProps = {
 };
@@ -26,46 +23,28 @@ export class CICluster extends cdk.Construct {
       version: eks.KubernetesVersion.V1_19,
     })
 
-    if (props.argoCDAdminPassword === undefined) {
-      throw new Error(`Expected ArgoCD Admin password to be specified in context`)
-    }
-
     const commonNamespacesChart = this.testCluster.addCdk8sChart('common-namespaces',
       new CommonNamespacesChart(new cdk8s.App(), 'CommonNamespaces', {}))
 
-    const argoCDChart = 
-      this.testCluster.addHelmChart('argocd', {
-        chart: 'argo-cd',
-        repository: 'https://argoproj.github.io/argo-helm',
-        version: '3.1.1',
-        namespace: ARGOCD_NAMESPACE,
-        values: {
-          configs: {
-            secret: {
-              argocdServerAdminPassword: props.argoCDAdminPassword
-            }
-          },
-          server: {
-            service: {
-              type: "LoadBalancer"
-            }
-          },
-        }
-      });
-
     const prowSecretsChart =
-      this.testCluster.addCdk8sChart('prow-secrets', new ProwSecretsChart(
-        new cdk8s.App(), 'ProwSecrets', props
-      ));
+      this.testCluster.addCdk8sChart('prow-secrets',
+        new ProwSecretsChart(
+          new cdk8s.App(), 'ProwSecrets', props
+        )
+      );
     // Ensure namespaces are created before secrets
     prowSecretsChart.node.addDependency(commonNamespacesChart);
 
-    const argoCDConfigChart = 
-      this.testCluster.addCdk8sChart('argocd-configuration', new ArgoCDConfigurationChart(
-        new cdk8s.App(), 'ArgoCDConfiguration', {}
-      ));
-
-    // Install in order, to ensure CRDs are in place
-    argoCDConfigChart.node.addDependency(argoCDChart);
+    const fluxChart = this.testCluster.addCdk8sChart('flux',
+      new FluxChart(
+        new cdk8s.App(), 'Flux', {}
+      )
+    );
+    const fluxConfigChart = this.testCluster.addCdk8sChart('flux-configuration',
+      new FluxConfigurationChart(
+        new cdk8s.App(), 'FluxConfiguration', {}
+      )
+    );
+    fluxConfigChart.node.addDependency(fluxChart);
   }
 }

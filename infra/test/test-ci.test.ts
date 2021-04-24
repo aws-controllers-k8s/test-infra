@@ -8,8 +8,7 @@ test('Empty Stack', () => {
     const stack = new TestCI.TestCIStack(app, 'MyTestStack', {
       clusterConfig: {
         botPersonalAccessToken: "abc123",
-        webhookHMACToken: "def456",
-        argoCDAdminPassword: "mypassword"
+        webhookHMACToken: "def456"
       },
       logsBucketName: "my-log-bucket"
     });

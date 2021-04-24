@@ -20,8 +20,7 @@ new TestCIStack(app, 'TestCIStack', {
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
   clusterConfig: {
     botPersonalAccessToken: app.node.tryGetContext('bot_pat') || process.env.BOT_PAT,
-    webhookHMACToken: app.node.tryGetContext('webhook_hmac') || process.env.WEBHOOK_HMAC,
-    argoCDAdminPassword: app.node.tryGetContext('argo_password') || process.env.ARGO_PASSWORD
+    webhookHMACToken: app.node.tryGetContext('webhook_hmac') || process.env.WEBHOOK_HMAC
   },
   logsBucketName: app.node.tryGetContext('logs_bucket') || process.env.LOGS_BUCKET
 });
