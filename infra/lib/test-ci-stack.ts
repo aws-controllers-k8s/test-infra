@@ -5,6 +5,7 @@ import { ProwServiceAccounts } from './prow-service-accounts';
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
+export const EXTERNAL_DNS_NAMESPACE = "external-dns";
 
 export type TestCIStackProps = cdk.StackProps & LogBucketCompileProps & {
   clusterConfig: CIClusterCompileTimeProps
