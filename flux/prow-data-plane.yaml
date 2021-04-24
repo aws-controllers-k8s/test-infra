@@ -4,6 +4,7 @@ metadata:
   name: prow-data-plane
   namespace: flux-system
 spec:
+  interval: 1m
   targetNamespace: test-pods
   values:
     region: "us-east-1"
