@@ -6,8 +6,10 @@ metadata:
 spec:
   interval: 30s
   ref:
-    branch: main
-  url: https://github.com/aws-controllers-k8s/test-infra
+    branch: prow
+    # branch: main
+  # url: https://github.com/aws-controllers-k8s/test-infra
+  url: https://github.com/RedbackThomson/ack-test-infra
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
 kind: Kustomization

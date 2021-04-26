@@ -4,10 +4,10 @@ metadata:
   name: prow-config
   namespace: flux-system
 spec:
-  interval: 1m
+  interval: 5m
   targetNamespace: prow
   values:
-    region: "us-east-1"
+    region: "us-west-2"
     prow:
       domain: "ack.aws.dev"
       presubmitsBucketName: "ack-prow-logs"
