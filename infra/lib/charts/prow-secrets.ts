@@ -19,15 +19,6 @@ export class ProwSecretsChart extends cdk8s.Chart {
       throw new Error(`Expected bot personal access token and webhook HMAC token to be specified`);
     }
 
-    // CDK8s does not have a way to create a namespace, and does not synthesize it by default
-    new cdk8s.ApiObject(this, 'prow-namespace', {
-      apiVersion: "v1",
-      kind: "Namespace",
-      metadata: {
-        name: PROW_NAMESPACE
-      }
-    });
-
     this.botPATSecret = new kplus.Secret(this, 'github-token', {
       stringData: {
         'token': props.botPersonalAccessToken

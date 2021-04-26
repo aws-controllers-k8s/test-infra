@@ -1,0 +1,40 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: prow-data-plane
+  namespace: flux-system
+spec:
+  interval: 5m
+  targetNamespace: test-pods
+  values:
+    region: "us-west-2"
+    crier:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    deck:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    hook:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    horologium:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    prowControllerManager:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    sinker:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    statusreconciler:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    tide:
+      serviceAccount:
+        name: "prow-deployment-service-account"
+  chart:
+    spec:
+      chart: ./prow/data-plane
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
