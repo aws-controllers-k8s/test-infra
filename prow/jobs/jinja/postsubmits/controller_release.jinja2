@@ -10,7 +10,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-job-base-v0.0.1
+        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-deploy-0.0.1
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]

@@ -2,6 +2,7 @@ import * as cdk from '@aws-cdk/core';
 import { CICluster, CIClusterCompileTimeProps } from './ci-cluster';
 import { LogBucket, LogBucketCompileProps } from './log-bucket';
 import { ProwServiceAccounts } from './prow-service-accounts';
+import { TestRole } from './iam/test-role';
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
@@ -25,13 +26,19 @@ export class TestCIStack extends cdk.Stack {
     });
 
     const prowServiceAccounts = new ProwServiceAccounts(this, 'ProwServiceAccountsConstruct', {
+      account: this.account,
       stackPartition: this.partition,
+      region: this.region,
+
       prowCluster: testCluster.testCluster,
       tideStatusBucket: logsBucket.bucket,
       presubmitsBucket: logsBucket.bucket,
       postsubmitsBucket: logsBucket.bucket,
-      account: this.account
     });
     prowServiceAccounts.node.addDependency(testCluster);
+
+    const testRole = new TestRole(this, 'TestRole', {
+      trustedEntities: [prowServiceAccounts.presubmitJobServiceAccount.role]
+    })
   }
 }

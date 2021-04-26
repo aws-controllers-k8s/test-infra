@@ -5,12 +5,14 @@ import * as iam from '@aws-cdk/aws-iam';
 import { PROW_JOB_NAMESPACE, PROW_NAMESPACE } from './test-ci-stack';
 
 export type ProwServiceAccountsProps = {
+  account: string;
   stackPartition: string;
+  region: string;
+
   prowCluster: eks.Cluster;
   tideStatusBucket: s3.Bucket;
   presubmitsBucket: s3.Bucket;
   postsubmitsBucket: s3.Bucket;
-  account: string;
 };
 
 export class ProwServiceAccounts extends cdk.Construct {
@@ -40,6 +42,13 @@ export class ProwServiceAccounts extends cdk.Construct {
       resources: [
         `arn:${props.stackPartition}:s3:::${props.presubmitsBucket.bucketName}/*`,
         `arn:${props.stackPartition}:s3:::${props.presubmitsBucket.bucketName}`,
+      ],
+    });
+
+    const preParamStoreAccessPolicy = new iam.PolicyStatement({
+      actions: ["ssm:Get*"],
+      resources: [
+        `arn:${props.stackPartition}:ssm:${props.region}:${props.account}:parameter/*`,
       ],
     });
 
@@ -109,7 +118,10 @@ export class ProwServiceAccounts extends cdk.Construct {
       namespace: PROW_JOB_NAMESPACE,
       name: "pre-submit-service-account"
     });
+
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
+    this.presubmitJobServiceAccount.addToPrincipalPolicy(preParamStoreAccessPolicy);
+
     new cdk.CfnOutput(scope, 'PreSubmitServiceAccountRoleOutput', {
       value: this.presubmitJobServiceAccount.role.roleName,
       exportName: 'PreSubmitServiceAccountRoleName',

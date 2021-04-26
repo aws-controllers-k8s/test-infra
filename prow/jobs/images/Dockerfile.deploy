@@ -1,5 +1,6 @@
-# Base container image for running ACK prow jobs.
+# Dockerfile for Prow CD postsubmit jobs
 FROM quay.io/containers/buildah:v1.20.1
+
 RUN dnf -y install \
 		which \
 		git \

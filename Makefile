@@ -8,5 +8,5 @@ PROW_JOBS_PATH="./prow/jobs"
 build-prow-jobs:
 	@pushd "$(PROW_JOBS_PATH)" 1>/dev/null; \
 	python jobs_factory.py; \
-	echo "probjobs available at $(PROW_JOBS_PATH)/jobs.yaml"; \
+	echo "Success! Prowjobs available at $(PROW_JOBS_PATH)/jobs.yaml"; \
 	popd 1>/dev/null
