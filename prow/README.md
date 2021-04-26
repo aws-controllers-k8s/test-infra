@@ -3,8 +3,8 @@
 ## `/config`
 
 Contains the Helm chart to configure Prow on the test infrastructure cluster.
-Any changes to the chart will automatically be applied by the ArgoCD application
-located in the `../argo` directory.
+Any changes to the chart will automatically be applied by the Flux2 HelmRelease
+located in the `../flux` directory.
 
 ## `/jobs`
 
