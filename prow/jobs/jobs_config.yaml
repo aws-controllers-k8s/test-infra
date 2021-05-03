@@ -1,0 +1,18 @@
+#This config is used to generate 'jobs.yaml' file from 'jobs_factory.py' using jinja2 templates.
+
+# list of aws services supported in ACK
+aws_services:
+- apigatewayv2
+- applicationautoscaling
+- dynamodb
+- ecr
+- elasticache
+- elasticsearchservice
+- kms
+- mq
+- rds
+- s3
+- sagemaker
+- sfn
+- sns
+- sqs
