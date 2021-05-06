@@ -48,6 +48,7 @@ spec:
         args:
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
+        - --deck-url=http://deck/
         volumeMounts:
         - name: config
           mountPath: /etc/config

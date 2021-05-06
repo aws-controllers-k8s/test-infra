@@ -18,19 +18,22 @@ metadata:
   name: plugins
 data:
   plugins.yaml: |
+    triggers:
+    - repos:
+      - {{ .Values.github.organisation }}
+      only_org_members: true
+
     plugins:
       {{ .Values.github.organisation }}:
-      - approve
-      - assign
-      - blunderbuss
-      - cat
-      - dog
-      - help
-      - heart
-      - hold
-      - label
-      - lgtm
-      - trigger
-      - verify-owners
-      - wip
-      - yuks
+        plugins:
+        - approve
+        - assign
+        - blunderbuss
+        - help
+        - hold
+        - label
+        - lgtm
+        - trigger
+        - verify-owners
+        - wip
+

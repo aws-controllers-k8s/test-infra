@@ -1,0 +1,9 @@
+- interval: 60m
+  agent: kubernetes
+  name: echo-test
+  spec:
+    serviceAccountName: pre-submit-service-account
+    containers:
+    - image: alpine
+      command: ["/bin/date"]
+
