@@ -5,11 +5,12 @@ import * as iam from '@aws-cdk/aws-iam';
 import { PROW_JOB_NAMESPACE, PROW_NAMESPACE } from './test-ci-stack';
 
 export type ProwServiceAccountsProps = {
-  stackPartition: string,
-  prowCluster: eks.Cluster,
-  tideStatusBucket: s3.Bucket,
-  presubmitsBucket: s3.Bucket,
-  postsubmitsBucket: s3.Bucket
+  stackPartition: string;
+  prowCluster: eks.Cluster;
+  tideStatusBucket: s3.Bucket;
+  presubmitsBucket: s3.Bucket;
+  postsubmitsBucket: s3.Bucket;
+  account: string;
 };
 
 export class ProwServiceAccounts extends cdk.Construct {
