@@ -26,8 +26,6 @@ from kubernetes.client.rest import ApiException
 
 from ..resources import load_resource_file
 
-_k8s_api_client = None
-
 
 @dataclass
 class CustomResourceReference:
@@ -112,12 +110,10 @@ def load_and_create_resource(resource_directory: Path,
     return reference, spec, resource
 
 def _get_k8s_api_client() -> ApiClient:
-    global _k8s_api_client
     # Create new client everytime to avoid token refresh issues
     # https://github.com/kubernetes-client/python/issues/741
     # https://github.com/kubernetes-client/python-base/issues/125
-    _k8s_api_client = config.new_client_from_config()
-    return _k8s_api_client
+    return config.new_client_from_config()
 
 
 def create_k8s_namespace(namespace_name: str):
