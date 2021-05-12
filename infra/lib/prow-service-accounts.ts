@@ -72,6 +72,13 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
+    const postEcrPublicAllResourcePolicy = new iam.PolicyStatement({
+      actions: ["ecr-public:GetAuthorizationToken"],
+      resources: [
+        "*",
+      ],
+    });
+
     const postStsPolicy = new iam.PolicyStatement({
       actions: ["sts:GetServiceBearerToken"],
       resources: [
@@ -116,6 +123,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     });
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postBucketAccessPolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postEcrPublicPolicy);
+    this.postsubmitJobServiceAccount.addToPrincipalPolicy(postEcrPublicAllResourcePolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postStsPolicy);
     new cdk.CfnOutput(scope, 'PostSubmitServiceAccountRoleOutput', {
       value: this.postsubmitJobServiceAccount.role.roleName,
