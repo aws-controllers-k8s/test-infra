@@ -31,3 +31,5 @@ Some of the changes we have made to the manifests:
 ## Prow Jobs
 
 The [Prow jobs](https://github.com/kubernetes/test-infra/blob/master/config/jobs/README.md) are managed in a separate directory from the Prow configuration so that they may be controlled and versioned without the risk of interfering with the service directly. Prow jobs are configured through a config map which is compiled using Kustomize’s `configMapGenerator` method. This Kustomization specification is located in `test-infra/prow/jobs`. Currently all jobs are specified in a single `jobs.yaml` file, but in the future it would be preferable to spread them into individual files grouped either by test type or by repository.
+
+For more information regarding the building and specification of Prow jobs, see [prow-jobs.md](prow-jobs.md)
