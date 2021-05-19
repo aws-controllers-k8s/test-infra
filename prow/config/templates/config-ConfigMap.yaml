@@ -83,8 +83,14 @@ data:
             sidecar: {{ .Values.utility_images.sidecar }}
 
     tide:
+      merge_commit_template:
+        "{{ .Values.github.organisation }}":
+          body: >-
+              {{ "{{ .Title }}" }}
+          title: >-
+              {{ "{{ .Body }}" }}
       merge_method:
-        "*": "squash"
+        "{{ .Values.github.organisation }}": "squash"
       queries:
       - labels:
         - lgtm
