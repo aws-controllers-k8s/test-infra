@@ -88,7 +88,7 @@ data:
           body: >-
               {{ "{{ .Body }}" }}
           title: >-
-              {{ "{{ .Title }}" }}
+              {{ "{{ .Title }} (#{{ .Number }})" }}
       merge_method:
         "{{ .Values.github.organisation }}": "squash"
       queries:
