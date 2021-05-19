@@ -86,9 +86,9 @@ data:
       merge_commit_template:
         "{{ .Values.github.organisation }}":
           body: >-
-              {{ "{{ .Title }}" }}
-          title: >-
               {{ "{{ .Body }}" }}
+          title: >-
+              {{ "{{ .Title }}" }}
       merge_method:
         "{{ .Values.github.organisation }}": "squash"
       queries:
