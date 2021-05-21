@@ -38,7 +38,25 @@ and provide access for the ACK infrastructure system. See the
 In the AWS console, navigate to IAM and create a new Role. For now, choose
 `EC2` as the trusted entity. Initially select the `AdministratorAccess` 
 policy, although your team can adjust policies for stricter requirements in
-the future. Set the role name to `DO-NOT-DELETE-<service>-test-role`.
+the future. Set the role name to `<service>-ack-test-role-DO-NOT-DELETE`.
+
+The testing infrastructure will need to assume this role for the duration of the
+integration tests. The default maximum session duration needs to be extended out
+to ensure the credentials do not expire during this period. In the settings of 
+the IAM role, under `Maximum session duration`, extend this option to the 
+maximum of 12 hours and save changes.
+
+```bash
+export SERVICE=<my-service-name>
+export ACK_TEST_ROLE_NAME=$SERVICE-ack-test-role-DO-NOT-DELETE
+aws iam create-role --role-name $ACK_TEST_ROLE_NAME \
+  --max-session-duration 43200 \
+  --assume-role-policy-document '{"Version":"2012-10-17","Statement":{"Effect"'\
+':"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":'\
+'"sts:AssumeRole"}}'
+aws iam attach-role-policy --role-name $ACK_TEST_ROLE_NAME \
+  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+```
 
 ### b. Update the trust relationship
 
@@ -51,7 +69,7 @@ In the details for the newly created role, navigate to the `Trust
 relationships` tab and click on `Edit trust relationship`. Add the new trust
 relationship as provided by the ACK core contributor team.
 
-### c. Update the ACK core team
+### c. Notify the ACK core team
 
 The test infrastructure needs to be made aware of the new service team role
 to use in place of the default fallback. This is a manual process for the ACK
@@ -61,6 +79,11 @@ the role ARN and send it to a member of the ACK core contributor team.
 > **Note for Core Contributors:** Upon receiving a new service team role ARN, 
 access the ACK infrastructure account and add a new SSM string parameter with
 the path `/ack/prow/service_team_role/<service>` and a value of the ARN.
+```bash
+# For ACK core contributors
+aws ssm put-parameter --name "/ack/prow/service_team_role/$SERVICE" \
+  --type String --value <provided-value> 
+```
 
 ## 3. Update `OWNERS_ALIASES` file
 

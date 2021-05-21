@@ -43,6 +43,7 @@ trap early_exit_handler TERM INT
 
 # setup test envs
 PROW_JOB_ID=${PROW_JOB_ID:-"unknown"}
+AWS_SERVICE=$(echo "$SERVICE" | tr '[:upper:]' '[:lower:]')
 
 # optionally enable ipv6 docker
 export DOCKER_IN_DOCKER_IPV6_ENABLED=${DOCKER_IN_DOCKER_IPV6_ENABLED:-false}
@@ -104,10 +105,18 @@ if git rev-parse --is-inside-work-tree >/dev/null; then
   >&2 echo "wrapper.sh] [SETUP] exported SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
 fi
 
-ACK_ROLE_ARN=$(aws ssm get-parameter --name ACK_ROLE_ARN | jq -r '.Parameter.Value')
+ASSUME_EXIT_VALUE=0
+ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
+  >&2 echo "wrapper.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
+  # Fall back to default
+  ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/default --query Parameter.Value --output text)
+fi
 export ACK_ROLE_ARN
 >&2 echo "wrapper.sh] [SETUP] exported ACK_ROLE_ARN"
-eval $(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name $PROW_JOB_ID | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+
+ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name $PROW_JOB_ID --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+eval $ASSUME_COMMAND
 >&2 echo "wrapper.sh] [SETUP] Assumed ACK_ROLE_ARN"
 
 # actually run the user supplied command

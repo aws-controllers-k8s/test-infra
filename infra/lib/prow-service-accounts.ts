@@ -37,6 +37,11 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
+    const preAssumeRolePolicy = new iam.PolicyStatement({
+      actions: ["sts:AssumeRole"],
+      resources: ["*"]
+    });
+
     const preBucketAccessPolicy = new iam.PolicyStatement({
       actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
       resources: [
@@ -119,6 +124,7 @@ export class ProwServiceAccounts extends cdk.Construct {
       name: "pre-submit-service-account"
     });
 
+    this.presubmitJobServiceAccount.addToPrincipalPolicy(preAssumeRolePolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preParamStoreAccessPolicy);
 
