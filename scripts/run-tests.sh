@@ -10,7 +10,7 @@ ROOT_DIR="$SCRIPTS_DIR/.."
 # set environment variables
 SKIP_PYTHON_TESTS=${SKIP_PYTHON_TESTS:-"false"}
 RUN_PYTEST_LOCALLY=${RUN_PYTEST_LOCALLY:-"false"}
-PYTEST_LOG_LEVEL="${PYTEST_LOG_LEVEL:-"INFO"}"
+PYTEST_LOG_LEVEL=$(echo "${PYTEST_LOG_LEVEL:-"info"}" | tr '[:upper:]' '[:lower:]')
 
 USAGE="
 Usage:
@@ -28,7 +28,7 @@ Environment variables:
                             inside Docker (<true|false>)
                             Default: false
   PYTEST_LOG_LEVEL:         Set to any Python logging level for the Python tests.
-                            Default: INFO
+                            Default: info
 "
 
 if [ $# -ne 1 ]; then
@@ -79,7 +79,8 @@ elif [[ "$RUN_PYTEST_LOCALLY" == "true" ]]; then
     python service_bootstrap.py
     set +e
 
-    pytest -n auto --dist loadfile --log-cli-level "${PYTEST_LOG_LEVEL}" .
+    pytest -n auto --dist loadfile -o log_cli=true \
+      --log-cli-level "${PYTEST_LOG_LEVEL}" --log-level "${PYTEST_LOG_LEVEL}" .
     test_exit_code=$?
 
     python service_cleanup.py
