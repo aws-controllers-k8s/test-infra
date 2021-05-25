@@ -21,7 +21,19 @@ data:
     triggers:
     - repos:
       - {{ .Values.github.organisation }}
-      only_org_members: true
+
+    approve:
+    - repos:
+      - {{ .Values.github.organisation }}
+      require_self_approval: false
+      lgtm_acts_as_approve: true
+
+    size:
+      s:   10
+      m:   30
+      l:   100
+      xl:  500
+      xxl: 1000
 
     plugins:
       {{ .Values.github.organisation }}:
