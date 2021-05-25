@@ -50,6 +50,7 @@ docker run --rm -t \
     -v $THIS_DIR:/root/tests:z \
     -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
     -e RUN_PYTEST_LOCALLY="true" \
+    -e PYTEST_LOG_LEVEL \
     -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-"us-west-2"}" \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
