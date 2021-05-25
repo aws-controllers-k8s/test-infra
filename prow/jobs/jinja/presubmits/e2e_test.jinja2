@@ -1,7 +1,8 @@
 {% for service in aws_services  %}
   aws-controllers-k8s/{{ service }}-controller:
-  - name: {{ service }}-pre-submit
+  - name: {{ service }}-kind-e2e
     decorate: true
+    always_run: true
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
