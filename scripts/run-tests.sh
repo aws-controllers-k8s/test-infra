@@ -11,6 +11,7 @@ ROOT_DIR="$SCRIPTS_DIR/.."
 SKIP_PYTHON_TESTS=${SKIP_PYTHON_TESTS:-"false"}
 RUN_PYTEST_LOCALLY=${RUN_PYTEST_LOCALLY:-"false"}
 PYTEST_LOG_LEVEL=$(echo "${PYTEST_LOG_LEVEL:-"info"}" | tr '[:upper:]' '[:lower:]')
+PYTEST_NUM_THREADS=${PYTEST_NUM_THREADS:-"auto"}
 
 USAGE="
 Usage:
@@ -29,6 +30,10 @@ Environment variables:
                             Default: false
   PYTEST_LOG_LEVEL:         Set to any Python logging level for the Python tests.
                             Default: info
+  PYTEST_NUM_THREADS:       Number of threads that the pytest-xdist plugin should use when
+                            running the tests. Default of \"auto\" will detect number of
+                            cores.
+                            Default: auto
 "
 
 if [ $# -ne 1 ]; then
@@ -79,7 +84,7 @@ elif [[ "$RUN_PYTEST_LOCALLY" == "true" ]]; then
     python service_bootstrap.py
     set +e
 
-    pytest -n auto --dist loadfile -o log_cli=true \
+    pytest -n $PYTEST_NUM_THREADS --dist loadfile -o log_cli=true \
       --log-cli-level "${PYTEST_LOG_LEVEL}" --log-level "${PYTEST_LOG_LEVEL}" .
     test_exit_code=$?
 
