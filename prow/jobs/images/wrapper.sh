@@ -109,8 +109,7 @@ ASSUME_EXIT_VALUE=0
 ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   >&2 echo "wrapper.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
-  # Fall back to default
-  ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/default --query Parameter.Value --output text)
+  exit 1
 fi
 export ACK_ROLE_ARN
 >&2 echo "wrapper.sh] [SETUP] exported ACK_ROLE_ARN"
