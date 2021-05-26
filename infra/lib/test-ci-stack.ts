@@ -2,7 +2,6 @@ import * as cdk from '@aws-cdk/core';
 import { CICluster, CIClusterCompileTimeProps } from './ci-cluster';
 import { LogBucket, LogBucketCompileProps } from './log-bucket';
 import { ProwServiceAccounts } from './prow-service-accounts';
-import { DefaultTestRole } from './iam/test-role';
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
@@ -36,9 +35,5 @@ export class TestCIStack extends cdk.Stack {
       postsubmitsBucket: logsBucket.bucket,
     });
     prowServiceAccounts.node.addDependency(testCluster);
-
-    const testRole = new DefaultTestRole(this, 'TestRole', {
-      trustedEntities: [prowServiceAccounts.presubmitJobServiceAccount.role]
-    })
   }
 }
