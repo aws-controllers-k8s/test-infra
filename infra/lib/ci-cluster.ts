@@ -1,5 +1,6 @@
 import * as cdk from '@aws-cdk/core';
 import * as eks from '@aws-cdk/aws-eks';
+import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
 import * as cdk8s from 'cdk8s';
 import { policies as ALBPolicies } from './policies/aws-load-balancer-controller-policy';
@@ -25,6 +26,8 @@ export class CICluster extends cdk.Construct {
 
     this.testCluster = new eks.Cluster(scope, 'TestInfraCluster', {
       version: eks.KubernetesVersion.V1_19,
+      defaultCapacity: 2,
+      defaultCapacityInstance: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8)
     })
 
     this.installProwRequirements(props);

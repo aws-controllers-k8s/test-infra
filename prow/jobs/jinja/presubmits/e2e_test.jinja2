@@ -21,6 +21,11 @@
       - image: public.ecr.aws/aws-controllers-k8s/prow:prow-test-0.0.3
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 2
+          limits:
+            cpu: 8
         env:
         - name: SERVICE
           value: {{ service }}
