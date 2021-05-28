@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.awsService }}-soak-test
+  labels:
+    app: {{ .Values.awsService }}-soak-test
+spec:
+  parallelism: {{ .Values.testJobParallelism }}
+  completions: {{ .Values.testJobCompletions }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.awsService }}-soak-test
+    spec:
+      serviceAccountName: ack-{{ .Values.awsService }}-controller # same as service controller service-account
+      restartPolicy: Never
+      containers:
+        - name: soak-test
+          image: {{ .Values.soak.imageRepo }}:{{ .Values.soak.imageTag }}
+          command: ["bash", "-c", "./run_soak_test.sh"]
+          env:
+            - name: LOAD_IN_CLUSTER_KUBECONFIG # This variable makes sure e2e tests run against local k8s cluster
+              value: "True"
+            - name: START_TIME_EPOCH_SECONDS
+              value: {{ .Values.soak.startTimeEpochSeconds | quote }}
+            - name: SOAK_TEST_DURATION_MINUTES
+              value: {{ .Values.soak.durationMinutes | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.awsRegion | quote }}
