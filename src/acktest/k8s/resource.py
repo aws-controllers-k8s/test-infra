@@ -16,6 +16,8 @@ CustomResource APIs.
 
 import logging
 import base64
+import os
+import distutils.util as util
 from pathlib import Path
 from time import sleep
 from typing import Dict, Optional, Union
@@ -109,10 +111,14 @@ def load_and_create_resource(resource_directory: Path,
     resource = create_resource(reference, spec)
     return reference, spec, resource
 
+
 def _get_k8s_api_client() -> ApiClient:
     # Create new client everytime to avoid token refresh issues
     # https://github.com/kubernetes-client/python/issues/741
     # https://github.com/kubernetes-client/python-base/issues/125
+    if util.strtobool(os.environ.get('LOAD_IN_CLUSTER_KUBECONFIG', 'false')):
+        config.load_incluster_config()
+        return ApiClient()
     return config.new_client_from_config()
 
 
