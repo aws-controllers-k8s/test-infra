@@ -116,7 +116,7 @@ def _get_k8s_api_client() -> ApiClient:
     # Create new client everytime to avoid token refresh issues
     # https://github.com/kubernetes-client/python/issues/741
     # https://github.com/kubernetes-client/python-base/issues/125
-    if util.strtobool(os.environ.get('LOAD_IN_CLUSTER_KUBECONFIG', 'false')):
+    if bool(util.strtobool(os.environ.get('LOAD_IN_CLUSTER_KUBECONFIG', 'false'))):
         config.load_incluster_config()
         return ApiClient()
     return config.new_client_from_config()
