@@ -22,15 +22,16 @@ To publish a version of the images to your own repository, run the following
 command:
 
 ```bash
-DOCKER_REPOSITORY=<my-repository-uri> ./push-images.sh
+DOCKER_REPOSITORY=<my-repository-uri> ./push-image.sh <image type>
 ```
-Replacing `<my-repository-uri>` with the URI of the repository.
+Replacing `<my-repository-uri>` with the URI of the repository and <image type>
+with the type of Dockerfile you wish to push.
 
 To publish a new version of the images to the **official ACK repository**, run
 the following command:
 
 ```bash
-VERSION=X.Y.Z ./push-images.sh
+VERSION=X.Y.Z ./push-images.sh <image type>
 ```
 Replacing `X.Y.Z` with the SemVer version tag of the images.
 

@@ -24,5 +24,6 @@ QUIET=${QUIET:-"false"}
 
 # check_is_installed docker
 
-docker build -f $IMAGE_DIR/Dockerfile.deploy --quiet=$QUIET -t prow/deploy "${IMAGE_DIR}"
-docker build -f $IMAGE_DIR/Dockerfile.test --quiet=$QUIET -t prow/test "${IMAGE_DIR}"
+for IMAGE_TYPE in deploy test integration unit; do
+  docker build -f "$IMAGE_DIR/Dockerfile.$IMAGE_TYPE" --quiet=$QUIET -t "prow/$IMAGE_TYPE" "${IMAGE_DIR}"
+done

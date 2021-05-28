@@ -1,0 +1,1 @@
+FROM prow/test as base
