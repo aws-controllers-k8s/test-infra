@@ -1,5 +1,6 @@
 # Dockerfile for integration testing
-FROM prow/test as base
+ARG TEST_BASE_TAG
+FROM $TEST_BASE_TAG as base
 
 ARG DOCKER_VERSION=19.03.15
 ENV DOCKER_VERSION=${DOCKER_VERSION}

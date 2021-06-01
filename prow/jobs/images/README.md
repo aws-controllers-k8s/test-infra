@@ -31,7 +31,7 @@ To publish a new version of the images to the **official ACK repository**, run
 the following command:
 
 ```bash
-VERSION=X.Y.Z ./push-images.sh <image type>
+VERSION=X.Y.Z ./push-image.sh <image type>
 ```
 Replacing `X.Y.Z` with the SemVer version tag of the images.
 

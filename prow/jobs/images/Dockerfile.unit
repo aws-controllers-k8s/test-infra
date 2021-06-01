@@ -1,1 +1,2 @@
-FROM prow/test as base
+ARG TEST_BASE_TAG
+FROM $TEST_BASE_TAG as base
