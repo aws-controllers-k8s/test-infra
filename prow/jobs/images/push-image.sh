@@ -11,14 +11,14 @@ QUIET=${QUIET:-"false"}
 
 USAGE="
 Usage:
-  $(basename "$0")
+  $(basename "$0") IMAGE_TYPE
 
 Pushes all of the tagged 'prow/*' images into a public ECR repository. Use
 DOCKER_REPOSITORY to specify the ECR repository URI. Use VERSION to set the 
 SemVer value in the image tag.
 
 Example:
-$(basename "$0")
+$(basename "$0") integration
 
 Environment variables:
   VERSION:                  Provide the version to be inserted into the docker tag
@@ -28,6 +28,14 @@ Environment variables:
   QUIET:                    Build container images quietly (<true|false>)
                             Default: false
 "
+
+if [ $# -ne 1 ]; then
+    echo "IMAGE_TYPE is not defined. Script accepts one parameter, <IMAGE_TYPE> to publish the Docker images of the given type." 1>&2
+    echo "${USAGE}"
+    exit 1
+fi
+
+IMAGE_TYPE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
 # Important Directory references
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -47,7 +55,5 @@ image_tag() {
 
 docker_login
 
-for image_type in deploy test; do
-  docker tag prow/$image_type $(image_tag $image_type)
-  docker push $(image_tag $image_type)
-done
+docker tag prow/$IMAGE_TYPE $(image_tag $IMAGE_TYPE)
+docker push $(image_tag $IMAGE_TYPE)

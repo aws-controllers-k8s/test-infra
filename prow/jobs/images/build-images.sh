@@ -24,5 +24,11 @@ QUIET=${QUIET:-"false"}
 
 # check_is_installed docker
 
-docker build -f $IMAGE_DIR/Dockerfile.deploy --quiet=$QUIET -t prow/deploy "${IMAGE_DIR}"
-docker build -f $IMAGE_DIR/Dockerfile.test --quiet=$QUIET -t prow/test "${IMAGE_DIR}"
+docker build -f "$IMAGE_DIR/Dockerfile.deploy" --quiet=$QUIET -t "prow/deploy" "${IMAGE_DIR}"
+
+export TEST_BASE_TAG="prow/test-$(uuidgen | cut -c1-8)"
+docker build -f "$IMAGE_DIR/Dockerfile.test" --quiet=$QUIET -t $TEST_BASE_TAG "${IMAGE_DIR}"
+
+for IMAGE_TYPE in integration unit; do
+  docker build -f "$IMAGE_DIR/Dockerfile.$IMAGE_TYPE" --quiet=$QUIET --build-arg TEST_BASE_TAG -t "prow/$IMAGE_TYPE" "${IMAGE_DIR}"
+done

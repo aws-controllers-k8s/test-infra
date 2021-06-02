@@ -1,0 +1,41 @@
+# Dockerfile for integration testing
+ARG TEST_BASE_TAG
+FROM $TEST_BASE_TAG as base
+
+ARG DOCKER_VERSION=19.03.15
+ENV DOCKER_VERSION=${DOCKER_VERSION}
+
+RUN echo "Installing controller-gen ..." \
+    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.0" \
+    && mv $GOPATH/bin/controller-gen /usr/bin/controller-gen
+
+RUN echo "Installing Kustomize ..." \
+    && export KUSTOMIZE_TARBALL="kustomize.tar.gz" \
+    && curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v4.1.2/kustomize_v4.1.2_linux_amd64.tar.gz --output "${KUSTOMIZE_TARBALL}" \
+    && tar xzf "${KUSTOMIZE_TARBALL}" -C /usr/bin \
+    && rm "${KUSTOMIZE_TARBALL}"
+
+RUN echo "Installing Kubectl ... " \
+    && curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list \
+    && apt-get update \
+    && apt-get install -y kubectl
+
+RUN echo "Installing Docker ..." \
+    && curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add - \
+    && add-apt-repository \
+        "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") \
+        $(lsb_release -cs) stable" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i 's/cgroupfs_mount$/#cgroupfs_mount\n/' /etc/init.d/docker
+
+RUN echo "Ensuring Legacy Iptables ..." \
+    && update-alternatives --set iptables  /usr/sbin/iptables-legacy || true \
+    && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true \
+    && update-alternatives --set arptables /usr/sbin/arptables-legacy || true
+
+RUN curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.10.0/kind-linux-amd64 && \
+    chmod +x ./kind && \
+    mv ./kind /usr/bin/kind
