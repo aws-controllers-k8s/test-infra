@@ -278,8 +278,9 @@ def delete_secret(namespace: str,
     _api_client = _get_k8s_api_client()
     client.CoreV1Api(_api_client).delete_namespaced_secret(name, namespace)
 
+
 def wait_on_condition(reference: CustomResourceReference,
-                      condition_name: str,
+                      condition_type: str,
                       desired_condition_status: str,
                       wait_periods: int = 2,
                       period_length: int = 60) -> bool:
@@ -300,48 +301,85 @@ def wait_on_condition(reference: CustomResourceReference,
 
     desired_condition = None
     for i in range(wait_periods):
-        logging.debug(f"Waiting on condition {condition_name} to reach {desired_condition_status} for resource {reference} ({i})")
+        logging.debug(f"Waiting on condition {condition_type} to reach {desired_condition_status} for resource {reference} ({i})")
 
-        desired_condition = get_resource_condition(reference, condition_name)
-        if desired_condition is not None and desired_condition['status'] == desired_condition_status:
-            logging.info(f"Condition {condition_name} has status {desired_condition_status}, continuing...")
-            return True
+        if condition_exists(reference, condition_type):
+            desired_condition = get_resource_condition(reference, condition_type)
+            if desired_condition is not None and desired_condition['status'] == desired_condition_status:
+                logging.info(f"Condition {condition_type} has status {desired_condition_status}, continuing...")
+                return True
+        else:
+            logging.debug(f"Condition {condition_type} not yet present in status.conditions")
 
         sleep(period_length)
 
-    if not desired_condition:
-        logging.error(f"Resource {reference} does not have a condition of type {condition_name}.")
+    if desired_condition is None:
+        logging.error(f"Resource {reference} does not have a condition of type {condition_type}.")
     else:
-        logging.error(f"Wait for condition {condition_name} to reach status {desired_condition_status} timed out")
+        logging.error(f"Wait for condition {condition_type} to reach status {desired_condition_status} timed out")
     return False
 
-def get_resource_condition(reference: CustomResourceReference, condition_name: str):
+
+def get_resource_condition(reference: CustomResourceReference, condition_type: str):
     """
     Returns the required condition from .status.conditions
 
     Precondition:
-        resource must exist in the cluster
+        call to condition_exists returns True, indicating that the resource must exist in the cluster, has
+        a status.conditions field, and contains the condition of interest.
 
     Returns:
-        condition json if it exists. None otherwise
+        condition if it exists. Raises a RuntimeError otherwise.
     """
-    if not get_resource_exists(reference):
-        logging.error(f"Resource {reference} does not exist")
-        return None
+
+    resource = get_resource(reference)
+    for condition in resource['status']['conditions']:
+        if condition['type'] == condition_type:
+            return condition
+
+    raise RuntimeError(f'Expected {condition_type} condition to exist in status.conditions field of resource.')
+
+
+def condition_exists(reference: CustomResourceReference, condition_type: str) -> bool:
+    """
+    If .status.conditions exists, finds whether the specified condition is present in the conditions list. Raises
+    an error otherwise (non-existence of status or status.conditions indicates something has gone wrong)
+
+    Returns:
+        False if the resource exists and has a status.conditions field but does not contain the desired condition
+        True if the resource exists and has a status.conditions field and contains the desired condition
+    """
+    assert get_resource_exists(reference)
 
     resource = get_resource(reference)
     if 'status' not in resource or 'conditions' not in resource['status']:
-        logging.error(f"Resource {reference} does not have a .status.conditions field.")
-        return None
+        raise KeyError('Resource does not have status.conditions field')
 
     for condition in resource['status']['conditions']:
-        if condition['type'] == condition_name:
-            return condition
+        if condition['type'] == condition_type:
+            return True
 
-    return None
+    return False
+
+
+def condition_dne_or_false(reference: CustomResourceReference, condition_type: str) -> bool:
+    """
+    Check if the specified condition either is not present in .status.conditions or has status 'False'.
+
+    Returns:
+        False if the condition is found but has status 'True'
+        True if the condition is found and has status 'False', or if the condition is not present in .status.conditions
+    """
+
+    if not condition_exists(reference, condition_type):
+        return True
+    else:
+        condition = get_resource_condition(reference, condition_type)
+        return condition['status'] == 'False'
+
 
 def assert_condition_state_message(reference: CustomResourceReference,
-                                   condition_name: str,
+                                   condition_type: str,
                                    desired_condition_status: str,
                                    desired_condition_message: Union[None, str]):
     """
@@ -351,18 +389,18 @@ def assert_condition_state_message(reference: CustomResourceReference,
     Returns:
         bool: True if condition exists and both the status and message match the desired values
     """
-    condition = get_resource_condition(reference, condition_name)
-    # Ensure the status existed
-    if condition is None:
-        logging.error(f"Resource {reference} does not have a condition of type {condition_name}")
+
+    if not condition_exists(reference, condition_type):
+        logging.error(f"Resource {reference} does not have a condition of type {condition_type}")
         return False
 
+    condition = get_resource_condition(reference, condition_type)
     current_condition_status = condition.get('status', None)
     current_condition_message = condition.get('message', None)
     if current_condition_status == desired_condition_status and current_condition_message == desired_condition_message:
-        logging.info(f"Condition {condition_name} has status {desired_condition_status} and message {desired_condition_message}, continuing...")
+        logging.info(f"Condition {condition_type} has status {desired_condition_status} and message {desired_condition_message}, continuing...")
         return True
 
-    logging.error(f"Resource {reference} has {condition_name} set {current_condition_status}, expected {desired_condition_status}; with message"
+    logging.error(f"Resource {reference} has {condition_type} set {current_condition_status}, expected {desired_condition_status}; with message"
                     f" {current_condition_message}, expected {desired_condition_message}")
     return False
