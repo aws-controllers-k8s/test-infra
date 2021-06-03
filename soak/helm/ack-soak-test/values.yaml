@@ -1,0 +1,13 @@
+# Default values for ack-soak-test.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+awsService: "" # provide during helm install command
+testJobParallelism: 1
+testJobCompletions: 1
+awsRegion: "us-west-2"
+soak:
+  imageRepo: "" # provide during helm install command
+  imageTag: "" # provide during helm install command
+  startTimeEpochSeconds: "" # provide during helm install command
+  durationMinutes: 1440
