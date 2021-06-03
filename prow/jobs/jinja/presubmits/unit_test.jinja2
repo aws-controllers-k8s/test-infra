@@ -1,21 +1,3 @@
-{% for service in aws_services  %}
-  aws-controllers-k8s/{{ service }}-controller:
-  - name: {{ service }}-unit-test
-    decorate: true
-    spec:
-      serviceAccountName: pre-submit-service-account
-      containers:
-      - image: public.ecr.aws/aws-controllers-k8s/prow:prow-unit-0.0.1
-        resources:
-          limits:
-            cpu: 2
-        env:
-        - name: SERVICE
-          value: {{ service }}
-        command: ["make", "test"]
-
-{% endfor %}
-
 {% for repo in ["runtime", "code-generator"] %}
   aws-controllers-k8s/{{ repo }}:
   - name: unit-test

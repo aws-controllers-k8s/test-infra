@@ -29,5 +29,19 @@
         - name: SERVICE
           value: {{ service }}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+        
+  - name: {{ service }}-unit-test
+    decorate: true
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: public.ecr.aws/aws-controllers-k8s/prow:prow-unit-0.0.1
+        resources:
+          limits:
+            cpu: 2
+        env:
+        - name: SERVICE
+          value: {{ service }}
+        command: ["make", "test"]
 
 {% endfor %}
