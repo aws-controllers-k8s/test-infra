@@ -15,3 +15,18 @@
         command: ["make", "test"]
 
 {% endfor %}
+
+{% for repo in ["runtime", "code-generator"] %}
+  aws-controllers-k8s/{{ repo }}:
+  - name: unit-test
+    decorate: true
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: public.ecr.aws/aws-controllers-k8s/prow:prow-unit-0.0.1
+        resources:
+          limits:
+            cpu: 1
+        command: ["make", "test"]
+
+{% endfor %}
