@@ -259,7 +259,7 @@ be run multiple times to perform the soak test.
     ```bash
     go-to-soak \
     && cd test-infra/soak \
-    && docker build -t $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG --build-arg AWS_SERVICE=$SERVICE_NAME --build-arg E2E_GIT_REF=$CONTROLLER_VERSION .
+    && docker build -t $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG --build-arg AWS_SERVICE=$SERVICE_NAME --build-arg E2E_GIT_REF=$CONTROLLER_VERSION . \
     && docker push $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG
     ```
 
@@ -318,4 +318,9 @@ NOTE: You can see the value of these credentials in secret named `$PROM_CHART_RE
 
 ### Step 11 (Cleanup the background port-forward processes)
 
-* 
+* RUN 
+    ```bash
+    for pid in $(ps -a | grep "kubectl port-forward" | grep "$PROM_CHART_RELEASE_NAME" | cut -d" " -f1); do
+        kill -9 $pid ;
+    done
+    ```
