@@ -47,7 +47,6 @@ docker run --rm -t \
     --network="host" \
     -v $KUBECONFIG_LOCATION:/root/.kube/config:z \
     -v $HOME/.aws/credentials:/root/.aws/credentials:z \
-    -v $THIS_DIR:/root/tests:z \
     -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
     -e RUN_PYTEST_LOCALLY="true" \
     -e PYTEST_LOG_LEVEL \
