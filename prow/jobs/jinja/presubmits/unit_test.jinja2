@@ -2,6 +2,7 @@
   aws-controllers-k8s/{{ repo }}:
   - name: unit-test
     decorate: true
+    optional: false
     spec:
       serviceAccountName: pre-submit-service-account
       containers:

@@ -2,6 +2,7 @@
   aws-controllers-k8s/{{ service }}-controller:
   - name: {{ service }}-kind-e2e
     decorate: true
+    optional: false
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -32,6 +33,7 @@
         
   - name: {{ service }}-unit-test
     decorate: true
+    optional: false
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
