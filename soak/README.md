@@ -17,12 +17,25 @@ TBD
 ## How To Run Soak Test Locally
 
 ### Prerequisites
-* A tool for building OCI images (docker, buildah etc..)
-* A Kubernetes cluster to run soak tests
-* helm 
-* kubectl
-* curl
-* yq
+* A tool for building OCI images ([docker](https://docs.docker.com/get-docker/), [buildah](https://github.com/containers/buildah/blob/master/install.md) etc..)
+* A [Kubernetes cluster](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html) to run soak tests
+* [helm](https://helm.sh/docs/intro/install/) 
+* [kubectl](https://kubernetes.io/docs/tasks/tools/)
+* [curl](https://curl.se/download.html)
+* [yq](https://mikefarah.gitbook.io/yq/)
+
+### Before You Begin
+
+If you are running soak tests locally for the first time, continue reading, otherwise skip to step 0.
+
+Make sure that service controller release that you are testing has following three characteristics:
+1. `aws-controllers-k8s/runtime` version is v0.2.2 or higher
+2. helm chart release of the service controller has "metrics-service.yaml" template
+3. `aws-controllers-k8s/test-infra` dependency inside `test/e2e/requirements.txt` is at
+    `3d5e98f5960ac2ea8360c212141c4ec89cfcb668` or a later commit.
+
+If this is not the case, please create a new release for your service controller and use it for soak testing.
+Here is a sample [PR](https://github.com/aws-controllers-k8s/ecr-controller/pull/7) for ECR service controller.
 
 ### Step 0 (Declare the ACK soak test configuration)
 
@@ -129,7 +142,7 @@ You can use either (a) or (b) method below.
     && helm chart pull $CONTROLLER_CHART_URL \
     && mkdir controller-helm \
     && cd controller-helm \
-    && helm chart export $CONTROLLER_CHART_URL
+    && helm chart export $CONTROLLER_CHART_URL \
     && cd ack-$SERVICE_NAME-controller
     ```
     
