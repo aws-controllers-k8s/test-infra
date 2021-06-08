@@ -19,7 +19,7 @@ spec:
         imagePullPolicy: Always
         name: ssm
         command: ["/bin/bash"]
-        args: ["-c","echo '* * * * * root yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm & rm -rf /etc/cron.d/ssmstart' > /etc/cron.d/ssmstart"]
+        args: ["-c","echo '* * * * * root yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm & rm -rf /etc/cron.d/ssmstart' > /etc/cron.d/ssmstart && tail -f /dev/null"]
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:
@@ -33,6 +33,6 @@ spec:
           path: /etc/cron.d
           type: Directory  
       dnsPolicy: ClusterFirst
-      restartPolicy: OnFailure
+      restartPolicy: Always
       schedulerName: default-scheduler
       terminationGracePeriodSeconds: 30
