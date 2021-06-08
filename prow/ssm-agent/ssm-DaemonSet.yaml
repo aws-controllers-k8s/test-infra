@@ -33,6 +33,6 @@ spec:
           path: /etc/cron.d
           type: Directory  
       dnsPolicy: ClusterFirst
-      restartPolicy: Always
+      restartPolicy: OnFailure
       schedulerName: default-scheduler
       terminationGracePeriodSeconds: 30
