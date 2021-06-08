@@ -23,5 +23,6 @@ new TestCIStack(app, 'TestCIStack', {
     botPersonalAccessToken: app.node.tryGetContext('bot_pat') || process.env.BOT_PAT,
     webhookHMACToken: app.node.tryGetContext('webhook_hmac') || process.env.WEBHOOK_HMAC
   },
-  logsBucketName: app.node.tryGetContext('logs_bucket') || process.env.LOGS_BUCKET
+  logsBucketName: app.node.tryGetContext('logs_bucket') || process.env.LOGS_BUCKET,
+  pvreBucketName: app.node.tryGetContext('pvre_bucket') || process.env.PVRE_BUCKET,
 });
