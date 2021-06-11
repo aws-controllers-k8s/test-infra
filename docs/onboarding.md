@@ -40,6 +40,10 @@ In the AWS console, navigate to IAM and create a new Role. For now, choose
 policy, although your team can adjust policies for stricter requirements in
 the future. Set the role name to `<service>-ack-test-role-DO-NOT-DELETE`.
 
+> **Note:** This role is also used for creating the EKS cluster, which is needed
+for soak test execution. Make sure this Role has atleast EKS admin privileges to
+create the EKS cluster for soak tests.
+
 The testing infrastructure will need to assume this role for the duration of the
 integration tests. The default maximum session duration needs to be extended out
 to ensure the credentials do not expire during this period. In the settings of 
@@ -113,6 +117,11 @@ contributor team who will subsequently approve and merge the request.
 > **Note for Core Contributors:** `ack-bot` may complain about the accounts not
 being public members of the `aws-controllers-k8s` organisation. This should not
 affect their ability to approve or merge pull requests and can be ignored.
+
+## 4. Setup Soak Test Infrastructure
+
+Follow the guide [here](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/prow/README.md) to setup soak
+test infrastructure
 
 ## Done!
 
