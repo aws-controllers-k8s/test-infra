@@ -17,5 +17,24 @@
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
     - stable
+{% if service in soak_test_on_release_service_names %}
+
+  - name: {{ service }}-soak-on-release
+    decorate: true
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-soak-0.0.2
+          securityContext:
+            privileged: true
+          command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
+    branches: #supports tags too.
+    - ^v[0-9]+\.[0-9]+\.[0-9]+$
+{% endif %}
 
 {% endfor %}

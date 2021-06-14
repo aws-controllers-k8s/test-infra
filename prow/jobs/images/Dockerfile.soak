@@ -1,0 +1,9 @@
+# Dockerfile for soak testing
+ARG DEPLOY_BASE_TAG
+FROM $DEPLOY_BASE_TAG as base
+
+RUN dnf -y install jq\
+    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && install -o root -g root -m 0755 kubectl /usr/bin/kubectl \
+    && curl -L -s https://github.com/mikefarah/yq/releases/download/v4.2.0/yq_linux_amd64 --output /usr/bin/yq \
+    && chmod +x /usr/bin/yq

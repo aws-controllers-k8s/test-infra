@@ -43,7 +43,7 @@ WORKSPACE_DIR=$TEST_INFRA_DIR/..
 SERVICE_CONTROLLER_DIR="$WORKSPACE_DIR/$AWS_SERVICE-controller"
 
 # Check all the dependencies are present in container.
-source "$SCRIPTS_DIR"/lib/common.sh
+source "$TEST_INFRA_DIR"/scripts/lib/common.sh
 check_is_installed buildah
 check_is_installed aws
 check_is_installed helm

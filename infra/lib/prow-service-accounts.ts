@@ -100,6 +100,12 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
+    // Assumes the Role in service team's account to access soak EKS cluster
+    const postAssumeRolePolicy = new iam.PolicyStatement({
+      actions: ["sts:AssumeRole"],
+      resources: ["*"]
+    });
+
     // Service account for each of the Prow deployments
     // TODO(RedbackThomson): Split by service and assign individual permissions to each
     this.deploymentServiceAccount = props.prowCluster.addServiceAccount('ProwDeploymentServiceAccount', {
@@ -143,6 +149,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postEcrPublicPolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postEcrPublicAllResourcePolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postStsPolicy);
+    this.postsubmitJobServiceAccount.addToPrincipalPolicy(postAssumeRolePolicy);
     new cdk.CfnOutput(scope, 'PostSubmitServiceAccountRoleOutput', {
       value: this.postsubmitJobServiceAccount.role.roleName,
       exportName: 'PostSubmitServiceAccountRoleName',
