@@ -47,6 +47,8 @@ perform_buildah_and_helm_login
 
 # Assume the iam role used to create the EKS soak cluster
 assume_soak_creds() {
+  # unset previously assumed creds, and assume new creds using IRSA of postsubmit prowjob.
+  unset AWS_ACCESS_KEY_ID && unset AWS_SECRET_ACCESS_KEY && unset AWS_SESSION_TOKEN
   local _ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
   eval $_ASSUME_COMMAND
   >&2 echo "soak-on-release.sh] [INFO] Assumed ACK_ROLE_ARN"
