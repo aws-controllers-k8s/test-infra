@@ -106,6 +106,13 @@ export class ProwServiceAccounts extends cdk.Construct {
       resources: ["*"]
     });
 
+    const postParamStoreAccessPolicy = new iam.PolicyStatement({
+      actions: ["ssm:Get*"],
+      resources: [
+        `arn:${props.stackPartition}:ssm:${props.region}:${props.account}:parameter/*`,
+      ],
+    });
+
     // Service account for each of the Prow deployments
     // TODO(RedbackThomson): Split by service and assign individual permissions to each
     this.deploymentServiceAccount = props.prowCluster.addServiceAccount('ProwDeploymentServiceAccount', {
@@ -150,6 +157,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postEcrPublicAllResourcePolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postStsPolicy);
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(postAssumeRolePolicy);
+    this.postsubmitJobServiceAccount.addToPrincipalPolicy(postParamStoreAccessPolicy);
     new cdk.CfnOutput(scope, 'PostSubmitServiceAccountRoleOutput', {
       value: this.postsubmitJobServiceAccount.role.roleName,
       exportName: 'PostSubmitServiceAccountRoleName',
