@@ -1,7 +1,7 @@
 import * as cdk8s from 'cdk8s';
 import * as constructs from 'constructs';
 import * as kplus from 'cdk8s-plus';
-import { PROW_NAMESPACE } from '../test-ci-stack';
+import { PROW_NAMESPACE, PROW_JOB_NAMESPACE } from '../test-ci-stack';
 
 export interface ProwSecretsChartProps {
   readonly botPersonalAccessToken: string;
@@ -10,6 +10,7 @@ export interface ProwSecretsChartProps {
 
 export class ProwSecretsChart extends cdk8s.Chart {
   readonly botPATSecret: kplus.Secret;
+  readonly botDocsPATSecret: kplus.Secret;
   readonly webhookHMACSecret: kplus.Secret;
 
   constructor(scope: constructs.Construct, id: string, props: ProwSecretsChartProps) {
@@ -26,6 +27,16 @@ export class ProwSecretsChart extends cdk8s.Chart {
       metadata: {
         name: 'github-token',
         namespace: PROW_NAMESPACE
+      }
+    });
+
+    this.botDocsPATSecret = new kplus.Secret(this, 'docs-github-token', {
+      stringData: {
+        'token': props.botPersonalAccessToken
+      },
+      metadata: {
+        name: 'github-docs-token',
+        namespace: PROW_JOB_NAMESPACE
       }
     });
 
