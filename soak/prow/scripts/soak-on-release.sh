@@ -138,8 +138,10 @@ helm install $SOAK_CHART_RELEASE_NAME . \
 # Loop until the Job executing soak test does not complete. Check again with 30 minutes interval.
 while kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r --exit-status '.status.completionTime'>/dev/null; [ $? -ne 0 ]
 do
-  >&2 echo "soak-on-release.sh] [INFO] Completion time is not present in the job status. Soak test is still running."
-  >&2 echo "soak-on-release.sh] [INFO] Sleeping for 30 mins..."
+  >&2 echo "soak-on-release.sh] [INFO] Current soak Job(default/$AWS_SERVICE-soak-test) status is: "
+  kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r '.status' >&2
+  >&2 echo "soak-on-release.sh] [INFO] Completion time is not present in the soak Job status. Soak Job is still running."
+  >&2 echo "soak-on-release.sh] [INFO] Current time is $(date) . Sleeping for 30 mins ..."
   sleep 1800
   # refresh the aws credentials to communicate with eks soak cluster
   assume_soak_creds
