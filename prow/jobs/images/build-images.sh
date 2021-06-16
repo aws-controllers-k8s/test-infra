@@ -25,6 +25,7 @@ QUIET=${QUIET:-"false"}
 # check_is_installed docker
 
 docker build -f "$IMAGE_DIR/Dockerfile.deploy" --quiet=$QUIET -t "prow/deploy" "${IMAGE_DIR}"
+docker build -f "$IMAGE_DIR/Dockerfile.docs" --quiet=$QUIET -t "prow/docs" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.soak" --quiet=$QUIET --build-arg DEPLOY_BASE_TAG="prow/deploy" -t "prow/soak" "${IMAGE_DIR}"
 
 export TEST_BASE_TAG="prow/test-$(uuidgen | cut -c1-8)"

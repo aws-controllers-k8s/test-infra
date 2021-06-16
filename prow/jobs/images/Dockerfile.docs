@@ -1,0 +1,7 @@
+FROM squidfunk/mkdocs-material:7.1.8
+
+COPY build-docs.sh /build-docs.sh
+
+RUN apk add -y --no-cache bash gcc libc-dev && chmod +x /build-docs.sh
+
+ENTRYPOINT ["./build-docs.sh"]
