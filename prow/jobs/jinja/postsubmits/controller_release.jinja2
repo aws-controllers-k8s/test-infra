@@ -44,7 +44,7 @@
       repo: test-infra
       base_ref: main
       workdir: true
-    {% for other_service in  aws_services if not other_service == service %}
+    {% for other_service in aws_services if not other_service == service %}
     - org: aws-controllers-k8s
       repo: {{ other_service }}-controller
       base_ref: main
@@ -61,7 +61,7 @@
                 key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
-          command: ["/build-docs.sh"]
+          command: ["/docs/build-docs.sh"]
     run_if_changed: "config/crd/bases/.*"
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
