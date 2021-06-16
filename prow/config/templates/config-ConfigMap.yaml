@@ -71,6 +71,9 @@ data:
             [Your PR dashboard](https://{{ .Values.prow.domain }}/pr?{{ "query=is:pr+state:open+author:{{with index .Spec.Refs.Pulls 0}}{{.Author}}{{end}}" }}).
       default_decoration_configs:
         "*":
+          # Allow for soak tests to run for maximum of 2 days
+          timeout: 48h
+          grace_period: 1h
           censor_secrets: true
           gcs_configuration:
             bucket: s3://{{ .Values.prow.presubmitsBucketName }}

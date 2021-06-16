@@ -81,6 +81,8 @@ export AWS_ACCOUNT_ID
 >&2 echo "soak-on-release.sh] [SETUP] Exported ACCOUNT_ID."
 
 aws eks update-kubeconfig --name soak-test-cluster >/dev/null
+# Use 'default' namespace by default and not 'test-pods' during helm commands.
+kubectl config set-context --current --namespace=default >/dev/null
 >&2 echo "soak-on-release.sh] [INFO] Updated the kubeconfig to communicate with 'soak-test-cluster' eks cluster."
 
 export HELM_EXPERIMENTAL_OCI=1
