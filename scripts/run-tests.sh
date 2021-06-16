@@ -84,7 +84,7 @@ elif [[ "$RUN_PYTEST_LOCALLY" == "true" ]]; then
     python service_bootstrap.py
     set +e
 
-    pytest -n $PYTEST_NUM_THREADS --dist loadfile -o log_cli=true \
+    pytest -n $PYTEST_NUM_THREADS --dist no -o log_cli=true \
       --log-cli-level "${PYTEST_LOG_LEVEL}" --log-level "${PYTEST_LOG_LEVEL}" .
     test_exit_code=$?
 
