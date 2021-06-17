@@ -51,37 +51,39 @@ assume_soak_creds() {
   unset AWS_ACCESS_KEY_ID && unset AWS_SECRET_ACCESS_KEY && unset AWS_SESSION_TOKEN
   local _ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
   eval $_ASSUME_COMMAND
-  >&2 echo "soak-on-release.sh] [INFO] Assumed ACK_ROLE_ARN"
+  echo "soak-on-release.sh] [INFO] Assumed ACK_ROLE_ARN"
 }
 
 ASSUME_EXIT_VALUE=0
 ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
-  >&2 echo "soak-on-release.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
+  echo "soak-on-release.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
   exit 1
 fi
 export ACK_ROLE_ARN
->&2 echo "soak-on-release.sh] [SETUP] exported ACK_ROLE_ARN"
+echo "soak-on-release.sh] [SETUP] exported ACK_ROLE_ARN"
 
 ASSUME_EXIT_VALUE=0
 IRSA_ARN=$(aws ssm get-parameter --name /ack/prow/soak/irsa/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
-  >&2 echo "soak-on-release.sh] [SETUP] Could not find irsa to run soak tests for $AWS_SERVICE"
+  echo "soak-on-release.sh] [SETUP] Could not find irsa to run soak tests for $AWS_SERVICE"
   exit 1
 fi
 export IRSA_ARN
->&2 echo "soak-on-release.sh] [SETUP] exported IRSA_ARN"
+echo "soak-on-release.sh] [SETUP] exported IRSA_ARN"
 
 ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
 eval $ASSUME_COMMAND
->&2 echo "soak-on-release.sh] [SETUP] Assumed ACK_ROLE_ARN"
+echo "soak-on-release.sh] [SETUP] Assumed ACK_ROLE_ARN"
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export AWS_ACCOUNT_ID
->&2 echo "soak-on-release.sh] [SETUP] Exported ACCOUNT_ID."
+echo "soak-on-release.sh] [SETUP] Exported ACCOUNT_ID."
 
 aws eks update-kubeconfig --name soak-test-cluster >/dev/null
->&2 echo "soak-on-release.sh] [INFO] Updated the kubeconfig to communicate with 'soak-test-cluster' eks cluster."
+# Use 'default' namespace by default and not 'test-pods' during helm commands.
+kubectl config set-context --current --namespace=default >/dev/null
+echo "soak-on-release.sh] [INFO] Updated the kubeconfig to communicate with 'soak-test-cluster' eks cluster."
 
 export HELM_EXPERIMENTAL_OCI=1
 cd "$SERVICE_CONTROLLER_DIR"/helm
@@ -103,7 +105,7 @@ export CONTROLLER_CHART_RELEASE_NAME="soak-test"
 chart_name=$(helm list -f '^soak-test$' -o json | jq -r '.[]|.name')
 [[ -n $chart_name ]] && echo "Chart soak-test already exists. Uninstalling..." && helm uninstall $CONTROLLER_CHART_RELEASE_NAME
 helm install $CONTROLLER_CHART_RELEASE_NAME . >/dev/null
->&2 echo "soak-on-release.sh] [INFO] Helm chart $CONTROLLER_CHART_RELEASE_NAME successfully installed."
+echo "soak-on-release.sh] [INFO] Helm chart $CONTROLLER_CHART_RELEASE_NAME successfully installed."
 
 # Build the soak test runner image
 cd "$TEST_INFRA_DIR"/soak
@@ -116,13 +118,13 @@ buildah bud \
   . >/dev/null
 
 buildah push $SOAK_RUNNER_IMAGE >/dev/null
->&2 echo "soak-on-release.sh] [INFO] Successfully built and pushed soak runner image $SOAK_RUNNER_IMAGE"
+echo "soak-on-release.sh] [INFO] Successfully built and pushed soak runner image $SOAK_RUNNER_IMAGE"
 
 # Check for already existing soak-test-runner helm chart
 export SOAK_CHART_RELEASE_NAME="soak-test-runner"
 chart_name=$(helm list -f '^soak-test-runner$' -o json | jq -r '.[]|.name')
 [[ -n $chart_name ]] \
-&& echo "soak-on-release.sh] [INFO] Chart soak-test-runner already exists. Uninstalling..." >&2 \
+&& echo "soak-on-release.sh] [INFO] Chart soak-test-runner already exists. Uninstalling..." \
 && helm uninstall $SOAK_CHART_RELEASE_NAME >/dev/null
 
 cd "$TEST_INFRA_DIR"/soak/helm/ack-soak-test
@@ -136,8 +138,10 @@ helm install $SOAK_CHART_RELEASE_NAME . \
 # Loop until the Job executing soak test does not complete. Check again with 30 minutes interval.
 while kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r --exit-status '.status.completionTime'>/dev/null; [ $? -ne 0 ]
 do
-  >&2 echo "soak-on-release.sh] [INFO] Completion time is not present in the job status. Soak test is still running."
-  >&2 echo "soak-on-release.sh] [INFO] Sleeping for 30 mins..."
+  echo "soak-on-release.sh] [INFO] Current soak Job(default/$AWS_SERVICE-soak-test) status is: "
+  kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r '.status'
+  echo "soak-on-release.sh] [INFO] Completion time is not present in the soak Job status. Soak Job is still running."
+  echo "soak-on-release.sh] [INFO] Current time is $(date) . Sleeping for 30 mins ..."
   sleep 1800
   # refresh the aws credentials to communicate with eks soak cluster
   assume_soak_creds

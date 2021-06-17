@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Values.awsService }}-soak-test
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ .Values.awsService }}-soak-test
 spec:
