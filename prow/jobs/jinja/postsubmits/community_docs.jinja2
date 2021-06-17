@@ -1,0 +1,24 @@
+  aws-controllers-k8s/community:
+  - name: community-docs-release
+    decorate: true
+    extra_refs:
+    {% for service in aws_services %}
+    - org: aws-controllers-k8s
+      repo: {{ service }}-controller
+      base_ref: main
+    {% endfor %}
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-docs-0.0.2
+          env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: github-docs-token
+                key: token
+          - name: GITHUB_ACTOR
+            value: "ack-bot"
+          command: ["/docs/build-docs.sh"]
+    run_if_changed: "docs/.*"
+    
