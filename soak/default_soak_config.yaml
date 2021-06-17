@@ -1,0 +1,13 @@
+# Amount of time in minutes to execute long running soak test. Default 1 day = 1440 minutes
+durationMinutes: 1440
+# Map of pytest marker name to pytest command options
+# Soak test running container will execute pytest command for each of these markers sequentially from the e2e directory.
+# One example would be to run 'service' marker pytests followed by 'e2e_dangling_resource_cleanup'(example name) marker
+# to eliminate piling of dangling resources from e2e test runs, since soak test runner will be executing e2e tests
+# continuously for 24 hours.
+pytestMarkers:
+  # For default soak config, only run e2e tests continuously
+  service:
+    logLevel: info
+    numThreads: auto
+    dist: no

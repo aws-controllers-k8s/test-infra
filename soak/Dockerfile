@@ -10,11 +10,15 @@ ENV CONTROLLER_E2E_PATH ${CONTROLLER_E2E_PATH}
 
 WORKDIR /soak
 # Install dependencies for soak test environment
-RUN apk add --no-cache git bash gcc libc-dev
+RUN apk add --no-cache git bash gcc libc-dev curl \
+    && curl -L -s https://github.com/mikefarah/yq/releases/download/v4.9.6/yq_linux_amd64 --output /usr/bin/yq \
+    && chmod +x /usr/bin/yq
 
 # Copy the script to run soak tests.
 COPY run_soak_test.sh .
 RUN chmod +x run_soak_test.sh
+
+COPY default_soak_config.yaml .
 
 # Checkout the controller repository where e2e tests are present.
 # Soak test run consists of multiple runs of these e2e tests.
