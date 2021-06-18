@@ -114,3 +114,8 @@ triggered.
       # For ACK core contributors
       aws ssm put-parameter --name "/ack/prow/soak/irsa/$SERVICE" --type String --value <provided-value> 
       ```
+
+6. By default, the soak-runner uses the [default configuration](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/default_soak_config.yaml)
+   i.e. run e2e tests continuously for 24 hours. To provide custom behavior for soak tests, create a file in service-controller
+   repository at "test/e2e/soak_config.yaml". Take a look at [default configuration](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/default_soak_config.yaml)
+   for sample configuration.
