@@ -3,6 +3,7 @@
   - name: {{ service }}-kind-e2e
     decorate: true
     optional: false
+    always_run: true
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -34,6 +35,7 @@
   - name: {{ service }}-unit-test
     decorate: true
     optional: false
+    always_run: true
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
