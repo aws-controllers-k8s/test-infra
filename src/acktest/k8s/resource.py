@@ -129,12 +129,12 @@ def _get_k8s_api_client() -> ApiClient:
 def create_k8s_namespace(namespace_name: str):
     _api_client = _get_k8s_api_client()
     return client.CoreV1Api(_api_client).create_namespace(
-        client.V1Namespace(name=namespace_name))
+        client.V1Namespace(name=namespace_name.lower()))
 
 
 def delete_k8s_namespace(namespace_name: str):
     _api_client = _get_k8s_api_client()
-    return client.CoreV1Api(_api_client).delete_namespace(namespace_name)
+    return client.CoreV1Api(_api_client).delete_namespace(namespace_name.lower())
 
 
 def create_custom_resource(
@@ -144,9 +144,18 @@ def create_custom_resource(
 
     if reference.namespace is None:
         return _api.create_cluster_custom_object(
-            reference.group, reference.version, reference.plural, custom_resource)
+            reference.group.lower(),
+            reference.version.lower(),
+            reference.plural.lower(),
+            custom_resource
+        )
     return _api.create_namespaced_custom_object(
-        reference.group, reference.version, reference.namespace, reference.plural, custom_resource)
+        reference.group.lower(),
+        reference.version.lower(),
+        reference.namespace.lower(),
+        reference.plural.lower(),
+        custom_resource
+    )
 
 def patch_custom_resource(
     reference: CustomResourceReference, custom_resource: dict):
@@ -155,9 +164,20 @@ def patch_custom_resource(
 
     if reference.namespace is None:
         return _api.patch_cluster_custom_object(
-            reference.group, reference.version, reference.plural, reference.name, custom_resource)
+            reference.group.lower(),
+            reference.version.lower(),
+            reference.plural.lower(),
+            reference.name.lower(),
+            custom_resource
+        )
     return _api.patch_namespaced_custom_object(
-        reference.group, reference.version, reference.namespace, reference.plural, reference.name, custom_resource)
+        reference.group.lower(),
+        reference.version.lower(),
+        reference.namespace.lower(),
+        reference.plural.lower(),
+        reference.name.lower(),
+        custom_resource
+    )
 
 def replace_custom_resource(
     reference: CustomResourceReference, custom_resource: dict):
@@ -186,9 +206,18 @@ def delete_custom_resource(
     _response = None
     if reference.namespace is None:
         _response = _api.delete_cluster_custom_object(
-            reference.group, reference.version, reference.plural, reference.name)
+            reference.group.lower(),
+            reference.version.lower(),
+            reference.plural.lower(),
+            reference.name.lower()
+        )
     _response = _api.delete_namespaced_custom_object(
-        reference.group, reference.version, reference.namespace, reference.plural, reference.name)
+        reference.group.lower(),
+        reference.version.lower(),
+        reference.namespace.lower(),
+        reference.plural.lower(),
+        reference.name.lower()
+    )
 
     for _ in range(wait_periods):
         sleep(period_length)
@@ -212,10 +241,19 @@ def get_resource(reference: CustomResourceReference):
 
     if reference.namespace is None:
         return _api.get_cluster_custom_object(
-            reference.group, reference.version, reference.plural, reference.name)
+            reference.group.lower(),
+            reference.version.lower(),
+            reference.plural.lower(),
+            reference.name.lower()
+        )
 
     return _api.get_namespaced_custom_object(
-        reference.group, reference.version, reference.namespace, reference.plural, reference.name)
+        reference.group.lower(),
+        reference.version.lower(),
+        reference.namespace.lower(),
+        reference.plural.lower(),
+        reference.name.lower()
+    )
 
 
 def get_resource_exists(reference: CustomResourceReference) -> bool:
@@ -278,7 +316,7 @@ def create_opaque_secret(namespace: str,
     body.metadata = {'name': name}
     body.type = 'Opaque'
     body = _api_client.sanitize_for_serialization(body)
-    client.CoreV1Api(_api_client).create_namespaced_secret(namespace,body)
+    client.CoreV1Api(_api_client).create_namespaced_secret(namespace.lower(),body)
 
 
 def delete_secret(namespace: str,
@@ -291,7 +329,7 @@ def delete_secret(namespace: str,
     :return: None
     """
     _api_client = _get_k8s_api_client()
-    client.CoreV1Api(_api_client).delete_namespaced_secret(name, namespace)
+    client.CoreV1Api(_api_client).delete_namespaced_secret(name.lower(), namespace.lower())
 
 def wait_on_condition(reference: CustomResourceReference,
                       condition_name: str,
@@ -327,8 +365,7 @@ def wait_on_condition(reference: CustomResourceReference,
     if not desired_condition:
         logging.error(f"Resource {reference} does not have a condition of type {condition_name}.")
     else:
-        logging.error(f"Wait for condition {condition_name} to reach status {desired_condition_status} timed out")
-    logging.info(f"Resource state:\n{get_resource(reference)}")  # log resource state upon failure
+        logging.error(f"Wait for condition {condition_name} to reach status {desired_condition_status} timed out. Condition has message '{desired_condition['message']}'")
     return False
 
 def get_resource_condition(reference: CustomResourceReference, condition_name: str):
