@@ -20,19 +20,29 @@ from .resources import random_suffix_name
 
 ADOPTED_RESOURCE_GROUP = "services.k8s.aws"
 ADOPTED_RESOURCE_VERSION = "v1alpha1"
-ADOPTED_RESOURCE_PLURAL = "AdoptedResources"
+ADOPTED_RESOURCE_PLURAL = "adoptedresources"
+ADOPTED_RESOURCE_KIND = "AdoptedResource"
 
 ADOPTED_CONDITION_NAME = "ACK.Adopted"
 
 @dataclass(frozen=True)
-class AdoptedResourceAWSIdentifiers:
-    """ Represents the AWS identifier spec fields from the adopted resource CRD.
+class AdoptedResourceAWSIdentifier:
+    """ Represents the base AWS identifier spec fields from the adopted resource CRD.
 
+    TODO(RedbackThomson): Enable after merging https://github.com/aws-controllers-k8s/runtime/pull/13
     Additional keys need to be configured as allowlisted as part of the 
     controller generator.
-    """
-    nameOrId: str
-    additionalKeys: Dict[str, str]
+    """    
+    pass
+    # additionalKeys: Optional[Dict[str, str]] = None
+
+@dataclass(frozen=True)
+class AdoptedResourceNameOrIDIdentifier(AdoptedResourceAWSIdentifier):
+    nameOrID: str
+
+@dataclass(frozen=True)
+class AdoptedResourceARNIdentifier(AdoptedResourceAWSIdentifier):
+    arn: str
 
 @dataclass(frozen=True)
 class AdoptedResourceKubernetesIdentifiers:
@@ -48,13 +58,15 @@ class AdoptedResourceKubernetesIdentifiers:
 class AdoptedResourceSpec:
     """ Represents the adopted resource CRD spec fields.
     """
-    aws: AdoptedResourceAWSIdentifiers
+    aws: AdoptedResourceAWSIdentifier
     kubernetes: AdoptedResourceKubernetesIdentifiers
 
 class AbstractAdoptionTest(ABC):
+    RESOURCE_PLURAL: str = ""
+    RESOURCE_VERSION: str = ""
+    TARGET_NAMESPACE: str = "default"
+
     _spec: AdoptedResourceSpec  = None
-    _plural: str = ""
-    _version: str = ""
     _reference: k8s.CustomResourceReference
 
     @abstractmethod
@@ -69,24 +81,25 @@ class AbstractAdoptionTest(ABC):
     def get_resource_spec(self) -> AdoptedResourceSpec:
         pass
 
-    @abstractmethod
-    def get_resource_plural(self) -> str:
-        pass
-
-    @abstractmethod
-    def get_resource_version(self) -> str:
-        pass
-
     def _generate_resource_name(self) -> str:
-        return random_suffix_name(f"adopted-{self._spec.kubernetes.kind}", 32, delimiter="-")
+        return (random_suffix_name(f"adopted-{self._spec.kubernetes.kind}", 32, delimiter="-")).lower()
 
     def _create_adopted_resource(self, resource_name: str) -> Tuple[k8s.CustomResourceReference, Dict]:
         spec_dict = asdict(self._spec)
+        body_dict = {
+            "apiVersion": f"{ADOPTED_RESOURCE_GROUP}/{ADOPTED_RESOURCE_VERSION}",
+            "kind": ADOPTED_RESOURCE_KIND,
+            "metadata": {
+                "name": resource_name,
+                "namespace": self.TARGET_NAMESPACE
+            },
+            "spec": spec_dict
+        }
 
         reference = k8s.CustomResourceReference(ADOPTED_RESOURCE_GROUP, ADOPTED_RESOURCE_VERSION,
-            ADOPTED_RESOURCE_PLURAL, resource_name)
+            ADOPTED_RESOURCE_PLURAL, resource_name, namespace=self.TARGET_NAMESPACE)
 
-        return (reference, k8s.create_custom_resource(reference, spec_dict))
+        return (reference, k8s.create_custom_resource(reference, body_dict))
         
 
     def _assert_adoption_status(self):
@@ -98,7 +111,7 @@ class AbstractAdoptionTest(ABC):
 
     def _assert_target_created(self, target_name: str):
         target_reference = k8s.CustomResourceReference(self._spec.kubernetes.group,
-            self._version, self._plural, target_name)
+            self.RESOURCE_VERSION, self.RESOURCE_PLURAL, target_name, namespace=self.TARGET_NAMESPACE)
         target = k8s.get_resource(target_reference)
         
         assert target is not None
@@ -115,21 +128,19 @@ class AbstractAdoptionTest(ABC):
 
         # Get resource spec (abstract)
         self._spec = self.get_resource_spec()
-        self._plural = self.get_resource_plural()
-        self._version = self.get_resource_version()
 
         # Create adopted resource
         resource_name = self._generate_resource_name()
         (self._reference, resource) = self._create_adopted_resource(resource_name)
 
         # Check adoption status
-        self._assert_adoption_status(resource)
+        self._assert_adoption_status()
 
         # Check presence of target resource
-        self._assert_target_created(resource)
+        self._assert_target_created(resource_name)
 
         # Delete adopted resource
-        self._delete_adopted_resource(resource)
+        self._delete_adopted_resource()
 
         # Cleanup resource (abstract)
         self.cleanup_resource()
