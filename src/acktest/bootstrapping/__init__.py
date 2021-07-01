@@ -84,6 +84,18 @@ class Bootstrappable(abc.ABC):
             yield attr
 
     def _bootstrap_subresources(self):
+        """Iterates through every `Bootstrappable` field and attempts to 
+            bootstrap it for a given number of retries.
+
+        If the bootstrapping fails, it will attempt to cleanup the previous 
+        attempt's subresources and try again. After reaching the maximum number
+        of retries, it will clean up any resources that were successfully 
+        bootstrapped and then fail with a `BootstrapFailureException`.
+
+        Raises:
+            BootstrapFailureException: If bootstrapping attempts reached the 
+                maximum number of retries.
+        """
         bootstrapped = []
         for resource in self.iter_bootstrappable:
             should_cleanup = True
@@ -121,6 +133,13 @@ class Bootstrappable(abc.ABC):
         self._cleanup_resources(self.iter_bootstrappable)
 
     def _cleanup_resources(self, resources: Iterable[Bootstrappable]):
+        """Iterates through the given list of resources and attempts to clean
+            them up for a given number of retries.
+
+        Args:
+            resources (Iterable[Bootstrappable]): The resources to attempt to 
+                clean up.
+        """
         # Iterate through list in reverse order, so that resources created last
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
