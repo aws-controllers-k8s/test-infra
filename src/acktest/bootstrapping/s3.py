@@ -35,13 +35,9 @@ class Bucket(Bootstrappable):
                 Bucket=self.name, CreateBucketConfiguration={"LocationConstraint": self.region}
             )
 
-        logging.info(f"Created bucket {self.name}")
-
     def cleanup(self):
         """Deletes an S3 bucket.
         """
         bucket = self.s3_resource.Bucket(self.name)
         bucket.objects.all().delete()
         bucket.delete()
-
-        logging.info(f"Deleted bucket {self.name}")

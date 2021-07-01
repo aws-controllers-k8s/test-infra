@@ -5,7 +5,7 @@ import pickle
 import logging
 
 from pathlib import Path
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, asdict
 from typing import Iterable, Iterator
 
 from ..aws.identity import get_region
@@ -46,28 +46,25 @@ class Serializable:
             bootstrap = pickle.load(stream)
         return bootstrap
 
+class BootstrapFailureException(Exception):
+    pass
 @dataclass
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
    
-    @abc.abstractmethod
-    def bootstrap(self):
-        pass
-
-    @abc.abstractmethod
-    def cleanup(self):
-        pass
-
     @property
     def region(self):
         return get_region()
 
-class BootstrapFailureException(Exception):
-    pass
+    @abc.abstractmethod
+    def bootstrap(self):
+        self._bootstrap_subresources()
 
-@dataclass
-class Resources(Serializable, Bootstrappable):
+    @abc.abstractmethod
+    def cleanup(self):
+        self._cleanup_subresources()
+
     @property
     def iter_bootstrappable(self) -> Iterator[Bootstrappable]:
         """Iterates over the values of each field that extends the 
@@ -77,61 +74,85 @@ class Resources(Serializable, Bootstrappable):
             Iterator[BootstrappableResource]: A field value.
         """
         for field in fields(self):
-            if not issubclass(field.type, Bootstrappable):
+            if not isinstance(field.type, type) or not issubclass(field.type, Bootstrappable):
                 continue
 
-            yield getattr(self, field.name)
+            attr = getattr(self, field.name)
+            if attr is None:
+                continue
 
-    def bootstrap(self):
-        """Runs the `bootstrap` method for every `BootstrappableResource` 
-            subclass in the bootstrap dictionary.
-        """
+            yield attr
 
+    def _bootstrap_subresources(self):
         bootstrapped = []
-        logging.info("🛠️ Bootstrapping resources ...")
         for resource in self.iter_bootstrappable:
-            exceptions = []
+            should_cleanup = True
+
+            resource_name = type(resource).__name__
+            logging.info(f"Attempting bootstrap {resource_name}")
             for _ in range(BOOTSTRAP_RETRIES):
                 try:
                     # Bootstrap and add to list of successes
                     resource.bootstrap()
+                    logging.info(f"Successfully bootstrapped {resource_name}")
                     bootstrapped.append(resource)
+                    should_cleanup = False
                     break
+                except BootstrapFailureException as ex:
+                    # Don't attempt to retry if we reached maximum retries beneath
+                    raise ex
                 except Exception as ex:
-                    exceptions.append(ex)
+                    logging.error(f"Exception while bootstrapping {resource_name}")
+                    logging.exception(ex)
+                    # Clean up any dependencies the first attempt made
+                    logging.info(f"Cleaning up dependencies created by {resource_name}")
+                    resource.cleanup()
+                    logging.info(f"Retrying bootstrapping {resource_name}")
                     continue
             else:
-                # Hit retry limit
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping resource")
-                for ex in exceptions:
-                    logging.exception(ex)
+                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping {resource_name}")
+            
+            if should_cleanup:
                 # Attempt to clean up successfully bootstrapped elements
                 self._cleanup_resources(bootstrapped)
-                raise BootstrapFailureException()
-                
+                raise BootstrapFailureException(f"Bootstrapping failed for resource type '{resource_name}'")
 
-    def cleanup(self):
-        """Runs the `cleanup` method for every `BootstrappableResource` 
-            subclass in the bootstrap dictionary.
-        """
-        logging.info("🧹 Cleaning up resources ...")
+    def _cleanup_subresources(self):
         self._cleanup_resources(self.iter_bootstrappable)
 
     def _cleanup_resources(self, resources: Iterable[Bootstrappable]):
         # Iterate through list in reverse order, so that resources created last
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
-            exceptions = []
+            resource_name = type(resource).__name__
             for _ in range(CLEANUP_RETRIES):
                 try:
                     # Clean up and add to list of successes
+                    logging.info(f"Attempting cleanup {resource_name}")
                     resource.cleanup()
+                    logging.info(f"Successfully cleaned up {resource_name}")
                     break
                 except Exception as ex:
-                    exceptions.append(ex)
+                    logging.error(f"Exception while cleaning up {resource_name}")
+                    logging.exception(ex)
                     continue
             else:
                 # Hit retry limit
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for cleaning up resource")
-                for ex in exceptions:
-                    logging.exception(ex)
+                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for cleaning up {resource_name}")
+                logging.error(f"Possibly dangling resource ({resource_name}): {asdict(resource)}")
+
+@dataclass
+class Resources(Serializable, Bootstrappable):
+    def bootstrap(self):
+        """Runs the `bootstrap` method for every `BootstrappableResource` 
+            subclass in the bootstrap dictionary.
+        """
+        logging.info("🛠️ Bootstrapping resources ...")
+        self._bootstrap_subresources()                
+
+    def cleanup(self):
+        """Runs the `cleanup` method for every `BootstrappableResource` 
+            subclass in the bootstrap dictionary.
+        """
+        logging.info("🧹 Cleaning up resources ...")
+        self._cleanup_subresources()

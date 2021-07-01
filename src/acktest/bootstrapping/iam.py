@@ -67,7 +67,6 @@ class Role(Bootstrappable):
         # resulting in failure that role is not present. So adding a delay
         # to allow for the role to become available
         time.sleep(ROLE_CREATE_WAIT_IN_SECONDS)
-        logging.info(f"Created role {resource_arn}")
 
         self.arn = resource_arn
 
@@ -89,5 +88,3 @@ class Role(Bootstrappable):
                 RoleName=role_name, InstanceProfileName=each["InstanceProfileName"]
             )
         self.iam_client.delete_role(RoleName=role_name)
-
-        logging.info(f"Deleted role {role_name}")
