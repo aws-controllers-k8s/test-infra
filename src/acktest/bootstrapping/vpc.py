@@ -103,7 +103,7 @@ class VPC(Bootstrappable):
         vpc = self.ec2_resource.Vpc(self.vpc_id)
 
         for subnet in self.public_subnet_ids + self.private_subnet_ids:
-            ec2.delete_subnet(SubnetId=subnet)
+            self.ec2_client.delete_subnet(SubnetId=subnet)
 
             logging.info(f"Deleted subnet {self.name}")
 
