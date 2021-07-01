@@ -19,13 +19,10 @@ and contain YAML files used as templates for creating test fixtures.
 import string
 import random
 import yaml
-import logging
-import pickle
 from pathlib import Path
 from typing import Any, Dict
 
 from .aws import identity
-from .bootstrapping import BootstrappableResource
 
 def default_placeholder_values():
     """ Default placeholder values for loading any resource file.

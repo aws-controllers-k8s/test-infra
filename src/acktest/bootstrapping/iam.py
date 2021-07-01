@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List
 
-from . import BootstrappableResource
+from . import Bootstrappable
 from .. import resources
 from ..aws.identity import get_region
 
@@ -18,7 +18,7 @@ ROLE_ARN_REGEX = r"^arn:aws:iam::\d{12}:(?:root|user|role\/([A-Za-z0-9-]+))$"
 ROLE_CREATE_WAIT_IN_SECONDS = 3
 
 @dataclass
-class Role(BootstrappableResource):
+class Role(Bootstrappable):
     # Inputs
     name_prefix: str
     principal_service: str
@@ -28,14 +28,16 @@ class Role(BootstrappableResource):
     # Outputs
     arn: str = field(default="", init=False)
     
+    @property
+    def iam_client(self):
+        return boto3.client("iam", region_name=self.region)
+
     def bootstrap(self):
         """Creates an IAM role with an auto-generated name.
         """
-        region = get_region()
         role_name = resources.random_suffix_name(self.name_prefix, 63)
-        iam = boto3.client("iam", region_name=region)
 
-        iam.create_role(
+        self.iam_client.create_role(
             RoleName=role_name,
             AssumeRolePolicyDocument=json.dumps(
                 {
@@ -53,12 +55,12 @@ class Role(BootstrappableResource):
         )
 
         for policy in self.policies:
-            iam.attach_role_policy(
+            self.iam_client.attach_role_policy(
                 RoleName=role_name,
                 PolicyArn=policy,
             )
 
-        iam_resource = iam.get_role(RoleName=role_name)
+        iam_resource = self.iam_client.get_role(RoleName=role_name)
         resource_arn = iam_resource["Role"]["Arn"]
 
         # There appears to be a delay in role availability after role creation
@@ -72,23 +74,20 @@ class Role(BootstrappableResource):
     def cleanup(self):
         """Deletes an IAM role.
         """
-        region = get_region()
-        iam = boto3.client("iam", region_name=region)
-
         role_name = re.match(ROLE_ARN_REGEX, self.arn).group(1)
-        managedPolicy = iam.list_attached_role_policies(RoleName=role_name)
-        for each in managedPolicy["AttachedPolicies"]:
-            iam.detach_role_policy(RoleName=role_name, PolicyArn=each["PolicyArn"])
+        managed_policy = self.iam_client.list_attached_role_policies(RoleName=role_name)
+        for each in managed_policy["AttachedPolicies"]:
+            self.iam_client.detach_role_policy(RoleName=role_name, PolicyArn=each["PolicyArn"])
 
-        inlinePolicy = iam.list_role_policies(RoleName=role_name)
-        for each in inlinePolicy["PolicyNames"]:
-            iam.delete_role_policy(RoleName=role_name, PolicyName=each)
+        inline_policy = self.iam_client.list_role_policies(RoleName=role_name)
+        for each in inline_policy["PolicyNames"]:
+            self.iam_client.delete_role_policy(RoleName=role_name, PolicyName=each)
 
-        instanceProfiles = iam.list_instance_profiles_for_role(RoleName=role_name)
-        for each in instanceProfiles["InstanceProfiles"]:
-            iam.remove_role_from_instance_profile(
+        instance_profiles = self.iam_client.list_instance_profiles_for_role(RoleName=role_name)
+        for each in instance_profiles["InstanceProfiles"]:
+            self.iam_client.remove_role_from_instance_profile(
                 RoleName=role_name, InstanceProfileName=each["InstanceProfileName"]
             )
-        iam.delete_role(RoleName=role_name)
+        self.iam_client.delete_role(RoleName=role_name)
 
         logging.info(f"Deleted role {role_name}")

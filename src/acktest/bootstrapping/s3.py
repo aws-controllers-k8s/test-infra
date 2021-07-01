@@ -1,36 +1,38 @@
 import boto3
 import logging
-import json
-import re
-import time
 
 from dataclasses import dataclass, field
-from typing import List
 
-from . import BootstrappableResource
+from . import Bootstrappable
 from .. import resources
-from ..aws.identity import get_region, get_account_id
+from ..aws.identity import get_region
 
 @dataclass
-class Bucket(BootstrappableResource):
+class Bucket(Bootstrappable):
     # Inputs
     name_prefix: str
 
     # Outputs
     name: str = field(init=False)
     
+    @property
+    def s3_client(self):
+        return boto3.client("s3", region_name=self.region)
+
+    @property
+    def s3_resource(self):
+        return boto3.resource("s3", region_name=self.region)
+
     def bootstrap(self):
         """Creates an S3 bucket with an auto-generated name.
         """
-        region = get_region()
         self.name = resources.random_suffix_name(self.name_prefix, 63)
 
-        s3 = boto3.client("s3", region_name=region)
-        if region == "us-east-1":
-            s3.create_bucket(Bucket=self.name)
+        if self.region == "us-east-1":
+            self.s3_client.create_bucket(Bucket=self.name)
         else:
-            s3.create_bucket(
-                Bucket=self.name, CreateBucketConfiguration={"LocationConstraint": region}
+            self.s3_client.create_bucket(
+                Bucket=self.name, CreateBucketConfiguration={"LocationConstraint": self.region}
             )
 
         logging.info(f"Created bucket {self.name}")
@@ -38,10 +40,7 @@ class Bucket(BootstrappableResource):
     def cleanup(self):
         """Deletes an S3 bucket.
         """
-        region = get_region()
-        s3_resource = boto3.resource("s3", region_name=region)
-
-        bucket = s3_resource.Bucket(self.name)
+        bucket = self.s3_resource.Bucket(self.name)
         bucket.objects.all().delete()
         bucket.delete()
 

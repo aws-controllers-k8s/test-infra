@@ -8,8 +8,9 @@ from pathlib import Path
 from dataclasses import dataclass, fields
 from typing import Iterator
 
-@dataclass
-class ServiceBootstrapResources(abc.ABC):
+from ..aws.identity import get_region
+
+class Serializable:
     """Represents a list of all bootstrappable resources required for a given
     service's tests.
     """
@@ -17,7 +18,6 @@ class ServiceBootstrapResources(abc.ABC):
         """ Dumps the service bootstrap into a pickle file at a given path.
 
         Args:
-            bootstrap: The bootstrap object.
             output_path: The directory in which to dump the bootstrap pickle.
             bootstrap_file_name: The name of the created bootstrap pickle file.
         """
@@ -27,12 +27,12 @@ class ServiceBootstrapResources(abc.ABC):
         logging.info(f"Wrote bootstrap to {path}")
 
     @classmethod
-    def deseralize(cls, config_dir: Path, bootstrap_file_name: str = "bootstrap.pkl") -> ServiceBootstrapResources:
+    def deseralize(cls, config_dir: Path, bootstrap_file_name: str = "bootstrap.pkl") -> Resources:
         """ Reads a service bootstrap from a given bootstrap pickle file.
 
         Args:
-            config_dir: The directory in which the bootstray yaml exists.
-            bootstrap_file_name: The name of the created bootstrap yaml file.
+            config_dir: The directory in which the bootstrap pickle exists.
+            bootstrap_file_name: The name of the created bootstrap pickle file.
 
         Returns:
             ServiceBootstrapResources: The servicebootstrap resources read from
@@ -43,38 +43,8 @@ class ServiceBootstrapResources(abc.ABC):
             bootstrap = pickle.load(stream)
         return bootstrap
 
-    @property
-    def bootstrappable_field_values(self) -> Iterator[BootstrappableResource]:
-        """Iterates over the values of each field that extends the 
-            `BootstrappableResource` type
-
-        Yields:
-            Iterator[BootstrappableResource]: A field value.
-        """
-        for field in fields(self):
-            if not issubclass(field.type, BootstrappableResource):
-                continue
-
-            yield getattr(self, field.name)
-
-    def bootstrap(self):
-        """Runs the `bootstrap` method for every `BootstrappableResource` 
-            subclass in the bootstrap dictionary.
-        """
-        logging.info("🛠️ Bootstrapping resources ...")
-        for resource in self.bootstrappable_field_values:
-            resource.bootstrap()
-
-    def cleanup(self):
-        """Runs the `cleanup` method for every `BootstrappableResource` 
-            subclass in the bootstrap dictionary.
-        """
-        logging.info("🧹 Cleaning up resources ...")
-        for resource in self.bootstrappable_field_values:
-            resource.cleanup()
-
 @dataclass
-class BootstrappableResource(abc.ABC):
+class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
     
@@ -85,3 +55,39 @@ class BootstrappableResource(abc.ABC):
     @abc.abstractmethod
     def cleanup(self):
         pass
+
+    @property
+    def region(self):
+        return get_region()
+
+@dataclass
+class Resources(Serializable, Bootstrappable):
+    @property
+    def iter_bootstrappable(self) -> Iterator[Bootstrappable]:
+        """Iterates over the values of each field that extends the 
+            `BootstrappableResource` type
+
+        Yields:
+            Iterator[BootstrappableResource]: A field value.
+        """
+        for field in fields(self):
+            if not issubclass(field.type, Bootstrappable):
+                continue
+
+            yield getattr(self, field.name)
+
+    def bootstrap(self):
+        """Runs the `bootstrap` method for every `BootstrappableResource` 
+            subclass in the bootstrap dictionary.
+        """
+        logging.info("🛠️ Bootstrapping resources ...")
+        for resource in self.iter_bootstrappable:
+            resource.bootstrap()
+
+    def cleanup(self):
+        """Runs the `cleanup` method for every `BootstrappableResource` 
+            subclass in the bootstrap dictionary.
+        """
+        logging.info("🧹 Cleaning up resources ...")
+        for resource in self.iter_bootstrappable:
+            resource.cleanup()
