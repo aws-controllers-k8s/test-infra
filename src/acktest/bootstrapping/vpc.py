@@ -2,6 +2,7 @@ from typing import List, Union
 import boto3
 import logging
 
+from boto3.session import Session
 from dataclasses import dataclass, field
 
 from . import BootstrappableResource
@@ -57,13 +58,15 @@ class VPC(BootstrappableResource):
         public_route_table = self._create_public_route_table()
         self.public_route_table_id = public_route_table.id
 
+        region_azs = self.get_availability_zone_names()
+
         subnet_count = 0
         for i in range(self.public_subnets):
             if self.public_subnet_cidr_blocks is None:
                 cidr_block = f"10.0.{subnet_count}.0/24"
             else:
                 cidr_block = self.public_subnet_cidr_blocks[i]
-            subnet = vpc.create_subnet(CidrBlock=cidr_block)
+            subnet = vpc.create_subnet(CidrBlock=cidr_block, AvailabilityZone=region_azs[subnet_count % len(region_azs)])
             self.public_subnet_ids.append(subnet.id)
 
             ec2_client.associate_route_table(RouteTableId=public_route_table.id, SubnetId=subnet.id)
@@ -82,7 +85,7 @@ class VPC(BootstrappableResource):
                 cidr_block = f"10.0.{subnet_count}.0/24"
             else:
                 cidr_block = self.private_subnet_cidr_blocks[i]
-            subnet = vpc.create_subnet(CidrBlock=cidr_block)
+            subnet = vpc.create_subnet(CidrBlock=cidr_block, AvailabilityZone=region_azs[subnet_count % len(region_azs)])
             self.private_subnet_ids.append(subnet.id)
 
             ec2_client.associate_route_table(RouteTableId=private_route_table.id, SubnetId=subnet.id)
@@ -113,6 +116,13 @@ class VPC(BootstrappableResource):
         vpc.delete()
 
         logging.info(f"Deleted VPC {self.name}")
+
+    def get_availability_zone_names(self):
+        region = get_region()
+        ec2 = boto3.client("ec2", region_name=region)
+
+        zones = ec2.describe_availability_zones()
+        return list(map(lambda x: x['ZoneName'], zones['AvailabilityZones']))
 
     @property
     def route_tables(self):
