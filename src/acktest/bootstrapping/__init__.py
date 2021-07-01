@@ -47,6 +47,7 @@ class Serializable:
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
+    region_override: str
     
     @abc.abstractmethod
     def bootstrap(self):
@@ -58,7 +59,7 @@ class Bootstrappable(abc.ABC):
 
     @property
     def region(self):
-        return get_region()
+        return get_region() if self.region_override is None else self.region_override
 
 @dataclass
 class Resources(Serializable, Bootstrappable):
