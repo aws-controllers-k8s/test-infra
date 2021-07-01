@@ -6,9 +6,12 @@ import logging
 
 from pathlib import Path
 from dataclasses import dataclass, fields
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from ..aws.identity import get_region
+
+BOOTSTRAP_RETRIES = 3
+CLEANUP_RETRIES = 3
 
 class Serializable:
     """Represents a list of all bootstrappable resources required for a given
@@ -47,8 +50,7 @@ class Serializable:
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
-    region_override: str
-    
+   
     @abc.abstractmethod
     def bootstrap(self):
         pass
@@ -59,7 +61,10 @@ class Bootstrappable(abc.ABC):
 
     @property
     def region(self):
-        return get_region() if self.region_override is None else self.region_override
+        return get_region()
+
+class BootstrapFailureException(Exception):
+    pass
 
 @dataclass
 class Resources(Serializable, Bootstrappable):
@@ -81,14 +86,52 @@ class Resources(Serializable, Bootstrappable):
         """Runs the `bootstrap` method for every `BootstrappableResource` 
             subclass in the bootstrap dictionary.
         """
+
+        bootstrapped = []
         logging.info("🛠️ Bootstrapping resources ...")
         for resource in self.iter_bootstrappable:
-            resource.bootstrap()
+            exceptions = []
+            for _ in range(BOOTSTRAP_RETRIES):
+                try:
+                    # Bootstrap and add to list of successes
+                    resource.bootstrap()
+                    bootstrapped.append(resource)
+                    break
+                except Exception as ex:
+                    exceptions.append(ex)
+                    continue
+            else:
+                # Hit retry limit
+                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping resource")
+                for ex in exceptions:
+                    logging.exception(ex)
+                # Attempt to clean up successfully bootstrapped elements
+                self._cleanup_resources(bootstrapped)
+                raise BootstrapFailureException()
+                
 
     def cleanup(self):
         """Runs the `cleanup` method for every `BootstrappableResource` 
             subclass in the bootstrap dictionary.
         """
         logging.info("🧹 Cleaning up resources ...")
-        for resource in self.iter_bootstrappable:
-            resource.cleanup()
+        self._cleanup_resources(self.iter_bootstrappable)
+
+    def _cleanup_resources(self, resources: Iterable[Bootstrappable]):
+        # Iterate through list in reverse order, so that resources created last
+        # (with the most dependencies) are the first to be deleted
+        for resource in reversed(list(resources)):
+            exceptions = []
+            for _ in range(CLEANUP_RETRIES):
+                try:
+                    # Clean up and add to list of successes
+                    resource.cleanup()
+                    break
+                except Exception as ex:
+                    exceptions.append(ex)
+                    continue
+            else:
+                # Hit retry limit
+                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for cleaning up resource")
+                for ex in exceptions:
+                    logging.exception(ex)
