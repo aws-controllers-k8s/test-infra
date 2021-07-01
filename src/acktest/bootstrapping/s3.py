@@ -21,9 +21,6 @@ class Bucket(BootstrappableResource):
     
     def bootstrap(self):
         """Creates an S3 bucket with an auto-generated name.
-
-        Args:
-            name_prefix (str): The prefix for the auto-generated name.
         """
         region = get_region()
         self.name = resources.random_suffix_name(self.name_prefix, 63)
@@ -48,4 +45,4 @@ class Bucket(BootstrappableResource):
         bucket.objects.all().delete()
         bucket.delete()
 
-        logging.info(f"Deleted data bucket {self.name}")
+        logging.info(f"Deleted bucket {self.name}")

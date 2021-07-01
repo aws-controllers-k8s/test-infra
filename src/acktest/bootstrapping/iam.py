@@ -30,14 +30,6 @@ class Role(BootstrappableResource):
     
     def bootstrap(self):
         """Creates an IAM role with an auto-generated name.
-
-        Args:
-            name_prefix (str): The prefix for the auto-generated name.
-            principal_service (str): The service principal that is allowed to assume
-                the role.
-            policies (List[str]): A list of IAM policy ARNs that are attached to the
-                the role.
-            description (str, optional): The role description. Defaults to "".
         """
         region = get_region()
         role_name = resources.random_suffix_name(self.name_prefix, 63)
