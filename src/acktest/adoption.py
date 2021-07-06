@@ -29,12 +29,10 @@ ADOPTED_CONDITION_NAME = "ACK.Adopted"
 class AdoptedResourceAWSIdentifier:
     """ Represents the base AWS identifier spec fields from the adopted resource CRD.
 
-    TODO(RedbackThomson): Enable after merging https://github.com/aws-controllers-k8s/runtime/pull/13
     Additional keys need to be configured as allowlisted as part of the 
     controller generator.
-    """    
-    pass
-    # additionalKeys: Optional[Dict[str, str]] = None
+    """
+    additionalKeys: Dict[str, str]
 
 @dataclass(frozen=True)
 class AdoptedResourceNameOrIDIdentifier(AdoptedResourceAWSIdentifier):
