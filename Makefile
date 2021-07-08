@@ -2,13 +2,15 @@ SHELL := /bin/bash # Use bash syntax
 
 PROW_JOBS_PATH="./prow/jobs"
 
+AWS_SERVICE=$(shell echo $(SERVICE) | tr '[:upper:]' '[:lower:]')
+
 .PHONY: build-prow-jobs
 
 # Assumes python3 is installed as default python on the host.
 build-prow-jobs: ## Compiles the Prow jobs
 	@pushd "$(PROW_JOBS_PATH)" 1>/dev/null; \
-	python jobs_factory.py; \
-	echo "Success! Prowjobs available at $(PROW_JOBS_PATH)/jobs.yaml"; \
+	python jobs_factory.py && echo "Success! Prowjobs available at $(PROW_JOBS_PATH)/jobs.yaml" || \
+	echo "Error while generating Prowjobs"; \
 	popd 1>/dev/null
 
 kind-test: export PRESERVE = true

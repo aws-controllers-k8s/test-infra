@@ -29,11 +29,9 @@ START=$(date +%s)
 # VERSION is the source revision that executables and images are built from.
 VERSION=$(git describe --tags --always --dirty || echo "unknown")
 
-DEFAULT_TEST_INFRA_SOURCE_PATH="$ROOT_DIR/../test-infra"
-TEST_INFRA_SOURCE_PATH=${TEST_INFRA_SOURCE_PATH:-$DEFAULT_TEST_INFRA_SOURCE_PATH}
-
-DEFAULT_COMMUNITY_SOURCE_PATH="$ROOT_DIR/../community"
-COMMUNITY_SOURCE_PATH=${COMMUNITY_SOURCE_PATH:-$DEFAULT_COMMUNITY_SOURCE_PATH}
+DEFAULT_CODE_GENERATOR_SOURCE_PATH="$ROOT_DIR/../code-generator"
+CODE_GENERATOR_SOURCE_PATH=${CODE_GENERATOR_SOURCE_PATH:-$DEFAULT_CODE_GENERATOR_SOURCE_PATH}
+CODE_GENERATOR_SCRIPTS_DIR="$CODE_GENERATOR_SOURCE_PATH/scripts"
 
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/aws.sh"
@@ -156,7 +154,7 @@ if [ -z "$AWS_SERVICE_DOCKER_IMG" ]; then
     AWS_SERVICE_DOCKER_IMG="${DEFAULT_AWS_SERVICE_DOCKER_IMG}"
     export AWS_SERVICE_DOCKER_IMG
     export LOCAL_MODULES
-    ${SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null || exit 1
+    ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null || exit 1
     echo "ok."
 else
     debug_msg "skipping building the ${AWS_SERVICE} docker image, since one was specified ${AWS_SERVICE_DOCKER_IMG}"
@@ -260,10 +258,10 @@ if [[ "$ENABLE_PROMETHEUS" == true ]]; then
 fi
 
 if [[ "$TEST_HELM_CHARTS" == true ]]; then
-  $COMMUNITY_SOURCE_PATH/scripts/test-helm.sh "$AWS_SERVICE" "$VERSION"
+  $SCRIPTS_DIR/test-helm.sh "$AWS_SERVICE" "$VERSION"
 fi
 
 # run e2e tests
 export SKIP_PYTHON_TESTS
 export RUN_PYTEST_LOCALLY
-$TEST_INFRA_SOURCE_PATH/scripts/run-tests.sh $AWS_SERVICE
+$SCRIPTS_DIR/run-tests.sh $AWS_SERVICE
