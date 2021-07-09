@@ -40,6 +40,36 @@ is_installed() {
     fi
 }
 
+# filenoext returns just the name of the supplied filename without the
+# extension
+filenoext() {
+    local __name="$1"
+    local __filename=$( basename "$__name" )
+    # How much do I despise Bash?!
+    echo "${__filename%.*}"
+}
+
+DEFAULT_DEBUG_PREFIX="DEBUG: "
+
+# debug_msg prints out a supplied message if the DEBUG environs variable is
+# set. An optional second argument indicates the "indentation level" for the
+# message. If the indentation level argument is missing, we look for the
+# existence of an environs variable called "indent_level" and use that.
+debug_msg() {
+    local __msg=${1:-}
+    local __indent_level=${2:-}
+    local __debug="${DEBUG:-""}"
+    local __debug_prefix="${DEBUG_PREFIX:-$DEFAULT_DEBUG_PREFIX}"
+    if [ ! -n "$__debug" ]; then
+        return 0
+    fi
+    __indent=""
+    if [ -n "$__indent_level" ]; then
+        __indent="$( for each in $( seq 0 $__indent_level ); do printf " "; done )"
+    fi
+    echo "$__debug_prefix$__indent$__msg"
+}
+
 perform_buildah_and_helm_login() {
   #ecr-public only exists in us-east-1 so use that region specifically
   local __pw=$(aws ecr-public get-login-password --region us-east-1)
