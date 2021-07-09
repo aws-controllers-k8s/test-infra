@@ -11,11 +11,11 @@
     - org: aws-controllers-k8s
       repo: code-generator
       base_ref: main
-      workdir: true
+      workdir: false
     - org: aws-controllers-k8s
       repo: test-infra
       base_ref: main
-      workdir: false
+      workdir: true
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
