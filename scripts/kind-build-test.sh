@@ -257,9 +257,12 @@ if [[ "$ENABLE_PROMETHEUS" == true ]]; then
     k8_wait_for_pod_status "prometheus-deployment" "Running" 60 || (echo 'FAIL: prometheus-deployment failed to Run' && exit 1)
 fi
 
-if [[ "$TEST_HELM_CHARTS" == true ]]; then
-  $SCRIPTS_DIR/test-helm.sh "$AWS_SERVICE" "$VERSION"
-fi
+# TODO(RedbackThomson): Helm scripts rely on building `ack-generate` to produce
+# the build artifacts. These need to come from the version used to generate the
+# resources, not necessarily the `main` branch of `code-generator`
+# if [[ "$TEST_HELM_CHARTS" == true ]]; then
+#   $SCRIPTS_DIR/test-helm.sh "$AWS_SERVICE" "$VERSION"
+# fi
 
 # run e2e tests
 export SKIP_PYTHON_TESTS
