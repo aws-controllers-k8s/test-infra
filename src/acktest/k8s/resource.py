@@ -78,7 +78,9 @@ def create_reference(crd_group: str,
     return reference
 
 def create_resource(reference: CustomResourceReference,
-                    spec: object):
+                    spec: object, 
+                    wait_periods: int, 
+                    period_length: int):
     """
     Create a resource from the reference and wait to be consumed by controller
     
@@ -88,7 +90,7 @@ def create_resource(reference: CustomResourceReference,
     :return: resource if it was created successfully, otherwise None
     """
     resource = create_custom_resource(reference, spec)
-    resource = wait_resource_consumed_by_controller(reference)
+    resource = wait_resource_consumed_by_controller(reference, wait_periods, period_length)
     return resource
 
 def load_and_create_resource(resource_directory: Path,
@@ -98,7 +100,9 @@ def load_and_create_resource(resource_directory: Path,
                              resource_name: str,
                              spec_file_name: str,
                              replacements: object,
-                             namespace: str = "default"):
+                             namespace: str = "default",
+                             wait_periods: int = 3,
+                             period_length: int = 10):
     """
     Helper method to encapsulate the common methods used to create a resource.
     Load a spec file from disk, create an instance of CustomResourceReference and resource in K8s cluster.
@@ -108,7 +112,7 @@ def load_and_create_resource(resource_directory: Path,
     """
     spec = load_resource_file(resource_directory, spec_file_name, replacements)
     reference = create_reference(crd_group, crd_version, resource_plural, resource_name, namespace)
-    resource = create_resource(reference, spec)
+    resource = create_resource(reference, spec, wait_periods, period_length)
     return reference, spec, resource
 
 
