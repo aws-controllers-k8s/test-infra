@@ -52,7 +52,9 @@ data:
             config:
             name: buildlog
           required_files:
-          - build-log.txt|controller_logs
+          - build-log.txt
+          optional_files:
+          - controller_logs
 
     plank:
       job_url_prefix_config:
