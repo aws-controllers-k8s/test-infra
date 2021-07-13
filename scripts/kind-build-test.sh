@@ -282,6 +282,6 @@ if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
     fi
 
     # Use the first pod in the `ack-system` namespace
-    POD=$(kubectl get pods -n ack-system -o name | head -n 1)
+    POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
     kubectl logs -n ack-system $POD > $ARTIFACTS/controller_logs
 fi
