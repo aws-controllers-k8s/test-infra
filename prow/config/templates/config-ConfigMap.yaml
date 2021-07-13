@@ -53,14 +53,8 @@ data:
             name: buildlog
           required_files:
           - build-log.txt
-        - lens:
-            name: junit
-          required_files:
-          - .*/junit.*\.xml
-        - lens:
-            name: podinfo
-          required_files:
-          - podinfo.json
+          optional_files:
+          - controller_logs
 
     plank:
       job_url_prefix_config:

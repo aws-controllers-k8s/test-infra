@@ -30,6 +30,8 @@
         env:
         - name: SERVICE
           value: {{ service }}
+        - name: DUMP_CONTROLLER_LOGS
+          value: "true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
         
   - name: {{ service }}-unit-test

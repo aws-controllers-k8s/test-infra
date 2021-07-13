@@ -29,6 +29,9 @@ START=$(date +%s)
 # VERSION is the source revision that executables and images are built from.
 VERSION=$(git describe --tags --always --dirty || echo "unknown")
 
+ARTIFACTS=${ARTIFACTS:-""}
+DUMP_CONTROLLER_LOGS=${DUMP_CONTROLLER_LOGS:-"false"}
+
 DEFAULT_CODE_GENERATOR_SOURCE_PATH="$ROOT_DIR/../code-generator"
 CODE_GENERATOR_SOURCE_PATH=${CODE_GENERATOR_SOURCE_PATH:-$DEFAULT_CODE_GENERATOR_SOURCE_PATH}
 CODE_GENERATOR_SCRIPTS_DIR="$CODE_GENERATOR_SOURCE_PATH/scripts"
@@ -106,6 +109,8 @@ Environment variables:
                             inside Docker (<true|false>)
                             Default: false
   ENABLE_PROMETHEUS:        Enables a different cluster config to enable Prometheus support.
+                            Default: false
+  DUMP_CONTROLLER_LOGS:     Whether to dump the controller pod logs to a local file after finishing tests.
                             Default: false
 "
 
@@ -268,3 +273,15 @@ fi
 export SKIP_PYTHON_TESTS
 export RUN_PYTEST_LOCALLY
 $SCRIPTS_DIR/run-tests.sh $AWS_SERVICE
+
+if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
+    if [[ ! -d $ARTIFACTS ]]; then
+        echo "Error evaluating ARTIFACTS environment variable:" 1>&2
+        echo "$ARTIFACTS is not a directory." 1>&2
+        exit 1
+    fi
+
+    # Use the first pod in the `ack-system` namespace
+    POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
+    kubectl logs -n ack-system $POD > $ARTIFACTS/controller_logs
+fi
