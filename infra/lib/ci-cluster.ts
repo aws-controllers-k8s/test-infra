@@ -19,6 +19,7 @@ export type CIClusterProps = CIClusterCompileTimeProps & CIClusterRuntimeProps;
 
 export class CICluster extends cdk.Construct {
   readonly testCluster: eks.Cluster;
+  readonly testNodegroup: eks.Nodegroup;
   readonly cdk8sApp: cdk8s.App = new cdk8s.App();
 
   constructor(scope: cdk.Construct, id: string, props: CIClusterProps) {
@@ -26,8 +27,12 @@ export class CICluster extends cdk.Construct {
 
     this.testCluster = new eks.Cluster(scope, 'TestInfraCluster', {
       version: eks.KubernetesVersion.V1_19,
-      defaultCapacity: 2,
-      defaultCapacityInstance: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8)
+      defaultCapacity: 0
+    })
+    this.testNodegroup = this.testCluster.addNodegroupCapacity('TestInfraNodegroup', {
+      instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8)],
+      minSize: 2,
+      diskSize: 150,
     })
 
     this.installProwRequirements(props);

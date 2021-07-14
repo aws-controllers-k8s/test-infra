@@ -11,6 +11,7 @@ export type ClusterSSMRuntimeProps = {
   account: string;
   region: string;
   cluster: eks.Cluster;
+  nodes: eks.Nodegroup;
 }
 
 export type ClusterSSMProps = ClusterSSMCompileProps & ClusterSSMRuntimeProps;
@@ -24,11 +25,7 @@ export class ClusterSSM extends cdk.Construct {
       return;
     }
 
-    if (!props.cluster.defaultNodegroup) {
-      throw new Error("Expected default nodegroup for SSM configuration")
-    }
-
-    props.cluster.defaultNodegroup.role.addManagedPolicy(
+    props.nodes.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName(
         "AmazonSSMManagedInstanceCore"
       )
