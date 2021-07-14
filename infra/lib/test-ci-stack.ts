@@ -29,7 +29,8 @@ export class TestCIStack extends cdk.Stack {
       ...props,
       account: this.account,
       region: this.region,
-      cluster: testCluster.testCluster
+      cluster: testCluster.testCluster,
+      nodes: testCluster.testNodegroup
     })
 
     const prowServiceAccounts = new ProwServiceAccounts(this, 'ProwServiceAccountsConstruct', {
