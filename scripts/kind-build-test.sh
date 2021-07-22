@@ -38,7 +38,6 @@ CODE_GENERATOR_SCRIPTS_DIR="$CODE_GENERATOR_SOURCE_PATH/scripts"
 
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/aws.sh"
-source "$SCRIPTS_DIR/lib/k8s.sh"
 
 check_is_installed curl
 check_is_installed docker
@@ -48,13 +47,6 @@ check_is_installed wget
 check_is_installed kind "You can install kind with the helper scripts/install-kind.sh"
 check_is_installed kubectl "You can install kubectl with the helper scripts/install-kubectl.sh"
 check_is_installed kustomize "You can install kustomize with the helper scripts/install-kustomize.sh"
-check_is_installed controller-gen "You can install controller-gen with the helper scripts/install-controller-gen.sh"
-
-if ! k8s_controller_gen_version_equals "$CONTROLLER_TOOLS_VERSION"; then
-    echo "FATAL: Existing version of controller-gen "`controller-gen --version`", required version is $CONTROLLER_TOOLS_VERSION."
-    echo "FATAL: Please uninstall controller-gen and install the required version with scripts/install-controller-gen.sh."
-    exit 1
-fi
 
 aws_check_credentials
 
