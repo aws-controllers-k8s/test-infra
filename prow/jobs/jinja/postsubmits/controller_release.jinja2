@@ -10,7 +10,12 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-deploy-0.0.2
+        - image: public.ecr.aws/aws-controllers-k8s/prow:prow-deploy-0.0.3
+          env:
+          - name: DOCKER_REPOSITORY
+            value: "public.ecr.aws/u2r4f3v7/{{ service }}-controller"
+          - name: HELM_REGISTRY
+            value: "public.ecr.aws/u2r4f3v7"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]

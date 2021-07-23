@@ -20,7 +20,7 @@ Environment variables:
   DOCKER_REPOSITORY:        Name for the Docker repository to push to
                             Default: $DEFAULT_DOCKER_REPOSITORY
   AWS_SERVICE_DOCKER_IMG:   Controller container image tag
-                            Default: aws-controllers-k8s:<AWS_SERVICE>-<VERSION>
+                            Default: public.ecr.aws/aws-controllers-k8s/<AWS_SERVICE>-controller:<VERSION>
                             VERSION is calculated from $PULL_BASE_REF
   QUIET:                    Build controller container image quietly (<true|false>)
                             Default: false
@@ -89,12 +89,10 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
   BUILD_DATE=$(date +%Y-%m-%dT%H:%M)
   CONTROLLER_IMAGE_DOCKERFILE_PATH=$CD_DIR/controller/Dockerfile
 
-  DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/controller"
+  DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
   DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
 
-  DEFAULT_AWS_SERVICE_DOCKER_IMG_TAG="${AWS_SERVICE}-${VERSION}"
-  AWS_SERVICE_DOCKER_IMG_TAG=${AWS_SERVICE_DOCKER_IMG_TAG:-"$DEFAULT_AWS_SERVICE_DOCKER_IMG_TAG"}
-  AWS_SERVICE_DOCKER_IMG=${AWS_SERVICE_DOCKER_IMG:-"$DOCKER_REPOSITORY:$AWS_SERVICE_DOCKER_IMG_TAG"}
+  AWS_SERVICE_DOCKER_IMG=${AWS_SERVICE_DOCKER_IMG:-"$DOCKER_REPOSITORY:$VERSION"}
   DOCKER_BUILD_CONTEXT="$WORKSPACE_DIR"
 
   popd 1>/dev/null
@@ -121,7 +119,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
     exit 2
   fi
 
-  echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG_TAG}"
+  echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG}"
 
   buildah push "${AWS_SERVICE_DOCKER_IMG}"
 
@@ -133,7 +131,7 @@ fi
 cd "$WORKSPACE_DIR"
 
 DEFAULT_HELM_REGISTRY="public.ecr.aws/aws-controllers-k8s"
-DEFAULT_HELM_REPO="chart"
+DEFAULT_HELM_REPO="$AWS_SERVICE-chart"
 
 HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}
 HELM_REPO=${HELM_REPO:-$DEFAULT_HELM_REPO}
@@ -142,9 +140,9 @@ export HELM_EXPERIMENTAL_OCI=1
 
 if [[ -d "$SERVICE_CONTROLLER_DIR/helm" ]]; then
     echo -n "Generating Helm chart package for $AWS_SERVICE@$VERSION ... "
-    helm chart save "$SERVICE_CONTROLLER_DIR"/helm/ "$HELM_REGISTRY/$HELM_REPO:$AWS_SERVICE-$VERSION"
+    helm chart save "$SERVICE_CONTROLLER_DIR"/helm/ "$HELM_REGISTRY/$HELM_REPO:$VERSION"
     echo "ok."
-    helm chart push "$HELM_REGISTRY/$HELM_REPO:$AWS_SERVICE-$VERSION"
+    helm chart push "$HELM_REGISTRY/$HELM_REPO:$VERSION"
 else
     echo "Error building Helm packages:" 1>&2
     echo "$SERVICE_CONTROLLER_SOURCE_PATH/helm is not a directory." 1>&2
