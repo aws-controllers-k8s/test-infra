@@ -4,7 +4,7 @@ set -eo pipefail
 
 VERSION=${VERSION:-$(git describe --tags --always --dirty || echo "unknown")}
 
-DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/prow"
+DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/m5q3e4b2/prow"
 DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
 
 QUIET=${QUIET:-"false"}

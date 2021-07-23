@@ -109,7 +109,7 @@ echo "soak-on-release.sh] [INFO] Helm chart $CONTROLLER_CHART_RELEASE_NAME succe
 
 # Build the soak test runner image
 cd "$TEST_INFRA_DIR"/soak
-SOAK_RUNNER_IMAGE="public.ecr.aws/aws-controllers-k8s/soak:$AWS_SERVICE"
+SOAK_RUNNER_IMAGE="public.ecr.aws/m5q3e4b2/soak:$AWS_SERVICE"
 buildah bud \
   -q \
   -t $SOAK_RUNNER_IMAGE \
@@ -130,7 +130,7 @@ chart_name=$(helm list -f '^soak-test-runner$' -o json | jq -r '.[]|.name')
 cd "$TEST_INFRA_DIR"/soak/helm/ack-soak-test
 helm install $SOAK_CHART_RELEASE_NAME . \
     --set awsService=$AWS_SERVICE \
-    --set soak.imageRepo="public.ecr.aws/aws-controllers-k8s/soak" \
+    --set soak.imageRepo="public.ecr.aws/m5q3e4b2/soak" \
     --set soak.imageTag=$AWS_SERVICE \
     --set soak.startTimeEpochSeconds=$(date +%s) \
     --set soak.durationMinutes=1440 >/dev/null
