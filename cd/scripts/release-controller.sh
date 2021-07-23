@@ -20,7 +20,7 @@ Environment variables:
   DOCKER_REPOSITORY:        Name for the Docker repository to push to
                             Default: $DEFAULT_DOCKER_REPOSITORY
   AWS_SERVICE_DOCKER_IMG:   Controller container image tag
-                            Default: public.ecr.aws/u2r4f3v7/<AWS_SERVICE>-controller:<VERSION>
+                            Default: public.ecr.aws/aws-controllers-k8s/<AWS_SERVICE>-controller:<VERSION>
                             VERSION is calculated from $PULL_BASE_REF
   QUIET:                    Build controller container image quietly (<true|false>)
                             Default: false
@@ -89,8 +89,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
   BUILD_DATE=$(date +%Y-%m-%dT%H:%M)
   CONTROLLER_IMAGE_DOCKERFILE_PATH=$CD_DIR/controller/Dockerfile
 
-  #TODO: vijat@ to replace u2r4f3v7 with aws-controllers-k8s
-  DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/u2r4f3v7/$AWS_SERVICE-controller"
+  DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
   DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
 
   AWS_SERVICE_DOCKER_IMG=${AWS_SERVICE_DOCKER_IMG:-"$DOCKER_REPOSITORY:$VERSION"}
@@ -131,7 +130,7 @@ fi
 
 cd "$WORKSPACE_DIR"
 
-DEFAULT_HELM_REGISTRY="public.ecr.aws/u2r4f3v7"
+DEFAULT_HELM_REGISTRY="public.ecr.aws/aws-controllers-k8s"
 DEFAULT_HELM_REPO="$AWS_SERVICE-chart"
 
 HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}
