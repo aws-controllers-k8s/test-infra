@@ -6,7 +6,7 @@ ARG DOCKER_VERSION=19.03.15
 ENV DOCKER_VERSION=${DOCKER_VERSION}
 
 RUN echo "Installing controller-gen ..." \
-    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.0" \
+    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1" \
     && mv $GOPATH/bin/controller-gen /usr/bin/controller-gen
 
 RUN echo "Installing Kustomize ..." \
