@@ -48,6 +48,7 @@ check_is_installed buildah
 check_is_installed aws
 check_is_installed helm
 check_is_installed git
+check_is_installed jq
 
 if [[ $PULL_BASE_REF = stable ]]; then
   pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller 1>/dev/null
