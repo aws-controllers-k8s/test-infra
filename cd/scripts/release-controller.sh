@@ -76,6 +76,19 @@ fi
 
 echo "VERSION is $VERSION"
 
+ASSUME_EXIT_VALUE=0
+ECR_PUBLISH_ARN=$(aws ssm get-parameter --name /ack/prow/cd/public_ecr/publish_role --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
+  echo "release-controller.sh] [SETUP] Could not find the iam role to publish images to public ecr repository"
+  exit 1
+fi
+export ECR_PUBLISH_ARN
+echo "release-controller.sh] [SETUP] exported ECR_PUBLISH_ARN"
+
+ASSUME_COMMAND=$(aws sts assume-role --role-arn $ECR_PUBLISH_ARN --role-session-name 'publish-images' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+eval $ASSUME_COMMAND
+echo "release-controller.sh] [SETUP] Assumed ECR_PUBLISH_ARN"
+
 # Setup the destination repository for buildah and helm
 perform_buildah_and_helm_login
 
