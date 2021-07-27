@@ -14,6 +14,9 @@ env = Environment(loader=FileSystemLoader('./'), trim_blocks=True, lstrip_blocks
 def load_templates(prow_job_type: str, template_dir: str) -> str:
     try:
         template_files = os.listdir(template_dir)
+
+        if template_files is not None:
+            template_files.sort()
     except FileNotFoundError as fe:
         print(f'{template_dir}: No such directory to load templates. Ignoring.')
         return ""
