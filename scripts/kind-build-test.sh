@@ -264,7 +264,9 @@ fi
 # run e2e tests
 export SKIP_PYTHON_TESTS
 export RUN_PYTEST_LOCALLY
+set +e
 $SCRIPTS_DIR/run-tests.sh $AWS_SERVICE
+EXIT_CODE=$?
 
 if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
     if [[ ! -d $ARTIFACTS ]]; then
@@ -277,3 +279,5 @@ if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
     POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
     kubectl logs -n ack-system $POD > $ARTIFACTS/controller_logs
 fi
+
+exit $EXIT_CODE
