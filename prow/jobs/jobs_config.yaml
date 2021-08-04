@@ -16,8 +16,8 @@ aws_services:
 - sfn
 - sns
 - sqs
+- ec2
 
 # list of aws services onboarded for soak test execution from prow cluster on every release
 soak_test_on_release_service_names:
 - ecr
-
