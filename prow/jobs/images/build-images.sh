@@ -28,7 +28,7 @@ docker build -f "$IMAGE_DIR/Dockerfile.deploy" --quiet=$QUIET -t "prow/deploy" "
 docker build -f "$IMAGE_DIR/Dockerfile.docs" --quiet=$QUIET -t "prow/docs" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.soak" --quiet=$QUIET --build-arg DEPLOY_BASE_TAG="prow/deploy" -t "prow/soak" "${IMAGE_DIR}"
 
-export TEST_BASE_TAG="prow/test-$(uuidgen | cut -c1-8)"
+export TEST_BASE_TAG=$(echo "prow/test-$(uuidgen | cut -c1-8)" | tr '[:upper:]' '[:lower:]')
 docker build -f "$IMAGE_DIR/Dockerfile.test" --quiet=$QUIET -t $TEST_BASE_TAG "${IMAGE_DIR}"
 
 for IMAGE_TYPE in integration unit; do
