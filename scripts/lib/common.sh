@@ -77,3 +77,17 @@ perform_buildah_and_helm_login() {
   export HELM_EXPERIMENTAL_OCI=1
   echo "$__pw" | helm registry login -u AWS --password-stdin public.ecr.aws
 }
+
+# get_num_columns returns the number of column on the terminal where script is
+# being executed
+get_num_columns() {
+  local __num_cols=$(tput cols)
+  echo "$__num_cols"
+}
+
+# print_line_separation prints a line of "=" symbol on the terminal executing
+# the script
+print_line_separation() {
+  local __num_cols=$(get_num_columns)
+  printf %"$__num_cols"s | tr " " "="
+}

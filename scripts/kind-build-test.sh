@@ -16,7 +16,8 @@ ACK_ROLE_ARN=${ACK_ROLE_ARN:-""}
 ACK_ENABLE_DEVELOPMENT_LOGGING="true"
 ACK_WATCH_NAMESPACE=${ACK_WATCH_NAMESPACE:-""}
 ENABLE_PROMETHEUS=${ENABLE_PROMETHEUS:-"false"}
-TEST_HELM_CHARTS=${TEST_HELM_CHARTS:-"true"}
+ENABLE_HELM_CHART_TEST=${ENABLE_HELM_CHART_TEST:-"true"}
+ENABLE_E2E_TESTS=${ENABLE_E2E_TESTS:-"true"}
 SKIP_PYTHON_TESTS=${SKIP_PYTHON_TESTS:-"false"}
 RUN_PYTEST_LOCALLY=${RUN_PYTEST_LOCALLY:="false"}
 ACK_LOG_LEVEL="debug"
@@ -92,7 +93,9 @@ Environment variables:
                             Default: $ROOT_DIR/build/tmp-$CLUSTER_NAME
   K8S_VERSION               Kubernetes Version [1.14, 1.15, 1.16, 1.17, and 1.18]
                             Default: 1.16
-  TEST_HELM_CHARTS          Whether to run the test-helm.sh script (<true|false>)
+  ENABLE_HELM_CHART_TEST    Whether to run the Helm Chart test (<true|false>)
+                            Default: true
+  ENABLE_E2E_TESTS          Whether to run the kind e2e tests (<true|false>)
                             Default: true
   SKIP_PYTHON_TESTS         Whether to skip python tests and run bash tests instead for
                             the service controller (<true|false>)
@@ -171,6 +174,16 @@ fi
 
 export KUBECONFIG="${TMP_DIR}/kubeconfig"
 
+if [[ "$ENABLE_HELM_CHART_TEST" == true ]]; then
+  print_line_separation
+  $SCRIPTS_DIR/test-helm.sh "$AWS_SERVICE"
+  print_line_separation
+else
+  echo "Skipping Helm Chart test because ENABLE_HELM_CHART_TEST is not true. Current value is : $ENABLE_HELM_CHART_TEST"
+fi
+
+[[ $ENABLE_E2E_TESTS != true ]] && echo "Skipping e2e tests because ENABLE_E2E_TESTS is not true. Current value is : $ENABLE_E2E_TESTS" && exit 0
+
 trap "clean_up" EXIT
 
 export AWS_ACCOUNT_ID
@@ -237,11 +250,11 @@ kubectl -n ack-system set env deployment/ack-"$AWS_SERVICE"-controller \
 sleep 10
 echo "ok."
 
-echo "======================================================================================================"
+print_line_separation
 echo "To poke around your test cluster manually:"
 echo "export KUBECONFIG=$TMP_DIR/kubeconfig"
 echo "kubectl get pods -A"
-echo "======================================================================================================"
+print_line_separation
 
 export KUBECONFIG
 
@@ -253,13 +266,6 @@ if [[ "$ENABLE_PROMETHEUS" == true ]]; then
     echo "ok."
     k8_wait_for_pod_status "prometheus-deployment" "Running" 60 || (echo 'FAIL: prometheus-deployment failed to Run' && exit 1)
 fi
-
-# TODO(RedbackThomson): Helm scripts rely on building `ack-generate` to produce
-# the build artifacts. These need to come from the version used to generate the
-# resources, not necessarily the `main` branch of `code-generator`
-# if [[ "$TEST_HELM_CHARTS" == true ]]; then
-#   $SCRIPTS_DIR/test-helm.sh "$AWS_SERVICE" "$VERSION"
-# fi
 
 # run e2e tests
 export SKIP_PYTHON_TESTS
