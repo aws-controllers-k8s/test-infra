@@ -148,4 +148,4 @@ echo "ok."
 echo -n "test-helm.sh] deleting $K8S_NAMESPACE namespace ... "
 kubectl delete namespace "$K8S_NAMESPACE" 1>/dev/null || exit 1
 echo "ok."
-echo "test-helm.sh] Helm Artifacts Test Finsihed Successfully"
+echo "test-helm.sh] Helm Artifacts Test Finished Successfully"
