@@ -135,6 +135,9 @@ then
   print_line_separation
   echo "$CONTROLLER_LOGS" | grep "ERROR"
   print_line_separation
+  # TODO(vijat@): Remove following INFO message upon completion of
+  #  https://github.com/aws-controllers-k8s/community/issues/885
+  echo "test-helm.sh] [INFO] Make sure to execute code-generator/scripts/build-controller-release.sh to update the helm artifacts ..."
   echo "test-helm.sh] [ERROR] Exiting ..."
   exit 1
 fi

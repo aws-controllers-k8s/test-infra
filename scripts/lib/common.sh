@@ -81,6 +81,8 @@ perform_buildah_and_helm_login() {
 # get_num_columns returns the number of column on the terminal where script is
 # being executed
 get_num_columns() {
+  # if the TERM variable is not set, default to xterm
+  export TERM=${TERM:-"xterm"}
   local __num_cols=$(tput cols)
   echo "$__num_cols"
 }
