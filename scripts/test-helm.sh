@@ -91,8 +91,8 @@ set +e
 helm uninstall --namespace "$K8S_NAMESPACE" "$HELM_CHART_NAME" > /dev/null 2>&1
 # cleanup to start the test from scratch
 kubectl delete namespace "$K8S_NAMESPACE" > /dev/null 2>&1
-kubectl delete cluster-role-binding  "ack-$AWS_SERVICE-controller-rolebinding" > /dev/null 2>&1
-kubectl delete cluster-role  "ack-$AWS_SERVICE-controller" > /dev/null 2>&1
+kubectl delete clusterrolebinding  "ack-$AWS_SERVICE-controller-rolebinding" > /dev/null 2>&1
+kubectl delete clusterrole  "ack-$AWS_SERVICE-controller" > /dev/null 2>&1
 set -e
 pushd "$HELM_DIR" 1> /dev/null
   echo -n "test-helm.sh] installing the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
