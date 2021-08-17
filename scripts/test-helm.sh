@@ -74,7 +74,6 @@ if [ "z$AWS_ACCOUNT_ID" == "z" ]; then
     AWS_ACCOUNT_ID=$( aws_account_id )
 fi
 AWS_REGION=${AWS_REGION:-"us-west-2"}
-export COLUMNS=$(tput cols)
 
 echo "test-helm.sh] Starting Helm Artifacts Test"
 HELM_DIR="$SERVICE_CONTROLLER_SOURCE_PATH/helm"
