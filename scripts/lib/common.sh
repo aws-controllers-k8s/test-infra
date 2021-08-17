@@ -79,15 +79,17 @@ perform_buildah_and_helm_login() {
 }
 
 # get_num_columns returns the number of column on the terminal where script is
-# being executed
+# being executed. Currently 80 is returned as output which is consistent with
+# other ACK bash scripts. Ex: wrapper.sh.
+#
+# NOTE(vijtrip2): Tried to use "tput cols" to get number of columns in the
+# terminal dynamically but the prow-job container does not work correctly for
+# 'tput' command.
+# It is hard to reproduce the issue because ACK prow-job images works correctly
+# for 'tput' but Prow wraps ACK prow-job images to produce a new image and uses
+# it to execute the prowjob.
 get_num_columns() {
-  local __cmd="tput cols"
-  # if the TERM variable is not set, default to xterm
-  if [[ -z $TERM ]]; then
-    __cmd="tput -T xterm cols"
-  fi
-  local __num_cols=$(eval "$__cmd")
-  echo "$__num_cols"
+  echo "80"
 }
 
 # print_line_separation prints a line of "=" symbol on the terminal executing
