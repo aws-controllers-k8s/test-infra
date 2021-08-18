@@ -49,6 +49,7 @@ check_is_installed aws
 check_is_installed helm
 check_is_installed git
 check_is_installed jq
+check_is_installed yq
 
 if [[ $PULL_BASE_REF = stable ]]; then
   pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller 1>/dev/null
@@ -72,6 +73,22 @@ if [[ $PULL_BASE_REF = stable ]]; then
   fi
 
   VERSION="$_major_version-stable"
+  popd 1>/dev/null
+else
+  echo "release-controller.sh] Validating that controller image repository & tag in release artifacts is consistent with semver tag"
+  pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller/helm 1>/dev/null
+    # helm directory will be existing due to release-test presubmit job
+    _repository=$(yq eval ".image.repository" values.yaml)
+    _image_tag=$(yq eval ".image.tag" values.yaml)
+    if [[ $_repository != public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller ]]; then
+      echo "release-controller.sh] [ERROR] 'image.repository' value in release artifacts should be public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller. Current value: $_repository"
+      exit 1
+    fi
+    if [[ $_image_tag != $VERSION ]]; then
+      echo "release-controller.sh] [ERROR] 'image.tag' value in release artifacts should be $VERSION. Current value: $_image_tag"
+      exit 1
+    fi
+    echo "release-controller.sh] Validation successful"
   popd 1>/dev/null
 fi
 
