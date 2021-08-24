@@ -17,6 +17,7 @@ aws_services:
 - sns
 - sqs
 - ec2
+- lambda
 
 # list of aws services onboarded for soak test execution from prow cluster on every release
 soak_test_on_release_service_names:
