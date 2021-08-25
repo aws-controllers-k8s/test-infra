@@ -159,6 +159,17 @@ def patch_custom_resource(
     return _api.patch_namespaced_custom_object(
         reference.group, reference.version, reference.namespace, reference.plural, reference.name, custom_resource)
 
+def replace_custom_resource(
+    reference: CustomResourceReference, custom_resource: dict):
+    _api_client = _get_k8s_api_client()
+    _api = client.CustomObjectsApi(_api_client)
+
+    if reference.namespace is None:
+        return _api.replace_cluster_custom_object(
+            reference.group, reference.version, reference.plural, reference.name, custom_resource)
+    return _api.replace_namespaced_custom_object(
+        reference.group, reference.version, reference.namespace, reference.plural, reference.name, custom_resource)
+
 def delete_custom_resource(
     reference: CustomResourceReference, wait_periods: int = 1, period_length: int = 5):
     """Delete custom resource from cluster and wait for it to be removed by the server
