@@ -10,7 +10,8 @@ export interface ProwSecretsChartProps {
 
 export class ProwSecretsChart extends cdk8s.Chart {
   readonly botPATSecret: kplus.Secret;
-  readonly botDocsPATSecret: kplus.Secret;
+  // github token to be used by prowjobs in PROW_JOB_NAMESPACE
+  readonly prowjobBotPATSecret: kplus.Secret;
   readonly webhookHMACSecret: kplus.Secret;
 
   constructor(scope: constructs.Construct, id: string, props: ProwSecretsChartProps) {
@@ -30,12 +31,12 @@ export class ProwSecretsChart extends cdk8s.Chart {
       }
     });
 
-    this.botDocsPATSecret = new kplus.Secret(this, 'docs-github-token', {
+    this.prowjobBotPATSecret = new kplus.Secret(this, 'prowjob-github-token', {
       stringData: {
         'token': props.botPersonalAccessToken
       },
       metadata: {
-        name: 'github-docs-token',
+        name: 'prowjob-github-token',
         namespace: PROW_JOB_NAMESPACE
       }
     });
