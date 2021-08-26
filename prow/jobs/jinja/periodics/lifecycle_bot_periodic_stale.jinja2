@@ -11,11 +11,7 @@
         command:
           - /app/robots/commenter/app.binary
         args:
-          - |-
-            --query=org:aws-controllers-k8s
-            -label:lifecycle/frozen
-            -label:lifecycle/rotten
-            -label:lifecycle/stale
+          - --query=org:aws-controllers-k8s -label:lifecycle/frozen -label:lifecycle/rotten -label:lifecycle/stale
           - --updated=2160h
           - --token=/etc/github/token
           - |-
