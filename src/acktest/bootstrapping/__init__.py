@@ -48,6 +48,7 @@ class Serializable:
 
 class BootstrapFailureException(Exception):
     pass
+
 @dataclass
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
