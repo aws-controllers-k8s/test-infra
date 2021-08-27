@@ -30,7 +30,7 @@ class Serializable:
         logging.info(f"Wrote bootstrap to {path}")
 
     @classmethod
-    def deseralize(cls, config_dir: Path, bootstrap_file_name: str = "bootstrap.pkl") -> Resources:
+    def deserialize(cls, config_dir: Path, bootstrap_file_name: str = "bootstrap.pkl") -> Resources:
         """ Reads a service bootstrap from a given bootstrap pickle file.
 
         Args:
