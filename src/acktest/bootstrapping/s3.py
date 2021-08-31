@@ -11,6 +11,7 @@ from ..aws.identity import get_region
 class Bucket(Bootstrappable):
     # Inputs
     name_prefix: str
+    enable_versioning: bool = False
 
     # Outputs
     name: str = field(init=False)
@@ -33,6 +34,14 @@ class Bucket(Bootstrappable):
         else:
             self.s3_client.create_bucket(
                 Bucket=self.name, CreateBucketConfiguration={"LocationConstraint": self.region}
+            )
+
+        if self.enable_versioning:
+            self.s3_client.put_bucket_versioning(
+                Bucket=self.name,
+                VersioningConfiguration={
+                    "Status": "Enabled"
+                }
             )
 
     def cleanup(self):
