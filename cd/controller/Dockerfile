@@ -1,7 +1,7 @@
 # The generic Dockerfile for building service controller image.
 
 # Build the manager binary
-FROM golang:1.14.1 as builder
+FROM public.ecr.aws/bitnami/golang:1.15.15 as builder
 
 ARG service_alias
 # The tuple of controller image version information
@@ -12,8 +12,7 @@ ARG build_date
 # service controller code.
 ARG work_dir=/github.com/aws-controllers-k8s/$service_alias-controller
 WORKDIR $work_dir
-# For building Go Module required
-ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=https://proxy.golang.org|direct
 ENV GO111MODULE=on
 ENV GOARCH=amd64
 ENV GOOS=linux
@@ -42,7 +41,7 @@ RUN GIT_VERSION=$service_controller_git_version && \
     -X ${VERSION_PKG}.BuildDate=${BUILD_DATE}" \
     -a -o $work_dir/bin/controller $work_dir/cmd/controller/main.go
 
-FROM amazonlinux:2
+FROM public.ecr.aws/amazonlinux/amazonlinux:2
 ARG service_alias
 ARG work_dir=/github.com/aws-controllers-k8s/$service_alias-controller
 WORKDIR /
