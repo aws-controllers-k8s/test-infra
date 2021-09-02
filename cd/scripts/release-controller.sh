@@ -135,6 +135,9 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
       echo " git commit: $SERVICE_CONTROLLER_GIT_COMMIT"
   fi
 
+  # Log into ECR public to access base images
+  aws ecr-public get-login-password --region us-east-1 | buildah login --username AWS --password-stdin public.ecr.aws
+
   # build controller image
   buildah bud \
     --quiet="$QUIET" \
