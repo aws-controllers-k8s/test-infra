@@ -27,3 +27,11 @@ aws_services:
 # cluster on every release
 soak_test_on_release_service_names:
 - ecr
+
+# list of AWS service controllers to be auto-generated on every release of ACK
+# code-generator
+auto_generate_on_codegen_release_service_names:
+- dynamodb
+- ec2
+- ecr
+- s3
