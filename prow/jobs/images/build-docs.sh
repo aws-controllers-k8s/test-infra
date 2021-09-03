@@ -13,11 +13,11 @@ if [ -z "${GITHUB_ACTOR}" ]; then
 fi
 
 GITHUB_SRC_GOPATH="${GOPATH}/src/github.com/"
-COMMUNITY_REPO="aws-controllers-k8s/community"
+COMMUNITY_REPO="${COMMUNITY_REPO:-"aws-controllers-k8s/community"}"
 
-COMMUNITY_PATH="${GITHUB_SRC_GOPATH}${COMMUNITY_REPO}"
+DEFAULT_COMMUNITY_PATH="${GITHUB_SRC_GOPATH}${COMMUNITY_REPO}"
+COMMUNITY_PATH="${COMMUNITY_PATH:-$DEFAULT_COMMUNITY_PATH}"
 DOCS_PATH="${COMMUNITY_PATH}/docs"
-export CONFIG_FILE="docs/mkdocs.yml"
 
 # Generate new reference sources
 
@@ -27,23 +27,27 @@ echo "build-docs.sh] 📝 Installing requirements file... "
 pip install -r requirements.txt
 
 echo -n "build-docs.sh] 📄 Generating reference files... "
-python ./scripts/gen_reference.py
+python3 ./scripts/gen_reference.py
 echo "Done!"
 
-popd 1> /dev/null
-
-# Deploy to GH pages
-
-pushd $COMMUNITY_PATH 1> /dev/null
+echo "build-docs.sh] 🛠️ Building the Hugo site... "
+npm install
+npm run postinstall
+npm run build
+echo "Done!"
 
 remote_repo="https://x-access-token:${GITHUB_TOKEN}@${GITHUB_DOMAIN:-"github.com"}/${COMMUNITY_REPO}.git"
 
-git config --global user.name "${GITHUB_ACTOR}"
-git config --global user.email "${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
-git remote add origin "${remote_repo}"
+user_email="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
+if [ -n "${GITHUB_EMAIL_ID}" ]; then
+    user_email="${GITHUB_EMAIL_ID}+${user_email}"
+fi
 
 echo "build-docs.sh] 📨 Deploying to Github pages... "
-mkdocs gh-deploy --config-file "${CONFIG_FILE}" --force
+short_sha=$(git rev-parse --short HEAD)
+./node_modules/.bin/gh-pages --dist "public" \
+    -u "${GITHUB_ACTOR} <${user_email}>" -r "${remote_repo}" \
+    -m "Deployed ${short_sha}"
 echo "Done!"
 
 popd 1> /dev/null
