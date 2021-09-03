@@ -1,0 +1,23 @@
+### $ISSUE_TITLE
+
+#### output for \`make build-controller\`:
+\`\`\`
+$MAKE_BUILD_OUTPUT
+\`\`\`
+
+#### Error output for \`make build-controller\`:
+\`\`\`
+$MAKE_BUILD_ERROR_OUTPUT
+\`\`\`
+
+
+#### Steps for closing this issue:
+1. Successfully generate the service controller locally using latest release of
+\`aws-controllers-k8s/code-generator\`.
+2. Update \`go.mod\` file to update \`aws-controllers-k8s/runtime\` to $ACK_RUNTIME_VERSION
+3. Run \`go mod tidy\`
+4. Create new pull request for $CONTROLLER_NAME
+5. Mention this issue number in the pull request
+6. When the above PR is merged, close this issue.
+
+Provide feedback via https://github.com/aws-controllers-k8s/community.
