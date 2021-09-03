@@ -9,16 +9,14 @@ ack-bot.
 To enable new services for auto generating controllers on new ACK code-generator
 release,
 
-1. Create a GitHub branch named `ack-bot/runtime` on `aws-controllers-k8s/$SERVICE-controller`
- repository.    
-2. Create a custom label named `ack-bot-codegen` on `aws-controllers-k8s/$SERVICE-controller`
+1. Create a custom label named `ack-bot-codegen` on `aws-controllers-k8s/$SERVICE-controller`
  repository.
-3. Make sure `ack-bot` is collaborator on `aws-controllers-k8s/$SERVICE-controller`
+2. Make sure `ack-bot` is collaborator on `aws-controllers-k8s/$SERVICE-controller`
  repository. See ["Configure ack-bot access"](https://github.com/aws-controllers-k8s/test-infra/blob/main/docs/onboarding.md#1-configure-ack-bot-access)
-4. Add the service name in `aws-controllers-k8s/test-infra/prow/jobs/jobs_config.yaml`
-5. Execute `make build-prow-jobs` on `aws-controllers-k8s/test-infra` repository.
-6. Create a PR for `test-infra` repository , get it merged.
-7. Next time an ACK code-generator release happens, the service controller will 
+3. Add the service name in `aws-controllers-k8s/test-infra/prow/jobs/jobs_config.yaml`
+4. Execute `make build-prow-jobs` on `aws-controllers-k8s/test-infra` repository.
+5. Create a PR for `test-infra` repository , get it merged.
+6. Next time an ACK code-generator release happens, the service controller will 
 be auto generated.
 
 ### Gotchas
