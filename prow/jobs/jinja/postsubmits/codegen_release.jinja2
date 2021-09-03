@@ -28,6 +28,8 @@
                 key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
-          command: ["/bin/bash", "-c", "cd cd/auto-generate && ./auto-generate-controllers.sh"]
+          - name: GITHUB_EMAIL_PREFIX
+            value: "82905295"
+          command: ["/bin/bash", "-c", "./cd/auto-generate/auto-generate-controllers.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$

@@ -1,6 +1,6 @@
 ### $COMMIT_MSG
 
-#### \`make build-controller\` output:
+#### stdout for \`make build-controller\`:
 
 \`\`\`
 $MAKE_BUILD_OUTPUT

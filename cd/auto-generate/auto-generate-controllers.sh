@@ -34,7 +34,7 @@ TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
 CODEGEN_DIR=$WORKSPACE_DIR/code-generator
 
-DEFAULT_PR_SOURCE_BRANCH="ack-bot-autogen"
+DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime"
 PR_SOURCE_BRANCH=${PR_SOURCE_BRANCH:-$DEFAULT_PR_SOURCE_BRANCH}
 
 DEFAULT_PR_TARGET_BRANCH="main"
@@ -50,8 +50,6 @@ GH_ISSUE_REPO=${GH_ISSUE_REPO:-$DEFAULT_GH_ISSUE_REPO}
 
 DEFAULT_GH_LABEL="ack-bot-autogen"
 GH_LABEL=${GH_LABEL:-$DEFAULT_GH_LABEL}
-
-GITHUB_EMAIL_PREFIX="82905295"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -79,23 +77,28 @@ fi
 
 # find all the directories whose name ends with 'controller'
 pushd "$WORKSPACE_DIR" >/dev/null
-  CONTROLLER_NAMES=$(find . -maxdepth 1 -mindepth 1 -type d | cut -d"/" -f2 | grep -E "controller$")
+  CONTROLLER_NAMES=$(find . -maxdepth 1 -name "*-controller" -type d | cut -d"/" -f2)
 popd >/dev/null
 
 for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   SERVICE_NAME=$(echo "$CONTROLLER_NAME"| sed 's/-controller$//g')
+  CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
   print_line_separation
+  cd "$CODEGEN_DIR"
 
   echo "auto-generate-controllers.sh][INFO] ## Generating new controller for $SERVICE_NAME service ##"
   # if the go.mod file is missing in a service controller, skip auto-generation
-  if [[ ! -f "$WORKSPACE_DIR/$CONTROLLER_NAME/go.mod" ]]; then
+  if [[ ! -f "$CONTROLLER_DIR/go.mod" ]]; then
     echo "auto-generate-controllers.sh][ERROR] Missing 'go.mod' file. Skipping $CONTROLLER_NAME"
     continue
   fi
 
   # Find the ACK runtime version in service controller 'go.mod' file
+  pushd "$CONTROLLER_DIR" >/dev/null
+    SERVICE_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime)
+  popd >/dev/null
+
   # If the current version is same as latest ACK runtime version, skip this controller.
-  SERVICE_RUNTIME_VERSION=$(grep "github.com/aws-controllers-k8s/runtime" "$WORKSPACE_DIR/$CONTROLLER_NAME/go.mod" | grep -oE "v[0-9]+\.[0-9]+\.[0-9]+")
   if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
     echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION. Skipping $CONTROLLER_NAME"
     continue
@@ -158,7 +161,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
   # Since there are no failures, print make build output in prowjob logs
   cat "$MAKE_BUILD_OUTPUT_FILE"
-  pushd "$WORKSPACE_DIR/$CONTROLLER_NAME" >/dev/null
+  pushd "$CONTROLLER_DIR" >/dev/null
     # After successful 'make build-controller', update go.mod file
     echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file in $CONTROLLER_NAME ... "
     if ! sed -i "s|aws-controllers-k8s/runtime $SERVICE_RUNTIME_VERSION|aws-controllers-k8s/runtime $ACK_RUNTIME_VERSION|" go.mod >/dev/null; then
@@ -179,7 +182,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="ACK runtime update. $SERVICE_RUNTIME_VERSION => $ACK_RUNTIME_VERSION"
+    COMMIT_MSG="Update ACK runtime to '$ACK_RUNTIME_VERSION'"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
@@ -190,7 +193,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Force push the new changes into '$PR_SOURCE_BRANCH'
     echo -n "auto-generate-controllers.sh][INFO] Pushing changes to branch '$PR_SOURCE_BRANCH' ... "
-    if ! git push --force "https://$GITHUB_TOKEN@github.com/vijtrip2/$CONTROLLER_NAME.git" "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null 2>&1; then
+    if ! git push --force "https://$GITHUB_TOKEN@github.com/$GH_ORG/$CONTROLLER_NAME.git" "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null 2>&1; then
       echo ""
       echo "auto-generate-controllers.sh][ERROR] Failed to push the latest changes into remote repository. Skipping $CONTROLLER_NAME"
       continue
