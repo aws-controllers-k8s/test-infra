@@ -16,7 +16,7 @@ Usage:
 Pushes all of the tagged 'prow/*' images into a public ECR repository. Use
 DOCKER_REPOSITORY to specify the ECR repository URI. Use VERSION to set the 
 SemVer value in the image tag.
-Valid IMAGE_TYPE are "deploy", "docs", "soak", "integration", "auto-generate-controller"
+Valid IMAGE_TYPE are "deploy", "docs", "soak", "integration", "auto-generate-controllers"
 and "unit"
 
 Example:
