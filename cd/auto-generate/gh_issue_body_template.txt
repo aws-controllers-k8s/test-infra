@@ -1,0 +1,27 @@
+### $ISSUE_TITLE
+
+#### stdout for \`make build-controller\`:
+\`\`\`
+$MAKE_BUILD_OUTPUT
+\`\`\`
+
+#### stderr for \`make build-controller\`:
+\`\`\`
+$MAKE_BUILD_ERROR_OUTPUT
+\`\`\`
+
+
+#### Steps for closing this issue:
+1. Update \`go.mod\` file to update \`aws-controllers-k8s/runtime\` to $ACK_RUNTIME_VERSION
+2. Successfully generate the service controller locally using latest release of
+\`aws-controllers-k8s/code-generator\`
+3. Run \`go mod tidy\` for $CONTROLLER_NAME
+4. Run \`make test\` for $CONTROLLER_NAME
+5. Run \`make kind-test\` from \`aws-controllers-k8s/test-infra\` repository for
+ $CONTROLLER_NAME
+6. When kind test is successful, Create new pull request for $CONTROLLER_NAME
+7. Mention this issue number in the pull request
+8. When the above PR is merged, close this issue
+
+For more guidance, [create an issue](https://github.com/aws-controllers-k8s/community/issues)
+or [reach out on Slack](https://github.com/aws-controllers-k8s/community#help--feedback).

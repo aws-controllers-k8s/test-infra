@@ -1,0 +1,35 @@
+  aws-controllers-k8s/code-generator:
+  - name: auto-generate-controllers
+    decorate: true
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
+      workdir: false
+{% for service in auto_generate_on_codegen_release_service_names  %}
+    - org: aws-controllers-k8s
+      repo: {{ service }}-controller
+      base_ref: main
+      workdir: false
+{% endfor %}
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: public.ecr.aws/m6e0o0r6/auto-generate-controllers:0.0.1
+          env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: prowjob-github-token
+                key: token
+          - name: GITHUB_ACTOR
+            value: "ack-bot"
+          - name: GITHUB_EMAIL_PREFIX
+            value: "82905295"
+          command: ["/bin/bash", "-c", "./cd/auto-generate/auto-generate-controllers.sh"]
+    branches: #supports tags too.
+    - ^v[0-9]+\.[0-9]+\.[0-9]+$

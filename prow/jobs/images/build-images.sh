@@ -26,6 +26,7 @@ QUIET=${QUIET:-"false"}
 
 docker build -f "$IMAGE_DIR/Dockerfile.deploy" --quiet=$QUIET -t "prow/deploy" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.docs" --quiet=$QUIET -t "prow/docs" "${IMAGE_DIR}"
+docker build -f "$IMAGE_DIR/Dockerfile.auto-generate-controllers" --quiet=$QUIET -t "prow/auto-generate-controllers" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.soak" --quiet=$QUIET --build-arg DEPLOY_BASE_TAG="prow/deploy" -t "prow/soak" "${IMAGE_DIR}"
 
 export TEST_BASE_TAG=$(echo "prow/test-$(uuidgen | cut -c1-8)" | tr '[:upper:]' '[:lower:]')
