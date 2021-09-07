@@ -11,13 +11,13 @@ Environment variables:
                        controller code is pushed. Defaults to 'ack-bot-autogen'
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
-  GH_ORG:              Name of the GitHub organisation where GitHub issues will
+  GITHUB_ORG:          Name of the GitHub organisation where GitHub issues will
                        be created when autogeneration of service controller fails.
                        Defaults to 'aws-controllers-k8s'
-  GH_ISSUE_REPO:       Name of the GitHub repository where GitHub issues will
+  GITHUB_ISSUE_REPO:   Name of the GitHub repository where GitHub issues will
                        be created when autogeneration of service controller fails.
                        Defaults to 'community'
-  GH_LABEL:            Label to add to issue and pull requests.
+  GITHUB_LABEL:        Label to add to issue and pull requests.
                        Defaults to 'ack-bot-autogen'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
@@ -42,14 +42,14 @@ PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
 
 LOCAL_GIT_BRANCH="main"
 
-DEFAULT_GH_ISSUE_ORG="aws-controllers-k8s"
-GH_ORG=${GH_ORG:-$DEFAULT_GH_ISSUE_ORG}
+DEFAULT_GITHUB_ISSUE_ORG="aws-controllers-k8s"
+GITHUB_ORG=${GITHUB_ORG:-$DEFAULT_GITHUB_ISSUE_ORG}
 
-DEFAULT_GH_ISSUE_REPO="community"
-GH_ISSUE_REPO=${GH_ISSUE_REPO:-$DEFAULT_GH_ISSUE_REPO}
+DEFAULT_GITHUB_ISSUE_REPO="community"
+GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
-DEFAULT_GH_LABEL="ack-bot-autogen"
-GH_LABEL=${GH_LABEL:-$DEFAULT_GH_LABEL}
+DEFAULT_GITHUB_LABEL="ack-bot-autogen"
+GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -116,7 +116,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     ISSUE_TITLE="Errors while generating $CONTROLLER_NAME for ACK runtime $ACK_RUNTIME_VERSION"
 
     echo -n "auto-generate-controllers.sh][INFO] Querying already open GitHub issue ... "
-    ISSUE_NUMBER=$(gh issue list -R "$GH_ORG/$GH_ISSUE_REPO" -L 1 -s open --json number -S "$ISSUE_TITLE" --jq '.[0].number' -A @me -l "$GH_LABEL")
+    ISSUE_NUMBER=$(gh issue list -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -L 1 -s open --json number -S "$ISSUE_TITLE" --jq '.[0].number' -A @me -l "$GITHUB_LABEL")
     if [[ $? -ne 0 ]]; then
       echo ""
       echo "auto-generate-controllers.sh][ERROR] Unable to query open github issue. Skipping $CONTROLLER_NAME"
@@ -125,20 +125,20 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     echo "ok"
 
     # Capture 'make build-controller' command output & error, then persist
-    # in '$GH_ISSUE_BODY_FILE'
+    # in '$GITHUB_ISSUE_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
     MAKE_BUILD_ERROR_OUTPUT=$(cat "$MAKE_BUILD_ERROR_FILE")
-    GH_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_body_template.txt"
-    GH_ISSUE_BODY_FILE=/tmp/"SERVICE_NAME"_gh_issue_body
-    eval "echo \"$(cat "$GH_ISSUE_BODY_TEMPLATE_FILE")\"" > $GH_ISSUE_BODY_FILE
+    GITHUB_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_body_template.txt"
+    GITHUB_ISSUE_BODY_FILE=/tmp/"SERVICE_NAME"_gh_issue_body
+    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > $GITHUB_ISSUE_BODY_FILE
 
     # If there is an already existing issue with same title as '$ISSUE_TITLE',
     # update the body of existing issue with latest command output.
     # In case no such issue exist, create a new GitHub issue.
     # Skip PR generation in both cases and continue to next service controller.
     if [[ -z $ISSUE_NUMBER ]]; then
-      echo -n "auto-generate-controllers.sh][INFO] No open issues exist. Creating a new GitHub issue inside $GH_ORG/$GH_ISSUE_REPO ... "
-      if ! gh issue create -R "$GH_ORG/$GH_ISSUE_REPO" -t "$ISSUE_TITLE" -F "$GH_ISSUE_BODY_FILE" -l "$GH_LABEL" >/dev/null ; then
+      echo -n "auto-generate-controllers.sh][INFO] No open issues exist. Creating a new GitHub issue inside $GITHUB_ORG/$GITHUB_ISSUE_REPO ... "
+      if ! gh issue create -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -t "$ISSUE_TITLE" -F "$GITHUB_ISSUE_BODY_FILE" -l "$GITHUB_LABEL" >/dev/null ; then
         echo ""
         echo "auto-generate-controllers.sh][ERROR] Unable to create GitHub issue for reporting failure. Skipping $CONTROLLER_NAME"
         continue
@@ -146,8 +146,8 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       echo "ok"
       continue
     else
-      echo -n "auto-generate-controllers.sh][INFO] Updating error output in the body of existing issue#$ISSUE_NUMBER inside $GH_ORG/$GH_ISSUE_REPO ... "
-      if ! gh issue edit "$ISSUE_NUMBER" -R "$GH_ORG/$GH_ISSUE_REPO" -F "$GH_ISSUE_BODY_FILE" >/dev/null; then
+      echo -n "auto-generate-controllers.sh][INFO] Updating error output in the body of existing issue#$ISSUE_NUMBER inside $GITHUB_ORG/$GITHUB_ISSUE_REPO ... "
+      if ! gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -F "$GITHUB_ISSUE_BODY_FILE" >/dev/null; then
         echo ""
         echo "auto-generate-controllers.sh][ERROR] Unable to edit GitHub issue$ISSUE_NUMBER with latest 'make build-controller' error. Skipping $CONTROLLER_NAME"
         continue
@@ -193,7 +193,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Force push the new changes into '$PR_SOURCE_BRANCH'
     echo -n "auto-generate-controllers.sh][INFO] Pushing changes to branch '$PR_SOURCE_BRANCH' ... "
-    if ! git push --force "https://$GITHUB_TOKEN@github.com/$GH_ORG/$CONTROLLER_NAME.git" "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null 2>&1; then
+    if ! git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null 2>&1; then
       echo ""
       echo "auto-generate-controllers.sh][ERROR] Failed to push the latest changes into remote repository. Skipping $CONTROLLER_NAME"
       continue
@@ -204,33 +204,33 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # update the PR body with latest successful command output.
     # In case no such PR exists, create a new PR.
     echo -n "auto-generate-controllers.sh][INFO] Finding existing open pull requests ... "
-    PR_NUMBER=$(gh pr list -R "$GH_ORG/$CONTROLLER_NAME" -A @me -L 1 -s open --json number -S "$COMMIT_MSG" --jq '.[0].number' -l "$GH_LABEL")
+    PR_NUMBER=$(gh pr list -R "$GITHUB_ORG/$CONTROLLER_NAME" -A @me -L 1 -s open --json number -S "$COMMIT_MSG" --jq '.[0].number' -l "$GITHUB_LABEL")
     if [[ $? -ne 0 ]]; then
       echo ""
-      echo "auto-generate-controllers.sh][ERROR] Failed to query for an existing pull request for $GH_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
+      echo "auto-generate-controllers.sh][ERROR] Failed to query for an existing pull request for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
     else
       echo "ok"
     fi
 
     # Capture 'make build-controller' command output, then persist
-    # in '$GH_PR_BODY_FILE'
+    # in '$GITHUB_PR_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
-    GH_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
-    GH_PR_BODY_FILE=/tmp/"SERVICE_NAME"_gh_pr_body
-    eval "echo \"$(cat "$GH_PR_BODY_TEMPLATE_FILE")\"" > $GH_PR_BODY_FILE
+    GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
+    GITHUB_PR_BODY_FILE=/tmp/"SERVICE_NAME"_gh_pr_body
+    eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
 
     if [[ -z $PR_NUMBER ]]; then
-      echo -n "auto-generate-controllers.sh][INFO] No Existing PRs found. Creating a new pull request for $GH_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch ... "
-      if ! gh pr create -R "$GH_ORG/$CONTROLLER_NAME" -t "$COMMIT_MSG" -F "$GH_PR_BODY_FILE" -H "$PR_SOURCE_BRANCH" -B "$PR_TARGET_BRANCH" -l "$GH_LABEL" >/dev/null ; then
+      echo -n "auto-generate-controllers.sh][INFO] No Existing PRs found. Creating a new pull request for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch ... "
+      if ! gh pr create -R "$GITHUB_ORG/$CONTROLLER_NAME" -t "$COMMIT_MSG" -F "$GITHUB_PR_BODY_FILE" -H "$PR_SOURCE_BRANCH" -B "$PR_TARGET_BRANCH" -l "$GITHUB_LABEL" >/dev/null ; then
         echo ""
         echo "auto-generate-controllers.sh][ERROR] Failed to create pull request. Skipping $CONTROLLER_NAME"
         continue
       fi
       echo "ok"
     else
-      echo "auto-generate-controllers.sh][INFO] PR#$PR_NUMBER already exists for $GH_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
+      echo "auto-generate-controllers.sh][INFO] PR#$PR_NUMBER already exists for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
       echo -n "auto-generate-controllers.sh][INFO] Updating PR body with latest 'make build-controller' output..."
-      if ! gh pr edit "$PR_NUMBER" -R "$GH_ORG/$CONTROLLER_NAME" -F "$GH_PR_BODY_FILE" >/dev/null ; then
+      if ! gh pr edit "$PR_NUMBER" -R "$GITHUB_ORG/$CONTROLLER_NAME" -F "$GITHUB_PR_BODY_FILE" >/dev/null ; then
         echo ""
         echo "auto-generate-controllers.sh][ERROR] Failed to update pull request"
         continue
