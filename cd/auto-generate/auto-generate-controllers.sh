@@ -180,6 +180,15 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     fi
     echo "ok"
 
+    # add git remote
+    echo -n "auto-generate-controllers.sh][INFO] Adding git remote ... "
+    if ! git remote add origin "https://github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" >/dev/null; then
+      echo ""
+      echo "auto-generate-controllers.sh][ERROR] Unable to add git remote. Skipping $CONTROLLER_NAME"
+      continue
+    fi
+    echo "ok"
+
     # Add all the files & create a GitHub commit
     git add .
     COMMIT_MSG="Update ACK runtime to '$ACK_RUNTIME_VERSION'"
