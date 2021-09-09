@@ -105,6 +105,10 @@ if git rev-parse --is-inside-work-tree >/dev/null; then
   >&2 echo "wrapper.sh] [SETUP] exported SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}"
 fi
 
+>&2 echo "wrapper.sh] [SETUP] Logging into ECR public ..."
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+>&2 echo "wrapper.sh] [SETUP] Logged in"
+
 ASSUME_EXIT_VALUE=0
 ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
