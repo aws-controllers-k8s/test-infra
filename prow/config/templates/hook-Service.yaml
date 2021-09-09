@@ -20,7 +20,8 @@ spec:
   selector:
     app: hook
   ports:
-  - port: 8888
+  - name: main
+    port: 8888
   {{- if .Values.hook.scrapeMetrics }}
   - name: metrics
     port: 9090
