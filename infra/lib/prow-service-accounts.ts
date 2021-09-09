@@ -57,6 +57,22 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
+    const preECRPublicReadOnlyPolicy = new iam.PolicyStatement({
+      actions: [
+        "ecr-public:GetAuthorizationToken",
+        "sts:GetServiceBearerToken",
+        "ecr-public:BatchCheckLayerAvailability",
+        "ecr-public:GetRepositoryPolicy",
+        "ecr-public:DescribeRepositories",
+        "ecr-public:DescribeRegistries",
+        "ecr-public:DescribeImages",
+        "ecr-public:DescribeImageTags",
+        "ecr-public:GetRepositoryCatalogData",
+        "ecr-public:GetRegistryCatalogData"
+      ],
+      resources: ["*"]
+    })
+
     const postBucketAccessPolicy = new iam.PolicyStatement({
       actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
       resources: [
@@ -140,6 +156,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preAssumeRolePolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preParamStoreAccessPolicy);
+    this.presubmitJobServiceAccount.addToPrincipalPolicy(preECRPublicReadOnlyPolicy)
 
     new cdk.CfnOutput(scope, 'PreSubmitServiceAccountRoleOutput', {
       value: this.presubmitJobServiceAccount.role.roleName,
