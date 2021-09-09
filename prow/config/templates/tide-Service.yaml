@@ -22,3 +22,7 @@ spec:
   ports:
   - port: 80
     targetPort: 8888
+  {{- if .Values.tide.scrapeMetrics }}
+  - name: metrics
+    port: 9090
+  {{- end }}

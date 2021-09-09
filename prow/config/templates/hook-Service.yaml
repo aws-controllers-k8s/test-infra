@@ -21,4 +21,8 @@ spec:
     app: hook
   ports:
   - port: 8888
+  {{- if .Values.hook.scrapeMetrics }}
+  - name: metrics
+    port: 9090
+  {{- end }}
   type: {{ .Values.hook.service.type }}
