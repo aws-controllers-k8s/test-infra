@@ -24,7 +24,7 @@ spec:
           - targets: ["tide.prow.svc.cluster.local:9090"]
         - job_name: prow_plank
           static_configs:
-          - targets: ["plank.prow.svc.cluster.local:9090"]
+          - targets: ["prow-controller-manager.prow.svc.cluster.local:9090"]
         - job_name: prow_hook
           static_configs:
           - targets: ["hook.prow.svc.cluster.local:9090"]
