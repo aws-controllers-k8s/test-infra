@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
 - prometheus.yaml
+- prometheus-dashboards.yaml
 - prow-config.yaml
 - prow-data-plane.yaml
 - prow-jobs.yaml
