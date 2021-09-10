@@ -21,7 +21,13 @@ spec:
         additionalScrapeConfigs:
         - job_name: prow_tide
           static_configs:
-          - targets: ["prow.tide.cluster.local:9090"]
+          - targets: ["tide.prow.svc.cluster.local:9090"]
+        - job_name: prow_plank
+          static_configs:
+          - targets: ["plank.prow.svc.cluster.local:9090"]
+        - job_name: prow_hook
+          static_configs:
+          - targets: ["hook.prow.svc.cluster.local:9090"]
   chart:
     spec:
       chart: kube-prometheus-stack

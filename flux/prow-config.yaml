@@ -23,11 +23,9 @@ spec:
       presubmitsBucketName: "ack-prow-logs"
       tideStatusReconcilerBucketName: "ack-prow-logs"
     crier:
-      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
     deck:
-      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
     hook:
@@ -35,7 +33,6 @@ spec:
       serviceAccount:
         name: "prow-deployment-service-account"
     horologium:
-      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
     prowControllerManager:
@@ -43,7 +40,6 @@ spec:
       serviceAccount:
         name: "prow-deployment-service-account"
     sinker:
-      scrapeMetrics: true 
       serviceAccount:
         name: "prow-deployment-service-account"
     statusreconciler:
