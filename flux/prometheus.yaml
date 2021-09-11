@@ -17,7 +17,7 @@ spec:
   targetNamespace: prometheus
   values:
     kube-state-metrics:
-      metricLabelsAllowlist: namespaces=[test-pods]
+      metricLabelsAllowlist: pods=[*]
     prometheus:
       prometheusSpec:
         additionalScrapeConfigs:
