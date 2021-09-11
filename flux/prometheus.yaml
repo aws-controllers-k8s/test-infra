@@ -16,6 +16,8 @@ spec:
   interval: 5m
   targetNamespace: prometheus
   values:
+    kube-state-metrics:
+      metricLabelsAllowlist: namespaces=[test-pods]
     prometheus:
       prometheusSpec:
         additionalScrapeConfigs:
@@ -35,7 +37,6 @@ spec:
         - name: prow
           rules:
           # These metrics are based on generic pods, not just Prow jobs.
-
           # group interesting information into a single metric
           # squash metrics from multiple kube-state-metrics pods
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="..."} 1
@@ -44,7 +45,7 @@ spec:
               max by (namespace, pod, node, pod_ip) (kube_pod_info) *
                 on (namespace, pod)
                 group_left (phase)
-                (kube_pod_status_phase{namespace="default"} == 1)
+                (kube_pod_status_phase{namespace="test-pods"} == 1)
           # all pending pods
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="Pending"} 1
           - record: prow:pod:pending
@@ -64,7 +65,6 @@ spec:
             expr: prow:pod:pending * prow:pod:created_time
 
           # These metrics are specific to Prow jobs.
-
           # This monster of a rule prepares a tidy list of jobs with their
           # namespace and pod name attached.
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="...",org="...",repo="...",type="...",name="...",id="<UUID>"} 1
