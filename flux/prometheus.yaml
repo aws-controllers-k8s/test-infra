@@ -17,7 +17,7 @@ spec:
   targetNamespace: prometheus
   values:
     kube-state-metrics:
-      metricLabelsAllowlist: pods=[*]
+      metricLabelsAllowlist: pods=[app,label_prow_k8s_io_id,label_prow_k8s_io_refs_repo,label_prow_k8s_io_type,label_prow_k8s_io_job,label_prow_k8s_io_refs_org]
     prometheus:
       prometheusSpec:
         additionalScrapeConfigs:
