@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+{{- if .Values.prowControllerManager.scrapeMetrics }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: hook
+  name: prow-controller-manager
 spec:
   selector:
-    app: hook
+    app: prow-controller-manager
   ports:
-  - name: main
-    port: 8888
-  type: {{ .Values.hook.service.type }}
+  - name: metrics
+    port: 9090
+  type: ClusterIP
+{{- end }}

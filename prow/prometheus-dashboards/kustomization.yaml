@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+
+configMapGenerator:
+- name: grafana-prow-dashboards
+  behavior: create
+  # Taken from https://github.com/loodse/prow-dashboards
+  files:
+  - builds.json
+  - jobs.json
+  - organisations.json
+  - repositories.json

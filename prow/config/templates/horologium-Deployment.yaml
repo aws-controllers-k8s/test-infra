@@ -27,7 +27,7 @@ spec:
       app: horologium
   template:
     metadata:
-      {{- if .Values.horologium.scrape_metrics }}
+      {{- if .Values.horologium.scrapeMetrics }}
       annotations:
         prometheus.io/path: /metrics
         prometheus.io/port: '9090'
