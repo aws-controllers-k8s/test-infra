@@ -96,12 +96,15 @@ kubectl delete clusterrole  "ack-$AWS_SERVICE-controller" > /dev/null 2>&1
 set -e
 pushd "$HELM_DIR" 1> /dev/null
   echo -n "test-helm.sh] installing the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
+  # NOTE: Do not skip creation of any k8s resource. This installation should test artifacts of all the
+  # k8s resources. https://github.com/aws-controllers-k8s/community/issues/956
   helm install --create-namespace \
     --namespace "$K8S_NAMESPACE" \
     --set aws.region="$AWS_REGION" \
     --set aws.account_id="$AWS_ACCOUNT_ID" \
     --set image.repository="$IMAGE_REPO" \
     --set image.tag="$IMAGE_TAG" \
+    --set metrics.service.create=true \
     "$HELM_CHART_NAME" . 1>/dev/null || exit 1
   echo "ok."
 popd 1> /dev/null
