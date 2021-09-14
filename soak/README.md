@@ -19,10 +19,14 @@ TBD
 ### Prerequisites
 * A tool for building OCI images ([docker](https://docs.docker.com/get-docker/), [buildah](https://github.com/containers/buildah/blob/master/install.md) etc..)
 * A [Kubernetes cluster](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html) to run soak tests
+  * Associate the cluster with OIDC and create an IAM role to authenticate the controller
+* A [Public ECR repository](https://docs.aws.amazon.com/AmazonECR/latest/public/public-repository-create.html) to host the soak test image
+  * Suggested name is `ack-<service>-soak` (e.g. `ack-s3-soak`)
 * [helm](https://helm.sh/docs/intro/install/) 
 * [kubectl](https://kubernetes.io/docs/tasks/tools/)
 * [curl](https://curl.se/download.html)
 * [yq](https://mikefarah.gitbook.io/yq/)
+* [jq](https://stedolan.github.io/jq/)
 
 ### Before You Begin
 
@@ -58,21 +62,22 @@ actual values.
     # AWS Service name of the controller under test. Ex: apigatewayv2
     export SERVICE_NAME=<aws-service-name>
     
-    # IAM Role Arn which will provide privileges to service account running controller pod
-    # This role will also provide access to the soak-test-runner for validating e2e test results
+    # IAM Role Arn which will provide privileges to service account running
+    # controller pod. This role will also provide access to the soak-test-runner
+    # for validating e2e test results
     export IAM_ROLE_ARN_FOR_IRSA=<"IAM Role ARN for providing AWS access to ack controller's service account">
 
     export HELM_EXPERIMENTAL_OCI=1
     
     # Semver version of the controller under test. Ex: v0.0.2
     export CONTROLLER_VERSION=<semver>
-    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/chart:$SERVICE_NAME-$CONTROLLER_VERSION
+    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/$SERVICE_NAME-chart:$CONTROLLER_VERSION
     
     # AWS Region for ACK service controller
     export CONTROLLER_AWS_REGION=us-west-2
   
     # AWS Account Id for ACK service controller
-    export CONTROLLER_AWS_ACCOUNT_ID=<aws-account-id>
+    export CONTROLLER_AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
     
     # Release name of controller helm chart.
     export CONTROLLER_CHART_RELEASE_NAME=soak-test
@@ -97,8 +102,7 @@ actual values.
     
     ### SOAK TEST RUNNER CONFIGURATION ###
     
-    # Image repository where soak test runner image will be stored. (This can be your personal repository.) Ex: 'my-ack-repo/soak-test'
-    # Make sure this is a public repository.
+    # The public ECR repository URI where your soak test runner image will be stored.
     export SOAK_IMAGE_REPO=<repository-to-store-soak-test-runner-image>
     
     # Image tag for soak-test-runner image.
@@ -107,8 +111,10 @@ actual values.
     # Release name of soak-test-runner helm chart.
     export SOAK_RUNNER_CHART_RELEASE_NAME=soak-test-runner
     
-    # Total test duration is calculated as sum of TEST_DURATION_MINUTES, TEST_DURATION_HOURS and TEST_DURATION_DAYS after converting them in minutes.
-    # Override following variables accordingly to set your soak test duration. Default value: 24 hrs.
+    # Total test duration is calculated as sum of TEST_DURATION_MINUTES,
+    # TEST_DURATION_HOURS and TEST_DURATION_DAYS after converting them in
+    # minutes. Override following variables accordingly to set your soak test
+    # duration. Default value: 24 hrs.
     export TEST_DURATION_DAYS=1
     export TEST_DURATION_HOURS=0
     export TEST_DURATION_MINUTES=0
@@ -131,19 +137,18 @@ In this step we install ACK service controller which will be soak tested using t
 You can install an ACK controller following the documentation [here](https://aws-controllers-k8s.github.io/community/user-docs/install/)
 but following commands are also TL;DR for the installation documentation.
 
-You can use either (a) or (b) method below.
-
-* Pull the helm chart either from (a) or (b)
+* Pull the helm chart from either (a) or (b)
 
     a) from public repo
 
     ```bash
     go-to-soak \
+    && aws ecr-public get-login-password --region us-east-1 | helm registry login -u AWS --password-stdin public.ecr.aws \
     && helm chart pull $CONTROLLER_CHART_URL \
     && mkdir controller-helm \
     && cd controller-helm \
     && helm chart export $CONTROLLER_CHART_URL \
-    && cd ack-$SERVICE_NAME-controller
+    && cd $SERVICE_NAME-chart
     ```
     
     b) from source repository
@@ -154,7 +159,7 @@ You can use either (a) or (b) method below.
     && cd $SERVICE_NAME-controller/helm
     ```
 
-* Insert $IAM_ROLE_ARN_FOR_IRSA into values.yaml
+* Update values.yaml with overrides
     ```bash
     yq e $SERVICE_ACCOUNT_ANNOTATION_EVAL -i values.yaml \
     && yq e $METRIC_SERVICE_CREATE_EVAL -i values.yaml \
@@ -165,7 +170,7 @@ You can use either (a) or (b) method below.
 
 * Run
     ```bash
-    helm install $CONTROLLER_CHART_RELEASE_NAME .
+    helm install --create-namespace -n ack-system $CONTROLLER_CHART_RELEASE_NAME .
     ```
 
 NOTE
@@ -189,17 +194,18 @@ Follow the commands below to install this helm chart.
 * Command
     ```bash
     go-to-soak \
+    && jq -n --arg CONTROLLER_CHART_RELEASE_NAME $CONTROLLER_CHART_RELEASE_NAME --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($CONTROLLER_CHART_RELEASE_NAME)-ack-\($SERVICE_NAME)-controller-metrics:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
     && helm repo add prometheus-community https://prometheus-community.github.io/helm-charts \
-    && helm install $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack
+    && helm install -f prometheus-values.yaml --create-namespace -n prometheus $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack
     ```
 
  * Start background processes to access `Prometheus` and `Grafana` using `kubectl port-forward`
     ```bash
-    kubectl port-forward service/$PROM_CHART_RELEASE_NAME-kube-prometheus-prometheus $LOCAL_PROMETHEUS_PORT:9090 >/dev/null &
+    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-kube-prometheus-prometheus $LOCAL_PROMETHEUS_PORT:9090 >/dev/null &
     ```
    
     ```bash
-    kubectl port-forward service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:80 >/dev/null &
+    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:80 >/dev/null &
     ```
 
 NOTE:
@@ -216,47 +222,13 @@ Validation:
 NOTE: You can also choose to update Prometheus and Grafana services to NodePort or LoadBalancer Type service, if you wish
 to access them through a public-facing ELB.
 
-### Step 3 (Update Prometheus scrape config to include ACK metrics)
-
-If you only care about the resource metrics(CPU, Memory) of the pod running the ack-service-controller, and not about 
-ACK metrics emitted from service controller, you can skip this step.
-
-ACK metrics which are emitted include `ack_outbound_api_requests_total` and `ack_outbound_api_requests_error_total`
-
-To include these metrics into your prometheus scraping config, follow the commands below. Main guide can be found 
-[here](https://github.com/prometheus-operator/prometheus-operator/blob/master/Documentation/additional-scrape-config.md)
-
-* Commands
+### Step 3 (Import ACK Grafana dashboard)
+* Run following command to install the default ACK soak test dashboard
     ```bash
-    go-to-soak \
-    && echo "- job_name: ack-controller\n  static_configs:\n  - targets: [$CONTROLLER_CHART_RELEASE_NAME-ack-$SERVICE_NAME-controller-metrics:8080]" > prometheus-additional.yaml \
-    && kubectl create secret generic additional-scrape-configs --from-file=prometheus-additional.yaml --dry-run=client -oyaml > additional-scrape-configs.yaml \
-    && kubectl create -f additional-scrape-configs.yaml \
-    && kubectl get prometheus/$PROM_CHART_RELEASE_NAME-kube-prometheus-prometheus -oyaml > prometheus.yaml \
-    && yq e '.spec.additionalScrapeConfigs.name = "additional-scrape-configs"' -i prometheus.yaml \
-    && yq e '.spec.additionalScrapeConfigs.key = "prometheus-additional.yaml"' -i prometheus.yaml \
-    && kubectl apply -f prometheus.yaml
-    ```
-  
-Validation
-* Wait for ~1 minute for scraping configuration to propagate to Prometheus server. 
-* Command `curl -s http://127.0.0.1:$LOCAL_PROMETHEUS_PORT/api/v1/status/config | grep "ack-controller"` should return a match.
-
-### Step 4 (Import ACK Grafana dashboard )
-* Run following command to checkout aws-controllers-k8s/test-infra source repository
-    ```bash
-    go-to-soak \
-    && git clone https://github.com/aws-controllers-k8s/test-infra.git -b main --depth 1 \
-    && cd test-infra/soak/monitoring/grafana
+    kubectl apply -k github.com/aws-controllers-k8s/test-infra/soak/monitoring/grafana\?ref\=main
     ```
 
-* Using the credentials mentioned in step 7, log into Grafana console
-    * Go to `http://127.0.0.1:3000/dashboards`
-    * Under 'Manage' tab, click Import
-    * Import the content from `ack-dashboard-source.json` file inside current directory.
-    * After the soak test run, this Dashboard will show all ACK related requests and error metrics.
-
-### Step 5 (Build the soak test runner image)
+### Step 4 (Build the soak test runner image)
 
 In this step we will build a container image which will execute the soak tests.
 Dockerfile for this image is present in `soak` directory of "aws-controllers-k8s/test-infra" github repository.
@@ -271,12 +243,13 @@ be run multiple times to perform the soak test.
 * Command: 
     ```bash
     go-to-soak \
+    && git clone https://github.com/aws-controllers-k8s/test-infra.git -b main --depth 1 \
     && cd test-infra/soak \
     && docker build -t $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG --build-arg AWS_SERVICE=$SERVICE_NAME --build-arg E2E_GIT_REF=$CONTROLLER_VERSION . \
     && docker push $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG
     ```
 
-### Step 6 (Install the helm chart which will run the soak tests against service controller)
+### Step 5 (Install the helm chart which will run the soak tests against service controller)
 
 * Command
     ```bash
@@ -301,7 +274,7 @@ Validation:
 * After executing above command, a Kubernetes Job will start which will execute the soak tests until complete. 
 * Run `kubectl get job/$SERVICE_NAME-soak-test`  and validate that the resource exists.
 
-### Step 7 (Monitor the metrics using Grafana console)
+### Step 6 (Monitor the metrics using Grafana console)
 
 * As mentioned in step 2, Prometheus and Grafana services are exposed through background port-forward processes.
 * You can access the Grafana dashboard in your browser at `http://127.0.0.1:$LOCAL_GRAFANA_PORT` address. NOTE: Do not forget
@@ -309,27 +282,25 @@ to substitute "$LOCAL_GRAFANA_PORT" with actual value from your `~/.ack/soak/con
 * When Grafana console is loaded, you can login with default username `admin` and default password `prom-operator`
 NOTE: You can see the value of these credentials in secret named `$PROM_CHART_RELEASE_NAME-grafana`
 * After the login, you can view your Grafana dashboard at `http://127.0.0.1:3000/dashboards`.
+* The `ACK Dashboard` will show the ACK-specific request counts and error codes when making calls to AWS APIs.
 * `Kubernetes/Compute Resources/Pod` dashboard will show the resource consumption by the controller pod
-* The dashboard imported in step 4 will show the ACK dashboard with request counts and error codes when making calls to AWS APIs.
 
 
-### Step 8 (Cleanup Soak test chart)
+### Step 7 (Cleanup Soak test chart)
 
 * RUN `helm uninstall $SOAK_RUNNER_CHART_RELEASE_NAME`
 
 
-### Step 9 (Cleanup the service controller deployment)
+### Step 8 (Cleanup the service controller deployment)
 
 * RUN `helm uninstall $CONTROLLER_CHART_RELEASE_NAME`
 
 
-### Step 10 (Optional: Cleanup the kube-prometheus-stack chart) 
+### Step 9 (Optional: Cleanup the kube-prometheus-stack chart) 
 
 * RUN `helm uninstall $PROM_CHART_RELEASE_NAME`
-* If you executed step3, remove the secret which was created for additional prometheus configuration.
-    * `kubectl delete -f additional-scrape-configs.yaml`
 
-### Step 11 (Cleanup the background port-forward processes)
+### Step 10 (Cleanup the background port-forward processes)
 
 * RUN 
     ```bash
