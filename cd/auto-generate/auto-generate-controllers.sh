@@ -34,9 +34,6 @@ TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
 CODEGEN_DIR=$WORKSPACE_DIR/code-generator
 
-DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime"
-PR_SOURCE_BRANCH=${PR_SOURCE_BRANCH:-$DEFAULT_PR_SOURCE_BRANCH}
-
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
 
@@ -74,6 +71,9 @@ if [[ -z $ACK_RUNTIME_VERSION ]]; then
 else
   echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controllers will be $ACK_RUNTIME_VERSION"
 fi
+
+DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime-$ACK_RUNTIME_VERSION"
+PR_SOURCE_BRANCH=${PR_SOURCE_BRANCH:-$DEFAULT_PR_SOURCE_BRANCH}
 
 # find all the directories whose name ends with 'controller'
 pushd "$WORKSPACE_DIR" >/dev/null
