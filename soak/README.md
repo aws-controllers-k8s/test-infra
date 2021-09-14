@@ -19,6 +19,7 @@ TBD
 ### Prerequisites
 * A tool for building OCI images ([docker](https://docs.docker.com/get-docker/), [buildah](https://github.com/containers/buildah/blob/master/install.md) etc..)
 * A [Kubernetes cluster](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html) to run soak tests
+  * We recommend using the `cluster-config.yaml` file with EKSCTL
   * Associate the cluster with OIDC and create an IAM role to authenticate the controller
 * A [Public ECR repository](https://docs.aws.amazon.com/AmazonECR/latest/public/public-repository-create.html) to host the soak test image
   * Suggested name is `ack-<service>-soak` (e.g. `ack-s3-soak`)
@@ -180,7 +181,7 @@ NOTE
 Validation:
 * After successful execution of above commands, ack-service-controller will be running in your cluster, exposing ACK 
 metrics through a K8s service endpoint.
-* RUN `kubectl get service/$CONTROLLER_CHART_RELEASE_NAME-ack-$SERVICE_NAME-controller-metrics` and result should be non-empty.
+* RUN `kubectl get -n ack-system service/$CONTROLLER_CHART_RELEASE_NAME-$SERVICE_NAME-chart-metrics` and result should be non-empty.
 
 
 ### Step 2 (Install "kube-prometheus" chart for monitoring the soak test behavior)
@@ -194,7 +195,7 @@ Follow the commands below to install this helm chart.
 * Command
     ```bash
     go-to-soak \
-    && jq -n --arg CONTROLLER_CHART_RELEASE_NAME $CONTROLLER_CHART_RELEASE_NAME --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($CONTROLLER_CHART_RELEASE_NAME)-ack-\($SERVICE_NAME)-controller-metrics:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
+    && jq -n --arg CONTROLLER_CHART_RELEASE_NAME $CONTROLLER_CHART_RELEASE_NAME --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($CONTROLLER_CHART_RELEASE_NAME)-\($SERVICE_NAME)-chart-metrics.ack-system:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
     && helm repo add prometheus-community https://prometheus-community.github.io/helm-charts \
     && helm install -f prometheus-values.yaml --create-namespace -n prometheus $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack
     ```
@@ -205,7 +206,7 @@ Follow the commands below to install this helm chart.
     ```
    
     ```bash
-    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:80 >/dev/null &
+    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:3000 >/dev/null &
     ```
 
 NOTE:
@@ -225,7 +226,7 @@ to access them through a public-facing ELB.
 ### Step 3 (Import ACK Grafana dashboard)
 * Run following command to install the default ACK soak test dashboard
     ```bash
-    kubectl apply -k github.com/aws-controllers-k8s/test-infra/soak/monitoring/grafana\?ref\=main
+    kubectl apply -n prometheus -k github.com/aws-controllers-k8s/test-infra/soak/monitoring/grafana\?ref\=main
     ```
 
 ### Step 4 (Build the soak test runner image)
@@ -255,7 +256,7 @@ be run multiple times to perform the soak test.
     ```bash
     go-to-soak \
     && cd test-infra/soak/helm/ack-soak-test \
-    && helm install $SOAK_RUNNER_CHART_RELEASE_NAME . \
+    && helm -n ack-system install $SOAK_RUNNER_CHART_RELEASE_NAME . \
     --set awsService=$SERVICE_NAME \
     --set soak.imageRepo=$SOAK_IMAGE_REPO \
     --set soak.imageTag=$SOAK_IMAGE_TAG \
@@ -288,17 +289,15 @@ NOTE: You can see the value of these credentials in secret named `$PROM_CHART_RE
 
 ### Step 7 (Cleanup Soak test chart)
 
-* RUN `helm uninstall $SOAK_RUNNER_CHART_RELEASE_NAME`
-
+* RUN `helm -n ack-system uninstall $SOAK_RUNNER_CHART_RELEASE_NAME`
 
 ### Step 8 (Cleanup the service controller deployment)
 
-* RUN `helm uninstall $CONTROLLER_CHART_RELEASE_NAME`
-
+* RUN `helm -n ack-system uninstall $CONTROLLER_CHART_RELEASE_NAME && helm delete namespace ack-system`
 
 ### Step 9 (Optional: Cleanup the kube-prometheus-stack chart) 
 
-* RUN `helm uninstall $PROM_CHART_RELEASE_NAME`
+* RUN `helm -n prometheus uninstall $PROM_CHART_RELEASE_NAME && helm delete namespace prometheus`
 
 ### Step 10 (Cleanup the background port-forward processes)
 
