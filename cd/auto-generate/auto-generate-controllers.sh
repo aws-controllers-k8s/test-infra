@@ -268,6 +268,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       echo "ok"
     fi
     echo "auto-generate-controllers.sh][INFO] Done :) "
+    # PRs created from this script trigger the presubmit prowjobs.
+    # To control the number of presubmit prowjobs that will run in parallel,
+    # adding sleep of 2 minutes. This will help distribute the load on prow
+    # cluster.
+    echo "auto-generate-controllers.sh][INFO] Sleeping for 2 minutes before generating next service controller."
+    sleep 120
   popd >/dev/null
 done
 
