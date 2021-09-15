@@ -134,7 +134,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     cat "$MAKE_BUILD_ERROR_FILE"
 
     echo "auto-generate-controllers.sh][ERROR] Failure while executing 'make build-controller' command. Creating/Updating GitHub issue"
-    ISSUE_TITLE="Errors while generating $CONTROLLER_NAME for ACK runtime $ACK_RUNTIME_VERSION"
+    ISSUE_TITLE="Errors while generating \`$CONTROLLER_NAME\` for ACK runtime \`$ACK_RUNTIME_VERSION\`"
 
     echo -n "auto-generate-controllers.sh][INFO] Querying already open GitHub issue ... "
     ISSUE_NUMBER=$(gh issue list -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -L 1 -s open --json number -S "$ISSUE_TITLE" --jq '.[0].number' -A @me -l "$GITHUB_LABEL")
@@ -212,7 +212,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="Update ACK runtime to '$ACK_RUNTIME_VERSION'"
+    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
