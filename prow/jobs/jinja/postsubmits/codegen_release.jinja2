@@ -10,7 +10,7 @@
       repo: runtime
       base_ref: main
       workdir: false
-{% for service in auto_generate_on_codegen_release_service_names  %}
+{% for service in aws_services  %}
     - org: aws-controllers-k8s
       repo: {{ service }}-controller
       base_ref: main

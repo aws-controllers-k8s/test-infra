@@ -19,6 +19,7 @@ Environment variables:
                        Defaults to 'community'
   GITHUB_LABEL:        Label to add to issue and pull requests.
                        Defaults to 'ack-bot-autogen'
+  GITHUB_LABEL_COLOR:  Color for GitHub label. Defaults to '3C6110'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
   GITHUB_EMAIL_PREFIX: The 7 digit unique id for no-reply email of
@@ -50,6 +51,9 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 DEFAULT_GITHUB_LABEL="ack-bot-autogen"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
+
+DEFAULT_GITHUB_LABEL_COLOR="3C6110"
+GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -105,6 +109,23 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   fi
 
   echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controller will be $ACK_RUNTIME_VERSION. Current version is $SERVICE_RUNTIME_VERSION"
+
+  echo -n "auto-generate-controllers.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
+  if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
+    echo ""
+    echo "auto-generate-controllers.sh][INFO] Could not find label $GITHUB_LABEL in repo $GITHUB_ORG/$CONTROLLER_NAME"
+    echo -n "Creating new GitHub label $GITHUB_LABEL ... "
+    if ! gh api -X POST repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels -f name="$GITHUB_LABEL" -f color="$GITHUB_LABEL_COLOR" >/dev/null; then
+      echo ""
+      echo "auto-generate-controllers.sh][ERROR] Failed to create label $GITHUB_LABEL. Skipping $CONTROLLER_NAME"
+      continue
+    else
+      echo "ok"
+    fi
+  else
+    echo "ok"
+  fi
+
   echo "auto-generate-controllers.sh][INFO] Generating new controller code using command 'make build-controller'"
   export SERVICE=$SERVICE_NAME
   MAKE_BUILD_OUTPUT_FILE=/tmp/"$SERVICE_NAME"_make_build_output
@@ -113,7 +134,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     cat "$MAKE_BUILD_ERROR_FILE"
 
     echo "auto-generate-controllers.sh][ERROR] Failure while executing 'make build-controller' command. Creating/Updating GitHub issue"
-    ISSUE_TITLE="Errors while generating $CONTROLLER_NAME for ACK runtime $ACK_RUNTIME_VERSION"
+    ISSUE_TITLE="Errors while generating \`$CONTROLLER_NAME\` for ACK runtime \`$ACK_RUNTIME_VERSION\`"
 
     echo -n "auto-generate-controllers.sh][INFO] Querying already open GitHub issue ... "
     ISSUE_NUMBER=$(gh issue list -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -L 1 -s open --json number -S "$ISSUE_TITLE" --jq '.[0].number' -A @me -l "$GITHUB_LABEL")
@@ -191,7 +212,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="Update ACK runtime to '$ACK_RUNTIME_VERSION'"
+    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
@@ -247,6 +268,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       echo "ok"
     fi
     echo "auto-generate-controllers.sh][INFO] Done :) "
+    # PRs created from this script trigger the presubmit prowjobs.
+    # To control the number of presubmit prowjobs that will run in parallel,
+    # adding sleep of 2 minutes. This will help distribute the load on prow
+    # cluster.
+    echo "auto-generate-controllers.sh][INFO] Sleeping for 2 minutes before generating next service controller."
+    sleep 120
   popd >/dev/null
 done
 
