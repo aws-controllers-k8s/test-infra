@@ -22,7 +22,9 @@ Github repository.
 [ack-bot]: https://github.com/ack-bot
 
 > **Note for Core Contributors:** Accept the invitation on behalf of the bot 
-account and change the bot to `Maintainer` role.
+account and change the bot to `Admin` role.  Admin role is required for successful
+prow job trigger functionality. Prow job trigger requires call to `ListCollaborators`
+API which is allowed only for a GitHub repository Admin.
 
 ## 2. Create an ACK test role
 
