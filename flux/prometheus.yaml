@@ -136,7 +136,7 @@ spec:
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="...",org="...",repo="...",type="...",name="...",id="<UUID>"} [bytes]
           - record: prow:job:resource_requests_memory_bytes
             expr: |
-              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_requests_memory_bytes{container="test"}) *
+              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_requests{resource="memory",container="test"}) *
                 on(namespace, pod)
                 group_left(org, repo, type, name, id, node, pod_ip, phase)
                 prow:job
@@ -144,7 +144,7 @@ spec:
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="...",org="...",repo="...",type="...",name="...",id="<UUID>"} [bytes]
           - record: prow:job:resource_limits_memory_bytes
             expr: |
-              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_limits_memory_bytes{container="test"}) *
+              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_limits{resource="memory",container="test"}) *
                 on(namespace, pod)
                 group_left(org, repo, type, name, id, node, pod_ip, phase)
                 prow:job
@@ -160,7 +160,7 @@ spec:
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="...",org="...",repo="...",type="...",name="...",id="<UUID>"} [cores]
           - record: prow:job:resource_requests_cpu_cores
             expr: |
-              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_requests_cpu_cores{container="test"}) *
+              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_requests{resource="cpu",container="test"}) *
                 on(namespace, pod)
                 group_left(org, repo, type, name, id, node, pod_ip, phase)
                 prow:job
@@ -168,7 +168,7 @@ spec:
           # {namespace="...",pod="...",node="...",pod_ip="1.2.3.4",phase="...",org="...",repo="...",type="...",name="...",id="<UUID>"} [cores]
           - record: prow:job:resource_limits_cpu_cores
             expr: |
-              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_limits_cpu_cores{container="test"}) *
+              sum by (namespace, pod, node, pod_ip) (kube_pod_container_resource_limits{resource="cpu",container="test"}) *
                 on(namespace, pod)
                 group_left(org, repo, type, name, id, node, pod_ip, phase)
                 prow:job
@@ -176,12 +176,12 @@ spec:
           # {node="..."} [cores]
           - record: prow:node:cpu_capacity_cores
             expr: |
-              sum by (node) (kube_node_status_capacity_cpu_cores{node=~"worker-.*"})
+              sum by (node) (kube_node_status_capacity{resource="cpu"})
           # total memory available on *worker* nodes
           # {node="..."} [bytes]
           - record: prow:node:memory_capacity_bytes
             expr: |
-              sum by (node) (kube_node_status_capacity_memory_bytes{node=~"worker-.*"})
+              sum by (node) (kube_node_status_capacity{resource="memory"})
   chart:
     spec:
       chart: kube-prometheus-stack
