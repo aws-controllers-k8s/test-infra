@@ -19,7 +19,7 @@ spec:
     createNamespace: true
   values:
     kube-state-metrics:
-      metricLabelsAllowlist: pods=[app,label_prow_k8s_io_id,label_prow_k8s_io_refs_repo,label_prow_k8s_io_type,label_prow_k8s_io_job,label_prow_k8s_io_refs_org]
+      metricLabelsAllowlist: pods=[app,prow.k8s.io/id,prow.k8s.io/refs.repo,prow.k8s.io/type,prow.k8s.io/job,prow.k8s.io/refs.org]
     prometheus:
       prometheusSpec:
         additionalScrapeConfigs:
