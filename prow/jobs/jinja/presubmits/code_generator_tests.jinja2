@@ -39,11 +39,6 @@
       - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.4
         securityContext:
           privileged: true
-        resources:
-          requests:
-            cpu: 2
-          limits:
-            cpu: 8
         env:
         - name: SERVICE
           value: {{ service }}
