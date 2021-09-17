@@ -28,3 +28,12 @@ aws_services:
 soak_test_on_release_service_names:
 - ecr
 
+# List of AWS services whose controller gets generated and e2e tested whenever
+# there is a new code-generator change.
+# These controllers are generated and tested to validate that changes in code-generator
+# are not breaking changes for service controllers. This helps surface any early
+# issues with code-generator release.
+# Since there can be some breaking changes, these tests are marked optional for
+# prow merge criteria.
+code_gen_presubmit_services:
+- dynamodb
