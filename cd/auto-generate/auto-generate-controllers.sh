@@ -52,6 +52,8 @@ GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 DEFAULT_GITHUB_LABEL_COLOR="3C6110"
 GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
+RUNTIME_MISSING_VERSION="missing-runtime-dependency"
+
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
 check_is_installed git
@@ -68,8 +70,8 @@ git config --global user.email "${USER_EMAIL}" >/dev/null
 
 # Findout the runtime semver from the code-generator repo
 cd "$CODEGEN_DIR"
-ACK_RUNTIME_VERSION=$(grep "github.com/aws-controllers-k8s/runtime" go.mod | grep -oE "v[0-9]+\.[0-9]+\.[0-9]+")
-if [[ -z $ACK_RUNTIME_VERSION ]]; then
+ACK_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
+if [[ $ACK_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
   echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from code-generator/go.mod file. Exiting"
   exit 1
 else
@@ -99,8 +101,13 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
   # Find the ACK runtime version in service controller 'go.mod' file
   pushd "$CONTROLLER_DIR" >/dev/null
-    SERVICE_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime)
+    SERVICE_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
   popd >/dev/null
+
+  if [[ $SERVICE_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
+    echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from $CONTROLLER_NAME/go.mod file. Skipping $CONTROLLER_NAME"
+    continue
+  fi
 
   # If the current version is same as latest ACK runtime version, skip this controller.
   if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
