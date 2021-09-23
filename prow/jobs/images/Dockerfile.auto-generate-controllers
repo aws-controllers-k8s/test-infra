@@ -42,7 +42,7 @@ RUN echo "Installing GitHub cli ..." \
 
 RUN echo "Installing Helm ... " \
     && export HELM_TARBALL="helm.tar.gz" \
-    && curl -fsSL https://get.helm.sh/helm-v3.6.2-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
+    && curl -fsSL https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
     && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
     && rm "${HELM_TARBALL}"
 

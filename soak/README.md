@@ -66,7 +66,7 @@ actual values.
     
     # Semver version of the controller under test. Ex: v0.0.2
     export CONTROLLER_VERSION=<semver>
-    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/chart:$SERVICE_NAME-$CONTROLLER_VERSION
+    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/$SERVICE_NAME-chart
     
     # AWS Region for ACK service controller
     export CONTROLLER_AWS_REGION=us-west-2
@@ -139,11 +139,11 @@ You can use either (a) or (b) method below.
 
     ```bash
     go-to-soak \
-    && helm chart pull $CONTROLLER_CHART_URL \
     && mkdir controller-helm \
     && cd controller-helm \
-    && helm chart export $CONTROLLER_CHART_URL \
-    && cd ack-$SERVICE_NAME-controller
+    && helm pull --version $CONTROLLER_VERSION oci://$CONTROLLER_CHART_URL \
+    && tar xvf $SERVICE_NAME-chart-$CONTROLLER_VERSION.tgz \
+    && cd $SERVICE_NAME-chart
     ```
     
     b) from source repository
