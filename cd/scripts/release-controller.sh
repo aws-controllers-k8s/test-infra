@@ -26,8 +26,6 @@ Environment variables:
                             Default: false
   HELM_REGISTRY:            Name for the helm registry to push to
                             Default: public.ecr.aws/aws-controllers-k8s
-  HELM_REPO:                Name for the helm repository to push to
-                            Default: chart
 "
 
 # find out the service name and semver tag from the prow environment variables.
@@ -162,18 +160,20 @@ fi
 cd "$WORKSPACE_DIR"
 
 DEFAULT_HELM_REGISTRY="public.ecr.aws/aws-controllers-k8s"
-DEFAULT_HELM_REPO="$AWS_SERVICE-chart"
+HELM_REPO="$AWS_SERVICE-chart"
 
 HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}
-HELM_REPO=${HELM_REPO:-$DEFAULT_HELM_REPO}
 
 export HELM_EXPERIMENTAL_OCI=1
 
 if [[ -d "$SERVICE_CONTROLLER_DIR/helm" ]]; then
     echo -n "Generating Helm chart package for $AWS_SERVICE@$VERSION ... "
-    helm chart save "$SERVICE_CONTROLLER_DIR"/helm/ "$HELM_REGISTRY/$HELM_REPO:$VERSION"
+    helm package "$SERVICE_CONTROLLER_DIR"/helm/
     echo "ok."
-    helm chart push "$HELM_REGISTRY/$HELM_REPO:$VERSION"
+    # Path to tarballed package (eg. `s3-chart-v0.0.1.tgz`)
+    CHART_PACKAGE="$HELM_REPO-$VERSION.tgz"
+
+    helm push "$CHART_PACKAGE" "oci://$HELM_REGISTRY"
 else
     echo "Error building Helm packages:" 1>&2
     echo "$SERVICE_CONTROLLER_SOURCE_PATH/helm is not a directory." 1>&2
