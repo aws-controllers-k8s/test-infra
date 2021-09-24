@@ -7,4 +7,3 @@ resources:
 - prow-config.yaml
 - prow-data-plane.yaml
 - prow-jobs.yaml
-- ssm-agent.yaml
