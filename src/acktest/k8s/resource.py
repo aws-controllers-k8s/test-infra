@@ -328,6 +328,7 @@ def wait_on_condition(reference: CustomResourceReference,
         logging.error(f"Resource {reference} does not have a condition of type {condition_name}.")
     else:
         logging.error(f"Wait for condition {condition_name} to reach status {desired_condition_status} timed out")
+    logging.info(f"Resource state:\n{get_resource(reference)}")  # log resource state upon failure
     return False
 
 def get_resource_condition(reference: CustomResourceReference, condition_name: str):
