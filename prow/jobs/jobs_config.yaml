@@ -12,10 +12,10 @@ aws_services:
 - ecr
 - eks
 - elasticache
-- elasticsearchservice
 - kms
 - lambda
 - mq
+- opensearchservice
 - rds
 - s3
 - sagemaker
