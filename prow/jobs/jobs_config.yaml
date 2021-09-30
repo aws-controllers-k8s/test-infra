@@ -21,7 +21,6 @@ aws_services:
 - sagemaker
 - sfn
 - sns
-- sqs
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
@@ -35,7 +34,7 @@ soak_test_on_release_service_names:
 # issues with code-generator release.
 # Since there can be some breaking changes, these tests are marked optional for
 # prow merge criteria.
-# TODO(vijtrip2): Add more service controllers as candidates for code-generator
-# presubmit validation
 code_gen_presubmit_services:
 - dynamodb
+- ecr
+- s3
