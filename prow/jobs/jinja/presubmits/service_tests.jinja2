@@ -88,9 +88,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/bitnami/aws-cli:2.2.43
-        securityContext:
-          privileged: true
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.5
         env:
         - name: SERVICE
           value: {{ service }}
