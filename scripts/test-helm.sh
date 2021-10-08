@@ -40,8 +40,6 @@ Environment variables:
                                     used during release test
   AWS_REGION:                       AWS Region to use for installing ACK service
                                     controller. Default: us-west-2
-  AWS_ACCOUNT_ID:                   AWS Account ID to use for installing ACK
-                                    service controller.
 "
 
 if [ $# -ne 1 ]; then
@@ -69,10 +67,6 @@ if [[ ! -d $SERVICE_CONTROLLER_SOURCE_PATH ]]; then
     exit 1
 fi
 
-if [ "z$AWS_ACCOUNT_ID" == "z" ]; then
-    aws_check_credentials
-    AWS_ACCOUNT_ID=$( aws_account_id )
-fi
 AWS_REGION=${AWS_REGION:-"us-west-2"}
 
 echo "test-helm.sh] Starting Helm Artifacts Test"
@@ -101,7 +95,6 @@ pushd "$HELM_DIR" 1> /dev/null
   helm install --create-namespace \
     --namespace "$K8S_NAMESPACE" \
     --set aws.region="$AWS_REGION" \
-    --set aws.account_id="$AWS_ACCOUNT_ID" \
     --set image.repository="$IMAGE_REPO" \
     --set image.tag="$IMAGE_TAG" \
     --set metrics.service.create=true \
