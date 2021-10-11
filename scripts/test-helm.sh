@@ -101,6 +101,24 @@ pushd "$HELM_DIR" 1> /dev/null
     "$HELM_CHART_NAME" . 1>/dev/null || exit 1
   echo "ok."
 popd 1> /dev/null
+# NOTE: Currently there is only a single deployment. Keeping this logic very simple
+# right now.
+# Update this logic if multiple deployments are started in single ACK Helm Chart
+# installation.
+CONTROLLER_DEPLOYMENT_NAME=$(kubectl get deployments -n $K8S_NAMESPACE -ojson | jq -r ".items[0].metadata.name")
+if [ -z "$CONTROLLER_DEPLOYMENT_NAME" ]; then
+  echo "test-helm.sh] [ERROR] Found empty ACK controller deployment name. Exiting ..."
+  exit 1
+fi
+echo "test-helm.sh] ACK $AWS_SERVICE controller deployment name is $K8S_NAMESPACE/$CONTROLLER_DEPLOYMENT_NAME"
+echo -n "test-helm.sh] Generating AWS temporary credentials and adding to env vars map in controller deployment ... "
+aws_generate_temp_creds
+kubectl -n "$K8S_NAMESPACE" set env deployment/"$CONTROLLER_DEPLOYMENT_NAME" \
+    AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+    AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+    AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" 1>/dev/null
+echo "ok."
+
 echo -n "test-helm.sh] waiting 10 seconds for $AWS_SERVICE controller to start ... "
 sleep 10
 echo "ok"
@@ -130,9 +148,6 @@ then
   print_line_separation
   echo "$CONTROLLER_LOGS" | grep "ERROR"
   print_line_separation
-  # TODO(vijat@): Remove following INFO message upon completion of
-  #  https://github.com/aws-controllers-k8s/community/issues/885
-  echo "test-helm.sh] [INFO] Make sure to execute code-generator/scripts/build-controller-release.sh to update the helm artifacts ..."
   echo "test-helm.sh] [ERROR] Exiting ..."
   exit 1
 fi
