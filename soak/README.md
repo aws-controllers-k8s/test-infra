@@ -193,7 +193,7 @@ Follow the commands below to install this helm chart.
 * Command
     ```bash
     go-to-soak \
-    && jq -n --arg CONTROLLER_CHART_RELEASE_NAME $CONTROLLER_CHART_RELEASE_NAME --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($CONTROLLER_CHART_RELEASE_NAME)-\($SERVICE_NAME)-chart-metrics.ack-system:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
+    && jq -n --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($SERVICE_NAME)-controller-metrics.ack-system:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
     && helm repo add prometheus-community https://prometheus-community.github.io/helm-charts \
     && helm install -f prometheus-values.yaml --create-namespace -n prometheus $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack
     ```
