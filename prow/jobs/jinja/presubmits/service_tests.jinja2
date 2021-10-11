@@ -19,7 +19,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.4
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.5
         securityContext:
           privileged: true
         resources:
@@ -57,7 +57,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.4
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.5
         securityContext:
           privileged: true
         resources:
@@ -75,7 +75,27 @@
         - name: ENABLE_HELM_CHART_TEST
           value: "true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
-        
+
+  - name: {{ service }}-recommended-policy-test
+    decorate: true
+    optional: false
+    always_run: true
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: public.ecr.aws/bitnami/aws-cli:2.2.43
+        securityContext:
+          runAsUser: 0
+        env:
+        - name: SERVICE
+          value: {{ service }}
+        command: ["bash", "-c", "./scripts/test-recommended-policy.sh"]
+
   - name: {{ service }}-unit-test
     decorate: true
     optional: false

@@ -20,5 +20,10 @@ spec:
   selector:
     app: tide
   ports:
-  - port: 80
+  - name: main
+    port: 80
     targetPort: 8888
+  {{- if .Values.tide.scrapeMetrics }}
+  - name: metrics
+    port: 9090
+  {{- end }}

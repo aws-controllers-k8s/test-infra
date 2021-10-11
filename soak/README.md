@@ -72,7 +72,7 @@ actual values.
     
     # Semver version of the controller under test. Ex: v0.0.2
     export CONTROLLER_VERSION=<semver>
-    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/$SERVICE_NAME-chart:$CONTROLLER_VERSION
+    export CONTROLLER_CHART_URL=public.ecr.aws/aws-controllers-k8s/$SERVICE_NAME-chart
     
     # AWS Region for ACK service controller
     export CONTROLLER_AWS_REGION=us-west-2
@@ -88,7 +88,6 @@ actual values.
     export METRIC_SERVICE_CREATE_EVAL=".metrics.service.create = true"
     export METRIC_SERVICE_TYPE_EVAL=".metrics.service.type = \"ClusterIP\""
     export AWS_REGION_EVAL=".aws.region = \"$CONTROLLER_AWS_REGION\""
-    export AWS_ACCOUNT_ID_EVAL=".aws.account_id = \"$CONTROLLER_AWS_ACCOUNT_ID\""
     
     ### PROMETHEUS, GRAFANA CONFIGURATION ###
     
@@ -144,11 +143,10 @@ but following commands are also TL;DR for the installation documentation.
 
     ```bash
     go-to-soak \
-    && aws ecr-public get-login-password --region us-east-1 | helm registry login -u AWS --password-stdin public.ecr.aws \
-    && helm chart pull $CONTROLLER_CHART_URL \
     && mkdir controller-helm \
     && cd controller-helm \
-    && helm chart export $CONTROLLER_CHART_URL \
+    && helm pull --version $CONTROLLER_VERSION oci://$CONTROLLER_CHART_URL \
+    && tar xvf $SERVICE_NAME-chart-$CONTROLLER_VERSION.tgz \
     && cd $SERVICE_NAME-chart
     ```
     

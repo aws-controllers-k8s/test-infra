@@ -12,28 +12,29 @@ aws_services:
 - ecr
 - eks
 - elasticache
-- elasticsearchservice
 - kms
 - lambda
 - mq
+- opensearchservice
 - rds
 - s3
 - sagemaker
 - sfn
 - sns
-- sqs
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names:
 - ecr
 
-# list of AWS service controllers to be auto-generated on every release of ACK
-# code-generator
-# NOTE(TODO): Instead of adding more services here, consider using aws_services
-# list above & removing this list.
-auto_generate_on_codegen_release_service_names:
+# List of AWS services whose controller gets generated and e2e tested whenever
+# there is a new code-generator change.
+# These controllers are generated and tested to validate that changes in code-generator
+# are not breaking changes for service controllers. This helps surface any early
+# issues with code-generator release.
+# Since there can be some breaking changes, these tests are marked optional for
+# prow merge criteria.
+code_gen_presubmit_services:
 - dynamodb
-- ec2
 - ecr
 - s3

@@ -42,6 +42,12 @@ export class ProwServiceAccounts extends cdk.Construct {
       resources: ["*"]
     });
 
+    // Used to validate recommended-policy-arn in service controllers repository
+    const preGetPolicyPolicy = new iam.PolicyStatement({
+      actions: ["iam:GetPolicy"],
+      resources: ["*"]
+    });
+
     const preBucketAccessPolicy = new iam.PolicyStatement({
       actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
       resources: [
@@ -154,6 +160,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     });
 
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preAssumeRolePolicy);
+    this.presubmitJobServiceAccount.addToPrincipalPolicy(preGetPolicyPolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preParamStoreAccessPolicy);
     this.presubmitJobServiceAccount.addToPrincipalPolicy(preECRPublicReadOnlyPolicy)

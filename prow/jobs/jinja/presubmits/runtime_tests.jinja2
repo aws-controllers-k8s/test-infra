@@ -1,5 +1,4 @@
-{% for repo in ["runtime", "code-generator"] %}
-  aws-controllers-k8s/{{ repo }}:
+  aws-controllers-k8s/runtime:
   - name: unit-test
     decorate: true
     optional: false
@@ -13,4 +12,3 @@
             cpu: 1
         command: ["make", "test"]
 
-{% endfor %}

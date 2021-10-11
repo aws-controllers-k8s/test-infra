@@ -29,12 +29,14 @@ spec:
       serviceAccount:
         name: "prow-deployment-service-account"
     hook:
+      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
     horologium:
       serviceAccount:
         name: "prow-deployment-service-account"
     prowControllerManager:
+      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
     sinker:
@@ -44,6 +46,7 @@ spec:
       serviceAccount:
         name: "prow-deployment-service-account"
     tide:
+      scrapeMetrics: true
       serviceAccount:
         name: "prow-deployment-service-account"
   chart:

@@ -30,7 +30,7 @@ spec:
       app: hook
   template:
     metadata:
-      {{- if .Values.hook.scrape_metrics }}
+      {{- if .Values.hook.scrapeMetrics }}
       annotations:
         prometheus.io/path: /metrics
         prometheus.io/port: '9090'

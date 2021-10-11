@@ -10,7 +10,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-deploy-0.0.4
+        - image: public.ecr.aws/m5q3e4b2/prow:prow-deploy-0.0.6
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
@@ -29,7 +29,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-soak-0.0.2
+        - image: public.ecr.aws/m5q3e4b2/prow:prow-soak-0.0.3
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -52,7 +52,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-docs-0.0.2
+        - image: public.ecr.aws/m5q3e4b2/prow:prow-docs-0.0.3
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -61,6 +61,8 @@
                 key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
+          - name: GITHUB_EMAIL_ID
+            value: "82905295"
           command: ["/docs/build-docs.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
