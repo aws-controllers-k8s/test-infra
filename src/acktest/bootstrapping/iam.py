@@ -143,3 +143,46 @@ class Role(Bootstrappable):
 
         # Policies need to be deleted after they have been detached
         super().cleanup()
+
+@dataclass
+class ServiceLinkedRole(Bootstrappable):
+    # Inputs
+    aws_service_name: str
+    default_name: str
+    description: str = ""
+
+    # Outputs
+    role_name: str = field(default="", init=False)
+
+    @property
+    def iam_client(self):
+        return boto3.client("iam", region_name=self.region)
+
+    def bootstrap(self):
+        """Creates a service-linked role.
+        """
+        try:
+            resp = self.iam_client.create_service_linked_role(
+                AWSServiceName=self.aws_service_name,
+                Description=self.description
+            )
+        except self.iam_client.exceptions.InvalidInputException as e:
+            # Existance check for SLRs
+            if "taken in this account" in str(e):
+                logging.info(f"Service-linked role ({self.default_name}) already exists")
+
+                self.role_name = self.default_name
+                return
+            raise e
+
+        # There appears to be a delay in role availability after role creation
+        # resulting in failure that role is not present. So adding a delay
+        # to allow for the role to become available
+        time.sleep(ROLE_CREATE_WAIT_IN_SECONDS)
+
+        self.role_name = resp["Role"]["RoleName"]
+
+    def cleanup(self):
+        """Deletes a service-linked role.
+        """
+        self.iam_client.delete_service_linked_role(RoleName=self.role_name)
