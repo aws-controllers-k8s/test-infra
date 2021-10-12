@@ -148,6 +148,7 @@ class Role(Bootstrappable):
 class ServiceLinkedRole(Bootstrappable):
     # Inputs
     aws_service_name: str
+    default_name: str
     description: str = ""
 
     # Outputs
@@ -166,9 +167,12 @@ class ServiceLinkedRole(Bootstrappable):
                 Description=self.description
             )
         except self.iam_client.exceptions.InvalidInputException as e:
-            if "Service role name AWSServiceRoleForAmazonOpenSearchService has been taken in this account" in str(e):
-                logging.info(f"Service-linked role AWSServiceRoleForAmazonOpenSearchService already exists")
-                return "AWSServiceRoleForAmazonOpenSearchService"
+            # Existance check for SLRs
+            if "taken in this account" in str(e):
+                logging.info(f"Service-linked role ({self.default_name}) already exists")
+
+                self.role_name = self.default_name
+                return
             raise e
 
         # There appears to be a delay in role availability after role creation
