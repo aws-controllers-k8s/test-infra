@@ -120,7 +120,26 @@ contributor team who will subsequently approve and merge the request.
 being public members of the `aws-controllers-k8s` organisation. This should not
 affect their ability to approve or merge pull requests and can be ignored.
 
-## 4. Setup Soak Test Infrastructure
+## 4. Setup GitHub Action Workflow For Creating GitHub Release
+
+ACK Prowjob automatically updates the ACK runtime dependency in the service controller
+repository whenever a new ACK runtime version is available and then creates a pull
+request.
+When this pull request gets merged, ACK Prowjob also automatically cuts a new patch
+release for the service controller.
+
+To create this release and update the changelog, ACK currently relies on a GitHub
+Action workflow. Follow the steps below to do this one time setup for service
+controller repository.
+
+* Click on 'Actions' tab on service-controller GitHub page
+* Click 'Set up this workflow' button on "Create Github Release Workflow" panel
+* Click 'Start commit' button and then 'Commit new file' directly into main branch
+
+This is it. With 4 clicks, the automatic patch releases for your controller is
+setup now.
+
+## 5. Setup Soak Test Infrastructure
 
 Follow the guide [here](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/prow/README.md) to setup soak
 test infrastructure

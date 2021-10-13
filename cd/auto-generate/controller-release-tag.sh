@@ -17,7 +17,8 @@ If the 'image.tag' value inside 'helm/values.yaml' file is next patch release,
 then this scripts tags the service controller repository with 'image.tag' value
 from 'helm/values.yaml' file
 
-This tagging kick starts the service controller release process for new semver.
+This tagging along with GitHub action for creating GitHub
+release, kick starts the service controller release process.
 
 Environment variables:
   REPO_NAME:           Name of the service controller repository. Ex: apigatewayv2-controller
@@ -28,6 +29,9 @@ Environment variables:
   GITHUB_EMAIL_PREFIX: The 7 digit unique id for no-reply email of '$GITHUB_ACTOR'
   GITHUB_TOKEN:        Personal Access Token for '$GITHUB_ACTOR'
 "
+
+#TODO(vijtrip2): remove GitHub Action details from script description and
+# onboarding guide once, the GitHub release process is moved completely to Prow
 
 # find out the service name
 AWS_SERVICE=$(echo "$REPO_NAME" | rev | cut -d"-" -f2- | rev | tr '[:upper:]' '[:lower:]')
