@@ -8,11 +8,12 @@ Usage:
 
 This script validates that file config/iam/recommended-policy-arn exists for a
 service controller repository and that each of the policies in the file are
-valid. If the file is empty, it will check for the existence of a 
+valid. If the file does not exist, it will check for the existence of a 
 config/iam/recommended-inline-policy file.
 
-Creating an IAM Role with IAM Policy mentioned in recommended-policy-arn file is
-a required step for ACK installation guide.
+Creating an IAM Role with all of the IAM Policies mentioned in
+recommended-policy-arn file and the inline Policy in the
+recommended-inline-policy is a required step for ACK installation guide.
 
 Environment variables:
   SERVICE: Name of the AWS service
@@ -37,16 +38,9 @@ cd "$SERVICE_CONTROLLER_DIR"
 echo -n "test-recommended-policy.sh][INFO] Checking presence of recommended-policy-arn ... "
 if [[ ! -f $RECOMMENDED_POLICY_RELATIVE_PATH ]]; then
   echo ""
-  echo "test-recommended-policy.sh][ERROR] Missing $RECOMMENDED_POLICY_RELATIVE_PATH for $CONTROLLER_NAME. Exiting"
-  exit 1
-fi
-echo "ok"
-
-RECOMMENDED_POLICY_FILE_CONTENTS="$(cat $RECOMMENDED_POLICY_RELATIVE_PATH)"
-
-if [[ -z "$RECOMMENDED_POLICY_FILE_CONTENTS" ]]; then
+  echo "test-recommended-policy.sh][INFO] Missing $RECOMMENDED_POLICY_RELATIVE_PATH for $CONTROLLER_NAME"
+  
   # Check for existence of recommended inline policy
-  echo "test-recommended-policy.sh][INFO] recommended-policy-arn is empty"
   echo -n "test-recommended-policy.sh][INFO] Checking presence of recommended-inline-policy ... "
   if [[ ! -f $RECOMMENDED_INLINE_POLICY_RELATIVE_PATH ]]; then
     echo ""
@@ -56,6 +50,7 @@ if [[ -z "$RECOMMENDED_POLICY_FILE_CONTENTS" ]]; then
   echo "ok"
   exit 0
 fi
+echo "ok"
 
 echo -n "test-recommended-policy.sh][INFO] Validating that recommended policy file contains valid AWS IAM policy ARNs ... "
 while IFS= read -r POLICY_ARN; do
