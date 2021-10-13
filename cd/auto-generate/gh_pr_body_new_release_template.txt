@@ -2,11 +2,11 @@
 
 ----------
 NOTE:
-This PR increments the release version of service controller from \` $LATEST_TAG \` to \` $RELEASE_VERSION \` .
+This PR increments the release version of service controller from \`$LATEST_TAG\` to \`$RELEASE_VERSION\`
 
-Once this PR is merged, release \` $RELEASE_VERSION \` will be automatically created for \` $CONTROLLER_NAME \`
+Once this PR is merged, release \`$RELEASE_VERSION\` will be automatically created for \`$CONTROLLER_NAME\`
 
-**Please close this PR, if you do not want the new patch release for \` $CONTROLLER_NAME \`**
+**Please close this PR, if you do not want the new patch release for \`$CONTROLLER_NAME\`**
 
 ----------
 

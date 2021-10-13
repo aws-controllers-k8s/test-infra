@@ -67,7 +67,7 @@
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
 
-  - name: {{ service }}-auto-tag
+  - name: {{ service }}-controller-release-tag
     decorate: true
     extra_refs:
     - org: aws-controllers-k8s
@@ -77,7 +77,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-auto-tag-0.0.1
+        - image: public.ecr.aws/m5q3e4b2/prow:prow-controller-release-tag-0.0.1
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -88,7 +88,7 @@
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
             value: "82905295"
-          command: ["/bin/bash", "-c", "./cd/auto-generate/auto-tag-controller.sh"]
+          command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-tag.sh"]
     branches:
     - main
 

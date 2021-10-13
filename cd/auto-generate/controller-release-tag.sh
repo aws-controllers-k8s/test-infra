@@ -8,16 +8,16 @@ Usage:
 
 This script automatically tags the service controller repository with proper semver
 to automate the controller release process.
-The script currently only support automating patch releases.
+The script currently only supports automating patch releases.
 (TODO: Consider automating Minor and Major release for controllers as well)
 
-The script compares latest GitHub tag on service controller repository with the
-image tag inside helm artifacts. If the generated helm artifacts are valid next
-patch release, then this scripts tags the service controller repository with
-helm image tag version.
+The script compares latest git tag on service controller repository with
+'image.tag' inside service controller's 'helm/values.yaml' file.
+If the 'image.tag' value inside 'helm/values.yaml' file is next patch release,
+then this scripts tags the service controller repository with 'image.tag' value
+from 'helm/values.yaml' file
 
-This tagging along with GitHub action for creating GitHub
-release, kick starts the service controller release process.
+This tagging kick starts the service controller release process for new semver.
 
 Environment variables:
   REPO_NAME:           Name of the service controller repository. Ex: apigatewayv2-controller
@@ -44,7 +44,7 @@ CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
 DEFAULT_GITHUB_ORG="aws-controllers-k8s"
 GITHUB_ORG=${GITHUB_ORG:-$DEFAULT_GITHUB_ORG}
 
-MISSING_GITHUB_TAG="missing-github-tag"
+MISSING_GIT_TAG="missing-git-tag"
 MISSING_IMAGE_TAG="missing-image-tag"
 NON_RELEASE_IMAGE_TAG="v0.0.0-non-release-version"
 
@@ -64,54 +64,54 @@ git config --global user.email "${USER_EMAIL}" >/dev/null
 
 cd "$CONTROLLER_DIR"
 
-# Find latest GitHub tag on controller repo
-echo "auto-tag-controllers.sh][INFO] Finding latest GitHub tag for $CONTROLLER_NAME"
-LATEST_GITHUB_TAG=$(git describe --abbrev=0 --tags || echo "$MISSING_GITHUB_TAG")
-if [[ $LATEST_GITHUB_TAG == $MISSING_GITHUB_TAG ]]; then
-  echo "auto-tag-controllers.sh][INFO] Unable to find latest GitHub tag for $CONTROLLER_NAME"
+# Find latest Git tag on controller repo
+echo "controller-release-tag.sh][INFO] Finding latest Git tag for $CONTROLLER_NAME"
+LATEST_GIT_TAG=$(git describe --abbrev=0 --tags || echo "$MISSING_GIT_TAG")
+if [[ $LATEST_GIT_TAG == $MISSING_GIT_TAG ]]; then
+  echo "controller-release-tag.sh][INFO] Unable to find latest Git tag for $CONTROLLER_NAME"
   exit 0
 fi
 
 # Find the image tag used in helm release artifacts
 HELM_IMAGE_TAG=$(yq eval '.image.tag' helm/values.yaml || echo "$MISSING_IMAGE_TAG")
 if [[ $HELM_IMAGE_TAG == $MISSING_IMAGE_TAG ]]; then
-  echo "auto-tag-controllers.sh][ERROR] Unable to find image tag in helm/values.yaml for $CONTROLLER_NAME. Exiting"
+  echo "controller-release-tag.sh][ERROR] Unable to find image tag in helm/values.yaml for $CONTROLLER_NAME. Exiting"
   exit 1
 fi
 
 if [[ $HELM_IMAGE_TAG == $NON_RELEASE_IMAGE_TAG ]]; then
-  echo "auto-tag-controllers.sh][INFO] Helm artifacts have $NON_RELEASE_IMAGE_TAG tag. Skipping $CONTROLLER_NAME"
+  echo "controller-release-tag.sh][INFO] Helm artifacts have $NON_RELEASE_IMAGE_TAG tag. Skipping $CONTROLLER_NAME"
   exit 0
 fi
 
-# Currently only support auto-tagging for patch releases
-NEXT_GITHUB_TAG=$(echo "$LATEST_GITHUB_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+# Currently only supports auto-tagging for patch releases
+NEXT_GIT_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
 
-if [[ $HELM_IMAGE_TAG != $NEXT_GITHUB_TAG ]]; then
-  echo "auto-tag-controllers.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is not the next patch release for current $LATEST_GITHUB_TAG release"
-  echo "auto-tag-controllers.sh][INFO] Not tagging the GitHub repository with $HELM_IMAGE_TAG tag"
+if [[ $HELM_IMAGE_TAG != $NEXT_GIT_TAG ]]; then
+  echo "controller-release-tag.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is not the next patch release for current $LATEST_GIT_TAG release"
+  echo "controller-release-tag.sh][INFO] Not tagging the GitHub repository with $HELM_IMAGE_TAG tag"
   exit 0
 fi
 
 ## tag the repo with same tag as helm release artifacts
-echo -n "auto-tag-controllers.sh][INFO] Tagging $CONTROLLER_NAME locally with $HELM_IMAGE_TAG tag ... "
+echo -n "controller-release-tag.sh][INFO] Tagging $CONTROLLER_NAME locally with $HELM_IMAGE_TAG tag ... "
 if ! git tag -a "$HELM_IMAGE_TAG" -m "$HELM_IMAGE_TAG" >/dev/null; then
   echo ""
-  echo "auto-tag-controllers.sh][ERROR] Failed to tag $CONTROLLER_NAME. Exiting"
+  echo "controller-release-tag.sh][ERROR] Failed to tag $CONTROLLER_NAME. Exiting"
   exit 1
 fi
 echo "ok"
 
 ## push the tags to controller-repo
-echo -n "auto-tag-controllers.sh][INFO] Pushing tags to $CONTROLLER_NAME  ... "
+echo -n "controller-release-tag.sh][INFO] Pushing tags to $CONTROLLER_NAME  ... "
 if ! git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" --tags >/dev/null; then
   echo ""
-  echo "auto-tag-controllers.sh][ERROR] Failed to push tags for $CONTROLLER_NAME. Exiting"
+  echo "controller-release-tag.sh][ERROR] Failed to push tags for $CONTROLLER_NAME. Exiting"
   exit 1
 fi
 echo "ok"
 
-echo "auto-tag-controllers.sh][INFO] Successfully tagged $CONTROLLER_NAME with $HELM_IMAGE_TAG tag"
-echo "auto-tag-controllers.sh][INFO] GitHub release $HELM_IMAGE_TAG for $CONTROLLER_NAME will be automatically created"
-echo "auto-tag-controllers.sh][INFO] $CONTROLLER_NAME image and chart for $HELM_IMAGE_TAG will also be automatically published"
+echo "controller-release-tag.sh][INFO] Successfully tagged $CONTROLLER_NAME with $HELM_IMAGE_TAG tag"
+echo "controller-release-tag.sh][INFO] GitHub release $HELM_IMAGE_TAG for $CONTROLLER_NAME will be automatically created"
+echo "controller-release-tag.sh][INFO] $CONTROLLER_NAME image and chart for $HELM_IMAGE_TAG will also be automatically published"
 echo "Done :) "

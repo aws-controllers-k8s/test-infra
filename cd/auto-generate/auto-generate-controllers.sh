@@ -53,7 +53,7 @@ DEFAULT_GITHUB_LABEL_COLOR="3C6110"
 GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
 RUNTIME_MISSING_VERSION="missing-runtime-dependency"
-MISSING_GITHUB_TAG="missing-github-tag"
+MISSING_GIT_TAG="missing-git-tag"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -137,9 +137,9 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   pushd "$CONTROLLER_DIR" >/dev/null
     echo "auto-generate-controllers.sh][INFO] Finding new release version for $CONTROLLER_NAME"
     # Find the latest tag on repository and only increment patch version
-    LATEST_TAG=$(git describe --abbrev=0 --tags 2>/dev/null || echo "$MISSING_GITHUB_TAG")
-    if [[ $LATEST_TAG == $MISSING_GITHUB_TAG ]]; then
-      echo "auto-generate-controllers.sh][INFO] Unable to find latest tag for $CONTROLLER_NAME"
+    LATEST_TAG=$(git describe --abbrev=0 --tags 2>/dev/null || echo "$MISSING_GIT_TAG")
+    if [[ $LATEST_TAG == $MISSING_GIT_TAG ]]; then
+      echo "auto-generate-controllers.sh][INFO] Unable to find latest git tag for $CONTROLLER_NAME"
       unset RELEASE_VERSION
     else
       export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
