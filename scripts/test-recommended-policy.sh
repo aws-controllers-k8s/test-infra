@@ -35,6 +35,7 @@ check_is_installed aws
 
 cd "$SERVICE_CONTROLLER_DIR"
 
+# Check for existence of recommended policy ARN
 echo -n "test-recommended-policy.sh][INFO] Checking presence of recommended-policy-arn ... "
 if [[ ! -f $RECOMMENDED_POLICY_RELATIVE_PATH ]]; then
   echo ""
@@ -48,10 +49,20 @@ if [[ ! -f $RECOMMENDED_POLICY_RELATIVE_PATH ]]; then
     exit 1
   fi
   echo "ok"
+
+  # Check for contents of recommended inline policy
+  echo -n "test-recommended-policy.sh][INFO] Checking contents of recommended-inline-policy ... "
+  if [[ ! -s $RECOMMENDED_INLINE_POLICY_RELATIVE_PATH ]]; then
+    echo ""
+    echo "test-recommended-policy.sh][ERROR] $RECOMMENDED_INLINE_POLICY_RELATIVE_PATH for $CONTROLLER_NAME is empty. Exiting"
+    exit 1
+  fi
+  echo "ok"
   exit 0
 fi
 echo "ok"
 
+# Check for valid contents of recommended policy ARN
 echo -n "test-recommended-policy.sh][INFO] Validating that recommended policy file contains valid AWS IAM policy ARNs ... "
 while IFS= read -r POLICY_ARN; do
   if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null; then
