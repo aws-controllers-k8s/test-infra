@@ -64,7 +64,7 @@ echo "ok"
 
 # Check for valid contents of recommended policy ARN
 echo -n "test-recommended-policy.sh][INFO] Validating that recommended policy file contains valid AWS IAM policy ARNs ... "
-while IFS= read -r POLICY_ARN; do
+for POLICY_ARN in $(awk NF=NF FS="\n" $RECOMMENDED_POLICY_RELATIVE_PATH); do
   if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null; then
     echo ""
     echo "test-recommended-policy.sh][ERROR] $POLICY_ARN is not a valid managed IAM policy ARN"
@@ -75,5 +75,5 @@ while IFS= read -r POLICY_ARN; do
     print_line_separation
     exit 1
   fi
-done <<< "$RECOMMENDED_POLICY_FILE_CONTENTS"
+done
 echo "ok"
