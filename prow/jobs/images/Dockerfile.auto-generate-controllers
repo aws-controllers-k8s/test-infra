@@ -25,7 +25,8 @@ RUN echo "Installing packages ..." \
         jq \
         uuid-runtime \
         apt-transport-https \
-        unzip
+        unzip \
+        gawk
 
 RUN echo "Installing Go ..." \
     && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
@@ -45,4 +46,3 @@ RUN echo "Installing Helm ... " \
     && curl -fsSL https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
     && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
     && rm "${HELM_TARBALL}"
-

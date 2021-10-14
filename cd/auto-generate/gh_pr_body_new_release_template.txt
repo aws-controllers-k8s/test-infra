@@ -1,0 +1,21 @@
+### $COMMIT_MSG
+
+----------
+NOTE:
+This PR increments the release version of service controller from \`$LATEST_TAG\` to \`$RELEASE_VERSION\`
+
+Once this PR is merged, release \`$RELEASE_VERSION\` will be automatically created for \`$CONTROLLER_NAME\`
+
+**Please close this PR, if you do not want the new patch release for \`$CONTROLLER_NAME\`**
+
+----------
+
+#### stdout for \`make build-controller\`:
+
+\`\`\`
+$MAKE_BUILD_OUTPUT
+\`\`\`
+
+----------
+
+By submitting this pull request, I confirm that my contribution is made under the terms of the Apache 2.0 license.

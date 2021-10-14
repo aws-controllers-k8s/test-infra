@@ -53,6 +53,7 @@ DEFAULT_GITHUB_LABEL_COLOR="3C6110"
 GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
 RUNTIME_MISSING_VERSION="missing-runtime-dependency"
+MISSING_GIT_TAG="missing-git-tag"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -132,6 +133,19 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   else
     echo "ok"
   fi
+
+  pushd "$CONTROLLER_DIR" >/dev/null
+    echo "auto-generate-controllers.sh][INFO] Finding new release version for $CONTROLLER_NAME"
+    # Find the latest tag on repository and only increment patch version
+    LATEST_TAG=$(git describe --abbrev=0 --tags 2>/dev/null || echo "$MISSING_GIT_TAG")
+    if [[ $LATEST_TAG == $MISSING_GIT_TAG ]]; then
+      echo "auto-generate-controllers.sh][INFO] Unable to find latest git tag for $CONTROLLER_NAME"
+      unset RELEASE_VERSION
+    else
+      export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+      echo "auto-generate-controllers.sh][INFO] Using $RELEASE_VERSION as new release version. Previous version: $LATEST_TAG"
+    fi
+  popd >/dev/null
 
   echo "auto-generate-controllers.sh][INFO] Generating new controller code using command 'make build-controller'"
   export SERVICE=$SERVICE_NAME
@@ -252,7 +266,8 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # Capture 'make build-controller' command output, then persist
     # in '$GITHUB_PR_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
-    GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
+    PR_BODY_TEMPLATE_FILE_NAME=$([[ -z "$RELEASE_VERSION" ]] && echo "gh_pr_body_template.txt" || echo "gh_pr_body_new_release_template.txt")
+    GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/$PR_BODY_TEMPLATE_FILE_NAME"
     GITHUB_PR_BODY_FILE=/tmp/"SERVICE_NAME"_gh_pr_body
     eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
 
