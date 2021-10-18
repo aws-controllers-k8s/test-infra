@@ -236,7 +236,15 @@ echo "ok."
 
 ## Functional tests where we assume role and pass aws temporary credentials as env vars to deployment
 echo -n "generating AWS temporary credentials and adding to env vars map ... "
-aws_generate_temp_creds
+# TODO(vijtrip2) remove this hack for elasticache-controller and manage the test
+# role duration configuration at a central place
+# https://github.com/aws-controllers-k8s/community/issues/1035
+# elasticache controller e2e tests can run upto 6 hours
+if [[ "$AWS_SERVICE" == elasticache ]]; then
+    aws_generate_temp_creds 21600
+else
+    aws_generate_temp_creds
+fi
 kubectl -n ack-system set env deployment/ack-"$AWS_SERVICE"-controller \
     AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
     AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
