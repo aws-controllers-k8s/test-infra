@@ -98,6 +98,7 @@ pushd "$HELM_DIR" 1> /dev/null
     --set image.repository="$IMAGE_REPO" \
     --set image.tag="$IMAGE_TAG" \
     --set metrics.service.create=true \
+    --wait \
     "$HELM_CHART_NAME" . 1>/dev/null || exit 1
   echo "ok."
 popd 1> /dev/null
@@ -152,11 +153,11 @@ then
   exit 1
 fi
 echo "ok."
-echo -n "test-helm.sh] uninstalling the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
-helm uninstall --namespace "$K8S_NAMESPACE" "$HELM_CHART_NAME" 1>/dev/null || exit 1
-echo "ok."
 echo -n "test-helm.sh] removing $AWS_SERVICE crds installed by Helm ... "
 kubectl delete -f "$HELM_DIR/crds" 1>/dev/null || exit 1
+echo "ok."
+echo -n "test-helm.sh] uninstalling the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
+helm uninstall --namespace "$K8S_NAMESPACE" "$HELM_CHART_NAME" 1>/dev/null || exit 1
 echo "ok."
 echo -n "test-helm.sh] deleting $K8S_NAMESPACE namespace ... "
 kubectl delete namespace "$K8S_NAMESPACE" 1>/dev/null || exit 1
