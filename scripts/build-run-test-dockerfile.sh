@@ -40,10 +40,6 @@ pushd "${ROOT_DIR}/.." 1> /dev/null
 popd 1>/dev/null
 
 echo "Running e2e test container $TEST_DOCKER_SHA"
-
-# Add AWS_PROFILE env var if one is set locally 
-aws_cli_profile_env=$([ ! -z "$AWS_PROFILE" ] && echo "--env AWS_PROFILE=$AWS_PROFILE")
-
 # Ensure it can connect to KIND cluster on host device by running on host 
 # network. 
 # Pass AWS credentials and kubeconfig through to Dockerfile.
@@ -59,5 +55,5 @@ docker run --rm -t \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     -e AWS_SESSION_TOKEN \
-    $aws_cli_profile_env \
+    -e AWS_PROFILE="${AWS_PROFILE:-"default"}" \
     $TEST_DOCKER_SHA
