@@ -43,7 +43,7 @@ trap 'kill -9 $(jobs -p)' EXIT SIGINT
 while true
 do
   echo "rotate-aws-creds-in-kind.sh][INFO] sleeping for 50 mins before rotating temporary aws credentials"
-  sleep 3000
+  sleep 3000 & wait
   if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
     if [[ ! -d $ARTIFACTS ]]; then
       echo "rotate-aws-creds-in-kind.sh][ERROR] Error evaluating ARTIFACTS environment variable" 1>&2
