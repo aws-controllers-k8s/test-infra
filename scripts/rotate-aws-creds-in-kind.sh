@@ -38,6 +38,8 @@ fi
 
 AWS_SERVICE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
+trap 'kill -9 $(jobs -p)' EXIT SIGINT
+
 while true
 do
   echo "rotate-aws-creds-in-kind.sh][INFO] sleeping for 50 mins before rotating temporary aws credentials"
