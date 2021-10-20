@@ -56,6 +56,12 @@ if [ "z$AWS_ACCOUNT_ID" == "z" ]; then
 fi
 
 function clean_up {
+    bg_jobs_pids=$(jobs -p)
+    if [[ -n $bg_jobs_pids ]]; then
+      echo "cleaning background jobs with pid : $bg_jobs_pids"
+      kill "$bg_jobs_pids"
+    fi
+
     if [[ "$PRESERVE" == false ]]; then
         "${SCRIPTS_DIR}"/delete-kind-cluster.sh "$TMP_DIR" || :
         return
@@ -184,7 +190,7 @@ fi
 
 [[ $ENABLE_E2E_TESTS != true ]] && echo "Skipping e2e tests because ENABLE_E2E_TESTS is not true. Current value is : $ENABLE_E2E_TESTS" && exit 0
 
-trap "clean_up" EXIT
+trap "clean_up" EXIT SIGINT
 
 export AWS_ACCOUNT_ID
 export AWS_REGION
@@ -249,6 +255,9 @@ kubectl -n ack-system set env deployment/ack-"$AWS_SERVICE"-controller \
 sleep 10
 echo "ok."
 
+# start a background job which will refresh AWS credentials periodically
+"$SCRIPTS_DIR"/rotate-aws-creds-in-kind.sh "$AWS_SERVICE" &
+
 print_line_separation
 echo "To poke around your test cluster manually:"
 echo "export KUBECONFIG=$TMP_DIR/kubeconfig"
@@ -282,7 +291,7 @@ if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
 
     # Use the first pod in the `ack-system` namespace
     POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
-    kubectl logs -n ack-system $POD > $ARTIFACTS/controller_logs
+    kubectl logs -n ack-system $POD >> $ARTIFACTS/controller_logs
 fi
 
 exit $EXIT_CODE

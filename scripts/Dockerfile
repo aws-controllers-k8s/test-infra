@@ -10,6 +10,9 @@ ARG CONTROLLER_E2E_PATH=./${AWS_SERVICE}-controller/test/e2e
 # Path to the test-infra directory in the build context
 ARG TEST_INFRA_PATH=./test-infra
 
+# Destination path to copy aws-web-identity-token
+ARG WEB_IDENTITY_TOKEN_DEST_PATH=/root/web-identity-token
+
 # Mirror the e2e directory structure as the controller
 WORKDIR /${AWS_SERVICE}-controller/tests/e2e
 ENV PYTHONPATH=/${AWS_SERVICE}-controller/tests/e2e
@@ -25,6 +28,8 @@ RUN mkdir -p $HOME/.kube
 
 # Copy the runner script
 COPY ${TEST_INFRA_PATH}/scripts/run-tests.sh .
+
+COPY ${TEST_INFRA_PATH}/scripts/web-identity-token ${WEB_IDENTITY_TOKEN_DEST_PATH}
 
 # Run the tests
 ENTRYPOINT ["./run-tests.sh"]
