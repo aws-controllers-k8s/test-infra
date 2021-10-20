@@ -129,4 +129,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# test generated file(s)
+scripts/web-identity-token
+
 # End of https://www.gitignore.io/api/python
