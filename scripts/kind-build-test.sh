@@ -59,7 +59,7 @@ function clean_up {
     bg_jobs_pids=$(jobs -p)
     if [[ -n $bg_jobs_pids ]]; then
       echo "cleaning background jobs with pid : $bg_jobs_pids"
-      kill -9 "$bg_jobs_pids"
+      kill "$bg_jobs_pids"
     fi
 
     if [[ "$PRESERVE" == false ]]; then

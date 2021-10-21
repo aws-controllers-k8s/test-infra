@@ -38,7 +38,7 @@ fi
 
 AWS_SERVICE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
-trap 'kill -9 $(jobs -p)' EXIT SIGINT
+trap 'kill $(jobs -p)' EXIT SIGINT
 
 while true
 do
