@@ -119,8 +119,8 @@ kubectl -n "$K8S_NAMESPACE" set env deployment/"$CONTROLLER_DEPLOYMENT_NAME" \
     AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" 1>/dev/null
 echo "ok."
 
-echo -n "test-helm.sh] waiting 10 seconds for $AWS_SERVICE controller to start ... "
-sleep 10
+echo -n "test-helm.sh] waiting 20 seconds for $AWS_SERVICE controller to start ... "
+sleep 20
 echo "ok"
 # NOTE: Currently there is only a single pod. Keeping this logic very simple
 # right now.
