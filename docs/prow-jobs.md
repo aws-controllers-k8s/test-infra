@@ -59,9 +59,43 @@ which has permissions to assume the test IAM role.
 
 ## Postsubmit Jobs
 
-Currently, the only postsubmit job we manage with Prow is to publish any new
-versions of the service controllers into the [ECR public repository][ecr-repo]
-and into the [Helm chart repository][helm-repo].
+### Service Controller Generation
+ACK uses postsubmit prowjobs to auto generate ACK service controllers when
+a newer semver of ACK code-generator is released.
+This postsubmit job does following 4 tasks: 
+a) updates the go.mod file with latest ACK runtime dependency
+b) generate ACK service controller with latest code-generator
+c) generate release artifacts with next patch release version
+d) open a pull request for service controller using `ack-bot` github account
+
+### Service Controller Semver Tagging
+Once an ACK service controller PR is merged, this prowjob checks the
+release artifacts(/helm directory) to see if the semver version for controller
+image in release artifacts is the next patch release of service controller.
+If it is the next patch release, then the prowjob tags service controller repository
+with semver of next patch release.
+
+NOTE
+```
+Currently this prowjob only supports tagging the next patch release version.
+Minor and Major release version tagging is not supported yet.
+```
+
+This prowjob works in conjunction with `Service Controller Generation` postsubmit
+job to automate the release of service controller when a new semver of ACK 
+code-generator is released.
+
+NOTE:
+```
+This prowjob can also be used when manually releasing the next patch version of
+service controller. Once the PR with newly generated release artifacts is merged,
+this prowjob will create the new tag and new patch release.
+```
+
+### Publish Controller Image And Chart To ECR Public
+This postsubmit prowjob runs whenever a new semver release of service controller
+is published. This prowjob publishes latest release of service controller into
+the [ECR public repository][ecr-repo] and into the [Helm chart repository][helm-repo].
 
 The Dockerfile we use for continuous deployment is
 `prow/jobs/images/Dockerfile.deploy`. It is based off `buildah`, which we use to
@@ -70,3 +104,27 @@ construct OCI-compliant images from inside the Prow container.
 [prow-jobs]: https://github.com/kubernetes/test-infra/blob/master/config/jobs/README.md
 [ecr-repo]: https://gallery.ecr.aws/aws-controllers-k8s/controller
 [helm-repo]: https://gallery.ecr.aws/aws-controllers-k8s/chart
+
+The diagram below will show how the postsubmit jobs help in making a new patch
+release of service controller whenever there is a new release of ACK common runtime.
+
+![controller release](./images/controller-release.png)
+
+1. A new semver release of ACK common runtime triggers the prowjob to auto generate
+service controllers.
+2. The prowjob opens pull requests for all the successfully generated service
+controllers. If any service controller fails to get generated, this prowjob
+creates a GitHub issue for the same.
+3. When the auto generated service controller PR gets merged, another prowjob is
+launched
+4. This prowjob creates a GitHub tag and GitHub release with next patch release
+semver. Example: Create a tag 'v0.0.5' is last tag on repository was 'v0.0.4'
+5. The new release triggers another postsubmit prowjob which is responsible for
+publishing controller image and helm charts to public ECR repository.
+6. Prowjob authenticates with public ECR registry
+7. Prowjob build service controller image using `buildah` tool. `buildah` is preferred
+to docker because it is lightweight tool compared to docker and does not need
+access to docker engine or docker network bridge on the node for building controller
+image.
+8. Prowjob packages release artifacts into the helm chart.
+9. Prowjob publishes controller image and helm chart in ECR public repositories.
