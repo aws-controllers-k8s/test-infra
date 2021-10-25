@@ -1,20 +1,20 @@
 ## Introduction
 
-ACK team provides the soak testing framework where service teams can execute long running soak tests for testing the
+ACK team provides the soak testing framework where service teams can execute long running soak tests to test the
 performance and stability of the service controllers. Running soak tests is also a requirement for cutting the stable
 release for the service controller. Find more details on the release process [here](https://github.com/aws-controllers-k8s/community/blob/main/docs/contents/releases.md).
 
 Under the hood, the soak test introduces load by repeatedly running the end-to-end tests for the service controller. End
-to end tests are present in service-controller github repository. i.e. "https://github.com/aws-controllers-k8s/<service-name>-controller".
+to end tests are present in service-controller github repository. i.e. "https://github.com/aws-controllers-k8s/\<service-name\>-controller".
 
-If you wish to run soak tests for your service controller locally, see the "How To Run Soak Test Locally" section below.
+Service teams are expected to deploy and maintain their own soak testing infrastructure, based off the templates and configuration provided in this repository. Soak tests will be started by Prow jobs before cutting a new `stable` release, but can also be manually triggered. Use the following guide to configure your soak testing infrastructure.
 
-## Running Soak Tests Using ACK Prow Jobs
+## Running soak tests with Prow jobs
 
-TBD
+After confirming that the soak tests work manually, follow the [Prow soak test document](./prow/README.md) for onboarding your soak tests onto the Prow automation.
 
 
-## How To Run Soak Test Locally
+## Running soak tests manually
 
 ### Prerequisites
 * A tool for building OCI images ([docker](https://docs.docker.com/get-docker/), [buildah](https://github.com/containers/buildah/blob/master/install.md) etc..)
@@ -218,8 +218,8 @@ Validation:
     && curl http://127.0.0.1:$LOCAL_GRAFANA_PORT >/dev/null 2>&1; [[ $? -eq 0 ]] && echo "Grafana Successully started" || echo "Failed to start Grafana."
     ```
 
-NOTE: You can also choose to update Prometheus and Grafana services to NodePort or LoadBalancer Type service, if you wish
-to access them through a public-facing ELB.
+NOTE: You can also choose to update Prometheus and Grafana services to `NodePort` or `LoadBalancer` Type service, if you wish
+to access them through a public-facing ELB. Be aware that the default `LoadBalancer` uses a security group that is publicly exposed - this should be reduced down to a more secure range.
 
 ### Step 3 (Import ACK Grafana dashboard)
 * Run following command to install the default ACK soak test dashboard
