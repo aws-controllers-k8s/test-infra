@@ -92,11 +92,14 @@ pushd "$HELM_DIR" 1> /dev/null
   echo -n "test-helm.sh] installing the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
   # NOTE: Do not skip creation of any k8s resource. This installation should test artifacts of all the
   # k8s resources. https://github.com/aws-controllers-k8s/community/issues/956
+  # Install the helm chart with installScope=namespace, so that during local testing, it does not interact with
+  # any left over custom resources from previous e2e runs when reusing kind cluster
   helm install --create-namespace \
     --namespace "$K8S_NAMESPACE" \
     --set aws.region="$AWS_REGION" \
     --set image.repository="$IMAGE_REPO" \
     --set image.tag="$IMAGE_TAG" \
+    --set installScope="namespace" \
     --set metrics.service.create=true \
     "$HELM_CHART_NAME" . 1>/dev/null || exit 1
   echo "ok."
@@ -154,9 +157,6 @@ fi
 echo "ok."
 echo -n "test-helm.sh] uninstalling the Helm Chart $HELM_CHART_NAME in namespace $K8S_NAMESPACE ... "
 helm uninstall --namespace "$K8S_NAMESPACE" "$HELM_CHART_NAME" 1>/dev/null || exit 1
-echo "ok."
-echo -n "test-helm.sh] removing $AWS_SERVICE crds installed by Helm ... "
-kubectl delete -f "$HELM_DIR/crds" 1>/dev/null || exit 1
 echo "ok."
 echo -n "test-helm.sh] deleting $K8S_NAMESPACE namespace ... "
 kubectl delete namespace "$K8S_NAMESPACE" 1>/dev/null || exit 1
