@@ -1,0 +1,66 @@
+FROM debian:buster-slim AS base
+
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
+
+ARG GO_VERSION=1.15
+ENV GO_VERSION=${GO_VERSION}
+
+ENV GOPATH=/home/prow/go \
+    GO111MODULE=on \
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
+
+RUN echo "Installing packages ..." \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends\
+        build-essential \
+        ca-certificates \
+        make \
+        curl \
+        git \
+        gnupg2 \
+        software-properties-common \
+        lsb-release \
+        wget \
+        jq \
+        uuid-runtime \
+        apt-transport-https \
+        unzip \
+        gawk
+
+RUN echo "Installing Go ${GO_VERSION}..." \
+    && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
+    && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
+    && tar xzf "${GO_TARBALL}" -C /usr/local \
+    && rm "${GO_TARBALL}"\
+    && mkdir -p "${GOPATH}/bin"
+
+RUN echo "Installing GitHub cli ..." \
+    && curl -fsSL "https://cli.github.com/packages/githubcli-archive-keyring.gpg" | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh
+
+RUN echo "Installing Helm v3.7.0... " \
+    && export HELM_TARBALL="helm.tar.gz" \
+    && curl -fsSL https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
+    && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
+    && rm "${HELM_TARBALL}"
+
+RUN echo "Installing operator-sdk v1.14.0 ... " \
+    && export OPERATOR_SDK_BIN="operator-sdk" \
+    && curl -sq -L https://github.com/operator-framework/operator-sdk/releases/download/v1.14.0/operator-sdk_linux_amd64 --output "${OPERATOR_SDK_BIN}" \
+    && chmod +x ${OPERATOR_SDK_BIN} \
+    && mv ${OPERATOR_SDK_BIN} /usr/local/bin/operator-sdk
+
+RUN echo "Installing Kustomize v4.1.2 ..." \
+    && export KUSTOMIZE_TARBALL="kustomize.tar.gz" \
+    && curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v4.1.2/kustomize_v4.1.2_linux_amd64.tar.gz --output "${KUSTOMIZE_TARBALL}" \
+    && tar xzf "${KUSTOMIZE_TARBALL}" -C /usr/bin \
+    && rm "${KUSTOMIZE_TARBALL}"
+
+RUN echo "Installing controller-gen v0.7.0 ..." \
+    && cd $(mktemp -d /tmp/controller-gen-XXX) \
+    && go mod init tmp \
+    && go get -d "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.7.0" \
+    && go build -o "/usr/local/bin/controller-gen" sigs.k8s.io/controller-tools/cmd/controller-gen

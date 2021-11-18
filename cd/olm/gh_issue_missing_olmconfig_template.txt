@@ -1,0 +1,12 @@
+### $ISSUE_TITLE
+
+#### Steps for closing this issue:
+1. Checkout [\`$CONTROLLER_NAME\`](https://github.com/aws-controllers-k8s/$CONTROLLER_NAME) repository
+2. Add \`olm/olmconfig.yaml\` file in [\`$CONTROLLER_NAME\`](https://github.com/aws-controllers-k8s/$CONTROLLER_NAME) repository.
+You can look at [\`s3-controller\`](https://github.com/aws-controllers-k8s/s3-controller/blob/main/olm/olmconfig.yaml) for reference.
+3. Create a new pull request with these changes for [\`$CONTROLLER_NAME\`](https://github.com/aws-controllers-k8s/$CONTROLLER_NAME)
+4. Mention this issue number in the pull request
+5. When the PR is merged, close this issue
+
+For more guidance, [create an issue](https://github.com/aws-controllers-k8s/community/issues)
+or [reach out on Slack](https://github.com/aws-controllers-k8s/community#help--feedback).
