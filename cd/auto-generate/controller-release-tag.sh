@@ -72,8 +72,7 @@ cd "$CONTROLLER_DIR"
 echo "controller-release-tag.sh][INFO] Finding latest Git tag for $CONTROLLER_NAME"
 LATEST_GIT_TAG=$(git describe --abbrev=0 --tags || echo "$MISSING_GIT_TAG")
 if [[ $LATEST_GIT_TAG == $MISSING_GIT_TAG ]]; then
-  echo "controller-release-tag.sh][INFO] Unable to find latest Git tag for $CONTROLLER_NAME"
-  exit 0
+  echo "controller-release-tag.sh][INFO] No git tag exists for $CONTROLLER_NAME"
 fi
 
 # Find the image tag used in helm release artifacts
@@ -89,7 +88,12 @@ if [[ $HELM_IMAGE_TAG == $NON_RELEASE_IMAGE_TAG ]]; then
 fi
 
 # Currently only supports auto-tagging for patch releases
-NEXT_GIT_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+if [[ $LATEST_GIT_TAG == $MISSING_GIT_TAG ]]; then
+  # If no git tag exist for controller, use v0.0.1 as next git tag
+  NEXT_GIT_TAG="v0.0.1"
+else
+  NEXT_GIT_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+fi
 
 if [[ $HELM_IMAGE_TAG != $NEXT_GIT_TAG ]]; then
   echo "controller-release-tag.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is not the next patch release for current $LATEST_GIT_TAG release"
