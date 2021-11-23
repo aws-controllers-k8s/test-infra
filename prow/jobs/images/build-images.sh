@@ -26,6 +26,7 @@ QUIET=${QUIET:-"false"}
 
 docker build -f "$IMAGE_DIR/Dockerfile.deploy" --quiet=$QUIET -t "prow/deploy" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.docs" --quiet=$QUIET -t "prow/docs" "${IMAGE_DIR}"
+docker build -f "$IMAGE_DIR/Dockerfile.olm-bundle-pr" --quiet=$QUIET -t "prow/olm-bundle-pr" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.olm-test" --quiet=$QUIET -t "prow/olm-test" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.auto-generate-controllers" --quiet=$QUIET -t "prow/auto-generate-controllers" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.controller-release-tag" --quiet=$QUIET -t "prow/controller-release-tag" "${IMAGE_DIR}"

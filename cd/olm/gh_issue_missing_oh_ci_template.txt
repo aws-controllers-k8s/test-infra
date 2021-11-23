@@ -1,0 +1,17 @@
+### $ISSUE_TITLE
+
+#### Steps for closing this issue:
+1. Checkout [\`$OH_REPO\`](https://github.com/$OH_ORG_REPO) repository
+2. Add \`operators/ack-$CONTROLLER_NAME/ci.yaml\` file in [\`$OH_REPO\`](https://github.com/$OH_ORG_REPO) repository.
+You can look at \`operators/ack-s3-controller/ci.yaml\` for reference.
+3. Create a new pull request with these changes for [\`$OH_REPO\`](https://github.com/$OH_ORG_REPO)
+4. Mention this issue number in the pull request
+5. When the PR is merged, close this issue
+
+#### Additional Note:
+Make sure that \`operators/ack-$CONTROLLER_NAME/ci.yaml\` file is present in both
+\`k8s-operatorhub/community-operators\` and \`redhat-openshift-ecosystem/community-operators-prod\`
+repositories. If not, follow the same steps as above.
+
+For more guidance, [create an issue](https://github.com/aws-controllers-k8s/community/issues)
+or [reach out on Slack](https://github.com/aws-controllers-k8s/community#help--feedback).
