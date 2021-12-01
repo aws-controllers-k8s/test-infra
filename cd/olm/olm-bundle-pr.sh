@@ -38,7 +38,7 @@ RELEASE_VERSION=$PULL_BASE_REF
 # Drop 'v' from controller semver to find olm bundle version
 OLM_BUNDLE_VERSION=$(echo "$RELEASE_VERSION" | awk -F v '{print $NF}')
 echo "olm-bundle-pr.sh][INFO] olm bundle version is $OLM_BUNDLE_VERSION"
-ACK_GENERATE_OLM=true
+export ACK_GENERATE_OLM=true
 
 # Important Directory references based on prowjob configuration.
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
