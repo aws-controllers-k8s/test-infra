@@ -24,8 +24,7 @@ aws_services:
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
-soak_test_on_release_service_names:
-- ecr
+soak_test_on_release_service_names: []
 
 # List of AWS services whose controller gets generated and e2e tested whenever
 # there is a new code-generator change.
