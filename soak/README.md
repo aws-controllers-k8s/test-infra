@@ -37,7 +37,7 @@ Make sure that service controller release that you are testing has following thr
 1. `aws-controllers-k8s/runtime` version is v0.2.2 or higher
 2. helm chart release of the service controller has "metrics-service.yaml" template
 3. `aws-controllers-k8s/test-infra` dependency inside `test/e2e/requirements.txt` is at
-    `3d5e98f5960ac2ea8360c212141c4ec89cfcb668` or a later commit.
+   `3d5e98f5960ac2ea8360c212141c4ec89cfcb668` or a later commit.
 
 If this is not the case, please create a new release for your service controller and use it for soak testing.
 Here is a sample [PR](https://github.com/aws-controllers-k8s/ecr-controller/pull/7) for ECR service controller.
@@ -62,6 +62,11 @@ actual values.
     
     # AWS Service name of the controller under test. Ex: apigatewayv2
     export SERVICE_NAME=<aws-service-name>
+    # K8s Service name for <aws-service-name>-controller
+    # K8s servcie name has following format inside helm chart
+    # "{{ .Chart.Name | trimSuffix "-chart" | trunc 44 }}-controller-metrics"
+    export K8S_SERVICE_NAME_PREFIX=$(echo "$SERVICE_NAME" | cut -c -44)
+    export K8S_SERVICE_NAME="$K8S_SERVICE_NAME_PREFIX"-controller-metrics
     
     # IAM Role Arn which will provide privileges to service account running
     # controller pod. This role will also provide access to the soak-test-runner
@@ -107,6 +112,9 @@ actual values.
     
     # Image tag for soak-test-runner image.
     export SOAK_IMAGE_TAG=0.0.1
+    
+    # Platform for soak-test-runner image.
+    export SOAK_IMAGE_PLATFORM="linux/amd64"
     
     # Release name of soak-test-runner helm chart.
     export SOAK_RUNNER_CHART_RELEASE_NAME=soak-test-runner
@@ -179,7 +187,8 @@ NOTE
 Validation:
 * After successful execution of above commands, ack-service-controller will be running in your cluster, exposing ACK 
 metrics through a K8s service endpoint.
-* RUN `kubectl get -n ack-system service/$CONTROLLER_CHART_RELEASE_NAME-$SERVICE_NAME-chart-metrics` and result should be non-empty.
+* RUN `kubectl get -n ack-system service/$K8S_SERVICE_NAME` and result should be
+non-empty.
 
 
 ### Step 2 (Install "kube-prometheus" chart for monitoring the soak test behavior)
@@ -193,7 +202,7 @@ Follow the commands below to install this helm chart.
 * Command
     ```bash
     go-to-soak \
-    && jq -n --arg SERVICE_NAME $SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack_controller", static_configs:[{ targets: ["\($SERVICE_NAME)-controller-metrics.ack-system:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
+    && jq -n --arg K8S_SERVICE_NAME $K8S_SERVICE_NAME '{prometheus: {prometheusSpec: { additionalScrapeConfigs: [{job_name: "ack-controller", static_configs:[{ targets: ["\($K8S_SERVICE_NAME).ack-system:8080"] }]}]}}}' | yq e -P > prometheus-values.yaml \
     && helm repo add prometheus-community https://prometheus-community.github.io/helm-charts \
     && helm install -f prometheus-values.yaml --create-namespace -n prometheus $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack
     ```
@@ -204,7 +213,7 @@ Follow the commands below to install this helm chart.
     ```
    
     ```bash
-    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:3000 >/dev/null &
+    kubectl port-forward -n prometheus service/$PROM_CHART_RELEASE_NAME-grafana $LOCAL_GRAFANA_PORT:80 >/dev/null &
     ```
 
 NOTE:
@@ -214,8 +223,8 @@ NOTE:
 Validation:
 * Run following command:
     ```
-    curl http://127.0.0.1:$LOCAL_PROMETHEUS_PORT >/dev/null 2>&1; [[ $? -eq 0 ]] && echo "Prometheus Successully started" || echo "Failed to start Prometheus." \
-    && curl http://127.0.0.1:$LOCAL_GRAFANA_PORT >/dev/null 2>&1; [[ $? -eq 0 ]] && echo "Grafana Successully started" || echo "Failed to start Grafana."
+    curl http://127.0.0.1:$LOCAL_PROMETHEUS_PORT >/dev/null 2>&1; [[ $? -eq 0 ]] && echo "Prometheus successully started" || echo "Failed to start Prometheus." \
+    && curl http://127.0.0.1:$LOCAL_GRAFANA_PORT >/dev/null 2>&1; [[ $? -eq 0 ]] && echo "Grafana successully started" || echo "Failed to start Grafana."
     ```
 
 NOTE: You can also choose to update Prometheus and Grafana services to `NodePort` or `LoadBalancer` Type service, if you wish
@@ -244,7 +253,8 @@ be run multiple times to perform the soak test.
     go-to-soak \
     && git clone https://github.com/aws-controllers-k8s/test-infra.git -b main --depth 1 \
     && cd test-infra/soak \
-    && docker build -t $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG --build-arg AWS_SERVICE=$SERVICE_NAME --build-arg E2E_GIT_REF=$CONTROLLER_VERSION . \
+    && docker build --platform $SOAK_IMAGE_PLATFORM -t $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG \
+    --build-arg AWS_SERVICE=$SERVICE_NAME --build-arg E2E_GIT_REF=$CONTROLLER_VERSION . \
     && docker push $SOAK_IMAGE_REPO:$SOAK_IMAGE_TAG
     ```
 
@@ -291,11 +301,11 @@ NOTE: You can see the value of these credentials in secret named `$PROM_CHART_RE
 
 ### Step 8 (Cleanup the service controller deployment)
 
-* RUN `helm -n ack-system uninstall $CONTROLLER_CHART_RELEASE_NAME && helm delete namespace ack-system`
+* RUN `helm -n ack-system uninstall $CONTROLLER_CHART_RELEASE_NAME && kubectl delete namespace ack-system`
 
 ### Step 9 (Optional: Cleanup the kube-prometheus-stack chart) 
 
-* RUN `helm -n prometheus uninstall $PROM_CHART_RELEASE_NAME && helm delete namespace prometheus`
+* RUN `helm -n prometheus uninstall $PROM_CHART_RELEASE_NAME && kubectl delete namespace prometheus`
 
 ### Step 10 (Cleanup the background port-forward processes)
 
