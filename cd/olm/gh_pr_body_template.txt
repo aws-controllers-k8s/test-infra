@@ -1,3 +1,7 @@
 ### $COMMIT_MSG
 
 This pull request is created by [\`ack-bot\`](https://github.com/ack-bot) after release of ACK [$CONTROLLER_NAME-$RELEASE_VERSION](https://gallery.ecr.aws/aws-controllers-k8s/$CONTROLLER_NAME)
+
+NOTE: \`CreateContainerConfigError\` is expected since \`ACK controllers\` have
+pre-installation steps to create resources in a cluster before the manager pod
+can come up.
