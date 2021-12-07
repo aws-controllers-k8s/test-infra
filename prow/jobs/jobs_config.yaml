@@ -12,6 +12,7 @@ aws_services:
 - ecr
 - eks
 - elasticache
+- iam
 - kms
 - lambda
 - mq
