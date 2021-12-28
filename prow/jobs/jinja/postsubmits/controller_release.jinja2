@@ -7,6 +7,10 @@
       repo: test-infra
       base_ref: main
       workdir: true
+    - org: aws-controllers-k8s
+      repo: code-generator
+      base_ref: main
+      workdir: false
     spec:
       serviceAccountName: post-submit-service-account
       containers:
