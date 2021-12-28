@@ -39,6 +39,7 @@ CD_DIR=$DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
 SERVICE_CONTROLLER_DIR="$WORKSPACE_DIR/$AWS_SERVICE-controller"
+CODE_GEN_DIR="$WORKSPACE_DIR/code-generator"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -116,7 +117,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
   SERVICE_CONTROLLER_GIT_COMMIT=$(git rev-parse HEAD)
   QUIET=${QUIET:-"false"}
   BUILD_DATE=$(date +%Y-%m-%dT%H:%M)
-  CONTROLLER_IMAGE_DOCKERFILE_PATH=$CD_DIR/controller/Dockerfile
+  CONTROLLER_IMAGE_DOCKERFILE_PATH=$CODE_GEN_DIR/Dockerfile
 
   DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
   DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
