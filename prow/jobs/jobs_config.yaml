@@ -15,6 +15,7 @@ aws_services:
 - iam
 - kms
 - lambda
+- memorydb
 - mq
 - opensearchservice
 - rds
