@@ -6,7 +6,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-unit-0.0.1
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-unit-0.0.2
         resources:
           limits:
             cpu: 1
@@ -64,7 +64,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.5
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.6
         securityContext:
           privileged: true
         env:
