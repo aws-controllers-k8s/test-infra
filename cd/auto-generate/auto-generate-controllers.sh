@@ -245,6 +245,13 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       continue
     fi
     echo "ok"
+    # fetch all remotes to bring changes locally
+    git fetch --all >/dev/null
+    # set local branch to track origin(PR source)
+    git branch "$LOCAL_GIT_BRANCH" --set-upstream-to origin/"$PR_SOURCE_BRANCH" >/dev/null
+    # sync local branch with the origin, if there is a diff the gh pr command
+    # prompts for user input
+    git pull --rebase >/dev/null
 
     # Capture 'make build-controller' command output, then persist
     # in '$GITHUB_PR_BODY_FILE'
