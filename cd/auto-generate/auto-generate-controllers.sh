@@ -247,8 +247,9 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     echo "ok"
     # fetch all remotes to bring changes locally
     git fetch --all >/dev/null
-    # set local branch to track origin(PR source)
-    git branch "$LOCAL_GIT_BRANCH" --set-upstream-to origin/"$PR_SOURCE_BRANCH" >/dev/null
+    # local branch name cannot be 'main' otherwise PR creation to target 'main' branch will fail
+    # checkout new local branch from remote PR source
+    git checkout -b runtime-"$ACK_RUNTIME_VERSION" origin/"$PR_SOURCE_BRANCH" >/dev/null
     # sync local branch with the origin, if there is a diff the gh pr command
     # prompts for user input
     git pull --rebase >/dev/null
