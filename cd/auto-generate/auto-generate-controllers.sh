@@ -46,6 +46,8 @@ GITHUB_ORG=${GITHUB_ORG:-$DEFAULT_GITHUB_ISSUE_ORG}
 DEFAULT_GITHUB_ISSUE_REPO="community"
 GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
+GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
+
 DEFAULT_GITHUB_LABEL="ack-bot-autogen"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
@@ -57,6 +59,7 @@ MISSING_GIT_TAG="missing-git-tag"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
+source "$TEST_INFRA_DIR"/scripts/lib/gh.sh
 check_is_installed git
 check_is_installed gh
 
@@ -77,6 +80,14 @@ if [[ $ACK_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
   exit 1
 else
   echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controllers will be $ACK_RUNTIME_VERSION"
+fi
+
+GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
+if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
+  echo "auto-generate-controllers.sh][ERROR] Unable to determine go version from code-generator/go.mod file. Exiting"
+  exit 1
+else
+  echo "auto-generate-controllers.sh][INFO] go version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
 fi
 
 DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime-$ACK_RUNTIME_VERSION"
@@ -103,20 +114,51 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   # Find the ACK runtime version in service controller 'go.mod' file
   pushd "$CONTROLLER_DIR" >/dev/null
     SERVICE_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
+
+    if [[ $SERVICE_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
+      echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from $CONTROLLER_NAME/go.mod file. Skipping $CONTROLLER_NAME"
+      continue
+    fi
+
+    # If the current version is same as latest ACK runtime version, skip this controller.
+    if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
+      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION. Skipping $CONTROLLER_NAME"
+      continue
+    else
+      echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controller will be $ACK_RUNTIME_VERSION. Current version is $SERVICE_RUNTIME_VERSION"
+      echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with ACK runtime $ACK_RUNTIME_VERSION ... "
+      if ! go get -u github.com/aws-controllers-k8s/runtime@"$ACK_RUNTIME_VERSION" >/dev/null; then
+        echo ""
+        echo "auto-generate-controllers.sh][ERROR] Unable to update go.mod file with ACK runtime version $ACK_RUNTIME_VERSION"
+        continue
+      fi
+
+      echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go version $GO_VERSION_IN_GO_MOD ... "
+      if ! go mod edit -go="$GO_VERSION_IN_GO_MOD" >/dev/null; then
+        echo ""
+        echo "auto-generate-controllers.sh][ERROR] Unable to update go.mod file with go version $GO_VERSION_IN_GO_MOD"
+        continue
+      fi
+      echo "ok"
+
+      # go dependencies need to be updated otherwise 'make build-controller' command will fail
+      echo -n "auto-generate-controllers.sh][INFO] Executing 'go mod download' for $CONTROLLER_NAME after 'go.mod' updates ... "
+      if ! go mod download >/dev/null; then
+        echo ""
+        echo "auto-generate-controllers.sh][ERROR] Unable to perform 'go mod download' for $CONTROLLER_NAME"
+        continue
+      fi
+      echo "ok"
+
+      echo -n "auto-generate-controllers.sh][INFO] Executing 'go mod tidy' for $CONTROLLER_NAME after 'go.mod' updates ... "
+      if ! go mod tidy >/dev/null; then
+        echo ""
+        echo "auto-generate-controllers.sh][ERROR] Unable to perform 'go mod tidy' for $CONTROLLER_NAME"
+        continue
+      fi
+      echo "ok"
+    fi
   popd >/dev/null
-
-  if [[ $SERVICE_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
-    echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from $CONTROLLER_NAME/go.mod file. Skipping $CONTROLLER_NAME"
-    continue
-  fi
-
-  # If the current version is same as latest ACK runtime version, skip this controller.
-  if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
-    echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION. Skipping $CONTROLLER_NAME"
-    continue
-  fi
-
-  echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controller will be $ACK_RUNTIME_VERSION. Current version is $SERVICE_RUNTIME_VERSION"
 
   echo -n "auto-generate-controllers.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
   if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
@@ -157,15 +199,6 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     echo "auto-generate-controllers.sh][ERROR] Failure while executing 'make build-controller' command. Creating/Updating GitHub issue"
     ISSUE_TITLE="Errors while generating \`$CONTROLLER_NAME\` for ACK runtime \`$ACK_RUNTIME_VERSION\`"
 
-    echo -n "auto-generate-controllers.sh][INFO] Querying already open GitHub issue ... "
-    ISSUE_NUMBER=$(gh issue list -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -L 1 -s open --json number -S "$ISSUE_TITLE" --jq '.[0].number' -A @me -l "$GITHUB_LABEL")
-    if [[ $? -ne 0 ]]; then
-      echo ""
-      echo "auto-generate-controllers.sh][ERROR] Unable to query open github issue. Skipping $CONTROLLER_NAME"
-      continue
-    fi
-    echo "ok"
-
     # Capture 'make build-controller' command output & error, then persist
     # in '$GITHUB_ISSUE_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
@@ -174,29 +207,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     GITHUB_ISSUE_BODY_FILE=/tmp/"SERVICE_NAME"_gh_issue_body
     eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > $GITHUB_ISSUE_BODY_FILE
 
-    # If there is an already existing issue with same title as '$ISSUE_TITLE',
-    # update the body of existing issue with latest command output.
-    # In case no such issue exist, create a new GitHub issue.
-    # Skip PR generation in both cases and continue to next service controller.
-    if [[ -z $ISSUE_NUMBER ]]; then
-      echo -n "auto-generate-controllers.sh][INFO] No open issues exist. Creating a new GitHub issue inside $GITHUB_ORG/$GITHUB_ISSUE_REPO ... "
-      if ! gh issue create -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -t "$ISSUE_TITLE" -F "$GITHUB_ISSUE_BODY_FILE" -l "$GITHUB_LABEL" >/dev/null ; then
-        echo ""
-        echo "auto-generate-controllers.sh][ERROR] Unable to create GitHub issue for reporting failure. Skipping $CONTROLLER_NAME"
-        continue
-      fi
-      echo "ok"
-      continue
-    else
-      echo -n "auto-generate-controllers.sh][INFO] Updating error output in the body of existing issue#$ISSUE_NUMBER inside $GITHUB_ORG/$GITHUB_ISSUE_REPO ... "
-      if ! gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_ORG/$GITHUB_ISSUE_REPO" -F "$GITHUB_ISSUE_BODY_FILE" >/dev/null; then
-        echo ""
-        echo "auto-generate-controllers.sh][ERROR] Unable to edit GitHub issue$ISSUE_NUMBER with latest 'make build-controller' error. Skipping $CONTROLLER_NAME"
-        continue
-      fi
-      echo "ok"
-      continue
-    fi
+    open_gh_issue "$GITHUB_ISSUE_ORG_REPO" "$ISSUE_TITLE" "$GITHUB_ISSUE_BODY_FILE"
     # Skip creating PR for this service controller after updating GitHub issue.
     continue
   fi
@@ -204,23 +215,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   # Since there are no failures, print make build output in prowjob logs
   cat "$MAKE_BUILD_OUTPUT_FILE"
   pushd "$CONTROLLER_DIR" >/dev/null
-    # After successful 'make build-controller', update go.mod file
-    echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file in $CONTROLLER_NAME ... "
-    if ! sed -i "s|aws-controllers-k8s/runtime $SERVICE_RUNTIME_VERSION|aws-controllers-k8s/runtime $ACK_RUNTIME_VERSION|" go.mod >/dev/null; then
-      echo ""
-      echo "auto-generate-controllers.sh][ERROR] Unable to update go.mod file with latest runtime version. Skipping $CONTROLLER_NAME"
-      continue
-    fi
-    echo "ok"
-
-    # perform 'go mod tidy' to remove old ACK runtime dependency
-    echo -n "auto-generate-controllers.sh][INFO] Executing 'go mod tidy' to cleanup redundant dependencies for $CONTROLLER_NAME ... "
-    if ! go mod tidy >/dev/null; then
-      echo ""
-      echo "auto-generate-controllers.sh][ERROR] Unable to execute 'go mod tidy'. Skipping $CONTROLLER_NAME"
-      continue
-    fi
-    echo "ok"
+    GITHUB_CONTROLLER_ORG_REPO="$GITHUB_ORG/$CONTROLLER_NAME"
 
     # add git remote
     echo -n "auto-generate-controllers.sh][INFO] Adding git remote ... "
@@ -251,44 +246,15 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     fi
     echo "ok"
 
-    # If a PR exists from '$PR_SOURCE_BRANCH' to '$PR_TARGET_BRANCH' then
-    # update the PR body with latest successful command output.
-    # In case no such PR exists, create a new PR.
-    echo -n "auto-generate-controllers.sh][INFO] Finding existing open pull requests ... "
-    PR_NUMBER=$(gh pr list -R "$GITHUB_ORG/$CONTROLLER_NAME" -A @me -L 1 -s open --json number -S "$COMMIT_MSG" --jq '.[0].number' -l "$GITHUB_LABEL")
-    if [[ $? -ne 0 ]]; then
-      echo ""
-      echo "auto-generate-controllers.sh][ERROR] Failed to query for an existing pull request for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
-    else
-      echo "ok"
-    fi
-
     # Capture 'make build-controller' command output, then persist
     # in '$GITHUB_PR_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
     PR_BODY_TEMPLATE_FILE_NAME=$([[ -z "$RELEASE_VERSION" ]] && echo "gh_pr_body_template.txt" || echo "gh_pr_body_new_release_template.txt")
     GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/$PR_BODY_TEMPLATE_FILE_NAME"
-    GITHUB_PR_BODY_FILE=/tmp/"SERVICE_NAME"_gh_pr_body
+    GITHUB_PR_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_pr_body
     eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
 
-    if [[ -z $PR_NUMBER ]]; then
-      echo -n "auto-generate-controllers.sh][INFO] No Existing PRs found. Creating a new pull request for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch ... "
-      if ! gh pr create -R "$GITHUB_ORG/$CONTROLLER_NAME" -t "$COMMIT_MSG" -F "$GITHUB_PR_BODY_FILE" -H "$PR_SOURCE_BRANCH" -B "$PR_TARGET_BRANCH" -l "$GITHUB_LABEL" >/dev/null ; then
-        echo ""
-        echo "auto-generate-controllers.sh][ERROR] Failed to create pull request. Skipping $CONTROLLER_NAME"
-        continue
-      fi
-      echo "ok"
-    else
-      echo "auto-generate-controllers.sh][INFO] PR#$PR_NUMBER already exists for $GITHUB_ORG/$CONTROLLER_NAME , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch"
-      echo -n "auto-generate-controllers.sh][INFO] Updating PR body with latest 'make build-controller' output..."
-      if ! gh pr edit "$PR_NUMBER" -R "$GITHUB_ORG/$CONTROLLER_NAME" -F "$GITHUB_PR_BODY_FILE" >/dev/null ; then
-        echo ""
-        echo "auto-generate-controllers.sh][ERROR] Failed to update pull request"
-        continue
-      fi
-      echo "ok"
-    fi
+    open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
     echo "auto-generate-controllers.sh][INFO] Done :) "
     # PRs created from this script trigger the presubmit prowjobs.
     # To control the number of presubmit prowjobs that will run in parallel,
