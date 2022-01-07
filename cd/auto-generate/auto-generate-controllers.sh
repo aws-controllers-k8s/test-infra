@@ -34,6 +34,7 @@ CD_DIR=$THIS_DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
 CODEGEN_DIR=$WORKSPACE_DIR/code-generator
+CODEGEN_RELEASES="https://github.com/aws-controllers-k8s/code-generator/releases"
 
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
@@ -228,7 +229,8 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`"
+    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`
+    release notes: $CODEGEN_RELEASES/tag/$ACK_RUNTIME_VERSION"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
