@@ -33,6 +33,14 @@ pushd "$CODEGEN_DIR" >/dev/null
   else
     echo "generate-test-controller.sh][INFO] ACK runtime version in code-generator/go.mod file is $ACK_RUNTIME_VERSION"
   fi
+
+  GO_MODULE_VERSION=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
+  if [[ -z $GO_MODULE_VERSION ]]; then
+    echo "generate-test-controller.sh][ERROR] Unable to determine go module version from code-generator/go.mod file. Exiting"
+    exit 1
+  else
+    echo "generate-test-controller.sh][INFO] go module version in code-generator/go.mod file is $GO_MODULE_VERSION"
+  fi
 popd >/dev/null
 
 # Update go.mod file
@@ -46,6 +54,29 @@ pushd "$CONTROLLER_DIR" >/dev/null
   if ! go get -u github.com/aws-controllers-k8s/runtime@"$ACK_RUNTIME_VERSION" >/dev/null; then
     echo ""
     echo "generate-test-controller.sh][ERROR] Unable to update go.mod file with ACK runtime version $ACK_RUNTIME_VERSION"
+    exit 1
+  fi
+
+  echo -n "generate-test-controller.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go module version $GO_MODULE_VERSION ... "
+  if ! go mod edit -go="$GO_MODULE_VERSION" >/dev/null; then
+    echo ""
+    echo "generate-test-controller.sh][ERROR] Unable to update go.mod file with go module version $GO_MODULE_VERSION"
+    exit 1
+  fi
+  echo "ok"
+
+  echo -n "generate-test-controller.sh][INFO] Executing 'go mod download' for $CONTROLLER_NAME after 'go.mod' updates ... "
+  if ! go mod download >/dev/null; then
+    echo ""
+    echo "generate-test-controller.sh][ERROR] Unable to perform 'go mod download' for $CONTROLLER_NAME"
+    exit 1
+  fi
+  echo "ok"
+
+  echo -n "generate-test-controller.sh][INFO] Executing 'go mod tidy' for $CONTROLLER_NAME after 'go.mod' updates ... "
+  if ! go mod tidy >/dev/null; then
+    echo ""
+    echo "generate-test-controller.sh][ERROR] Unable to perform 'go mod tidy' for $CONTROLLER_NAME"
     exit 1
   fi
   echo "ok"
