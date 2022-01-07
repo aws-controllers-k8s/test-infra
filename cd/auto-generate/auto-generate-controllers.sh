@@ -84,10 +84,10 @@ fi
 
 GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
 if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
-  echo "auto-generate-controllers.sh][ERROR] Unable to determine go module version from code-generator/go.mod file. Exiting"
+  echo "auto-generate-controllers.sh][ERROR] Unable to determine go version from code-generator/go.mod file. Exiting"
   exit 1
 else
-  echo "auto-generate-controllers.sh][INFO] go module version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
+  echo "auto-generate-controllers.sh][INFO] go version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
 fi
 
 DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime-$ACK_RUNTIME_VERSION"
@@ -133,10 +133,10 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
         continue
       fi
 
-      echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go module version $GO_VERSION_IN_GO_MOD ... "
+      echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go version $GO_VERSION_IN_GO_MOD ... "
       if ! go mod edit -go="$GO_VERSION_IN_GO_MOD" >/dev/null; then
         echo ""
-        echo "auto-generate-controllers.sh][ERROR] Unable to update go.mod file with go module version $GO_VERSION_IN_GO_MOD"
+        echo "auto-generate-controllers.sh][ERROR] Unable to update go.mod file with go version $GO_VERSION_IN_GO_MOD"
         continue
       fi
       echo "ok"

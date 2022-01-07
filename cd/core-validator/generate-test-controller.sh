@@ -36,10 +36,10 @@ pushd "$CODEGEN_DIR" >/dev/null
 
   GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
   if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
-    echo "generate-test-controller.sh][ERROR] Unable to determine go module version from code-generator/go.mod file. Exiting"
+    echo "generate-test-controller.sh][ERROR] Unable to determine go version from code-generator/go.mod file. Exiting"
     exit 1
   else
-    echo "generate-test-controller.sh][INFO] go module version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
+    echo "generate-test-controller.sh][INFO] go version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
   fi
 popd >/dev/null
 
@@ -57,10 +57,10 @@ pushd "$CONTROLLER_DIR" >/dev/null
     exit 1
   fi
 
-  echo -n "generate-test-controller.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go module version $GO_VERSION_IN_GO_MOD ... "
+  echo -n "generate-test-controller.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with go version $GO_VERSION_IN_GO_MOD ... "
   if ! go mod edit -go="$GO_VERSION_IN_GO_MOD" >/dev/null; then
     echo ""
-    echo "generate-test-controller.sh][ERROR] Unable to update go.mod file with go module version $GO_VERSION_IN_GO_MOD"
+    echo "generate-test-controller.sh][ERROR] Unable to update go.mod file with go version $GO_VERSION_IN_GO_MOD"
     exit 1
   fi
   echo "ok"
