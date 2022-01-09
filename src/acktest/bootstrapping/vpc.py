@@ -94,6 +94,7 @@ class Subnets(Bootstrappable):
     cidr_blocks: List[str]
     is_public: bool = True
     num_subnets: int = 1
+    map_public_ip: bool = True
 
     # Subresources
     route_table: RouteTable = field(init=False, default=None)
@@ -123,6 +124,11 @@ class Subnets(Bootstrappable):
         for i in range(self.num_subnets):
             subnet = vpc.create_subnet(CidrBlock=self.cidr_blocks[i], AvailabilityZone=region_azs[i % len(region_azs)])
             self.subnet_ids.append(subnet.id)
+
+            # Make a separate call to enable MapPublicIpOnLaunch since boto3
+            # does not accept it in the `create_subnet` parameter list
+            if self.map_public_ip:
+                vpc.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={'Value': True})
 
             self.ec2_client.associate_route_table(RouteTableId=self.route_table.route_table_id, SubnetId=subnet.id)
 
