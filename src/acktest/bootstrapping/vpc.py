@@ -128,7 +128,7 @@ class Subnets(Bootstrappable):
             # Make a separate call to enable MapPublicIpOnLaunch since boto3
             # does not accept it in the `create_subnet` parameter list
             if self.map_public_ip:
-                vpc.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={'Value': True})
+                self.ec2_client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={'Value': True})
 
             self.ec2_client.associate_route_table(RouteTableId=self.route_table.route_table_id, SubnetId=subnet.id)
 
