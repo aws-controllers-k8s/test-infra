@@ -1,6 +1,12 @@
 ### $COMMIT_MSG
 
 ----------
+
+* ACK code-generator \`$ACK_RUNTIME_VERSION\` [release notes](https://github.com/aws-controllers-k8s/code-generator/releases/tags/$ACK_RUNTIME_VERSION) 
+* ACK runtime \`$ACK_RUNTIME_VERSION\` [release notes](https://github.com/aws-controllers-k8s/runtime/releases/tags/$ACK_RUNTIME_VERSION)
+
+----------
+
 NOTE:
 This PR increments the release version of service controller from \`$LATEST_TAG\` to \`$RELEASE_VERSION\`
 
