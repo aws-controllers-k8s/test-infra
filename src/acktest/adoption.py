@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict
 from typing import Dict, Tuple
 
 from .k8s import resource as k8s
+from .k8s import condition
 from .resources import random_suffix_name
 
 ADOPTED_RESOURCE_GROUP = "services.k8s.aws"
@@ -27,7 +28,7 @@ ADOPTED_CONDITION_NAME = "ACK.Adopted"
 
 @dataclass(frozen=True)
 class AdoptedResourceAWSIdentifier:
-    """ Represents the base AWS identifier spec fields from the adopted resource CRD.
+    """Represents the base AWS identifier spec fields from the adopted resource CRD.
 
     Additional keys need to be configured as allowlisted as part of the 
     controller generator.
@@ -44,7 +45,7 @@ class AdoptedResourceARNIdentifier(AdoptedResourceAWSIdentifier):
 
 @dataclass(frozen=True)
 class AdoptedResourceKubernetesIdentifiers:
-    """ Represents the Kubernetes spec fields from the adopted resource CRD.
+    """Represents the Kubernetes spec fields from the adopted resource CRD.
 
     This class purposefully does not expose metadata configuration elements, as
     those are configured by the test fixture.
@@ -54,12 +55,45 @@ class AdoptedResourceKubernetesIdentifiers:
 
 @dataclass(frozen=True)
 class AdoptedResourceSpec:
-    """ Represents the adopted resource CRD spec fields.
+    """Represents the adopted resource CRD spec fields.
     """
     aws: AdoptedResourceAWSIdentifier
     kubernetes: AdoptedResourceKubernetesIdentifiers
 
 class AbstractAdoptionTest(ABC):
+    """Acts as the base class for an adoption smoke test.
+
+    This class should be derived inside a service's end-to-end tests, overriding
+    the static class variables and any of the public methods as necessary. The
+    derived class *must* override the `get_resource_spec` class.
+
+    Example (S3 bucket adoption):
+    ```
+    class TestAdoptBucket(adoption.AbstractAdoptionTest):
+        RESOURCE_PLURAL: str = RESOURCE_PLURAL
+        RESOURCE_VERSION: str = CRD_VERSION
+
+        _bucket_name: str = random_suffix_name("ack-adopted-bucket", 63)
+
+        def bootstrap_resource(self):
+            # Create the S3 bucket using boto3
+            return
+
+        def cleanup_resource(self):
+            # Delete the S3 bucket using boto3
+            return
+
+        def get_resource_spec(self) -> adoption.AdoptedResourceSpec:
+            return adoption.AdoptedResourceSpec(
+                aws=adoption.AdoptedResourceNameOrIDIdentifier(name_or_id=self._bucket_name),
+                kubernetes=adoption.AdoptedResourceKubernetesIdentifiers(CRD_GROUP, RESOURCE_KIND),
+            )
+
+    ```
+
+    You can define additional tests by create any new method starting with 
+    `test_` in the name, just like with any other PyTest method.
+    """
     RESOURCE_PLURAL: str = ""
     RESOURCE_VERSION: str = ""
     TARGET_NAMESPACE: str = "default"
@@ -105,7 +139,7 @@ class AbstractAdoptionTest(ABC):
 
         assert cr is not None
         assert k8s.get_resource_exists(self._reference)
-        assert k8s.wait_on_condition(self._reference, ADOPTED_CONDITION_NAME, "True")
+        condition.assert_type_status(self._reference, condition.CONDITION_TYPE_ADOPTED, True)
 
     def _assert_target_created(self, target_name: str):
         target_reference = k8s.CustomResourceReference(self._spec.kubernetes.group,
