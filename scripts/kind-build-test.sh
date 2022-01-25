@@ -217,6 +217,16 @@ for crd_file in $service_config_dir/crd/common/bases; do
 done
 echo "ok."
 
+echo -n "creating ack-system namespace"
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller
+  name: ack-system
+EOF
+
 echo -n "loading RBAC manifests for $AWS_SERVICE into the cluster ... "
 kustomize build "$service_config_dir"/rbac | kubectl apply -f - 1>/dev/null
 echo "ok."

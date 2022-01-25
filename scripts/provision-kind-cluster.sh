@@ -23,12 +23,12 @@ else
     KIND_CONFIG_FILE="$SCRIPTS_DIR/kind-two-node-cluster.yaml"
 fi
 
-K8_1_21="kindest/node:v1.21.1@sha256:f2b782464e6c368487071ed114bc37d7f033658bfa27666f47629c6cf2d515c7"
-K8_1_18="kindest/node:v1.18.4@sha256:9ddbe5ba7dad96e83aec914feae9105ac1cffeb6ebd0d5aa42e820defe840fd4"
-K8_1_17="kindest/node:v1.17.5@sha256:ab3f9e6ec5ad8840eeb1f76c89bb7948c77bbf76bcebe1a8b59790b8ae9a283a"
-K8_1_16="kindest/node:v1.16.9@sha256:7175872357bc85847ec4b1aba46ed1d12fa054c83ac7a8a11f5c268957fd5765"
-K8_1_15="kindest/node:v1.15.11@sha256:6cc31f3533deb138792db2c7d1ffc36f7456a06f1db5556ad3b6927641016f50"
-K8_1_14="kindest/node:v1.14.10@sha256:6cd43ff41ae9f02bb46c8f455d5323819aec858b99534a290517ebc181b443c6"
+K8_1_21="kindest/node:v1.21.1"
+K8_1_18="kindest/node:v1.18.4"
+K8_1_17="kindest/node:v1.17.5"
+K8_1_16="kindest/node:v1.16.9"
+K8_1_15="kindest/node:v1.15.11"
+K8_1_14="kindest/node:v1.14.10"
 
 USAGE="
 Usage:
