@@ -14,8 +14,11 @@ from ..aws.identity import get_region
 # Regex to match the role name from a role ARN
 ROLE_ARN_REGEX = r"^arn:aws:iam::\d{12}:(?:root|user|role\/([A-Za-z0-9-]+))$"
 
-# Time to wait (in seconds) after a role is created
-ROLE_CREATE_WAIT_IN_SECONDS = 3
+# Time to wait (in seconds) after a role is created.
+# Sometimes role propagation takes few seconds, specially
+# ServiceLinkedRoles. Waiting after role creation reduces
+# the chances of tests getting affected by propagation delay
+ROLE_CREATE_WAIT_IN_SECONDS = 30
 
 # Time to wait (in seconds) after a role is deleted
 ROLE_DELETE_WAIT_IN_SECONDS = 3
