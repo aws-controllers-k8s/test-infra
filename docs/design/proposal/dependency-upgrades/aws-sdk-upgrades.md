@@ -15,7 +15,7 @@ Before proposing new automation, it is important to understand how aws-sdk-go
 upgrades are handled in ACK repositories currently.
 
 #### Current steps
-* At first ACK runtime gets updated with the newer version of aws-sdk-go and
+* The ACK runtime first gets updated with the newer version of aws-sdk-go and
   a new patch release is made for ACK runtime.
 * Then ACK code-generator is updated with new ACK runtime release. Because of
   transitive dependency the minimum required version of aws-sdk-go in 
@@ -23,16 +23,16 @@ upgrades are handled in ACK repositories currently.
   release.
 * Then a new code-generator release is made, which triggers ACK service 
   controller auto generation.
-* Controller auto-generation script updates the ACK runtime version in each 
-  controller to new ACK runtime version.
-* The update to new ACK runtime in service controller repositories updates the
-  minimum aws-sdk-go version in service controller go.mod file.
-* During auto-generation, ACK code-generator uses the aws-sdk-go present in
+* The [`auto-generate-controllers.sh`](https://github.com/aws-controllers-k8s/test-infra/blob/main/cd/auto-generate/auto-generate-controllers.sh)
+  updates the go.mod file in the service controller's source repository root
+  directory with updated versions of the ACK runtime and minimum aws-sdk-go
+  package version.
+* ACK code-generator uses the aws-sdk-go present in
   the service controller go.mod file to generate new service controller.
 
-The current process is automated for most parts but it misses the trigger to
-updating aws-sdk-go in ACK runtime and generating a preview of all service
-controller builds with new aws-sdk-go version.
+While mostly automated, the current process does not cover automatically
+updating the aws-sdk-go package in ACK runtime's go.mod file when
+new versions of aws-sdk-go are released.
 
 #### aws-sdk-go Releases
 * aws-sdk-go **v1** has two kinds of releases. **Minor version updates** which
