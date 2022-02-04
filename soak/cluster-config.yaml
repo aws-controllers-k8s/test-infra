@@ -10,3 +10,13 @@ nodeGroups:
     instanceType: m5.xlarge
     desiredCapacity: 2
     volumeSize: 80
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+  - metadata:
+      name: ack-soak-controller
+      namespace: ack-system
+    attachPolicyARNs:
+    - "arn:aws:iam::aws:policy/PowerUserAccess"
+    - "arn:aws:iam::aws:policy/IAMFullAccess"
