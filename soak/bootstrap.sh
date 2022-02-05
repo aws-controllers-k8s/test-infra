@@ -16,9 +16,15 @@ Example: $(basename "$0") ecr v0.0.1
   tested.
 
 Environment variables:
-  DEPLOY_REGION:
-  CLUSTER_NAME:
-  SOAK_IMAGE_REPO_NAME: 
+  DEPLOY_REGION:        The AWS region where the cluster and resources will be 
+                        deployed.
+                        Default: us-west-2
+  CLUSTER_NAME:         The name of the EKS cluster.
+                        Default: The value in the cluster-config.yaml file
+  SOAK_IMAGE_REPO_NAME: The name of the soak test ECR public repository.
+                        Default: ack-\$AWS_SERVICE-soak
+  OCI_BUILDER:          The binary used to build the OCI images.
+                        Default: docker
 "
 
 if [ $# -ne 2 ]; then
@@ -73,6 +79,8 @@ LOCAL_PROMETHEUS_PORT=9090
 LOCAL_GRAFANA_PORT=3000
 
 ### SOAK TEST RUNNER CONFIGURATION ###
+# The binary used to build and push the container images
+OCI_BUILDER=${OCI_BUILDER:-"docker"}
 # The public ECR repository URI where your soak test runner image will be stored.
 DEFAULT_SOAK_IMAGE_REPO_NAME="ack-$AWS_SERVICE-soak"
 SOAK_IMAGE_REPO_NAME=${SOAK_IMAGE_REPO_NAME:-$DEFAULT_SOAK_IMAGE_REPO_NAME}
@@ -172,13 +180,13 @@ SOAK_IMAGE_REPO_URI="$($AWS_ECR_PUBLIC_CLI describe-repositories --repository-na
     { >&2 echo "Could not get the soak test image repository URI"; exit 1; }
 
 echo "Building soak test image ... "
-docker build --platform $SOAK_IMAGE_PLATFORM -t $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG \
+$OCI_BUILDER build --platform $SOAK_IMAGE_PLATFORM -t $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG \
     --build-arg AWS_SERVICE=$AWS_SERVICE --build-arg E2E_GIT_REF=$CONTROLLER_TAG "$TEST_INFRA_DIR/soak"
 echo "ok."
 
 echo -n "Pushing soak test image to ECR public ... "
-$AWS_ECR_PUBLIC_CLI get-login-password | docker login --username AWS --password-stdin public.ecr.aws 1> /dev/null 2>&1
-docker push $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG 1> /dev/null
+$AWS_ECR_PUBLIC_CLI get-login-password | $OCI_BUILDER login --username AWS --password-stdin public.ecr.aws 1> /dev/null 2>&1
+$OCI_BUILDER push $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG 1> /dev/null
 echo "ok."
 
 # Install the soak test runner

@@ -20,3 +20,8 @@ iam:
     attachPolicyARNs:
     - "arn:aws:iam::aws:policy/PowerUserAccess"
     - "arn:aws:iam::aws:policy/IAMFullAccess"
+  - metadata:
+      name: ack-core-account
+      namespace: ack-system
+    attachPolicyARNs:
+    - "arn:aws:iam::aws:policy/AdministratorAccess"
