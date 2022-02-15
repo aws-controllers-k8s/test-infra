@@ -95,9 +95,9 @@ SOAK_RUNNER_CHART_RELEASE_NAME="soak-test-runner"
 # TEST_DURATION_HOURS and TEST_DURATION_DAYS after converting them in
 # minutes. Override following variables accordingly to set your soak test
 # duration. Default value: 24 hrs.
-TEST_DURATION_DAYS=1
-TEST_DURATION_HOURS=0
-TEST_DURATION_MINUTES=0
+TEST_DURATION_DAYS=${TEST_DURATION_DAYS:-1}
+TEST_DURATION_HOURS=${TEST_DURATION_HOURS:-0}
+TEST_DURATION_MINUTES=${TEST_DURATION_MINUTES:-0}
 NET_SOAK_TEST_DURATION_MINUTES=$(($TEST_DURATION_MINUTES + $TEST_DURATION_HOURS*60 + $TEST_DURATION_DAYS*24*60))
 
 export HELM_EXPERIMENTAL_OCI=1
@@ -105,10 +105,10 @@ export HELM_EXPERIMENTAL_OCI=1
 AWS_CLI="aws --region $DEPLOY_REGION"
 AWS_ECR_PUBLIC_CLI="aws --region us-east-1 ecr-public"
 
+[ ! -d "$CONTROLLER_DIR" ] && { >&2 echo "Error: Service controller directory does not exist: $CONTROLLER_DIR"; exit 1; }
+
 # Check and create the public ECR repository
-ret=0
-$AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_NAME > /dev/null 2>&1 || ret=$?
-if [ $ret -eq 0 ]; then
+if $AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_NAME > /dev/null 2>&1; then
     echo "ECR public repository already exists"
 else
     echo -n "Creating ECR public repository ... "
@@ -118,26 +118,21 @@ fi
 
 # Check and create the EKS cluster
 CLUSTER_NAME=$(yq eval -e ".metadata.name" $CLUSTER_CONFIG_PATH 2> /dev/null) || CLUSTER_NAME=$DEFAULT_CLUSTER_NAME
-
-ret=0
-$AWS_CLI eks describe-cluster --name $CLUSTER_NAME > /dev/null 2>&1 || ret=$?
-if [ $ret -eq 0 ]; then
+if $AWS_CLI eks describe-cluster --name $CLUSTER_NAME > /dev/null 2>&1; then
     echo "EKS cluster already exists"
 else
     echo "Creating EKS cluster ... "
-
     eksctl create cluster -f $CLUSTER_CONFIG_PATH
-
     echo "ok."
 fi
 
+$AWS_CLI eks update-kubeconfig --name $CLUSTER_NAME > /dev/null
+
 # Install the controller into the cluster
 CONTROLLER_SERVICE_ACCOUNT_NAME=$(yq eval -e ".iam.serviceAccounts[0].metadata.name" $CLUSTER_CONFIG_PATH 2> /dev/null) || \
-    { >&2 echo "IRSA is not included in this cluster config. IRSA is required for soak testing"; exit 1; }
+    { >&2 echo "Error: IRSA is not included in this cluster config. IRSA is required for soak testing"; exit 1; }
 
-ret=0
-helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $CONTROLLER_CHART_RELEASE_NAME || ret=$?
-if [ $ret -eq 0 ]; then
+if helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $CONTROLLER_CHART_RELEASE_NAME; then
     echo "Controller Helm release ($CONTROLLER_CHART_RELEASE_NAME) already installed in cluster"
 else
     echo -n "Installing controller chart ... "
@@ -150,18 +145,14 @@ else
 fi
 
 # Install the prometheus helm repo
-ret=0
-helm repo list 2> /dev/null | grep -q $PROM_REPO_NAME || ret=$?
-if [ $ret -ne 0 ]; then
+if helm repo list 2> /dev/null | grep -q $PROM_REPO_NAME; then
     echo -n "Adding prometheus chart repository ... "
-    helm repo add $PROM_REPO_NAME $PROM_REPO_URL 1> /dev/null
+    helm repo add $PROM_REPO_NAME $PROM_REPO_URL 1> /dev/null 2>&1
     echo "ok."
 fi
 
 # Install the prometheus chart
-ret=0
-helm list -n $PROM_NAMESPACE 2> /dev/null | grep -q $PROM_CHART_RELEASE_NAME || ret=$?
-if [ $ret -eq 0 ]; then
+if helm list -n $PROM_NAMESPACE 2> /dev/null | grep -q $PROM_CHART_RELEASE_NAME; then
     echo "Prometheus Helm release ($PROM_CHART_RELEASE_NAME) already installed in cluster"
 else
     echo -n "Installing Prometheus chart ... "
@@ -177,7 +168,7 @@ kubectl apply -n $PROM_NAMESPACE -k github.com/aws-controllers-k8s/test-infra/so
 
 # Build and publish the soak test runner image
 SOAK_IMAGE_REPO_URI="$($AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_NAME --output text --query "repositories[0].repositoryUri")" || \
-    { >&2 echo "Could not get the soak test image repository URI"; exit 1; }
+    { >&2 echo "Error: Could not get the soak test image repository URI"; exit 1; }
 
 echo "Building soak test image ... "
 $OCI_BUILDER build --platform $SOAK_IMAGE_PLATFORM -t $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG \
@@ -190,19 +181,19 @@ $OCI_BUILDER push $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG 1> /dev/null
 echo "ok."
 
 # Install the soak test runner
-ret=0
-helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $SOAK_RUNNER_CHART_RELEASE_NAME || ret=$?
-if [ $ret -eq 0 ]; then
-    echo -n "Controller Helm release ($SOAK_RUNNER_CHART_RELEASE_NAME) already installed in cluster"
-else
-    echo -n "Installing soak test chart ... "
-    helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
-        --set awsService=$AWS_SERVICE --set soak.imageRepo=$SOAK_IMAGE_REPO_URI \
-        --set soak.imageTag=$SOAK_IMAGE_TAG --set soak.startTimeEpochSeconds=$(date +%s) \
-        --set soak.durationMinutes=$NET_SOAK_TEST_DURATION_MINUTES \
-        $SOAK_RUNNER_CHART_RELEASE_NAME "$SOAK_DIR/helm/ack-soak-test" 1> /dev/null
+if helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $SOAK_RUNNER_CHART_RELEASE_NAME; then
+    echo -n "Controller Helm release ($SOAK_RUNNER_CHART_RELEASE_NAME) already installed in cluster. Uninstalling ... "
+    helm uninstall -n $CONTROLLER_NAMESPACE $SOAK_RUNNER_CHART_RELEASE_NAME 1> /dev/null 2>&1
     echo "ok."
 fi
+
+echo -n "Installing soak test chart ... "
+helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
+    --set awsService=$AWS_SERVICE --set soak.imageRepo=$SOAK_IMAGE_REPO_URI \
+    --set soak.imageTag=$SOAK_IMAGE_TAG --set soak.startTimeEpochSeconds=$(date +%s) \
+    --set soak.durationMinutes=$NET_SOAK_TEST_DURATION_MINUTES \
+    $SOAK_RUNNER_CHART_RELEASE_NAME "$SOAK_DIR/helm/ack-soak-test" 1> /dev/null 2>&1
+echo "ok."
 
 # Final messages and links
 echo "Your soak test cluster should now be operational and actively running tests"
