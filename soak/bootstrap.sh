@@ -16,15 +16,24 @@ Example: $(basename "$0") ecr v0.0.1
   tested.
 
 Environment variables:
-  DEPLOY_REGION:        The AWS region where the cluster and resources will be 
-                        deployed.
-                        Default: us-west-2
-  CLUSTER_NAME:         The name of the EKS cluster.
-                        Default: The value in the cluster-config.yaml file
-  SOAK_IMAGE_REPO_NAME: The name of the soak test ECR public repository.
-                        Default: ack-\$AWS_SERVICE-soak
-  OCI_BUILDER:          The binary used to build the OCI images.
-                        Default: docker
+  DEPLOY_REGION:            The AWS region where the cluster and resources will be 
+                            deployed.
+                            Default: us-west-2
+  CLUSTER_NAME:             The name of the EKS cluster.
+                            Default: The value in the cluster-config.yaml file
+  SOAK_IMAGE_REPO_NAME:     The name of the soak test ECR public repository.
+                            Default: ack-\$AWS_SERVICE-soak
+  OCI_BUILDER:              The binary used to build the OCI images.
+                            Default: docker
+  TEST_DURATION_DAYS:       The number of days added to the total duration for
+                            the soak tests to run.
+                            Default: 1
+  TEST_DURATION_HOURS:      The number of hours added to the total duration for
+                            the soak tests to run.
+                            Default: 0
+  TEST_DURATION_MINUTES:    The number of minutes added to the total duration
+                            for the soak tests to run.
+                            Default: 0
 "
 
 if [ $# -ne 2 ]; then
@@ -133,16 +142,17 @@ CONTROLLER_SERVICE_ACCOUNT_NAME=$(yq eval -e ".iam.serviceAccounts[0].metadata.n
     { >&2 echo "Error: IRSA is not included in this cluster config. IRSA is required for soak testing"; exit 1; }
 
 if helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $CONTROLLER_CHART_RELEASE_NAME; then
-    echo "Controller Helm release ($CONTROLLER_CHART_RELEASE_NAME) already installed in cluster"
+    echo -n "Controller Helm release ($CONTROLLER_CHART_RELEASE_NAME) already installed in cluster. Upgrading ... "
 else
     echo -n "Installing controller chart ... "
-    helm install --create-namespace -n $CONTROLLER_NAMESPACE \
-        --set metrics.service.create="true" --set metrics.service.type="ClusterIP" \
-        --set aws.region=$CONTROLLER_AWS_REGION --set serviceAccount.create="false" \
-        --set serviceAccount.name="$CONTROLLER_SERVICE_ACCOUNT_NAME" \
-        $CONTROLLER_CHART_RELEASE_NAME "$CONTROLLER_DIR/helm" 1> /dev/null
-    echo "ok."
 fi
+
+helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
+    --set metrics.service.create="true" --set metrics.service.type="ClusterIP" \
+    --set aws.region=$CONTROLLER_AWS_REGION --set serviceAccount.create="false" \
+    --set serviceAccount.name="$CONTROLLER_SERVICE_ACCOUNT_NAME" \
+    $CONTROLLER_CHART_RELEASE_NAME "$CONTROLLER_DIR/helm" 1> /dev/null
+echo "ok."
 
 # Install the prometheus helm repo
 if helm repo list 2> /dev/null | grep -q $PROM_REPO_NAME; then
@@ -153,15 +163,16 @@ fi
 
 # Install the prometheus chart
 if helm list -n $PROM_NAMESPACE 2> /dev/null | grep -q $PROM_CHART_RELEASE_NAME; then
-    echo "Prometheus Helm release ($PROM_CHART_RELEASE_NAME) already installed in cluster"
+    echo "Prometheus Helm release ($PROM_CHART_RELEASE_NAME) already installed in cluster. Upgrading ... "
 else
     echo -n "Installing Prometheus chart ... "
-    helm install --create-namespace -n $PROM_NAMESPACE \
-        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name="ack-controller" \
-        --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]="$AWS_SERVICE-controller-metrics.ack-system:8080" \
-        $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack 1> /dev/null
-    echo "ok."
 fi
+
+helm upgrade --install --create-namespace -n $PROM_NAMESPACE \
+    --set prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name="ack-controller" \
+    --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]="$AWS_SERVICE-controller-metrics.ack-system:8080" \
+    $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack 1> /dev/null
+echo "ok."
 
 # Apply the grafana dashboard
 kubectl apply -n $PROM_NAMESPACE -k github.com/aws-controllers-k8s/test-infra/soak/monitoring/grafana?ref=main
@@ -182,7 +193,11 @@ echo "ok."
 
 # Install the soak test runner
 if helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $SOAK_RUNNER_CHART_RELEASE_NAME; then
-    echo -n "Controller Helm release ($SOAK_RUNNER_CHART_RELEASE_NAME) already installed in cluster. Uninstalling ... "
+    echo -n "Soak test runner release ($SOAK_RUNNER_CHART_RELEASE_NAME) already installed in cluster. Uninstalling ... "
+
+    # The soak test runner cannot be upgraded, because it contains a kind `Job`.
+    # Helm does not support upgrading `Job`, throwing an `UPGRADE FAILED` error.
+    # Instead, we will uninstall the chart and completely re-install it.
     helm uninstall -n $CONTROLLER_NAMESPACE $SOAK_RUNNER_CHART_RELEASE_NAME 1> /dev/null 2>&1
     echo "ok."
 fi
@@ -192,7 +207,7 @@ helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
     --set awsService=$AWS_SERVICE --set soak.imageRepo=$SOAK_IMAGE_REPO_URI \
     --set soak.imageTag=$SOAK_IMAGE_TAG --set soak.startTimeEpochSeconds=$(date +%s) \
     --set soak.durationMinutes=$NET_SOAK_TEST_DURATION_MINUTES \
-    $SOAK_RUNNER_CHART_RELEASE_NAME "$SOAK_DIR/helm/ack-soak-test" 1> /dev/null 2>&1
+    $SOAK_RUNNER_CHART_RELEASE_NAME "$SOAK_DIR/helm/ack-soak-test" 1> /dev/null
 echo "ok."
 
 # Final messages and links
