@@ -86,32 +86,3 @@ calls to AWS APIs.
 
 The `Kubernetes/Compute Resources/Pod` dashboard will show the resource
 consumption by the controller pod.
-
-### Step 3 (Notify the ACK core team)
-
-The ACK core team needs to be made aware that service controller is ready for
-soak test execution using Prow, which is a manual process. Therefore, once you
-have completed the above steps copy the IRSA ARN from the following command, and
-send it to a member of the ACK core contributor team:
-```bash
-kubectl get sa -n ack-system ack-core-account -o json | jq -r ".metadata.annotations.\"eks.amazonaws.com/role-arn\""
-```
-
-> **Note for Core Contributors:** Upon receiving a new IRSA ARN, access the
-ACK infrastructure account and add a new SSM string parameter with the path
-`/ack/prow/soak/irsa/<service>` and a value of the ARN.
-```bash
-# For ACK core contributors
-aws ssm put-parameter --name "/ack/prow/soak/irsa/$SERVICE" --type String
---value <provided-value> 
-```
-
-### Step 4 (Customise your soak tests)
-
-By default, the soak-runner uses the [default
-configuration](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/default_soak_config.yaml)
-i.e. run e2e tests continuously for 24 hours. To provide custom behavior for
-your soak tests, create a file in the service-controller repository at
-`test/e2e/soak_config.yaml`. Take a look at [default
-configuration](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/default_soak_config.yaml)
-for sample configuration.
