@@ -45,6 +45,13 @@ account.
 Export the credentials for an AWS user with administrator access to your
 terminal before following the rest of the documents.
 
+> **Note:** Bootstrapping the soak test cluster will create an IAM role in the
+> account used to run the e2e tests for the soak load. By default this role has 
+> the `PowerUserAccess` policy. Update `attachPolicyARNs` under the
+> `ack-soak-controller` in the `cluster-config.yaml` file with the least
+> privileges required to run your service's e2e tests.
+
+
 ### Step 1 (Run the bootstrapping script)
 
 Run the `bootstrap.sh` script in the current directory. This script will do the
