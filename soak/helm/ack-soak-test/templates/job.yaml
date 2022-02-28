@@ -13,7 +13,7 @@ spec:
       labels:
         app: {{ .Values.awsService }}-soak-test
     spec:
-      serviceAccountName: ack-{{ .Values.awsService }}-controller # same as service controller service-account
+      serviceAccountName: ack-soak-controller # same as service controller service-account
       restartPolicy: Never
       containers:
         - name: soak-test
