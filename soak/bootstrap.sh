@@ -80,8 +80,16 @@ PROM_REPO_NAME="prometheus-community"
 PROM_REPO_URL="https://prometheus-community.github.io/helm-charts"
 # Release name of kube-prometheus helm chart
 PROM_CHART_RELEASE_NAME="kube-prom"
+# Local helm repository name for the grafana repository
+GRAFANA_REPO_NAME="grafana"
+# Helm repository URL for the grafana community charts
+GRAFANA_REPO_URL="https://grafana.github.io/helm-charts"
+# Release name of loki helm chart
+LOKI_CHART_RELEASE_NAME="loki"
 # Namespace for the prometheus helm chart
 PROM_NAMESPACE="prometheus"
+# Size of the Loki persistence PersistentVolumeClaim
+LOKI_PERSISTENCE_SIZE="15Gi"
 # Local port to access Prometheus dashbaord
 LOCAL_PROMETHEUS_PORT=9090
 # Local port to access Prometheus dashbaord
@@ -171,7 +179,29 @@ fi
 helm upgrade --install --create-namespace -n $PROM_NAMESPACE \
     --set prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name="ack-controller" \
     --set prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]="$AWS_SERVICE-controller-metrics.ack-system:8080" \
-    $PROM_CHART_RELEASE_NAME prometheus-community/kube-prometheus-stack 1> /dev/null
+    $PROM_CHART_RELEASE_NAME $PROM_REPO_NAME/kube-prometheus-stack 1> /dev/null
+echo "ok."
+
+# Install the grafana helm repo
+if helm repo list 2> /dev/null | grep -q $GRAFANA_REPO_NAME; then
+    echo -n "Adding grafana chart repository ... "
+    helm repo add $GRAFANA_REPO_NAME $GRAFANA_REPO_URL 1> /dev/null 2>&1
+    echo "ok."
+fi
+
+if helm list -n $PROM_NAMESPACE 2> /dev/null | grep -q $LOKI_CHART_RELEASE_NAME; then
+    echo "Loki Helm release ($LOKI_CHART_RELEASE_NAME) already installed in cluster. Upgrading ... "
+else
+    echo -n "Installing Loki chart ... "
+fi
+
+helm upgrade --install -n $PROM_NAMESPACE --create-namespace  \
+    --set grafana.enabled=false \
+    --set prometheus.enabled=false \
+    --set loki.persistence.enabled=true \
+    --set loki.persistence.storageClassName=gp2 \
+    --set loki.persistence.size="$LOKI_PERSISTENCE_SIZE" \
+    $LOKI_CHART_RELEASE_NAME $GRAFANA_REPO_NAME/loki-stack 1> /dev/null
 echo "ok."
 
 # Apply the grafana dashboard
