@@ -34,6 +34,8 @@ Environment variables:
   TEST_DURATION_MINUTES:    The number of minutes added to the total duration
                             for the soak tests to run.
                             Default: 0
+  CONTROLLER_IMAGE_REPO:    The controller image repository URL.
+                            Default: public.ecr.aws/aws-controllers-k8s/\$AWS_SERVICE
 "
 
 if [ $# -ne 2 ]; then
@@ -57,8 +59,10 @@ CONTROLLER_DIR="$ROOT_DIR/../$AWS_SERVICE-controller"
 CLUSTER_CONFIG_PATH="$SOAK_DIR/cluster-config.yaml"
 # EKS cluster name if not specified in cluster config
 DEFAULT_CLUSTER_NAME="ack-soak-test"
-# Semver version of the controller under test. Ex: v0.0.2
-CONTROLLER_CHART_URL="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-chart"
+# Default controller image repository URL
+DEFAULT_CONTROLLER_IMAGE_REPO="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
+# Controller repository URL
+CONTROLLER_IMAGE_REPO=${CONTROLLER_IMAGE_REPO:-$DEFAULT_CONTROLLER_IMAGE_REPO}
 # AWS Region for ACK service controller
 CONTROLLER_AWS_REGION="us-west-2"
 # AWS Account Id for ACK service controller
@@ -121,7 +125,7 @@ if $AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_
     echo "ECR public repository already exists"
 else
     echo -n "Creating ECR public repository ... "
-    $AWS_ECR_PUBLIC_CLI create-repository --repository-name $SOAK_IMAGE_REPO_NAME
+    $AWS_ECR_PUBLIC_CLI create-repository --repository-name $SOAK_IMAGE_REPO_NAME > /dev/null 2>&1
     echo "ok."
 fi
 
@@ -151,6 +155,8 @@ helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
     --set metrics.service.create="true" --set metrics.service.type="ClusterIP" \
     --set aws.region=$CONTROLLER_AWS_REGION --set serviceAccount.create="false" \
     --set serviceAccount.name="$CONTROLLER_SERVICE_ACCOUNT_NAME" \
+    --set image.Repository=$CONTROLLER_IMAGE_REPO \
+    --set image.Tag=$CONTROLLER_TAG \
     $CONTROLLER_CHART_RELEASE_NAME "$CONTROLLER_DIR/helm" 1> /dev/null
 echo "ok."
 
