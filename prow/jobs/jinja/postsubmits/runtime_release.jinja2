@@ -1,10 +1,11 @@
-  aws-controllers-k8s/community:
-  - name: community-docs-release
+  aws-controllers-k8s/runtime:
+  - name: runtime-docs-release
     decorate: true
     extra_refs:
     - org: aws-controllers-k8s
-      repo: runtime
+      repo: community
       base_ref: main
+      workdir: true
     {% for service in aws_services %}
     - org: aws-controllers-k8s
       repo: {{ service }}-controller
@@ -25,6 +26,6 @@
           - name: GITHUB_EMAIL_ID
             value: "82905295"
           command: ["/docs/build-docs.sh"]
-    run_if_changed: "docs/.*"
+    run_if_changed: "apis/core/.*"
     branches:
     - main
