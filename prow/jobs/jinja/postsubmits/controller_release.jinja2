@@ -48,6 +48,9 @@
       repo: community
       base_ref: main
       workdir: true
+    - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
     {% for other_service in aws_services if not other_service == service %}
     - org: aws-controllers-k8s
       repo: {{ other_service }}-controller
