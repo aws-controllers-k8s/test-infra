@@ -10,6 +10,8 @@ ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
     PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
 
+ENV OPERATOR_SDK_BIN_PATH=/usr/local/bin
+
 RUN echo "Installing packages ..." \
     && apt-get update \
     && apt-get install -y --no-install-recommends\
@@ -27,26 +29,26 @@ RUN echo "Installing packages ..." \
         apt-transport-https \
         unzip
 
-RUN echo "Installing Go ..." \
+RUN echo "Installing Go ${GO_VERSION}..." \
     && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
     && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
     && tar xzf "${GO_TARBALL}" -C /usr/local \
     && rm "${GO_TARBALL}"\
     && mkdir -p "${GOPATH}/bin"
 
-RUN echo "Installing Helm ... " \
+RUN echo "Installing Helm v3.7.0... " \
     && export HELM_TARBALL="helm.tar.gz" \
     && curl -fsSL https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
     && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
     && rm "${HELM_TARBALL}"
 
-RUN echo "Installing operator-sdk ..." \
+RUN echo "Installing operator-sdk v1.17.0 ..." \
     && export OPERATOR_SDK_BIN="operator-sdk" \
     && curl -sq -L "https://github.com/operator-framework/operator-sdk/releases/download/v1.17.0/operator-sdk_linux_amd64" --output "${OPERATOR_SDK_BIN}" \
     && chmod +x "${OPERATOR_SDK_BIN}" \
-    && mv "${OPERATOR_SDK_BIN}" /usr/local/bin/"${OPERATOR_SDK_BIN}"
+    && mv "${OPERATOR_SDK_BIN}" "${OPERATOR_SDK_BIN_PATH}"/"${OPERATOR_SDK_BIN}"
 
-RUN echo "Installing Kustomize ..." \
+RUN echo "Installing Kustomize v4.1.2 ..." \
     && export KUSTOMIZE_TARBALL="kustomize.tar.gz" \
     && curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v4.1.2/kustomize_v4.1.2_linux_amd64.tar.gz --output "${KUSTOMIZE_TARBALL}" \
     && tar xzf "${KUSTOMIZE_TARBALL}" -C /usr/bin \
