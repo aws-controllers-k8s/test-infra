@@ -26,6 +26,10 @@
     "cdk8s": "^1.0.0-beta.11",
     "cdk8s-plus": "^0.33.0",
     "constructs": "^3.3.71",
+    "follow-redirects": ">=1.14.8",
+    "json-schema": ">=0.4.0",
+    "minimist": ">=1.2.6",
+    "pac-resolver": ">=5.0.0",
     "set-value": ">=4.0.1",
     "source-map-support": "^0.5.16"
   }
