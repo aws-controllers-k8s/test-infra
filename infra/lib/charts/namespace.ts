@@ -1,6 +1,6 @@
 import * as cdk8s from 'cdk8s';
 import * as constructs from 'constructs';
-import * as kplus from 'cdk8s-plus';
+import * as kplus from 'cdk8s-plus-20';
 
 export interface NamespaceChartProps {
   readonly name: string;
