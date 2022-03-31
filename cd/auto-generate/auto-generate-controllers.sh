@@ -72,7 +72,7 @@ fi
 git config --global user.name "${GITHUB_ACTOR}" >/dev/null
 git config --global user.email "${USER_EMAIL}" >/dev/null
 
-# Findout the runtime semver from the code-generator repo
+# Find the runtime semver from the code-generator repo
 cd "$CODEGEN_DIR"
 ACK_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
 if [[ $ACK_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
@@ -81,6 +81,9 @@ if [[ $ACK_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
 else
   echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controllers will be $ACK_RUNTIME_VERSION"
 fi
+
+# Find the code-gen semver from the latest tag on the code-generator repo
+ACK_CODE_GEN_VERSION=$(git describe --tags --always --dirty)
 
 GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
 if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
@@ -120,10 +123,9 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       continue
     fi
 
-    # If the current version is same as latest ACK runtime version, skip this controller.
+    # If the current runtime version is the same as latest ACK runtime version, skip over runtime updates.
     if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
-      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION. Skipping $CONTROLLER_NAME"
-      continue
+      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION"
     else
       echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controller will be $ACK_RUNTIME_VERSION. Current version is $SERVICE_RUNTIME_VERSION"
       echo -n "auto-generate-controllers.sh][INFO] Updating 'go.mod' file for $CONTROLLER_NAME with ACK runtime $ACK_RUNTIME_VERSION ... "
@@ -157,6 +159,16 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
         continue
       fi
       echo "ok"
+    fi
+
+    SERVICE_AVAILABLE_API_VERSION=$(yq e '.api_versions[] | select(.status == "available") | .api_version' metadata.yaml)
+    SERVICE_CODE_GEN_VERSION=$(yq e '.ack_generate_info.version' apis/$SERVICE_AVAILABLE_API_VERSION/ack-generate-metadata.yaml)
+    # If the current version was generated with the latest ACK code-gen binary version, skip over the controller entirely
+    if [[ "$SERVICE_CODE_GEN_VERSION" == "$ACK_CODE_GEN_VERSION" ]]; then
+      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK code-gen version $ACK_CODE_GEN_VERSION. Skipping ... "
+      continue
+    else
+      echo "auto-generate-controllers.sh][INFO] ACK code-gen version for new controller will be $ACK_CODE_GEN_VERSION. Current version is $SERVICE_CODE_GEN_VERSION"
     fi
   popd >/dev/null
 
