@@ -93,7 +93,7 @@ else
   echo "auto-generate-controllers.sh][INFO] go version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
 fi
 
-DEFAULT_PR_SOURCE_BRANCH="ack-bot/runtime-$ACK_RUNTIME_VERSION"
+DEFAULT_PR_SOURCE_BRANCH="ack-bot/rt-$ACK_RUNTIME_VERSION-codegen-$ACK_CODE_GEN_VERSION"
 PR_SOURCE_BRANCH=${PR_SOURCE_BRANCH:-$DEFAULT_PR_SOURCE_BRANCH}
 
 # find all the directories whose name ends with 'controller'
@@ -209,7 +209,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     cat "$MAKE_BUILD_ERROR_FILE"
 
     echo "auto-generate-controllers.sh][ERROR] Failure while executing 'make build-controller' command. Creating/Updating GitHub issue"
-    ISSUE_TITLE="Errors while generating \`$CONTROLLER_NAME\` for ACK runtime \`$ACK_RUNTIME_VERSION\`"
+    ISSUE_TITLE="Errors while generating \`$CONTROLLER_NAME\` for ACK runtime \`$ACK_RUNTIME_VERSION\`, code-generator \`$ACK_CODE_GEN_VERSION\`"
 
     # Capture 'make build-controller' command output & error, then persist
     # in '$GITHUB_ISSUE_BODY_FILE'
@@ -240,7 +240,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`"
+    COMMIT_MSG="Update to ACK runtime \`$ACK_RUNTIME_VERSION\`, code-generator \`$ACK_CODE_GEN_VERSION\`"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
