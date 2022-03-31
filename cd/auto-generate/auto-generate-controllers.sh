@@ -240,7 +240,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Add all the files & create a GitHub commit
     git add .
-    COMMIT_MSG="Update ACK runtime to \`$ACK_RUNTIME_VERSION\`, code-generator \`$ACK_CODE_GEN_VERSION\`"
+    COMMIT_MSG="Update to ACK runtime \`$ACK_RUNTIME_VERSION\`, code-generator \`$ACK_CODE_GEN_VERSION\`"
     echo -n "auto-generate-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
