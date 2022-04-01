@@ -16,10 +16,7 @@ import os
 
 import github
 
-import ecrpublic
-import maintenance_phases
-import project_stages
-import service
+from . import ecrpublic, maintenance_phases, project_stages, service
 
 # A cache of Github Issues for new service controllers
 _sc_issues = None
@@ -36,6 +33,7 @@ class Release:
     chart_version: str = None
     ack_runtime_version: str = None
     aws_sdk_go_version: str = None
+    release_url: str = None
 
 
 @dataclasses.dataclass
@@ -108,6 +106,12 @@ def collect_all(writer, gh, ep_client, services):
             )
             latest_release.ack_runtime_version = runtime_version
             latest_release.aws_sdk_go_version = aws_sdk_version
+            
+            try:
+                gh_release = repo.get_release(image_repo_latest_version)
+                latest_release.release_url = gh_release.html_url
+            except github.UnknownObjectException:
+                writer.debug(f"[controller.collect_all] no github release associated with controller version {image_repo_latest_version}")
 
         chart_repo_url = f"{ecrpublic.BASE_ECR_URL}/{service_package_name}-chart"
         chart_repo = ecrpublic.get_repository(writer, ep_client, chart_repo_url)
@@ -124,7 +128,7 @@ def collect_all(writer, gh, ep_client, services):
             latest_release=latest_release,
             project_stage=project_stage,
             maintenance_phase=maintenance_phase,
-            source_repo_url=repo.url,
+            source_repo_url=repo.html_url,
             image_repo=image_repo,
             chart_repo=chart_repo,
             gh_issue_url=gh_issue_url,

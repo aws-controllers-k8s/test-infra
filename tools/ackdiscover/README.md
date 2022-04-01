@@ -31,5 +31,5 @@ Access Token:
 ```bash
 source ~/.github/venv
 source .venv/bin/activate
-tools/ack-discover/ack-discover --debug
+tools/cmd/ack-discover --debug
 ```
