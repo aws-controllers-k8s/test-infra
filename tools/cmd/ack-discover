@@ -48,11 +48,7 @@ import sys
 
 import github
 
-import awssdkgo
-import controller
-import ecrpublic
-import printer
-import service
+from ackdiscover import awssdkgo, controller, ecrpublic, printer, service
 
 DEFAULT_CACHE_DIR = os.path.join(pathlib.Path.home(), ".cache", "ack-discover")
 

@@ -11,15 +11,13 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-import dataclasses
+from dataclasses import dataclass, field, asdict
 import sys
 
 import prettytable
 import yaml
 
-import controller
-import maintenance_phases
-import project_stages
+from . import maintenance_phases
 
 FORMAT_TABLE = "table"
 FORMAT_YAML = "yaml"
@@ -28,9 +26,14 @@ FORMATS = set([
     FORMAT_YAML,
 ])
 
+@dataclass
+class WriterArgs:
+    debug: bool = field(default=False)
+    output: str = field(default=None)
+    format: str = field(default=FORMAT_TABLE)
 
 class Writer:
-    def __init__(self, args):
+    def __init__(self, args: WriterArgs):
         self._args = args
 
     def debug(self, *args, **kwargs):
@@ -47,31 +50,7 @@ class Writer:
         else:
             self._print_yaml(services, controllers)
 
-    def _print_table(self, services, controllers):
-        num_services = len(services)
-        num_preview = sum(
-            [
-                1 for c in controllers.values()
-                if c.maintenance_phase == maintenance_phases.PREVIEW
-            ]
-        )
-        num_ga = sum(
-            [
-                1 for c in controllers.values()
-                if c.maintenance_phase == maintenance_phases.GENERAL_AVAILABILITY
-            ]
-        )
-        num_controllers = num_preview + num_ga
-        pct_coverage = round(((num_controllers / num_services) *100), 2)
-
-        self._outfile.write(f"Number of AWS services with published APIs: {num_services}\n")
-        self._outfile.write(f"Number of ACK controllers:                  {num_controllers}\n")
-        self._outfile.write(f"Service coverage %:                         {pct_coverage}\n")
-
-        self._outfile.write(f"Number controllers in PREVIEW:              {num_preview}\n")
-        self._outfile.write(f"Number controllers in GENERAL_AVAILABILITY: {num_ga}\n")
-        self._outfile.write("\n")
-
+    def build_table(self, controllers):
         t = prettytable.PrettyTable()
         t.field_names = [
             "Service",
@@ -105,13 +84,41 @@ class Writer:
                 runtime_version,
                 aws_sdk_version,
             ])
+        return t
+
+    def _print_table(self, services, controllers):
+        num_services = len(services)
+        num_preview = sum(
+            [
+                1 for c in controllers.values()
+                if c.maintenance_phase == maintenance_phases.PREVIEW
+            ]
+        )
+        num_ga = sum(
+            [
+                1 for c in controllers.values()
+                if c.maintenance_phase == maintenance_phases.GENERAL_AVAILABILITY
+            ]
+        )
+        num_controllers = num_preview + num_ga
+        pct_coverage = round(((num_controllers / num_services) *100), 2)
+
+        self._outfile.write(f"Number of AWS services with published APIs: {num_services}\n")
+        self._outfile.write(f"Number of ACK controllers:                  {num_controllers}\n")
+        self._outfile.write(f"Service coverage %:                         {pct_coverage}\n")
+
+        self._outfile.write(f"Number controllers in PREVIEW:              {num_preview}\n")
+        self._outfile.write(f"Number controllers in GENERAL_AVAILABILITY: {num_ga}\n")
+        self._outfile.write("\n")
+
+        t = self.build_table(controllers)
         self._outfile.write(t.get_string())
         self._outfile.write("\n")
 
     def _print_yaml(self, services, controllers):
         obj = dict(
             controllers={
-                cname: dataclasses.asdict(c)
+                cname: asdict(c)
                 for cname, c in controllers.items()
             }
         )
