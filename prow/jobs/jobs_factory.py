@@ -1,6 +1,8 @@
-from jinja2 import Environment, FileSystemLoader
-import yaml
+import dataclasses
 import os
+from typing import Dict, Mapping
+import yaml
+from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
 
 """Script to auto-generate jobs.yaml file declaring prow-jobs
@@ -8,8 +10,24 @@ from datetime import datetime
 
 # Load the config to be used with jinja templates.
 config = yaml.safe_load(open('./jobs_config.yaml'))
+image_config = yaml.safe_load(open('./images_config.yaml'))
 env = Environment(loader=FileSystemLoader('./'), trim_blocks=True, lstrip_blocks=True)
 
+@dataclasses.dataclass(frozen=True)
+class ImageContext:
+    image_repo: str
+    images: Mapping[str, str] # Map from image name to image tag
+
+def load_images(image_file_content: Dict) -> ImageContext:
+    if "image_repo" not in image_file_content:
+        raise ValueError("Key image_repo not found in images config")
+    
+    image_repo = image_file_content["image_repo"]
+    images = {}
+    for key in image_file_content["images"]:
+        # Prepend image repo to each of the image tags
+        images[key] = image_repo + ":" + image_file_content["images"][key]
+    return ImageContext(image_repo=image_repo, images=images)
 
 def load_templates(prow_job_type: str, template_dir: str) -> str:
     try:
@@ -21,10 +39,14 @@ def load_templates(prow_job_type: str, template_dir: str) -> str:
         print(f'{template_dir}: No such directory to load templates. Ignoring.')
         return ""
 
+    image_context = load_images(image_config)
+
     content = f'{prow_job_type}:\n'
     for file_name in template_files:
         template_content = env.get_template(f'{template_dir}/{file_name}')
-        content += f'{template_content.render(config)}\n'
+        rendered_content = template_content.render(config, image_context=image_context)
+        content += f'{rendered_content}\n'
+
 
     return content
 
