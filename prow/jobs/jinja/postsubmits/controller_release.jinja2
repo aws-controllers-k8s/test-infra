@@ -14,7 +14,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-deploy-0.0.6
+        - image: {{ image_context.images["deploy"] }}
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
@@ -33,7 +33,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-soak-0.0.3
+        - image: {{ image_context.images["soak-test"] }}
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -59,7 +59,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-docs-0.0.4
+        - image: {{ image_context.images["docs"] }}
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -84,7 +84,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-controller-release-tag-0.0.1
+        - image: {{ image_context.images["controller-release-tag"] }}
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -117,7 +117,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-olm-bundle-pr-0.0.4
+        - image: {{ image_context.images["olm-bundle-pr"] }}
           env:
           - name: GITHUB_TOKEN
             valueFrom:

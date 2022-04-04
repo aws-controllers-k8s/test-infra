@@ -6,7 +6,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-unit-0.0.2
+      - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
             cpu: 1
@@ -32,7 +32,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-olm-test-0.0.4
+      - image: {{ image_context.images["olm-test"] }}
         env:
         - name: SERVICE
           value: "s3"
@@ -64,7 +64,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.6
+      - image: {{ image_context.images["integration-test"] }}
         securityContext:
           privileged: true
         env:

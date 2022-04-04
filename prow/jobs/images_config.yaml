@@ -1,0 +1,14 @@
+image_repo: public.ecr.aws/m5q3e4b2/prow
+images:
+  docs: prow-docs-0.0.5
+
+  unit-test: prow-unit-0.0.2
+  integration-test: prow-integration-0.0.6
+  soak-test: prow-soak-0.0.3
+
+  auto-generate-controllers: prow-auto-generate-controllers-0.0.7
+  controller-release-tag: prow-controller-release-tag-0.0.1
+  deploy: prow-deploy-0.0.6
+
+  olm-test: prow-olm-test-0.0.4
+  olm-bundle-pr: prow-olm-bundle-pr-0.0.4
