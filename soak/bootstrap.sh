@@ -169,7 +169,7 @@ helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
 echo "ok."
 
 # Install the prometheus helm repo
-if helm repo list 2> /dev/null | grep -q $PROM_REPO_NAME; then
+if ! helm repo list 2> /dev/null | grep -q $PROM_REPO_NAME; then
     echo -n "Adding prometheus chart repository ... "
     helm repo add $PROM_REPO_NAME $PROM_REPO_URL 1> /dev/null 2>&1
     echo "ok."
@@ -189,7 +189,7 @@ helm upgrade --install --create-namespace -n $PROM_NAMESPACE \
 echo "ok."
 
 # Install the grafana helm repo
-if helm repo list 2> /dev/null | grep -q $GRAFANA_REPO_NAME; then
+if ! helm repo list 2> /dev/null | grep -q $GRAFANA_REPO_NAME; then
     echo -n "Adding grafana chart repository ... "
     helm repo add $GRAFANA_REPO_NAME $GRAFANA_REPO_URL 1> /dev/null 2>&1
     echo "ok."
