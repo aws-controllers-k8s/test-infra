@@ -4,11 +4,10 @@ import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
 import * as cdk8s from 'cdk8s';
 import { policies as ALBPolicies } from './policies/aws-load-balancer-controller-policy';
-import { FluxChart } from './charts/flux';
 import { FluxConfigurationChart } from './charts/flux-configuration';
 import { ProwSecretsChart, ProwSecretsChartProps } from './charts/prow-secrets';
 import { NamespaceChart } from './charts/namespace';
-import { EXTERNAL_DNS_NAMESPACE, PROW_JOB_NAMESPACE, PROW_NAMESPACE } from './test-ci-stack';
+import { EXTERNAL_DNS_NAMESPACE, FLUX_NAMESPACE, PROW_JOB_NAMESPACE, PROW_NAMESPACE } from './test-ci-stack';
 
 export type CIClusterCompileTimeProps = ProwSecretsChartProps;
 
@@ -26,7 +25,7 @@ export class CICluster extends cdk.Construct {
     super(scope, id);
 
     this.testCluster = new eks.Cluster(scope, 'TestInfraCluster', {
-      version: eks.KubernetesVersion.V1_19,
+      version: eks.KubernetesVersion.V1_20,
       defaultCapacity: 0
     })
     this.testNodegroup = this.testCluster.addNodegroupCapacity('TestInfraNodegroup', {
@@ -37,6 +36,7 @@ export class CICluster extends cdk.Construct {
 
     this.installProwRequirements(props);
     this.installFlux();
+    this.installFluxConfiguration();
     this.installExternalDNS();
     this.installAWSLoadBalancer();
   }
@@ -49,17 +49,22 @@ export class CICluster extends cdk.Construct {
   }
 
   installFlux = () => {
-    const fluxChart = this.testCluster.addCdk8sChart('flux',
-      new FluxChart(
-        this.cdk8sApp, 'Flux', {}
-      )
-    );
+    const fluxChart = this.testCluster.addHelmChart('flux2', {
+      chart: 'flux2',
+      repository: 'https://fluxcd-community.github.io/helm-charts',
+      namespace: FLUX_NAMESPACE,
+      createNamespace: true,
+      version: '0.19.2',
+      values: {},
+    })
+  }
+
+  installFluxConfiguration = () => {
     const fluxConfigChart = this.testCluster.addCdk8sChart('flux-configuration',
       new FluxConfigurationChart(
         this.cdk8sApp, 'FluxConfiguration', {}
       )
     );
-    fluxConfigChart.node.addDependency(fluxChart);
   }
 
   installProwRequirements = (secretsProps: ProwSecretsChartProps) => {
