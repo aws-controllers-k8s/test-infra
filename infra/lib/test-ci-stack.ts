@@ -7,6 +7,7 @@ import { ProwServiceAccounts } from './prow-service-accounts';
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
 export const EXTERNAL_DNS_NAMESPACE = "external-dns";
+export const FLUX_NAMESPACE = "flux-system";
 
 export type TestCIStackProps = cdk.StackProps & LogBucketCompileProps & ClusterSSMCompileProps & {
   clusterConfig: CIClusterCompileTimeProps
