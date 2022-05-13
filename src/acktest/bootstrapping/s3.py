@@ -5,13 +5,14 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
-from ..aws.identity import get_region
+from ..aws.identity import get_region, get_account_id
 
 @dataclass
 class Bucket(Bootstrappable):
     # Inputs
     name_prefix: str
     enable_versioning: bool = False
+    policy: str = ""
 
     # Outputs
     name: str = field(init=False)
@@ -42,6 +43,13 @@ class Bucket(Bootstrappable):
                 VersioningConfiguration={
                     "Status": "Enabled"
                 }
+            )
+
+        if self.policy != "":
+            policy = self.policy.replace("$NAME", self.name).replace("$ACCOUNT_ID", str(get_account_id()))
+            self.s3_client.put_bucket_policy(
+                Bucket=self.name,
+                Policy=policy,
             )
 
     def cleanup(self):
