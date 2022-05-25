@@ -13,7 +13,7 @@ class Bucket(Bootstrappable):
     name_prefix: str
     enable_versioning: bool = False
     policy: str = ""
-    policy_vars: dict = {}
+    policy_vars: dict = field(default_factory=dict)
 
     # Outputs
     name: str = field(init=False)
