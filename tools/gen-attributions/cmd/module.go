@@ -26,7 +26,7 @@ type Module struct {
 	// The unique identifier of a module is in format $path@$version
 	Version *module.Version
 	// LicenseBytes is the license of the module.
-	LicenseBytes []byte
+	License *License
 	// Is the list of the required modules found in a go.mod file.
 	Dependencies []*Module
 }
@@ -54,7 +54,7 @@ func (tree *Tree) String() string {
 
 func addChildNodes(parent treeprint.Tree, modules []*Module) {
 	for _, m := range modules {
-		child := parent.AddBranch(m.Version.String())
+		child := parent.AddBranch(m.Version.String() + " " + m.License.Name)
 		addChildNodes(child, m.Dependencies)
 	}
 }

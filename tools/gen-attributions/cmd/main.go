@@ -82,7 +82,10 @@ func generateAttributionsFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// build the dependency graph
-	gb := newGraphBuilder(logger)
+	gb, err := newGraphBuilder(logger, defaultConfidenceTreshHold)
+	if err != nil {
+		return err
+	}
 	tree, err := gb.buildGraph(goMod, depthOpt)
 	if err != nil {
 		return err

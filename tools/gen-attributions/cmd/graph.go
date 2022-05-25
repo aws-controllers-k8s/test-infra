@@ -36,14 +36,21 @@ type graphBuilder struct {
 	logger *logrus.Logger
 	// modulesCache is used to avoid downloading/parsing already seen modules.
 	modulesCache map[string]*Module
+	// classifier for licenses
+	lc *licenseClassifierWrapper
 }
 
 // newGraphBuilder instantiate a new graphBuilder
-func newGraphBuilder(logger *logrus.Logger) *graphBuilder {
+func newGraphBuilder(logger *logrus.Logger, licenseClassificationTreshold float64) (*graphBuilder, error) {
+	lc, err := newLicenseClassifier(licenseClassificationTreshold)
+	if err != nil {
+		return nil, err
+	}
 	return &graphBuilder{
 		modulesCache: make(map[string]*Module),
 		logger:       logger,
-	}
+		lc:           lc,
+	}, nil
 }
 
 // buildGraph takes a modfile a max depth and proceeds into building the
@@ -111,9 +118,16 @@ func (gb *graphBuilder) buildModulesDependencyGraph(
 		}
 		gb.logger.Debugf("Found %s license and %d required modules", mod.String(), len(requiredModules))
 
+		licenseType, err := gb.lc.detectLicense(license)
+		if err != nil {
+			return nil, err
+		}
 		module = &Module{
-			Version:      mod,
-			LicenseBytes: license,
+			Version: mod,
+			License: &License{
+				Data: license,
+				Name: licenseType,
+			},
 		}
 		moduleDependencies, err := gb.buildModulesDependencyGraph(
 			requiredModules, depth+1, maxDepth,
