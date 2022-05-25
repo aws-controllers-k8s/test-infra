@@ -53,7 +53,7 @@ class Bucket(Bootstrappable):
                 "$REGION": get_region(),
             })
 
-            for key, value in self.policy_vars:
+            for key, value in self.policy_vars.items():
                 self.policy = self.policy.replace(key, value)
 
             self.s3_client.put_bucket_policy(
