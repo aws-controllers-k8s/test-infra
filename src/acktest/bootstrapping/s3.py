@@ -13,6 +13,7 @@ class Bucket(Bootstrappable):
     name_prefix: str
     enable_versioning: bool = False
     policy: str = ""
+    policy_vars: dict = {}
 
     # Outputs
     name: str = field(init=False)
@@ -46,10 +47,18 @@ class Bucket(Bootstrappable):
             )
 
         if self.policy != "":
-            policy = self.policy.replace("$NAME", self.name).replace("$ACCOUNT_ID", str(get_account_id()))
+            self.policy_vars.update({
+                "$NAME": self.name,
+                "$ACCOUNT_ID": str(get_account_id()),
+                "$REGION": get_region(),
+            })
+
+            for key, value in self.policy_vars:
+                self.policy = self.policy.replace(key, value)
+
             self.s3_client.put_bucket_policy(
                 Bucket=self.name,
-                Policy=policy,
+                Policy=self.policy,
             )
 
     def cleanup(self):
