@@ -23,7 +23,7 @@ RUN_PYTEST_LOCALLY=${RUN_PYTEST_LOCALLY:="false"}
 ACK_LOG_LEVEL="debug"
 ACK_RESOURCE_TAGS='services.k8s.aws/managed=true, services.k8s.aws/created=%UTCNOW%, services.k8s.aws/namespace=%KUBERNETES_NAMESPACE%'
 DELETE_CLUSTER_ARGS=""
-K8S_VERSION=${K8S_VERSION:-"1.16"}
+K8S_VERSION=${K8S_VERSION:-"1.22"}
 PRESERVE=${PRESERVE:-"false"}
 LOCAL_MODULES=${LOCAL_MODULES:-"false"}
 START=$(date +%s)
@@ -97,8 +97,8 @@ Environment variables:
                             Default: aws-controllers-k8s:$AWS_SERVICE-$VERSION
   TMP_DIR                   Cluster context directory, if operating on an existing cluster
                             Default: $ROOT_DIR/build/tmp-$CLUSTER_NAME
-  K8S_VERSION               Kubernetes Version [1.14, 1.15, 1.16, 1.17, and 1.18]
-                            Default: 1.16
+  K8S_VERSION               Kubernetes Version [1.19, 1.20, 1.21, 1.22, 1.23 and 1.24]
+                            Default: 1.22
   ENABLE_HELM_CHART_TEST    Whether to run the Helm Chart test (<true|false>)
                             Default: true
   ENABLE_E2E_TESTS          Whether to run the kind e2e tests (<true|false>)
