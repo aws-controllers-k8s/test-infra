@@ -23,12 +23,12 @@ else
     KIND_CONFIG_FILE="$SCRIPTS_DIR/kind-two-node-cluster.yaml"
 fi
 
-K8_1_21="kindest/node:v1.21.1"
-K8_1_18="kindest/node:v1.18.4"
-K8_1_17="kindest/node:v1.17.5"
-K8_1_16="kindest/node:v1.16.9"
-K8_1_15="kindest/node:v1.15.11"
-K8_1_14="kindest/node:v1.14.10"
+K8_1_24="kindest/node:v1.24.0"
+K8_1_23="kindest/node:v1.23.6"
+K8_1_22="kindest/node:v1.22.9"
+K8_1_21="kindest/node:v1.21.12"
+K8_1_20="kindest/node:v1.20.15"
+K8_1_19="kindest/node:v1.19.16"
 
 USAGE="
 Usage:
@@ -39,8 +39,8 @@ Provisions a KinD cluster for local development and testing.
 Example: $(basename "$0") my-test
 
 Environment variables:
-  K8S_VERSION               Kubernetes Version [1.14, 1.15, 1.16, 1.17, 1.18 and 1.21]
-                            Default: 1.16
+  K8S_VERSION               Kubernetes Version [1.19, 1.20, 1.21, 1.22, 1.23 and 1.24]
+                            Default: 1.22
   ENABLE_PROMETHEUS:        Enables a different cluster config to enable Prometheus support.
                             Default: false
 "
@@ -65,7 +65,7 @@ if [ ! -z ${K8S_VERSION} ]; then
         exit 2
     fi
 else
-    K8_VERSION=${K8_1_16}
+    K8_VERSION=${K8_1_22}
 fi
 
 TMP_DIR=$ROOT_DIR/build/tmp-$cluster_name
