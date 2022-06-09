@@ -23,6 +23,7 @@ aws_services:
 - memorydb
 - mq
 - opensearchservice
+- prometheusservice
 - rds
 - route53
 - s3
