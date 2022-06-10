@@ -21,7 +21,7 @@ ENABLE_E2E_TESTS=${ENABLE_E2E_TESTS:-"true"}
 SKIP_PYTHON_TESTS=${SKIP_PYTHON_TESTS:-"false"}
 RUN_PYTEST_LOCALLY=${RUN_PYTEST_LOCALLY:="false"}
 ACK_LOG_LEVEL="debug"
-ACK_RESOURCE_TAGS='services.k8s.aws/managed=true, services.k8s.aws/created=%UTCNOW%, services.k8s.aws/namespace=%KUBERNETES_NAMESPACE%'
+ACK_RESOURCE_TAGS='services.k8s.aws/controller-version=%CONTROLLER_SERVICE%-%CONTROLLER_VERSION%,services.k8s.aws/namespace=%K8S_NAMESPACE%'
 DELETE_CLUSTER_ARGS=""
 K8S_VERSION=${K8S_VERSION:-"1.22"}
 PRESERVE=${PRESERVE:-"false"}
