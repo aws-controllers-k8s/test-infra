@@ -1,0 +1,28 @@
+cluster:
+  create: true
+  name: ack-test-0da91974-11c0d5d6 # Optional (defaults to generated name)
+  arch: amd64 # Optional (defaults to amd64)
+  k8s_version: 1.22 # Optional (defaults to latest)
+
+  configuration:
+    # file_name: kind-two-node-cluster.yaml # Optional (defaults to kind-two-node-cluster.yaml)
+    additional_controllers:
+    - s3-controller@v0.1.0
+    - rds-controller@v0.0.24
+
+aws:
+  # profile: # Optional (defaults to none)
+  # token_file: # Optional (defaults to none)
+  region: us-west-2
+  assumed_role_arn: arn:aws:iam::123456789012:role/Admin-k8s
+
+tests:
+  markers: # Optional (defaults to all)
+  - slow
+  - canary
+
+local_build: false # Optional (defaults to false)
+
+debug:
+  enabled: true # Optional (defaults to false)
+  dump_controller_logs: false # Optional (defaults to fales)
