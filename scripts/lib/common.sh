@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+source "$LIB_DIR/logging.sh"
+
 # check_is_installed checks to see if the supplied executable is installed and
 # exits if not. An optional second argument is an extra message to display when
 # the supplied executable is not installed.
@@ -15,12 +19,12 @@ check_is_installed() {
     local __name="$1"
     local __extra_msg="$2"
     if ! is_installed "$__name"; then
-        echo "FATAL: Missing requirement '$__name'"
-        echo "Please install $__name before running this script."
+        error_msg "Missing required binary in PATH: '$__name'"
+        error_msg "Please install $__name before running this script."
         if [[ -n $__extra_msg ]]; then
-            echo ""
-            echo "$__extra_msg"
-            echo ""
+            error_msg ""
+            error_msg "$__extra_msg"
+            error_msg ""
         fi
         exit 1
     fi
@@ -43,14 +47,3 @@ filenoext() {
     # How much do I despise Bash?!
     echo "${__filename%.*}"
 }
-
-perform_helm_login() {
-  #ecr-public only exists in us-east-1 so use that region specifically
-  echo "$__pw" | helm registry login -u AWS --password-stdin public.ecr.aws
-}
-
-ensure_binaries() {
-    check_is_installed "helm"
-}
-
-ensure_binaries

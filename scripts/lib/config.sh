@@ -29,15 +29,18 @@ get_aws_token_file() { _get_config_field ".aws.token_file"; }
 get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
 get_assumed_role_arn() { _get_config_field ".aws.assumed_role_arn"; }
 get_test_markers() { _get_config_field ".tests.markers"; }
+get_run_tests_locally() { _get_config_field ".tests.run_locally"; }
 get_is_local_build() { _get_config_field ".local_build" false; }
 get_debug_enabled() { _get_config_field ".debug.enabled" false; }
+
+get_test_config_path() { echo "$TEST_CONFIG_PATH"; }
 
 ensure_config_file_exists() {
     [[ ! -f "$TEST_CONFIG_PATH" ]] && { error_msg "Config file does not exist at path $TEST_CONFIG_PATH"; exit 1; } || :
 }
 
 ensure_required_fields() {
-    local required_field_paths=( ".aws.region" ".aws.assumed_role_arn" )
+    local required_field_paths=( ".aws.assumed_role_arn" )
     for path in "${required_field_paths[@]}"; do
         [[ -z $(_get_config_field $path) ]] && { error_msg "Required config path \`$path\` not provided"; exit 1; } || :
     done

@@ -13,10 +13,11 @@ cluster:
 aws:
   # profile: # Optional (defaults to none)
   # token_file: # Optional (defaults to none)
-  region: us-west-2
-  assumed_role_arn: arn:aws:iam::123456789012:role/Admin-k8s
+  region: us-west-2 # Optional (defaults to us-west-2)
+  assumed_role_arn: arn:aws:iam::394120634394:role/Admin-k8s
 
 tests:
+  run_locally: false # Optional (defaults to false)
   markers: # Optional (defaults to all)
   - slow
   - canary
@@ -25,4 +26,4 @@ local_build: false # Optional (defaults to false)
 
 debug:
   enabled: true # Optional (defaults to false)
-  dump_controller_logs: false # Optional (defaults to fales)
+  dump_controller_logs: false # Optional (defaults to false)

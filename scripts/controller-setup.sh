@@ -6,7 +6,7 @@ SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
 CODE_GENERATOR_SCRIPTS_DIR="$ROOT_DIR/../code-generator/scripts"
 
-AWS_SERVICE=${AWS_SERVICE:-""}
+AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 
 VERSION=$(git describe --tags --always --dirty || echo "unknown")
 DEFAULT_AWS_SERVICE_DOCKER_IMG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
@@ -23,8 +23,7 @@ build_and_install_controller() {
     local img_name="${AWS_SERVICE_DOCKER_IMG:-$DEFAULT_AWS_SERVICE_DOCKER_IMG}"
 
     info_msg "Building controller image ... "
-    # TODO: UNCOMMENT LINE BELOW
-    # _build_controller_image $img_name
+    _build_controller_image $img_name
 
     info_msg "Loading image into cluster ... "
     _load_controller_image $__cluster_name $img_name
@@ -109,13 +108,12 @@ EOF
     # Static sleep to ensure controller is up and running
     sleep 5
 
+    trap 'kill $(jobs -p)' EXIT SIGINT
     _rotate_temp_creds $__controller_namespace &
 }
 
 _rotate_temp_creds() {
     local __controller_namespace=$1
-
-    trap 'kill $(jobs -p)' EXIT SIGINT
 
     while true; do
         info_msg "Sleeping for 50 mins before rotating temporary aws credentials"

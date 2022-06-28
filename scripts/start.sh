@@ -8,7 +8,7 @@ set -Eeo pipefail
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
 
-AWS_SERVICE=${AWS_SERVICE:-""}
+AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 
 CONTROLLER_NAMESPACE=${CONTROLLER_NAMESPACE:-"ack-system"}
 
@@ -19,6 +19,8 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 
 source "$SCRIPTS_DIR/controller-setup.sh"
 source "$SCRIPTS_DIR/kind-setup.sh"
+source "$SCRIPTS_DIR/pytest-image-runner.sh"
+source "$SCRIPTS_DIR/pytest-local-runner.sh"
 
 ensure_cluster() {
     local cluster_create="$(get_cluster_create)"
@@ -43,6 +45,24 @@ ensure_debug_mode() {
     fi
 }
 
+build_and_run_tests() {
+    local run_locally=$(get_run_tests_locally)
+    if [[ "$run_locally" == true ]]; then
+        bootstrap_and_run
+        local test_exit_code=$?
+    else
+        local image_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+        local image_name="ack-test-${AWS_SERVICE}-${image_uuid}"
+
+        build_pytest_image $image_name
+
+        run_pytest_image $image_name
+        local test_exit_code=$?
+    fi
+
+    info_msg "Tests finished with exit code $test_exit_code"
+}
+
 _ensure_existing_context() {
     debug_msg "Calling kubectl get nodes"
     if ! (kubectl get nodes 1> /dev/null 2>& 1); then
@@ -57,6 +77,7 @@ ensure_inputs() {
 
 ensure_binaries() {
     check_is_installed "kubectl"
+    check_is_installed "uuidgen"
 }
 
 ensure_debug_mode
@@ -65,4 +86,5 @@ ensure_binaries
 
 ensure_aws_credentials
 
-ensure_cluster
+# ensure_cluster
+build_and_run_tests

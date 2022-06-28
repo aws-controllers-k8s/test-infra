@@ -7,7 +7,6 @@ source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
-
 setup_kind_cluster() {
     local __cluster_name=$1
     local __controller_namespace=$2
@@ -92,11 +91,16 @@ _install_additional_controller() {
     local __controller_namespace=$4
 
     debug_msg "Logging into the Helm registry"
-    perform_helm_login
+    _perform_helm_login
 
     helm install -n "$__controller_namespace" \
         oci://public.ecr.aws/aws-controllers-k8s/$__controller_service-chart \
         --version=$__controller_version --generate-name --set=aws.region=$__region
+}
+
+_perform_helm_login() {
+  # ECR Public only exists in us-east-1 so use that region specifically
+  aws ecr-public get-login-password --region us-east-1 | helm registry login -u AWS --password-stdin public.ecr.aws
 }
 
 ensure_binaries() {
