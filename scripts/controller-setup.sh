@@ -4,11 +4,15 @@ set -Eeo pipefail
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
-CODE_GENERATOR_SCRIPTS_DIR="$ROOT_DIR/../code-generator/scripts"
 
 AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 
-VERSION=$(git describe --tags --always --dirty || echo "unknown")
+DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH="$ROOT_DIR/../$AWS_SERVICE-controller"
+SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH}
+
+CODE_GENERATOR_SCRIPTS_DIR="$ROOT_DIR/../code-generator/scripts"
+
+VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
 DEFAULT_AWS_SERVICE_DOCKER_IMG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
 
 source "$SCRIPTS_DIR/lib/aws.sh"
@@ -95,7 +99,7 @@ EOF
 
     local region=$(get_aws_region)
 
-    kubectl -n ack-system set env deployment/ack-"$AWS_SERVICE"-controller \
+    kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
@@ -112,26 +116,34 @@ EOF
     _rotate_temp_creds $__controller_namespace &
 }
 
+dump_controller_logs() {
+    local __controller_namespace=$1
+
+    local dump_logs=$(get_dump_controller_logs)
+
+    if [[ "$dump_logs" == true ]]; then
+        debug_msg "Dumping controller logs"
+
+        # ARTIFACTS will be defined by Prow
+        if [[ ! -d $ARTIFACTS ]]; then
+            error_msg "Error evaluating ARTIFACTS environment variable" 
+            error_msg "Skipping controller logs capture"
+        else
+            # Use the first pod in the `ack-system` namespace
+            POD=$(kubectl get pods -n $__controller_namespace -o name | grep $AWS_SERVICE-controller | head -n 1)
+            kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
+        fi
+    fi
+}
+
 _rotate_temp_creds() {
     local __controller_namespace=$1
     
-    local dump_logs=$(get_dump_controller_logs)
-
     while true; do
         info_msg "Sleeping for 50 mins before rotating temporary aws credentials"
         sleep 3000 & wait
-        if [[ "$dump_logs" == true ]]; then
-            # ARTIFACTS will be defined by Prow
-            if [[ ! -d $ARTIFACTS ]]; then
-                error_msg "Error evaluating ARTIFACTS environment variable" 1>&2
-                error_msg "$ARTIFACTS is not a directory" 1>&2
-                error_msg "Skipping controller logs capture"
-            else
-                # Use the first pod in the `ack-system` namespace
-                POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
-                kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
-            fi
-        fi
+
+        dump_controller_logs $__controller_namespace
 
         aws_generate_temp_creds
 

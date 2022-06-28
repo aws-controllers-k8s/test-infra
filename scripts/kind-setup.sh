@@ -13,10 +13,10 @@ setup_kind_cluster() {
     local kubeconfig_path="$ROOT_DIR/build/clusters/$__cluster_name/kubeconfig"
 
     info_msg "Creating cluster with name \"$__cluster_name\""
-    # _create_kind_cluster $__cluster_name $kubeconfig_path
+    _create_kind_cluster $__cluster_name $kubeconfig_path
 
     debug_msg "Exporting KUBECONFIG"
-    # export KUBECONFIG=$kubeconfig_path
+    export KUBECONFIG=$kubeconfig_path
 
     _install_additional_controllers $__controller_namespace
 }
@@ -33,7 +33,7 @@ _create_kind_cluster() {
     info_msg "Using configuration \"$config_file_name\""
     debug_msg "Using K8s version \"$cluster_version\""
 
-    for i in $(seq 0 5); do
+    for i in $(seq 0 3); do
         if [[ -z $(kind get clusters 2>/dev/null | grep $cluster_name) ]]; then
             kind create cluster --name "$cluster_name" \
                 ${cluster_version:+ --image kindest/node:v$cluster_version} \
@@ -93,7 +93,7 @@ _install_additional_controller() {
     debug_msg "Logging into the Helm registry"
     _perform_helm_login
 
-    helm install -n "$__controller_namespace" \
+    helm install --create-namespace -n "$__controller_namespace" \
         oci://public.ecr.aws/aws-controllers-k8s/$__controller_service-chart \
         --version=$__controller_version --generate-name --set=aws.region=$__region
 }

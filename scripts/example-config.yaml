@@ -1,8 +1,8 @@
 cluster:
   create: true
-  name: ack-test-0da91974-11c0d5d6 # Optional (defaults to generated name)
+  name: ack-test-eeb9569f # Optional (defaults to generated name)
   arch: amd64 # Optional (defaults to amd64)
-  k8s_version: 1.22 # Optional (defaults to latest)
+  k8s_version: 1.22.9 # Optional (defaults to latest)
 
   configuration:
     # file_name: kind-two-node-cluster.yaml # Optional (defaults to kind-two-node-cluster.yaml)
@@ -26,4 +26,4 @@ local_build: false # Optional (defaults to false)
 
 debug:
   enabled: true # Optional (defaults to false)
-  dump_controller_logs: false # Optional (defaults to false)
+  dump_controller_logs: true # Optional (defaults to false)

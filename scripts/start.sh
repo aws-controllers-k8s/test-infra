@@ -47,20 +47,27 @@ ensure_debug_mode() {
 
 build_and_run_tests() {
     local run_locally=$(get_run_tests_locally)
+    local test_exit_code=0
     if [[ "$run_locally" == true ]]; then
+        set +e
         bootstrap_and_run
-        local test_exit_code=$?
+        test_exit_code=$?
+        set -e
     else
         local image_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
         local image_name="ack-test-${AWS_SERVICE}-${image_uuid}"
 
         build_pytest_image $image_name
 
+        set +e
         run_pytest_image $image_name
-        local test_exit_code=$?
+        test_exit_code=$?
+        set -e
     fi
 
-    info_msg "Tests finished with exit code $test_exit_code"
+    dump_controller_logs $CONTROLLER_NAMESPACE
+
+    return $test_exit_code
 }
 
 _ensure_existing_context() {
@@ -86,5 +93,5 @@ ensure_binaries
 
 ensure_aws_credentials
 
-# ensure_cluster
+ensure_cluster
 build_and_run_tests

@@ -43,5 +43,5 @@ error_msg() {
     local __msg=${1:-}
     local __indent=${2:-}
     local __error_prefix="${ERROR_PREFIX:-"[ERROR] "}"
-    _indented_msg "$__error_prefix$__msg" $__indent
+    >&2 _indented_msg "$__error_prefix$__msg" $__indent
 }
