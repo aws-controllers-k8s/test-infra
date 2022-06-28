@@ -11,8 +11,6 @@ SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVIC
 DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_SOURCE_PATH}/test/e2e"
 SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_E2E_TEST_PATH:-$DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH}"
 
-KUBECONFIG_LOCATION="${KUBECONFIG:-"$HOME/.kube/config"}"
-
 # The location of new credential file which will be copied in test container
 # Keep this file in same location as '~/.aws/credentials' file
 TMP_TEST_AWS_CREDS_FILE_LOCATION="$HOME/.aws/ack-test-credentials"
@@ -93,7 +91,7 @@ run_pytest_image() {
 
     docker run --rm -t \
         --network="host" \
-        -v "$KUBECONFIG_LOCATION":/root/.kube/config:z \
+        -v "$KUBECONFIG":/root/.kube/config:z \
         -v "$TMP_TEST_AWS_CREDS_FILE_LOCATION":/root/.aws/credentials:z \
         -v "$TMP_TEST_CONFIG_FILE_LOCATION":/root/test-config.yaml:z \
         -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \

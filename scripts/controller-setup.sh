@@ -104,10 +104,10 @@ EOF
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
         ACK_ENABLE_DEVELOPMENT_LOGGING="true" \
-        # TODO: Support watch namespace configuration
-        # ACK_WATCH_NAMESPACE="$ACK_WATCH_NAMESPACE" \
         ACK_LOG_LEVEL="debug" \
         AWS_REGION="$region" 1>/dev/null
+        # TODO: Support watch namespace configuration
+        # ACK_WATCH_NAMESPACE="$ACK_WATCH_NAMESPACE" \
 
     # Static sleep to ensure controller is up and running
     sleep 5
@@ -146,8 +146,6 @@ _rotate_temp_creds() {
         dump_controller_logs $__controller_namespace
 
         aws_generate_temp_creds
-
-        local region=$(get_aws_region)
 
         kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
             AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \

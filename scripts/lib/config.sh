@@ -4,9 +4,10 @@ set -Eeo pipefail
 
 # Define global vars
 LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SCRIPTS_DIR="$LIB_DIR/.."
 
 # Define file-specific vars
-TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$LIB_DIR/../example-config.yaml"}
+TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$SCRIPTS_DIR/../test_config.yaml"}
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/logging.sh"

@@ -19,8 +19,8 @@ aws:
 tests:
   run_locally: false # Optional (defaults to false)
   markers: # Optional (defaults to all)
-  - slow
-  - canary
+  # - slow
+  # - canary
 
 local_build: false # Optional (defaults to false)
 

@@ -15,7 +15,7 @@ setup_kind_cluster() {
     info_msg "Creating cluster with name \"$__cluster_name\""
     _create_kind_cluster $__cluster_name $kubeconfig_path
 
-    debug_msg "Exporting KUBECONFIG"
+    info_msg "Exporting KUBECONFIG=$kubeconfig_path"
     export KUBECONFIG=$kubeconfig_path
 
     _install_additional_controllers $__controller_namespace
