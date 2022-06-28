@@ -1,19 +1,18 @@
 cluster:
   create: true
-  name: ack-test-eeb9569f # Optional (defaults to generated name)
+  name: ack-s3-test # Optional (defaults to generated name)
   k8s_version: 1.22.9 # Optional (defaults to latest)
 
   configuration:
     # file_name: kind-two-node-cluster.yaml # Optional (defaults to kind-two-node-cluster.yaml)
     additional_controllers:
-    - s3-controller@v0.1.0
-    - rds-controller@v0.0.24
+    # - s3-controller@v0.1.0
 
 aws:
   # profile: # Optional (defaults to none)
   # token_file: # Optional (defaults to none)
   region: us-west-2 # Optional (defaults to us-west-2)
-  assumed_role_arn: arn:aws:iam::394120634394:role/Admin-k8s
+  assumed_role_arn: arn:aws:iam::123456789012:role/Admin-k8s
 
 tests:
   run_locally: false # Optional (defaults to false)
