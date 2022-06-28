@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# controller-setup.sh contains functions used to build an ACK service controller
+# container image and to run it within a K8s cluster.
+
 set -Eeo pipefail
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"

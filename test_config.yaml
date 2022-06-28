@@ -1,7 +1,6 @@
 cluster:
   create: true
   name: ack-test-eeb9569f # Optional (defaults to generated name)
-  arch: amd64 # Optional (defaults to amd64)
   k8s_version: 1.22.9 # Optional (defaults to latest)
 
   configuration:

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# kind-setup.sh contains functions used to setup a KIND cluster and install 
+# a number of additional ACK service controllers (from their respective Helm 
+# repositories).
+
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
 

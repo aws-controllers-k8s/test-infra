@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# logging.sh contains functions for writing log messages to the console for 
+# three different severities: debug, info and error.
+
 # Prints out a message with an optional second argument indicating the
 # "indentation level" for the message. If the indentation level argument is
 # missing, we look for the existence of an environs variable called

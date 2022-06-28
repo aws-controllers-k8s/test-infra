@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# common.sh contains commonly used functions, meant to be imported by other
+# bash scripts.
+
 LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source "$LIB_DIR/logging.sh"
@@ -37,13 +40,4 @@ is_installed() {
     else
         return 1
     fi
-}
-
-# filenoext returns just the name of the supplied filename without the
-# extension
-filenoext() {
-    local __name="$1"
-    local __filename=$( basename "$__name" )
-    # How much do I despise Bash?!
-    echo "${__filename%.*}"
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Define global vars
+# aws.sh contains functions for running common AWS command line methods.
+
 LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source "$LIB_DIR/common.sh"

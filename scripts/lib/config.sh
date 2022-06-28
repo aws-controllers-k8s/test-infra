@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
+# config.sh contains functions for extracting configuration elements from an ACK
+# test config file, providing sane defaults when possible.
+
 set -Eeo pipefail
 
-# Define global vars
 LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 SCRIPTS_DIR="$LIB_DIR/.."
 
-# Define file-specific vars
 TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$SCRIPTS_DIR/../test_config.yaml"}
 
 source "$LIB_DIR/common.sh"
@@ -21,7 +22,6 @@ _get_config_field() {
 
 get_cluster_create() { _get_config_field ".cluster.create" "true"; }
 get_cluster_name() { _get_config_field ".cluster.name"; }
-get_cluster_arch() { _get_config_field ".cluster.arch" "amd64"; }
 get_cluster_k8s_version() { _get_config_field ".cluster.k8s_version"; }
 get_cluster_configuration_file_name() { _get_config_field ".cluster.configuration.file_name" "kind-two-node-cluster.yaml"; }
 get_cluster_additional_controllers() { _get_config_field ".cluster.configuration.additional_controllers"; }

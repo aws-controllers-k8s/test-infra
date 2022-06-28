@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# ./scripts/start.sh
-# The entrypoint for all of the testing configuration
+# ./scripts/start.sh is the entrypoint for ACK integration testing. It ensures
+# that a K8s cluster is acsessible, then configures the ACK controller under 
+# test onto the cluster before finally running the Python tests.
 
 set -Eeo pipefail
 

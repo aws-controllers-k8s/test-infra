@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# pytest-image-runner.sh contains functions used to build and run the ACK Python
+# test framework from within a container.
+
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
 

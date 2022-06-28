@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# pytest-local-runner.sh contains functions to bootstrap, run and clean up the
+# ACK Python tests for a given controller.
+
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
 
