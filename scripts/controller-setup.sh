@@ -114,22 +114,24 @@ EOF
 
 _rotate_temp_creds() {
     local __controller_namespace=$1
+    
+    local dump_logs=$(get_dump_controller_logs)
 
     while true; do
         info_msg "Sleeping for 50 mins before rotating temporary aws credentials"
         sleep 3000 & wait
-        # TODO: Support dumping controller logs
-        # if [[ "$DUMP_CONTROLLER_LOGS" == true ]]; then
-        #     if [[ ! -d $ARTIFACTS ]]; then
-        #     error_msg "Error evaluating ARTIFACTS environment variable" 1>&2
-        #     error_msg "$ARTIFACTS is not a directory" 1>&2
-        #     error_msg "Skipping controller logs capture"
-        #     else
-        #     # Use the first pod in the `ack-system` namespace
-        #     POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
-        #     kubectl logs -n ack-system $POD >> $ARTIFACTS/controller_logs
-        #     fi
-        # fi
+        if [[ "$dump_logs" == true ]]; then
+            # ARTIFACTS will be defined by Prow
+            if [[ ! -d $ARTIFACTS ]]; then
+                error_msg "Error evaluating ARTIFACTS environment variable" 1>&2
+                error_msg "$ARTIFACTS is not a directory" 1>&2
+                error_msg "Skipping controller logs capture"
+            else
+                # Use the first pod in the `ack-system` namespace
+                POD=$(kubectl get pods -n ack-system -o name | grep $AWS_SERVICE-controller | head -n 1)
+                kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
+            fi
+        fi
 
         aws_generate_temp_creds
 
