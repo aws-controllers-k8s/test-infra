@@ -5,7 +5,7 @@ service teams can execute long running soak tests to test the performance and
 stability of the service controllers. Running soak tests is one of the
 requirements for cutting the stable release for any service controller. Find
 more details on the release process
-[here](https://github.com/aws-controllers-k8s/community/blob/main/docs/contents/releases.md).
+[here](https://github.com/aws-controllers-k8s/community/blob/main/docs/content/docs/community/releases.md).
 
 Under the hood, the soak test introduces load by repeatedly running the
 end-to-end tests for the service controller. End to end tests are present in
@@ -18,13 +18,6 @@ provided in this repository. Soak tests will be started by Prow jobs before
 cutting a new `stable` release, but can also be manually triggered. Use the
 following guide to configure your soak testing infrastructure.
 
-## Running soak tests with Prow jobs
-
-After confirming that the soak tests work manually, follow the [Prow soak test
-document](./prow/README.md) for onboarding your soak tests onto the Prow
-automation.
-
-
 ## Bootstrapping your soak test cluster
 
 ### Prerequisites
@@ -32,6 +25,7 @@ automation.
   [buildah](https://github.com/containers/buildah/blob/master/install.md) etc..)
 * [helm](https://helm.sh/docs/intro/install/) 
 * [kubectl](https://kubernetes.io/docs/tasks/tools/)
+* [eksctl](https://docs.aws.amazon.com/eks/latest/userguide/eksctl.html)
 * [yq](https://mikefarah.gitbook.io/yq/)
 * [jq](https://stedolan.github.io/jq/)
 
