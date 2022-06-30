@@ -29,15 +29,15 @@ install_chart_and_run_tests() {
     local image_tag=$(echo "$__image_tag" | cut -d":" -f2)
 
     info_msg "Installing the controller Helm charts ..."
-    _cleanup_helm_chart $__chart_namespace $chart_name
-    _helm_install $__chart_namespace $chart_name $image_repo $image_tag
+    _cleanup_helm_chart "$__chart_namespace" "$chart_name"
+    _helm_install "$__chart_namespace" "$chart_name" "$image_repo" "$image_tag"
 
     # Wait for the controller to start
     sleep 10
     info_msg "Running Helm chart tests ..."
-    _assert_pod_running $__chart_namespace
+    _assert_pod_running "$__chart_namespace"
 
-    _cleanup_helm_chart $__chart_namespace $chart_name
+    _cleanup_helm_chart "$__chart_namespace" "$chart_name"
 }
 
 _helm_install() {
@@ -60,7 +60,7 @@ _helm_install() {
     local controller_deployment_name=$(kubectl get deployments -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name")
     [[ -z "$controller_deployment_name" ]] && { error_msg "Unable to find Helm deployment"; exit 1; }
 
-    rotate_temp_creds $__chart_namespace $controller_deployment_name false
+    rotate_temp_creds "$__chart_namespace" "$controller_deployment_name" false
 }
 
 _cleanup_helm_chart() {

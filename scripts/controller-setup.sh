@@ -114,7 +114,7 @@ EOF
     local dump_logs=$(get_dump_controller_logs)
 
     trap 'kill $(jobs -p)' EXIT SIGINT
-    _loop_rotate_temp_creds 3000 $__controller_namespace "ack-$AWS_SERVICE-controller" $dump_logs &
+    _loop_rotate_temp_creds 3000 "$__controller_namespace" "ack-$AWS_SERVICE-controller" "$dump_logs" &
 }
 
 dump_controller_logs() {
@@ -143,7 +143,7 @@ _loop_rotate_temp_creds() {
         info_msg "Sleeping for 50 mins before rotating temporary aws credentials"
         sleep $__rotation_time_in_seconds & wait
 
-        rotate_temp_creds $__controller_namespace $__deployment_name $__dump_logs
+        rotate_temp_creds "$__controller_namespace" "$__deployment_name" "$__dump_logs"
     done
 }
 
@@ -153,7 +153,7 @@ rotate_temp_creds() {
     local __dump_logs=$3
 
     if [[ "$__dump_logs" == true ]]; then
-        dump_controller_logs $__controller_namespace
+        dump_controller_logs "$__controller_namespace"
     fi
 
     aws_generate_temp_creds

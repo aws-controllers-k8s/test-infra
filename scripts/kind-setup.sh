@@ -17,12 +17,12 @@ setup_kind_cluster() {
     local kubeconfig_path="$ROOT_DIR/build/clusters/$__cluster_name/kubeconfig"
 
     info_msg "Creating cluster with name \"$__cluster_name\""
-    _create_kind_cluster $__cluster_name $kubeconfig_path
+    _create_kind_cluster "$__cluster_name" "$kubeconfig_path"
 
     info_msg "Exporting KUBECONFIG=$kubeconfig_path"
     export KUBECONFIG=$kubeconfig_path
 
-    _install_additional_controllers $__controller_namespace
+    _install_additional_controllers "$__controller_namespace"
 }
 
 _create_kind_cluster() {
@@ -38,8 +38,8 @@ _create_kind_cluster() {
     debug_msg "Using K8s version \"$cluster_version\""
 
     for i in $(seq 0 3); do
-        if [[ -z $(kind get clusters 2>/dev/null | grep $cluster_name) ]]; then
-            kind create cluster --name "$cluster_name" \
+        if [[ -z $(kind get clusters 2>/dev/null | grep $__cluster_name) ]]; then
+            kind create cluster --name "$__cluster_name" \
                 ${cluster_version:+ --image kindest/node:v$cluster_version} \
                 --config "$config_file_path" \
                 --kubeconfig $__kubeconfig_path 1>&2 || :
@@ -71,11 +71,11 @@ _install_additional_controllers() {
         # Strip the `-controller` from the name
         local controller_service=$(echo $controller_name | sed 's/-controller//')
 
-        if (_is_additional_controller_installed $controller_service $__controller_namespace); then
+        if (_is_additional_controller_installed "$controller_service" "$__controller_namespace"); then
             info_msg "$controller_name already installed. Skipping"
         else
             info_msg "Installing the $controller_name"
-            _install_additional_controller $controller_service $controller_version $install_region $__controller_namespace
+            _install_additional_controller "$controller_service" "$controller_version" "$install_region" "$__controller_namespace"
         fi
     done
 }
