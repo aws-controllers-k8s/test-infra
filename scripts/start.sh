@@ -28,7 +28,6 @@ source "$SCRIPTS_DIR/controller-setup.sh"
 source "$SCRIPTS_DIR/helm-test-runner.sh"
 source "$SCRIPTS_DIR/kind-setup.sh"
 source "$SCRIPTS_DIR/pytest-image-runner.sh"
-source "$SCRIPTS_DIR/pytest-local-runner.sh"
 
 ensure_cluster() {
     local cluster_create="$(get_cluster_create)"
@@ -57,6 +56,8 @@ build_and_run_tests() {
     local run_locally=$(get_run_tests_locally)
     local test_exit_code=0
     if [[ "$run_locally" == true ]]; then
+        source "$SCRIPTS_DIR/pytest-local-runner.sh"
+
         set +e
         bootstrap_and_run
         test_exit_code=$?
@@ -89,7 +90,7 @@ _ensure_existing_context() {
 run() {
     ensure_aws_credentials
 
-    # ensure_cluster
+    ensure_cluster
 
     local helm_tests_enabled=$(get_helm_tests_enabled)
     if [[ "$helm_tests_enabled" == true ]]; then
@@ -97,7 +98,7 @@ run() {
         install_chart_and_run_tests $helm_test_namespace $CONTROLLER_IMAGE_TAG
     fi
     
-    # build_and_run_tests
+    build_and_run_tests
 }
 
 ensure_inputs() {

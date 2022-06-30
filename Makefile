@@ -13,15 +13,8 @@ build-prow-jobs: ## Compiles the Prow jobs
 	echo "Error while generating Prowjobs"; \
 	popd 1>/dev/null
 
-kind-test: export PRESERVE = true
-kind-test: export LOCAL_MODULES = false
 kind-test: ## Run functional tests for SERVICE with ACK_ROLE_ARN
-	@./scripts/kind-build-test.sh $(AWS_SERVICE)
-
-local-kind-test: export PRESERVE = true
-local-kind-test: export LOCAL_MODULES = true
-local-kind-test: ## Run functional tests for SERVICE with ACK_ROLE_ARN allowing local modules
-	@./scripts/kind-build-test.sh $(AWS_SERVICE)
+	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/start.sh
 
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
