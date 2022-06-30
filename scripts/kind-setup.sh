@@ -50,13 +50,13 @@ _create_kind_cluster() {
 }
 
 _get_kind_cluster_name() {
-    local config_name=$(get_cluster_name)
+    local cluster_name=$(get_cluster_name)
 
-    if [[ "$config_name" == "" ]]; then
+    if [[ "$cluster_name" == "" ]]; then
         local name_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
-        config_name="ack-test-${name_uuid}"
+        cluster_name="ack-test-${name_uuid}"
     fi
-    echo $config_name
+    echo $cluster_name
 }
 
 _install_additional_controllers() {
