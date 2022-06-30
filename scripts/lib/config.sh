@@ -30,7 +30,7 @@ get_aws_token_file() { _get_config_field ".aws.token_file"; }
 get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
 get_assumed_role_arn() { _get_config_field ".aws.assumed_role_arn"; }
 get_test_markers() { _get_config_field ".tests.markers"; }
-get_helm_tests_enabled() { _get_config_field ".tests.helm.enabled"; }
+get_helm_tests_enabled() { _get_config_field ".tests.helm.enabled" true; }
 get_run_tests_locally() { _get_config_field ".tests.run_locally"; }
 get_is_local_build() { _get_config_field ".local_build" false; }
 get_debug_enabled() { _get_config_field ".debug.enabled" false; }
