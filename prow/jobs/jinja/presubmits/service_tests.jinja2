@@ -94,7 +94,7 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        command: ["bash", "-c", "SERVICE=$SERVICE source ./scripts/test-recommended-policy.sh && assert_iam_policies"]
+        command: ["bash", "-c", "source ./scripts/test-recommended-policy.sh && assert_iam_policies"]
 
   - name: {{ service }}-unit-test
     decorate: true
