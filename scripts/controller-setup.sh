@@ -15,9 +15,6 @@ SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVIC
 
 CODE_GENERATOR_SCRIPTS_DIR="$ROOT_DIR/../code-generator/scripts"
 
-VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
-DEFAULT_AWS_SERVICE_DOCKER_IMG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
-
 source "$SCRIPTS_DIR/lib/aws.sh"
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
@@ -26,17 +23,16 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 build_and_install_controller() {
     local __cluster_name=$1
     local __controller_namespace=$2
-
-    local img_name="${AWS_SERVICE_DOCKER_IMG:-$DEFAULT_AWS_SERVICE_DOCKER_IMG}"
+    local __img_name=$3    
 
     info_msg "Building controller image ... "
-    _build_controller_image $img_name
+    _build_controller_image $__img_name
 
     info_msg "Loading image into cluster ... "
-    _load_controller_image $__cluster_name $img_name
+    _load_controller_image $__cluster_name $__img_name
 
     info_msg "Installing controller deployment ... "
-    _install_deployment $__controller_namespace $img_name
+    _install_deployment $__controller_namespace $__img_name
 }
 
 _build_controller_image() {
@@ -115,49 +111,60 @@ EOF
     # Static sleep to ensure controller is up and running
     sleep 5
 
+    local dump_logs=$(get_dump_controller_logs)
+
     trap 'kill $(jobs -p)' EXIT SIGINT
-    _rotate_temp_creds $__controller_namespace &
+    _loop_rotate_temp_creds 3000 $__controller_namespace "ack-$AWS_SERVICE-controller" $dump_logs &
 }
 
 dump_controller_logs() {
     local __controller_namespace=$1
 
-    local dump_logs=$(get_dump_controller_logs)
+    debug_msg "Dumping controller logs"
 
-    if [[ "$dump_logs" == true ]]; then
-        debug_msg "Dumping controller logs"
-
-        # ARTIFACTS will be defined by Prow
-        if [[ ! -d $ARTIFACTS ]]; then
-            error_msg "Error evaluating ARTIFACTS environment variable" 
-            error_msg "Skipping controller logs capture"
-        else
-            # Use the first pod in the `ack-system` namespace
-            POD=$(kubectl get pods -n $__controller_namespace -o name | grep $AWS_SERVICE-controller | head -n 1)
-            kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
-        fi
+    # ARTIFACTS will be defined by Prow
+    if [[ ! -d $ARTIFACTS ]]; then
+        error_msg "Error evaluating ARTIFACTS environment variable" 
+        error_msg "Skipping controller logs capture"
+    else
+        # Use the first pod in the `ack-system` namespace
+        POD=$(kubectl get pods -n $__controller_namespace -o name | grep $AWS_SERVICE-controller | head -n 1)
+        kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
     fi
 }
 
-_rotate_temp_creds() {
-    local __controller_namespace=$1
+_loop_rotate_temp_creds() {
+    local __rotation_time_in_seconds=$1
+    local __controller_namespace=$2
+    local __deployment_name=$3
+    local __dump_logs=$4
     
     while true; do
         info_msg "Sleeping for 50 mins before rotating temporary aws credentials"
-        sleep 3000 & wait
+        sleep $__rotation_time_in_seconds & wait
 
-        dump_controller_logs $__controller_namespace
-
-        aws_generate_temp_creds
-
-        kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
-            AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-            AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-            AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"  1>/dev/null
-
-        kubectl -n $__controller_namespace rollout restart deployment ack-"$AWS_SERVICE"-controller >/dev/null
-        info_msg "Successfully rotated AWS credentials and restarted controller deployment"
+        rotate_temp_creds $__controller_namespace $__deployment_name $__dump_logs
     done
+}
+
+rotate_temp_creds() {
+    local __controller_namespace=$1
+    local __deployment_name=$2
+    local __dump_logs=$3
+
+    if [[ "$__dump_logs" == true ]]; then
+        dump_controller_logs $__controller_namespace
+    fi
+
+    aws_generate_temp_creds
+
+    kubectl -n $__controller_namespace set env deployment/$__deployment_name \
+        AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+        AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+        AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"  1>/dev/null
+
+    kubectl -n $__controller_namespace rollout restart deployment $__deployment_name >/dev/null
+    info_msg "Successfully rotated AWS credentials and restarted controller deployment"
 }
 
 ensure_inputs() {

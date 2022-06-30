@@ -13,12 +13,19 @@ AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 
 CONTROLLER_NAMESPACE=${CONTROLLER_NAMESPACE:-"ack-system"}
 
+DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH="$ROOT_DIR/../$AWS_SERVICE-controller"
+SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH}
+
+VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
+CONTROLLER_IMAGE_TAG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
+
 source "$SCRIPTS_DIR/lib/aws.sh"
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 source "$SCRIPTS_DIR/controller-setup.sh"
+source "$SCRIPTS_DIR/helm-test-runner.sh"
 source "$SCRIPTS_DIR/kind-setup.sh"
 source "$SCRIPTS_DIR/pytest-image-runner.sh"
 source "$SCRIPTS_DIR/pytest-local-runner.sh"
@@ -31,7 +38,7 @@ ensure_cluster() {
         info_msg "Creating KIND cluster ..."
         setup_kind_cluster $cluster_name $CONTROLLER_NAMESPACE
 
-        build_and_install_controller $cluster_name $CONTROLLER_NAMESPACE
+        build_and_install_controller $cluster_name $CONTROLLER_NAMESPACE $CONTROLLER_IMAGE_TAG
     else
         info_msg "Testing connection to existing cluster ..."
         _ensure_existing_context
@@ -79,6 +86,20 @@ _ensure_existing_context() {
     fi
 }
 
+run() {
+    ensure_aws_credentials
+
+    # ensure_cluster
+
+    local helm_tests_enabled=$(get_helm_tests_enabled)
+    if [[ "$helm_tests_enabled" == true ]]; then
+        local helm_test_namespace="$AWS_SERVICE-test"
+        install_chart_and_run_tests $helm_test_namespace $CONTROLLER_IMAGE_TAG
+    fi
+    
+    # build_and_run_tests
+}
+
 ensure_inputs() {
     [[ -z "$AWS_SERVICE" ]] && { error_msg "Expected \`AWS_SERVICE\` to be defined"; exit 1; } || :
 }
@@ -92,7 +113,4 @@ ensure_debug_mode
 ensure_inputs
 ensure_binaries
 
-ensure_aws_credentials
-
-ensure_cluster
-build_and_run_tests
+run
