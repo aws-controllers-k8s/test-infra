@@ -130,6 +130,6 @@ dmypy.json
 .pyre/
 
 # Testing configuration files
-test_config.yaml
+/test_config.yaml
 
 # End of https://www.gitignore.io/api/python
