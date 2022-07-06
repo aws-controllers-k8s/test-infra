@@ -10,11 +10,14 @@
 _indented_msg() {
     local __msg=${1:-}
     local __indent_level=${2:-}
-    __indent=""
+    local indent=""
     if [ -n "$__indent_level" ]; then
-        __indent="$( for each in $( seq 0 $__indent_level ); do printf " "; done )"
+        indent="$( for each in $( seq 0 $__indent_level ); do printf " "; done )"
     fi
-    echo "$__indent$__msg"
+
+    local timestamp=$(date --iso-8601=seconds)
+
+    echo "$timestamp $__indent$__msg"
 }
 
 # debug_msg prints out a supplied message if the ACK_TEST_DEBUGGING_MODE environ
