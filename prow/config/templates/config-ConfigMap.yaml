@@ -104,6 +104,18 @@ data:
 
     presets:
       - labels:
+          preset-test-config: "true"
+        env:
+        - name: TEST_CONFIG_PATH
+          value: "/e2e/config/test_config.yaml"
+        volumes:
+        - name: config-volume
+          configMap:
+            name: test-config
+        volumeMounts:
+        - mountPath: /e2e/config
+          name: config-volume
+      - labels:
           preset-dind-enabled: "true"
         env:
         - name: DOCKER_IN_DOCKER_ENABLED

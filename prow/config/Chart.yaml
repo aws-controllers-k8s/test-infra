@@ -2,5 +2,5 @@ apiVersion: v2
 name: prow-config
 description: Configuration for the ACK Prow cluster
 type: application
-version: 0.1.9
+version: 0.1.10
 appVersion: "1.16.0"

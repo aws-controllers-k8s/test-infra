@@ -7,6 +7,7 @@
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -45,6 +46,7 @@
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -72,8 +74,6 @@
           value: "true"
         - name: ENABLE_E2E_TESTS
           value: "false"
-        - name: ENABLE_HELM_CHART_TEST
-          value: "true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-recommended-policy-test
