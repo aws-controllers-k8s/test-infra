@@ -98,6 +98,7 @@ run_pytest_image() {
         -v "$TMP_TEST_AWS_CREDS_FILE_LOCATION":/root/.aws/credentials:z \
         -v "$TMP_TEST_CONFIG_FILE_LOCATION":/root/test-config.yaml:z \
         -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
+        -e ACK_ROLE_ARN \
         -e PYTEST_LOG_LEVEL \
         -e PYTEST_NUM_THREADS \
         -e AWS_DEFAULT_REGION="$region" \
