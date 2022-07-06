@@ -31,12 +31,6 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        - name: DUMP_CONTROLLER_LOGS
-          value: "true"
-        - name: ENABLE_E2E_TESTS
-          value: "true"
-        - name: ENABLE_HELM_CHART_TEST
-          value: "false"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-release-test
@@ -70,11 +64,7 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        - name: DUMP_CONTROLLER_LOGS
-          value: "true"
-        - name: ENABLE_E2E_TESTS
-          value: "false"
-        command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+        command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-recommended-policy-test
     decorate: true
@@ -94,7 +84,7 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        command: ["bash", "-c", "source ./scripts/test-recommended-policy.sh && assert_iam_policies"]
+        command: ["bash", "-c", "source ./scripts/iam-policy-test-runner.sh && assert_iam_policies"]
 
   - name: {{ service }}-unit-test
     decorate: true

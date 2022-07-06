@@ -46,7 +46,7 @@ ensure_cluster() {
 
 ensure_debug_mode() {
     local debug_enabled="$(get_debug_enabled)"
-    if [[ "$debug_enabled" == true ]]; then
+    if [[ "$debug_enabled" == true && ${ACK_TEST_DEBUGGING_MODE-""} == "" ]]; then
         export ACK_TEST_DEBUGGING_MODE="true"
         debug_msg "Debug mode enabled"
     fi
@@ -114,4 +114,7 @@ ensure_debug_mode
 ensure_inputs
 ensure_binaries
 
-run
+# The purpose of the `return` subshell command in this script is to determine
+# whether the script was sourced, or whether it is being executed directly.
+# https://stackoverflow.com/a/28776166
+(return 0 2>/dev/null) || run

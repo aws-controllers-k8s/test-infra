@@ -46,10 +46,6 @@ tests:
   # the required environment. Defaults to false.
   run_locally: false
 
-  helm:
-    # (Optional) If true, the Helm tests will run. Defaults to true.
-    enabled: true
-
   # (Optional) Selects a subset of tests - by their Pytest marker - to run.
   # Defaults to running all tests.
   markers:

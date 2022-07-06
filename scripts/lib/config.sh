@@ -34,7 +34,6 @@ get_assumed_role_arn() {
     [[ ! -z "${ACK_ROLE_ARN}" ]] && echo "${ACK_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
 }
 get_test_markers() { _get_config_field ".tests.markers"; }
-get_helm_tests_enabled() { _get_config_field ".tests.helm.enabled" true; }
 get_run_tests_locally() { _get_config_field ".tests.run_locally"; }
 get_is_local_build() { _get_config_field ".local_build" false; }
 get_debug_enabled() { _get_config_field ".debug.enabled" false; }

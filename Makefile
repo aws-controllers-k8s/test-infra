@@ -13,8 +13,11 @@ build-prow-jobs: ## Compiles the Prow jobs
 	echo "Error while generating Prowjobs"; \
 	popd 1>/dev/null
 
-kind-test: ## Run functional tests for SERVICE with ACK_ROLE_ARN
+kind-test: ## Run functional tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/start.sh
+
+kind-helm-test: ## Run the Helm tests for SERVICE
+	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/start-helm-tests.sh
 
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
