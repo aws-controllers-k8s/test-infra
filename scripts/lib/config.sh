@@ -10,6 +10,8 @@ SCRIPTS_DIR="$LIB_DIR/.."
 
 TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$SCRIPTS_DIR/../test_config.yaml"}
 
+ACK_ROLE_ARN="${ACK_ROLE_ARN:-""}"
+
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/logging.sh"
 
@@ -28,7 +30,9 @@ get_cluster_additional_controllers() { _get_config_field ".cluster.configuration
 get_aws_profile() { _get_config_field ".aws.profile"; }
 get_aws_token_file() { _get_config_field ".aws.token_file"; }
 get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
-get_assumed_role_arn() { _get_config_field ".aws.assumed_role_arn"; }
+get_assumed_role_arn() {
+    [[ ! -z "${ACK_ROLE_ARN}" ]] && echo "${ACK_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
+}
 get_test_markers() { _get_config_field ".tests.markers"; }
 get_helm_tests_enabled() { _get_config_field ".tests.helm.enabled" true; }
 get_run_tests_locally() { _get_config_field ".tests.run_locally"; }
@@ -45,7 +49,7 @@ ensure_config_file_exists() {
 ensure_required_fields() {
     local required_field_paths=( ".aws.assumed_role_arn" )
     for path in "${required_field_paths[@]}"; do
-        [[ -z $(_get_config_field $path) ]] && { error_msg "Required config path \`$path\` not provided"; exit 1; } || :
+        [[ -z $(_get_config_field $path) && -z ${ACK_ROLE_ARN} ]] && { error_msg "Required config path \`$path\` not provided"; exit 1; } || :
     done
 }
 
