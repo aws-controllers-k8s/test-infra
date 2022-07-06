@@ -68,7 +68,7 @@ GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
-source "$TEST_INFRA_DIR"/scripts/lib/gh.sh
+source "$CD_DIR"/lib/gh.sh
 check_is_installed git
 check_is_installed gh
 
