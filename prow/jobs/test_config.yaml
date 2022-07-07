@@ -5,10 +5,6 @@ cluster:
 aws:
   region: us-west-2
 
-tests:
-  helm:
-    enabled: true
-
 debug:
   enabled: true
   dump_controller_logs: true
