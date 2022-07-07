@@ -38,7 +38,7 @@ _create_kind_cluster() {
     debug_msg "Using K8s version \"$cluster_version\""
 
     for i in $(seq 0 3); do
-        if [[ -z $(kind get clusters 2>/dev/null | grep $__cluster_name) ]]; then
+        if [[ -z $(kind get clusters 2>/dev/null | grep "$__cluster_name") ]]; then
             kind create cluster --name "$__cluster_name" \
                 ${cluster_version:+ --image kindest/node:v$cluster_version} \
                 --config "$config_file_path" \
