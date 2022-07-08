@@ -74,7 +74,10 @@ build_and_run_tests() {
         set -e
     fi
 
-    dump_controller_logs "$CONTROLLER_NAMESPACE"
+    local dump_logs=$(get_dump_controller_logs)
+    if [[ "$dump_logs" == "true" ]]; then
+        dump_controller_logs "$CONTROLLER_NAMESPACE"
+    fi
 
     return $test_exit_code
 }
