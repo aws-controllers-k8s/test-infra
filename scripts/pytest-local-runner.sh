@@ -37,14 +37,14 @@ run_python_tests() {
     local markers_args=""
     local method_args=""
 
-    local test_markers=( $(get_test_markers | yq -o=j -I=0 '.[]' -) )
-    for test_marker in "${test_markers[@]}"; do
+    for (( i=0; i<$(get_test_markers | yq '. | length' -); i++)); do
+        local test_marker="$(get_test_markers | I=$i yq '.[env(I)]' -)"
         markers_args="$markers_args -m "$test_marker""
     done
 
-    local test_methods=( $(get_test_methods | yq -o=j -I=0 '.[]' -) )
-    for test_method in "${test_methods[@]}"; do
-        method_args="$method_args -k "$test_method""
+    for (( i=0; i<$(get_test_methods | yq '. | length' -); i++)); do
+        local test_method="$(get_test_methods | I=$i yq '.[env(I)]' -)"
+        method_args="$method_args -k $test_method"
     done
 
     pushd "${SERVICE_CONTROLLER_E2E_TEST_PATH}" 1> /dev/null
