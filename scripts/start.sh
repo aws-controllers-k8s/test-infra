@@ -56,10 +56,11 @@ build_and_run_tests() {
     local run_locally=$(get_run_tests_locally)
     local test_exit_code=0
     if [[ "$run_locally" == true ]]; then
+        local region=$(get_aws_region)
         source "$SCRIPTS_DIR/pytest-local-runner.sh"
 
         set +e
-        bootstrap_and_run
+        AWS_DEFAULT_REGION=$region bootstrap_and_run
         test_exit_code=$?
         set -e
     else
