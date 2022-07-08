@@ -89,14 +89,7 @@ _ensure_existing_context() {
 
 run() {
     ensure_aws_credentials
-
     ensure_cluster
-
-    local helm_tests_enabled=$(get_helm_tests_enabled)
-    if [[ "$helm_tests_enabled" == true ]]; then
-        local helm_test_namespace="$AWS_SERVICE-test"
-        install_chart_and_run_tests "$helm_test_namespace" "$CONTROLLER_IMAGE_TAG"
-    fi
     
     build_and_run_tests
 }
