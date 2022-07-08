@@ -35,15 +35,22 @@ cleanup_tests() {
 
 run_python_tests() {
     local markers_args=""
+    local method_args=""
 
     local test_markers=( $(get_test_markers | yq -o=j -I=0 '.[]' -) )
     for test_marker in "${test_markers[@]}"; do
-        markers_args="$markers_args -m $test_marker"
+        markers_args="$markers_args -m "$test_marker""
+    done
+
+    local test_methods=( $(get_test_methods | yq -o=j -I=0 '.[]' -) )
+    for test_method in "${test_methods[@]}"; do
+        method_args="$method_args -k "$test_method""
     done
 
     pushd "${SERVICE_CONTROLLER_E2E_TEST_PATH}" 1> /dev/null
         pytest -n ${PYTEST_NUM_THREADS} --dist no -o log_cli=true ${markers_args} \
-            --log-cli-level "${PYTEST_LOG_LEVEL}" --log-level "${PYTEST_LOG_LEVEL}" .
+            ${method_args} --log-cli-level "${PYTEST_LOG_LEVEL}" \
+            --log-level "${PYTEST_LOG_LEVEL}" .
         local test_exit_code=$?
     popd 1> /dev/null
     return $test_exit_code

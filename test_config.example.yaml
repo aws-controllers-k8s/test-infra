@@ -52,6 +52,13 @@ tests:
   # - slow
   # - canary
 
+  # (Optional) Selects a subsets of tests - by their method name - to run.
+  # Accepts any expression supported by the pytest selector. See 
+  # https://docs.pytest.org/en/latest/example/markers.html#using-k-expr-to-select-tests-based-on-their-name
+  # Defaults to running all tests.
+  methods:
+  # - test_eks_smoke
+
 # (Optional) If true, when building the controller, the scripts will use the 
 # `go.local.mod` file. If false, it will use the default `go.mod` file. Defaults
 # to false.

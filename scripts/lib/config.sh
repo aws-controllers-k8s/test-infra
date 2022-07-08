@@ -52,10 +52,11 @@ get_assumed_role_arn() {
     [[ ! -z "${ACK_ROLE_ARN}" ]] && echo "${ACK_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
 }
 get_test_markers() { _get_config_field ".tests.markers"; }
+get_test_methods() { _get_config_field ".tests.methods"; }
 get_run_tests_locally() { _get_config_field ".tests.run_locally"; }
-get_is_local_build() { _get_config_boolean ".local_build" false; }
-get_debug_enabled() { _get_config_boolean ".debug.enabled" false; }
-get_dump_controller_logs() { _get_config_boolean ".debug.dump_controller_logs" false; }
+get_is_local_build() { _get_config_boolean ".local_build" "false"; }
+get_debug_enabled() { _get_config_boolean ".debug.enabled" "false"; }
+get_dump_controller_logs() { _get_config_boolean ".debug.dump_controller_logs" "false"; }
 
 get_test_config_path() { echo "$TEST_CONFIG_PATH"; }
 
