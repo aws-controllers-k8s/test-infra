@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# ./scripts/start.sh is the entrypoint for ACK integration testing. It ensures
-# that a K8s cluster is acsessible, then configures the ACK controller under 
-# test onto the cluster before finally running the Python tests.
+# ./scripts/run-e2e-tests.sh is the entrypoint for ACK integration testing. It
+# ensures that a K8s cluster is acsessible, then configures the ACK controller
+# under test onto the cluster before finally running the Python tests.
 
 set -Eeo pipefail
 
@@ -25,8 +25,7 @@ source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 source "$SCRIPTS_DIR/controller-setup.sh"
-source "$SCRIPTS_DIR/helm-test-runner.sh"
-source "$SCRIPTS_DIR/kind-setup.sh"
+source "$SCRIPTS_DIR/kind.sh"
 source "$SCRIPTS_DIR/pytest-image-runner.sh"
 
 ensure_cluster() {

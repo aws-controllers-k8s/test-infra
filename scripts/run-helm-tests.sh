@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-# helm-image-runner.sh contains functions used to run the ACK Helm tests
+# ./scripts/run-helm-tests.sh is the entrypoint for ACK Helm test suite. It
+# ensures that a K8s cluster is acsessible, then applies the Helm chart in the
+# service controller directory to the cluster before validating that the 
+# pods are able to run successfully.
+
+set -Eeo pipefail
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
@@ -10,13 +15,16 @@ AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH="$ROOT_DIR/../$AWS_SERVICE-controller"
 SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH}
 
-HELM_DIR="$SERVICE_CONTROLLER_SOURCE_PATH/helm"
+VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
+CONTROLLER_IMAGE_TAG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
 
+source "$SCRIPTS_DIR/lib/aws.sh"
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
-source "$SCRIPTS_DIR/controller-setup.sh"
+source "$SCRIPTS_DIR/helm.sh"
+source "$SCRIPTS_DIR/start.sh"
 
 install_chart_and_run_tests() {
     local __chart_namespace=$1
@@ -28,16 +36,23 @@ install_chart_and_run_tests() {
     local image_repo=$(echo "$__image_tag" | cut -d":" -f1)
     local image_tag=$(echo "$__image_tag" | cut -d":" -f2)
 
-    info_msg "Installing the controller Helm charts ..."
+    info_msg "Installing the controller Helm chart ..."
     _cleanup_helm_chart "$__chart_namespace" "$chart_name"
     _helm_install "$__chart_namespace" "$chart_name" "$image_repo" "$image_tag"
 
     # Wait for the controller to start
     sleep 10
-    info_msg "Running Helm chart tests ..."
-    _assert_pod_running "$__chart_namespace"
+    info_msg "Running Helm chart tests ..." 
+    set +e
 
+    run_helm_tests "$__chart_namespace"
+    local test_exit_code=$?
+
+    set -e
+
+    info_msg "Cleaning up Helm chart ..."
     _cleanup_helm_chart "$__chart_namespace" "$chart_name"
+    return $test_exit_code
 }
 
 _helm_install() {
@@ -76,44 +91,23 @@ _cleanup_helm_chart() {
     set -e
 }
 
-_assert_pod_running() {
-    local __chart_namespace=$1
+run() {
+    ensure_aws_credentials
 
-    local controller_pod_name=$(kubectl get pods -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name")
-    [[ -z "$controller_pod_name" ]] && { error_msg "Unable to find controller pod"; exit 1; }
+    ensure_cluster
 
-    debug_msg "ACK $AWS_SERVICE controller pod name is $__chart_namespace/$controller_pod_name"
-    info_msg "Verifying that pod status is in Running state ... "
-
-    local pod_status=$(kubectl get pod/"$controller_pod_name" -n $__chart_namespace -ojson | jq -r ".status.phase")
-    [[ $pod_status != Running ]] && { error_msg "Pod is in status '$pod_status'. Expected 'Running' "; exit 1; }
-
-    info_msg "Verifying that there are no ERROR in controller logs ... "
-
-    local controller_logs=$(kubectl logs pod/"$controller_pod_name" -n $__chart_namespace)
-    [[ -z "$controller_logs" ]] && { error_msg "Unable to find controller logs"; exit 1; }
-
-    if (echo "$controller_logs" | grep -q "ERROR"); then
-        error_msg "Found following ERROR statements in controller logs:"
-        error_msg "$(echo $controller_logs | grep "ERROR")"
-        exit 1
-    fi
-}
-
-ensure_helm_directory_exists() {
-    [[ ! -d "$HELM_DIR" ]] && { error_msg "Helm directory does not exist for the service controller "; exit 1; } || :
-    [[ ! -f "$HELM_DIR/Chart.yaml" ]] && { error_msg "Helm chart does not exist for the service controller "; exit 1; } || :
+    local helm_test_namespace="$AWS_SERVICE-test"
+    install_chart_and_run_tests "$helm_test_namespace" "$CONTROLLER_IMAGE_TAG"
 }
 
 ensure_inputs() {
     [[ -z "$AWS_SERVICE" ]] && { error_msg "Expected \`AWS_SERVICE\` to be defined"; exit 1; } || :
 }
 
-ensure_binaries() {
-    check_is_installed "helm"
-    check_is_installed "jq"
-    check_is_installed "kubectl"
-}
-
+ensure_debug_mode
 ensure_inputs
-ensure_binaries
+
+# The purpose of the `return` subshell command in this script is to determine
+# whether the script was sourced, or whether it is being executed directly.
+# https://stackoverflow.com/a/28776166
+(return 0 2>/dev/null) || run

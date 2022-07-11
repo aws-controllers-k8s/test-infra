@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# kind-setup.sh contains functions used to setup a KIND cluster and install 
+# kind.sh contains functions used to setup a KIND cluster and install 
 # a number of additional ACK service controllers (from their respective Helm 
 # repositories).
 

@@ -66,7 +66,7 @@ build_pytest_image() {
         eval "echo \"$(cat "$SCRIPTS_DIR/creds-templates/local-test-aws-creds-template.txt")\"" > "$TMP_TEST_AWS_CREDS_FILE_LOCATION"
     fi
 
-    local e2e_test_dockerfile="${SCRIPTS_DIR}/pytest-image.Dockerfile"
+    local e2e_test_dockerfile="${SCRIPTS_DIR}/Dockerfile.pytest-image"
 
     # Move into the aws-controllers-k8s/ context
     # This will provide access to both the service-controller and the test-infra directory

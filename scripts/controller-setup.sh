@@ -26,13 +26,13 @@ build_and_install_controller() {
     local __img_name=$3    
 
     info_msg "Building controller image ... "
-    _build_controller_image $__img_name
+    _build_controller_image "$__img_name"
 
     info_msg "Loading image into cluster ... "
-    _load_controller_image $__cluster_name $__img_name
+    _load_controller_image "$__cluster_name" "$__img_name"
 
     info_msg "Installing controller deployment ... "
-    _install_deployment $__controller_namespace $__img_name
+    _install_deployment "$__controller_namespace" "$__img_name"
 }
 
 _build_controller_image() {
