@@ -1,4 +1,3 @@
-import abc
 from types import FunctionType
 from typing import ClassVar, Optional, Type
 
@@ -38,10 +37,3 @@ class FrameworkHelper:
     resource_name: ClassVar[str] = ""
     plural: ClassVar[str] = ""
     api_version: ClassVar[str] = ""
-
-    @classmethod
-    def get_helper_hash(cls):
-        return get_helper_hash(cls.resource_name, cls.api_version)
-
-def get_helper_hash(resource_name: str, api_version: str):
-    return f"{resource_name}/{api_version}"
