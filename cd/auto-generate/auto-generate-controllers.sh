@@ -59,7 +59,7 @@ MISSING_GIT_TAG="missing-git-tag"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
-source "$TEST_INFRA_DIR"/scripts/lib/gh.sh
+source "$CD_DIR"/lib/gh.sh
 check_is_installed git
 check_is_installed gh
 
@@ -104,7 +104,6 @@ popd >/dev/null
 for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   SERVICE_NAME=$(echo "$CONTROLLER_NAME"| sed 's/-controller$//g')
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
-  print_line_separation
   cd "$CODEGEN_DIR"
 
   echo "auto-generate-controllers.sh][INFO] ## Generating new controller for $SERVICE_NAME service ##"
@@ -284,5 +283,3 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     sleep 120
   popd >/dev/null
 done
-
-print_line_separation

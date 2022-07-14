@@ -10,3 +10,8 @@ configMapGenerator:
   # Alias the file to be compatible with each of the deployments
   files:
   - config.yaml=jobs.yaml
+- name: test-config
+  namespace: test-pods
+  behavior: create
+  files:
+  - test_config.yaml

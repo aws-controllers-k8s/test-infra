@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 
-DEFAULT_AWS_CLI_VERSION="2.0.52"
+# aws.sh contains functions for running common AWS command line methods.
+
+LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/config.sh"
+source "$LIB_DIR/logging.sh"
+
+AWS_CLI_VERSION=${DEFAULT_AWS_CLI_VERSION:-"2.0.52"}
 
 # daws() executes the AWS Python CLI tool from a Docker container.
 #
@@ -21,44 +29,52 @@ DEFAULT_AWS_CLI_VERSION="2.0.52"
 # To use a specific version of the AWS CLI, set the ACK_AWS_CLI_IMAGE_VERSION
 # environment variable, otherwise the value of DEFAULT_AWS_CLI_VERSION is used.
 daws() {
-    aws_cli_profile_env=$([ ! -z "$AWS_PROFILE" ] && echo "--env AWS_PROFILE=$AWS_PROFILE")
-    aws_cli_web_identity_env="$([ ! -z "$AWS_WEB_IDENTITY_TOKEN_FILE" ] && \
-        echo "--env AWS_WEB_IDENTITY_TOKEN_FILE=/root/aws_token --env AWS_ROLE_ARN -v $AWS_WEB_IDENTITY_TOKEN_FILE:/root/aws_token:ro" )"
-    aws_cli_img_version=${ACK_AWS_CLI_IMAGE_VERSION:-$DEFAULT_AWS_CLI_VERSION}
-    aws_cli_img="amazon/aws-cli:$aws_cli_img_version"
-    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) -v $(pwd):/aws "$aws_cli_img" "$@"
+    local profile="$(get_aws_profile)"
+    local identity_file="$(get_aws_token_file)"
+    local default_region="$(get_aws_region)"
+
+    aws_cli_profile_env=$([ ! -z "$profile" ] && echo "--env AWS_PROFILE=$profile")
+    aws_cli_web_identity_env="$([ ! -z "$identity_file" ] && \
+        echo "--env AWS_WEB_IDENTITY_TOKEN_FILE=/root/aws_token --env AWS_ROLE_ARN -v $identity_file:/root/aws_token:ro" )"
+    aws_cli_img="amazon/aws-cli:$AWS_CLI_VERSION"
+
+    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
 }
 
-# aws_check_credentials() calls the STS::GetCallerIdentity API call and
+# ensure_aws_credentials() calls the STS::GetCallerIdentity API call and
 # verifies that there is a local identity for running AWS commands
-aws_check_credentials() {
-    echo -n "checking AWS credentials ... "
+ensure_aws_credentials() {
     daws sts get-caller-identity --query "Account" >/dev/null ||
-        ( echo "\nFATAL: No AWS credentials found. Please run \`aws configure\` to set up the CLI for your credentials." && exit 1)
-    echo "ok."
+        ( error_msg "No AWS credentials found. Please run \`aws configure\` to set up the CLI for your credentials" && exit 1)
 }
 
-# generate_aws_temp_creds function will generate temporary AWS CREDENTIALS which are valid for 3600 seconds
+# generate_aws_temp_creds function will generate temporary AWS credentials which
+# are valid for 3600 seconds
 aws_generate_temp_creds() {
-    __uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+    local __uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
 
-    if [ -z "$ACK_ROLE_ARN" ]; then
-        printf "Missing input Role ARN, exiting...\n"
-        exit 1
-    fi
+    local assumed_role=$(get_assumed_role_arn)
 
-    JSON=$(daws sts assume-role \
-           --role-arn "$ACK_ROLE_ARN"  \
+    local json=$(daws sts assume-role \
+           --role-arn "$assumed_role"  \
            --role-session-name tmp-role-"$__uuid" \
            --duration-seconds 3600 \
            --output json || exit 1)
 
-    AWS_ACCESS_KEY_ID=$(echo "${JSON}" | jq --raw-output ".Credentials[\"AccessKeyId\"]")
-    AWS_SECRET_ACCESS_KEY=$(echo "${JSON}" | jq --raw-output ".Credentials[\"SecretAccessKey\"]")
-    AWS_SESSION_TOKEN=$(echo "${JSON}" | jq --raw-output ".Credentials[\"SessionToken\"]")
+    AWS_ACCESS_KEY_ID=$(echo "${json}" | jq --raw-output ".Credentials[\"AccessKeyId\"]")
+    AWS_SECRET_ACCESS_KEY=$(echo "${json}" | jq --raw-output ".Credentials[\"SecretAccessKey\"]")
+    AWS_SESSION_TOKEN=$(echo "${json}" | jq --raw-output ".Credentials[\"SessionToken\"]")
 }
 
 aws_account_id() {
-    JSON=$(daws sts get-caller-identity --output json || exit 1)
-    echo "${JSON}" | jq --raw-output ".Account"
+    local json=$(daws sts get-caller-identity --output json || exit 1)
+    echo "${json}" | jq --raw-output ".Account"
 }
+
+ensure_binaries() {
+    check_is_installed "docker"
+    check_is_installed "jq"
+    check_is_installed "uuidgen"
+}
+
+ensure_binaries

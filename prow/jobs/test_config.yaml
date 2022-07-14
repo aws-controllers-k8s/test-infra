@@ -1,0 +1,10 @@
+cluster:
+  create: true
+  k8s_version: 1.22.9
+
+aws:
+  region: us-west-2
+
+debug:
+  enabled: true
+  dump_controller_logs: true

@@ -1,0 +1,7 @@
+[prow-irsa]
+web_identity_token_file=$test_container_web_identity_token_file
+role_arn=$ack_role_arn
+
+[$TEST_AWS_PROFILE_NAME]
+role_arn=$ack_role_arn
+source_profile=prow-irsa

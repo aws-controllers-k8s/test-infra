@@ -1,0 +1,5 @@
+$local_aws_creds_content
+
+[$TEST_AWS_PROFILE_NAME]
+role_arn=$ack_role_arn
+source_profile=$ack_test_source_aws_profile

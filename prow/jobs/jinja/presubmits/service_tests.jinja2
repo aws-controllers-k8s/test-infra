@@ -7,6 +7,7 @@
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -30,12 +31,6 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        - name: DUMP_CONTROLLER_LOGS
-          value: "true"
-        - name: ENABLE_E2E_TESTS
-          value: "true"
-        - name: ENABLE_HELM_CHART_TEST
-          value: "false"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-release-test
@@ -45,6 +40,7 @@
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -68,13 +64,7 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        - name: DUMP_CONTROLLER_LOGS
-          value: "true"
-        - name: ENABLE_E2E_TESTS
-          value: "false"
-        - name: ENABLE_HELM_CHART_TEST
-          value: "true"
-        command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+        command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-recommended-policy-test
     decorate: true
@@ -94,7 +84,7 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        command: ["bash", "-c", "./scripts/test-recommended-policy.sh"]
+        command: ["bash", "-c", "source ./scripts/iam-policy-test-runner.sh && assert_iam_policies"]
 
   - name: {{ service }}-unit-test
     decorate: true

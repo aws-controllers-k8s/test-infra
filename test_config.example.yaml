@@ -1,0 +1,76 @@
+cluster:
+  # If true, the tests will create a new KIND cluster with the configuration given
+  # below. If false, the tests will assume you have a connection to a K8s
+  # context.
+  create: true
+
+  # (Optional) The name of the new cluster. Defaults to a random name for each
+  # run.
+  # name: ack-s3-test
+
+  # (Optional) The K8s version of the KIND cluster. Defaults to the latest
+  # version provided by your installation of KIND.
+  k8s_version: 1.22.9
+
+  configuration:
+    # (Optional) The KIND configuration file to use. Defaults to
+    # `kind-two-node-cluster.yaml`.
+    # file_name: kind-two-node-cluster.yaml
+
+    # Additional controllers that should be installed into the KIND cluster
+    # when it is started. Controllers should be in the format of
+    # `<controller-name>@<chart version>`.
+    additional_controllers:
+    # - s3-controller@v0.1.0
+
+aws:
+  # (Optional) The AWS profile used to make AWS CLI calls. Defaults to
+  # `default`.
+  # profile:
+
+  # (Optional) The AWS web identity token file to attach along with any AWS CLI
+  # calls. Defaults to none
+  # token_file:
+
+  # (Optional) The AWS region in which all testing resources will be created. 
+  # Defaults to `us-west-2`
+  region: us-west-2
+
+  # The role ARN to assume when generating credentials for the controller under
+  # test
+  assumed_role_arn: arn:aws:iam::123456789012:role/Admin-k8s
+
+tests:
+  # (Optional) If true, the tests will use the local Python environment to run 
+  # the tests. If false, the tests will create and run a container image with
+  # the required environment. Defaults to false.
+  run_locally: false
+
+  # (Optional) Selects a subset of tests - by their Pytest marker - to run.
+  # Defaults to running all tests.
+  markers:
+  # - slow
+  # - canary
+
+  # (Optional) Selects a subsets of tests - by their method name - to run.
+  # Accepts any expression supported by the pytest selector. See 
+  # https://docs.pytest.org/en/latest/example/markers.html#using-k-expr-to-select-tests-based-on-their-name
+  # Defaults to running all tests.
+  methods:
+  # - test_eks_smoke
+
+# (Optional) If true, when building the controller, the scripts will use the 
+# `go.local.mod` file. If false, it will use the default `go.mod` file. Defaults
+# to false.
+local_build: false
+
+debug:
+  # (Optional) If true, will enable debugging logging. If false, the minimum
+  # log level will be set at INFO. Defaults to false.
+  enabled: false
+
+  # (Optional) If true, will dump the controller logs into a file at the 
+  # conclusion of the tests. This script requires that you define an environment
+  # variable called ARTIFACTS which should be a path to where the script can 
+  # dump the logs. Defaults to false
+  dump_controller_logs: false

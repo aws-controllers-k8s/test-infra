@@ -28,6 +28,13 @@ RUN echo "Installing packages ..." \
         apt-transport-https \
         unzip
 
+RUN echo "Installing yq ..." \
+    && export BINARY=yq_linux_amd64 \
+    && export VERSION=v4.25.3 \
+    && wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
+    tar xz \
+    && mv ${BINARY} /usr/bin/yq
+
 RUN echo "Installing Go ..." \
     && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
     && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
