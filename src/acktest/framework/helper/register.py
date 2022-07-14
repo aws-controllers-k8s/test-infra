@@ -1,7 +1,7 @@
-from importlib import import_module
 import os
+from importlib import import_module
 from pathlib import Path
-from typing import List
+from typing import List, Mapping, Type
 from acktest.framework.helper.context import HelperRegistrationContext
 
 from acktest.framework.helper.helper import FrameworkHelper
@@ -30,3 +30,24 @@ def _walk_helper_files(helper_root_path: Path) -> List[str]:
             if "__" in file or "__" in root:
                 continue
             yield os.path.join(root, file)
+
+class HelperMap:
+    _helpers: Mapping[str, Type[FrameworkHelper]] = []
+
+    def __init__(self, test_package_path: Path):
+        helpers = collect_all_helpers(test_package_path)
+        self._helpers = {self._hash_from_helper(helper): helper for helper in helpers}
+
+    @staticmethod
+    def _hash(resource_name: str, api_version: str):
+        return f"{resource_name.lower()}/{api_version.lower()}"
+
+    @staticmethod
+    def _hash_from_helper(helper: FrameworkHelper):
+        return HelperMap._hash(helper.resource_name, helper.api_version)
+    
+    def get(self, resource_name: str, api_version: str):
+        return self._helpers[self._hash(resource_name, api_version)]
+
+    def has(self, resource_name: str, api_version: str):
+        return self._hash(resource_name, api_version) in self._helpers
