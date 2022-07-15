@@ -57,7 +57,7 @@ To run the test container inside Prow, the `pytest-image-runner.sh` script
 mounts the local `~/.aws/credentials` file inside test container with an
 additionalS **"ack-test"** profile (which is used to run the e2e tests). The
 source profile for this "ack-test" profile is the IRSA identity of Prow job pod.
-See this [template](./templates/Prow-test-aws-creds-template.txt) for generated
+See this [template](./creds-templates/prow-test-aws-creds-template.txt) for generated
 `~/.aws/credentials` file.
 
 When running test container locally, the local environment will not always have
@@ -65,7 +65,7 @@ consistent IRSA source identity as seen in Prow environment. To enable
 credentials refresh when running locally, `~/.aws/credentials` file is mounted
 inside test container with "ack-test" AWS profile similar to Prow environment
 but the content of local `~/.aws/credentials` file is also copied inside this
-mounted file. See this [template](./templates/local-test-aws-creds-template.txt)
+mounted file. See this [template](./creds-templates/local-test-aws-creds-template.txt)
 for more details.
 
 When running test container locally, the source profile for "ack-test" AWS
