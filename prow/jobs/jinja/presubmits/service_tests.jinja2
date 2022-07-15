@@ -70,6 +70,8 @@
     decorate: true
     optional: false
     always_run: true
+    labels:
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -78,13 +80,13 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/bitnami/aws-cli:2.2.43
+      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.7
         securityContext:
           runAsUser: 0
         env:
         - name: SERVICE
           value: {{ service }}
-        command: ["bash", "-c", "source ./scripts/iam-policy-test-runner.sh && assert_iam_policies"]
+        command: ["wrapper.sh", "bash", "-c", "make test-recommended-policy SERVICE=$SERVICE"]
 
   - name: {{ service }}-unit-test
     decorate: true

@@ -10,5 +10,4 @@ spec:
     name: test-infra
   path: ./prow/jobs
   prune: true
-  targetNamespace: prow
   validation: client

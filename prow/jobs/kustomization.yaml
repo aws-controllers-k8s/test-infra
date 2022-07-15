@@ -6,6 +6,7 @@ generatorOptions:
 
 configMapGenerator:
 - name: job-config
+  namespace: prow
   behavior: create
   # Alias the file to be compatible with each of the deployments
   files:
