@@ -20,9 +20,6 @@ CODEGEN_DIR=$WORKSPACE_DIR/code-generator
 CONTROLLER_NAME="$SERVICE"-controller
 CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
 
-source "$TEST_INFRA_DIR"/scripts/lib/common.sh
-source "$TEST_INFRA_DIR"/scripts/lib/aws.sh
-
 # Update the go.mod file in controller directory
 # Findout the runtime semver from the code-generator repo
 pushd "$CODEGEN_DIR" >/dev/null
@@ -82,7 +79,6 @@ pushd "$CONTROLLER_DIR" >/dev/null
   echo "ok"
 popd >/dev/null
 
-print_line_separation
 # Use code-generator to generate new version of service controller
 pushd "$CODEGEN_DIR" >/dev/null
   echo "generate-test-controller.sh][INFO] Generating new controller code using command 'make build-controller'"
@@ -92,14 +88,17 @@ pushd "$CODEGEN_DIR" >/dev/null
   fi
 popd >/dev/null
 
-print_line_separation
 # Perform unit test for newly generated controller
 echo "generate-test-controller.sh][INFO] Performing unit tests"
 cd "$CONTROLLER_DIR"
 make test
 
-print_line_separation
-echo "generate-test-controller.sh][INFO] Performing e2e and helm tests"
+echo "generate-test-controller.sh][INFO] Performing e2e tests"
 # Perform make kind-test for the service controller
 cd "$TEST_INFRA_DIR"
 make kind-test
+
+echo "generate-test-controller.sh][INFO] Performing helm tests"
+# Perform make kind-helm-test for the service controller
+cd "$TEST_INFRA_DIR"
+make kind-helm-test
