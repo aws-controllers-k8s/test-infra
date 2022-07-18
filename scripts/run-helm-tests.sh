@@ -24,6 +24,7 @@ source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 source "$SCRIPTS_DIR/helm.sh"
+source "$SCRIPTS_DIR/run-e2e-tests.sh"
 
 install_chart_and_run_tests() {
     local __chart_namespace=$1
