@@ -19,6 +19,9 @@ kind-test: ## Run functional tests for SERVICE
 kind-helm-test: ## Run the Helm tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-helm-tests.sh
 
+test-recommended-policy:
+	@AWS_SERVICE=$(AWS_SERVICE) source ./scripts/iam-policy-test-runner.sh && assert_iam_policies
+
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
 
