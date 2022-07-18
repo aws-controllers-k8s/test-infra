@@ -48,6 +48,7 @@
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: runtime
@@ -70,12 +71,6 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        - name: DUMP_CONTROLLER_LOGS
-          value: "true"
-        - name: ENABLE_E2E_TESTS
-          value: "true"
-        - name: ENABLE_HELM_CHART_TEST
-          value: "true"
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
 
 {% endfor %}

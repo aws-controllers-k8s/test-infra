@@ -21,8 +21,6 @@ assert_iam_policies() {
 
     local recommended_policy_path="${SERVICE_CONTROLLER_SOURCE_PATH}/${recommended_policy_relative_path}"
     local recommended_inline_policy_path="${SERVICE_CONTROLLER_SOURCE_PATH}/${recommended_inline_policy_relative_path}"
-    echo $recommended_policy_path
-    echo $recommended_inline_policy_path
 
     info_msg "Checking presence of recommended-policy-arn ..."
 
@@ -48,7 +46,7 @@ assert_iam_policies() {
     info_msg "Validating contents of recommended-policy-arn ..."
     for policy_arn in $(awk NF=NF FS="\n" $recommended_policy_path); do
         debug_msg "Validating \"$policy_arn\" ..."
-        if ! (daws iam get-policy --policy-arn "$policy_arn" >/dev/null); then
+        if ! (aws iam get-policy --policy-arn "$policy_arn" >/dev/null); then
             error_msg "\"$policy_arn\" is not a valid managed IAM policy ARN"
             exit 1
         fi
@@ -59,4 +57,9 @@ ensure_inputs() {
     [[ -z "$AWS_SERVICE" ]] && { error_msg "Expected \`AWS_SERVICE\` to be defined"; exit 1; } || :
 }
 
+ensure_binaries() {
+    check_is_installed "aws"
+}
+
 ensure_inputs
+ensure_binaries
