@@ -21,8 +21,6 @@ assert_iam_policies() {
 
     local recommended_policy_path="${SERVICE_CONTROLLER_SOURCE_PATH}/${recommended_policy_relative_path}"
     local recommended_inline_policy_path="${SERVICE_CONTROLLER_SOURCE_PATH}/${recommended_inline_policy_relative_path}"
-    echo $recommended_policy_path
-    echo $recommended_inline_policy_path
 
     info_msg "Checking presence of recommended-policy-arn ..."
 
@@ -59,4 +57,9 @@ ensure_inputs() {
     [[ -z "$AWS_SERVICE" ]] && { error_msg "Expected \`AWS_SERVICE\` to be defined"; exit 1; } || :
 }
 
+ensure_binaries() {
+    check_is_installed "aws"
+}
+
 ensure_inputs
+ensure_binaries
