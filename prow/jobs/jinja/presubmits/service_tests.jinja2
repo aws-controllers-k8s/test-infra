@@ -80,7 +80,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: public.ecr.aws/m5q3e4b2/prow:prow-integration-0.0.7
+      - image: {{ image_context.images["integration-test"] }}
         securityContext:
           runAsUser: 0
         env:

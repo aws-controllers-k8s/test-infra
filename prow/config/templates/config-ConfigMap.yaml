@@ -107,13 +107,13 @@ data:
           preset-test-config: "true"
         env:
         - name: TEST_CONFIG_PATH
-          value: "/e2e/config/test_config.yaml"
+.         value: "/etc/config/test_config.yaml"
         volumes:
         - name: config-volume
           configMap:
             name: test-config
         volumeMounts:
-        - mountPath: /e2e/config
+        - mountPath: /etc/config
           name: config-volume
       - labels:
           preset-dind-enabled: "true"
