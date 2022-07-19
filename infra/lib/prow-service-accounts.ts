@@ -93,6 +93,7 @@ export class ProwServiceAccounts extends cdk.Construct {
         "ecr-public:Describe*",
         "ecr-public:Get*",
         // Limited write access
+        "ecr-public:CreateRepository",
         "ecr-public:PutRepositoryCatalogData",
         "ecr-public:UploadLayerPart",
         "ecr-public:CompleteLayerUpload",
