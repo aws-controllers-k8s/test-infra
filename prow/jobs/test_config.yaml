@@ -4,6 +4,7 @@ cluster:
 
 aws:
   region: us-west-2
+  token_file: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
 
 debug:
   enabled: true
