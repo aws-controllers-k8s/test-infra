@@ -33,7 +33,6 @@ source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 build_pytest_image() {
-    set -x
     local __image_tag=$1
 
     local ack_role_arn=$(get_assumed_role_arn)
@@ -85,7 +84,6 @@ build_pytest_image() {
 }
 
 run_pytest_image() {
-    set -x
     local __image_tag=$1
 
     local region=$(get_aws_region)
@@ -115,7 +113,6 @@ run_pytest_image() {
         -e AWS_PROFILE="$TEST_AWS_PROFILE_NAME" \
         "${params[@]}" \
         "$__image_tag"
-    sleep 5000
 }
 
 ensure_inputs() {
