@@ -97,7 +97,7 @@ run_pytest_image() {
 
     params=()
     if [[ "$identity_file" != "" ]]; then
-        params+=("-e AWS_WEB_IDENTITY_TOKEN_FILE="$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE"")
+        params+=(-e AWS_WEB_IDENTITY_TOKEN_FILE="$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE")
     fi
 
     docker run --rm -t \
@@ -105,6 +105,7 @@ run_pytest_image() {
         -v "$KUBECONFIG":/root/.kube/config:z \
         -v "$TMP_TEST_AWS_CREDS_FILE_LOCATION":/root/.aws/credentials:z \
         -v "$TMP_TEST_CONFIG_FILE_LOCATION":/root/test-config.yaml:z \
+        -e TEST_CONFIG_PATH="/root/test-config.yaml" \
         -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
         -e ACK_ROLE_ARN \
         -e PYTEST_LOG_LEVEL \
