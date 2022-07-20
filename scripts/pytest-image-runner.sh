@@ -32,6 +32,7 @@ source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 build_pytest_image() {
+    set -x
     local __image_tag=$1
 
     local ack_role_arn=$(get_assumed_role_arn)
@@ -39,7 +40,7 @@ build_pytest_image() {
 
     # If 'AWS_PROFILE' variable is set, use it as source profile for 'ack-test'
     # profile. Use 'default' as fallback
-    local ack_test_source_aws_profile=${AWS_PROFILE:-"default"}
+    local ack_test_source_aws_profile=${get_aws_profile:-"default"}
     local aws_creds_file_location="$HOME/.aws/credentials"
 
     if [[ -n $PROW_JOB_ID ]]; then
@@ -83,6 +84,7 @@ build_pytest_image() {
 }
 
 run_pytest_image() {
+    set -x
     local __image_tag=$1
 
     local region=$(get_aws_region)
@@ -111,6 +113,7 @@ run_pytest_image() {
         -e AWS_PROFILE="$TEST_AWS_PROFILE_NAME" \
         "${params[@]}" \
         "$__image_tag"
+    sleep 500
 }
 
 ensure_inputs() {
