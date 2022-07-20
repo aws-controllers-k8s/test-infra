@@ -113,7 +113,7 @@ run_pytest_image() {
         -e AWS_PROFILE="$TEST_AWS_PROFILE_NAME" \
         "${params[@]}" \
         "$__image_tag"
-    sleep 500
+    sleep 5000
 }
 
 ensure_inputs() {
