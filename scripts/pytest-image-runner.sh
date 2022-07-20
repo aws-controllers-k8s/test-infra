@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
 # pytest-image-runner.sh contains functions used to build and run the ACK Python
-# test framework from within a container.
+# test framework from within a container. When building the test container, it
+# places certain files into pre-defined locations such that the Dockerfile can
+# copy them into the image. At runtime, it sets environment variables indicating
+# where in the image those files were copied. Any variable beginning with
+# `TMP_TEST` indicates the location of a temporary file for build-item. Any
+# variable beginning with `TEST_CONTAINER` indicates the location within the
+# container into which a file has been copied.
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR="$SCRIPTS_DIR/.."
@@ -17,10 +23,12 @@ SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_E2E_TEST_PATH:-$DEFAULT_S
 # The location of new credential file which will be copied in test container
 # Keep this file in same location as '~/.aws/credentials' file
 TMP_TEST_AWS_CREDS_FILE_LOCATION="$HOME/.aws/ack-test-credentials"
-# The name of the AWS profile inside the container for rotating credentials
-TEST_AWS_PROFILE_NAME="ack-test"
 # The file path containing a copy of the test config
 TMP_TEST_CONFIG_FILE_LOCATION="$HOME/.aws/$AWS_SERVICE-test-config.yaml"
+
+# The name of the AWS profile inside the container for rotating credentials
+TEST_AWS_PROFILE_NAME="ack-test"
+
 # Path of web-identity-token in test container
 TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE="/root/web-identity-token"
 
