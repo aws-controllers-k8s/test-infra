@@ -26,6 +26,7 @@ TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE="/root/web-identity-token"
 
 # The following environment variables are injected when running as a Prow job
 PROW_JOB_ID=${PROW_JOB_ID:-}
+AWS_ROLE_ARN=${AWS_ROLE_ARN:-}
 
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
