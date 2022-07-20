@@ -3,5 +3,5 @@ web_identity_token_file=$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE
 role_arn=$AWS_ROLE_ARN
 
 [$TEST_AWS_PROFILE_NAME]
-role_arn=$ack_role_arn
+role_arn=$assumed_role_arn
 source_profile=prow-irsa

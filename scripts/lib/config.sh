@@ -10,7 +10,7 @@ SCRIPTS_DIR="$LIB_DIR/.."
 
 TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$SCRIPTS_DIR/../test_config.yaml"}
 
-ACK_ROLE_ARN="${ACK_ROLE_ARN:-""}"
+ASSUMED_ROLE_ARN="${ASSUMED_ROLE_ARN:-""}"
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/logging.sh"
@@ -49,7 +49,7 @@ get_aws_profile() { _get_config_field ".aws.profile"; }
 get_aws_token_file() { _get_config_field ".aws.token_file"; }
 get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
 get_assumed_role_arn() {
-    [[ ! -z "${ACK_ROLE_ARN}" ]] && echo "${ACK_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
+    [[ ! -z "${ASSUMED_ROLE_ARN}" ]] && echo "${ASSUMED_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
 }
 get_test_markers() { _get_config_field ".tests.markers"; }
 get_test_methods() { _get_config_field ".tests.methods"; }
@@ -65,8 +65,8 @@ ensure_config_file_exists() {
 }
 
 ensure_required_fields() {
-    # Allow if the ACK_ROLE_ARN is substituting
-    [[ -z $(_get_config_field ".aws.assumed_role_arn") && -z ${ACK_ROLE_ARN} ]] && { error_msg "Required config path \`.aws.assumed_role_arn\` not provided"; exit 1; } || :
+    # Allow if the ASSUMED_ROLE_ARN is substituting
+    [[ -z $(_get_config_field ".aws.assumed_role_arn") && -z ${ASSUMED_ROLE_ARN} ]] && { error_msg "Required config path \`.aws.assumed_role_arn\` not provided"; exit 1; } || :
 
     local required_field_paths=( ".cluster.create" )
     for path in "${required_field_paths[@]}"; do

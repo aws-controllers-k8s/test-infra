@@ -35,7 +35,7 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 build_pytest_image() {
     local __image_tag=$1
 
-    local ack_role_arn=$(get_assumed_role_arn)
+    local assumed_role_arn=$(get_assumed_role_arn)
     local identity_file="$(get_aws_token_file)"
 
     # If 'AWS_PROFILE' variable is set, use it as source profile for 'ack-test'
@@ -47,7 +47,7 @@ build_pytest_image() {
         # If this is prowjob, create new aws credentials file and setup two profiles
         # 1. 'prow-irsa' profile which gets aws credentials using web-identity-token
         # 2. 'ack-test' profile which uses 'prow-irsa' as source profile and assumes
-        # ack_role_arn for aws credentials
+        # assumed_role_arn for aws credentials
         # NOTE: credentials in both these profiles rotate automatically
 
         # copy web-identity-token file for use inside test container
@@ -106,7 +106,7 @@ run_pytest_image() {
         -v "$TMP_TEST_CONFIG_FILE_LOCATION":/root/test-config.yaml:z \
         -e TEST_CONFIG_PATH="/root/test-config.yaml" \
         -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
-        -e ACK_ROLE_ARN \
+        -e ASSUMED_ROLE_ARN \
         -e PYTEST_LOG_LEVEL \
         -e PYTEST_NUM_THREADS \
         -e AWS_DEFAULT_REGION="$region" \

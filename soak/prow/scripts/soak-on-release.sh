@@ -49,19 +49,19 @@ perform_buildah_and_helm_login
 assume_soak_creds() {
   # unset previously assumed creds, and assume new creds using IRSA of postsubmit prowjob.
   unset AWS_ACCESS_KEY_ID && unset AWS_SECRET_ACCESS_KEY && unset AWS_SESSION_TOKEN
-  local _ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+  local _ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
   eval $_ASSUME_COMMAND
-  echo "soak-on-release.sh] [INFO] Assumed ACK_ROLE_ARN"
+  echo "soak-on-release.sh] [INFO] Assumed ASSUMED_ROLE_ARN"
 }
 
 ASSUME_EXIT_VALUE=0
-ACK_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   echo "soak-on-release.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
   exit 1
 fi
-export ACK_ROLE_ARN
-echo "soak-on-release.sh] [SETUP] exported ACK_ROLE_ARN"
+export ASSUMED_ROLE_ARN
+echo "soak-on-release.sh] [SETUP] Exported ASSUMED_ROLE_ARN"
 
 ASSUME_EXIT_VALUE=0
 IRSA_ARN=$(aws ssm get-parameter --name /ack/prow/soak/irsa/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
@@ -70,11 +70,11 @@ if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   exit 1
 fi
 export IRSA_ARN
-echo "soak-on-release.sh] [SETUP] exported IRSA_ARN"
+echo "soak-on-release.sh] [SETUP] Exported IRSA_ARN"
 
-ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
 eval $ASSUME_COMMAND
-echo "soak-on-release.sh] [SETUP] Assumed ACK_ROLE_ARN"
+echo "soak-on-release.sh] [SETUP] Assumed ASSUMED_ROLE_ARN"
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export AWS_ACCOUNT_ID
