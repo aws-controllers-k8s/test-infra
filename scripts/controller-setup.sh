@@ -140,7 +140,7 @@ _loop_rotate_temp_creds() {
     local __dump_logs=$4
     
     while true; do
-        info_msg "Sleeping for 50 mins before rotating temporary aws credentials"
+        info_msg "Sleeping for $__rotation_time_in_seconds seconds before rotating temporary aws credentials"
         sleep $__rotation_time_in_seconds & wait
 
         rotate_temp_creds "$__controller_namespace" "$__deployment_name" "$__dump_logs"
