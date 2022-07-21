@@ -110,17 +110,17 @@ aws ecr-public get-login-password --region us-east-1 | docker login --username A
 >&2 echo "wrapper.sh] [SETUP] Logged in"
 
 ASSUME_EXIT_VALUE=0
-ACK_ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   >&2 echo "wrapper.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
   exit 1
 fi
-export ACK_ASSUMED_ROLE_ARN
->&2 echo "wrapper.sh] [SETUP] Exported ACK_ASSUMED_ROLE_ARN"
+export ASSUMED_ROLE_ARN
+>&2 echo "wrapper.sh] [SETUP] Exported ASSUMED_ROLE_ARN"
 
-ASSUME_COMMAND=$(aws sts assume-role --role-arn $ACK_ASSUMED_ROLE_ARN --role-session-name $PROW_JOB_ID --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name $PROW_JOB_ID --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
 eval $ASSUME_COMMAND
->&2 echo "wrapper.sh] [SETUP] Assumed ACK_ASSUMED_ROLE_ARN"
+>&2 echo "wrapper.sh] [SETUP] Assumed ASSUMED_ROLE_ARN"
 
 # actually run the user supplied command
 printf '%0.s=' {1..80}; echo
