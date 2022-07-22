@@ -95,6 +95,7 @@ run() {
     ensure_cluster
     
     build_and_run_tests
+    exit $?
 }
 
 ensure_inputs() {

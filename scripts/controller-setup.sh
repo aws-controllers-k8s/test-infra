@@ -20,6 +20,9 @@ source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
+# Register the trap to stop looping through the rotating credentials
+trap _stop_loop_rotating_creds EXIT SIGINT
+
 build_and_install_controller() {
     local __cluster_name=$1
     local __controller_namespace=$2
@@ -113,7 +116,6 @@ EOF
 
     local dump_logs=$(get_dump_controller_logs)
 
-    trap 'kill $(jobs -p)' EXIT SIGINT
     _loop_rotate_temp_creds 3000 "$__controller_namespace" "ack-$AWS_SERVICE-controller" "$dump_logs" &
 }
 
@@ -133,15 +135,25 @@ dump_controller_logs() {
     fi
 }
 
+_stop_loop_rotating_creds() {
+    debug_msg "Killing all background jobs"
+    kill $(jobs -p)
+}
+
 _loop_rotate_temp_creds() {
     local __rotation_time_in_seconds=$1
     local __controller_namespace=$2
     local __deployment_name=$3
     local __dump_logs=$4
-    
+
+    function _kill_sleep() {
+        kill $(jobs -p)
+    }
+    trap _kill_sleep EXIT SIGINT
+
     while true; do
         info_msg "Sleeping for $__rotation_time_in_seconds seconds before rotating temporary aws credentials"
-        sleep $__rotation_time_in_seconds & wait
+        sleep $__rotation_time_in_seconds &
 
         rotate_temp_creds "$__controller_namespace" "$__deployment_name" "$__dump_logs"
     done
