@@ -1,0 +1,15 @@
+### $COMMIT_MSG
+
+----------
+
+* ACK controller-bootstrap \`$ACK_CONTROLLER_BOOTSTRAP_VERSION\` [release notes](https://github.com/aws-controllers-k8s/controller-bootstrap/releases/tag/$ACK_CONTROLLER_BOOTSTRAP_VERSION)
+
+----------
+
+#### stdout for \`make run\`:
+
+\`\`\`
+$MAKE_RUN_OUTPUT
+\`\`\`
+
+By submitting this pull request, I confirm that my contribution is made under the terms of the Apache 2.0 license.
