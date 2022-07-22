@@ -136,10 +136,9 @@ dump_controller_logs() {
 }
 
 _stop_loop_rotating_creds() {
-    debug_msg "Killing all background jobs"
     local bg_jobs_pids=$(jobs -p)
     if [[ -n $bg_jobs_pids ]]; then
-        echo "cleaning background jobs with pid : $bg_jobs_pids"
+        debug_msg "cleaning background jobs with pids : $bg_jobs_pids"
         kill "$bg_jobs_pids"
     fi
 }
@@ -153,7 +152,7 @@ _loop_rotate_temp_creds() {
     function _kill_sleep() {
         local bg_jobs_pids=$(jobs -p)
         if [[ -n $bg_jobs_pids ]]; then
-          echo "cleaning background jobs with pid : $bg_jobs_pids"
+          debug_msg "cleaning background jobs with pids : $bg_jobs_pids"
           kill "$bg_jobs_pids"
         fi
     }
