@@ -43,9 +43,7 @@ CODE_GEN_DIR="$WORKSPACE_DIR/code-generator"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
-check_is_installed buildah
-check_is_installed aws
-check_is_installed helm
+source "$TEST_INFRA_DIR"/scripts/lib/login.sh
 check_is_installed git
 check_is_installed jq
 check_is_installed yq
