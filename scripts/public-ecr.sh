@@ -26,3 +26,9 @@ ensure_repository() {
         fi
     done
 }
+
+ensure_binaries() {
+    check_is_installed "aws"
+}
+
+ensure_binaries

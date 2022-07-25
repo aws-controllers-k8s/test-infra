@@ -44,6 +44,7 @@ CODE_GEN_DIR="$WORKSPACE_DIR/code-generator"
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
 source "$TEST_INFRA_DIR"/scripts/lib/login.sh
+source "$TEST_INFRA_DIR"/scripts/public-ecr.sh
 check_is_installed git
 check_is_installed jq
 check_is_installed yq
