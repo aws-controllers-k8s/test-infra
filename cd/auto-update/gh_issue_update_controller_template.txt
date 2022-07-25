@@ -12,7 +12,7 @@ $MAKE_RUN_ERROR_OUTPUT
 
 
 #### Steps for closing this issue:
-1. Execute \`export SERVICE=$SERVICE_NAME\` and \`make run\` from controller-bootstrap
+1. Execute \`export SERVICE=$SERVICE_NAME && make\` from controller-bootstrap
 2. When the project description files are successfully updated, create a new pull request for $CONTROLLER_NAME
 3. Mention this issue number in the pull request
 4. When the above PR is merged, close this issue

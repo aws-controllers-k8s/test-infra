@@ -28,8 +28,21 @@ RUN echo "Installing packages ..." \
         unzip \
         gawk
 
+RUN echo "Installing Go ..." \
+    && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
+    && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
+    && tar xzf "${GO_TARBALL}" -C /usr/local \
+    && rm "${GO_TARBALL}"\
+    && mkdir -p "${GOPATH}/bin"
+
 RUN echo "Installing GitHub cli ..." \
     && curl -fsSL "https://cli.github.com/packages/githubcli-archive-keyring.gpg" | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh
+
+RUN echo "Installing Helm ... " \
+    && export HELM_TARBALL="helm.tar.gz" \
+    && curl -fsSL https://get.helm.sh/helm-v3.7.0-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
+    && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
+    && rm "${HELM_TARBALL}"
