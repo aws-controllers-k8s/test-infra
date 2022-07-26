@@ -8,7 +8,7 @@ Usage:
 
 Environment variables:
   PR_SOURCE_BRANCH:    Name of the GitHub branch where auto-updated project description
-                       files are pushed. Defaults to 'ack-bot-autogen'
+                       files are pushed. Defaults to 'ack-bot-autoupdate'
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
   GITHUB_ORG:          Name of the GitHub organisation where GitHub issues will
@@ -18,7 +18,7 @@ Environment variables:
                        be created when auto-update of project description files
                        for service controller fails. Defaults to 'community'
   GITHUB_LABEL:        Label to add to issue and pull requests.
-                       Defaults to 'ack-bot-autogen'
+                       Defaults to 'ack-bot-autoupdate'
   GITHUB_LABEL_COLOR:  Color for GitHub label. Defaults to '3C6110'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
@@ -47,7 +47,7 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
 
-DEFAULT_GITHUB_LABEL="ack-bot-autogen"
+DEFAULT_GITHUB_LABEL="ack-bot-autoupdate"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
 DEFAULT_GITHUB_LABEL_COLOR="3C6110"
@@ -82,6 +82,7 @@ popd >/dev/null
 for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   SERVICE_NAME=$(echo "$CONTROLLER_NAME"| sed 's/-controller$//g')
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
+  cd "$CONTROLLER_BOOTSTRAP_DIR"
 
   echo -n "auto-update-controllers.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
   if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
@@ -136,6 +137,13 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     fi
     echo "ok"
 
+    # Ensure there are changes in project description file(s) to commit
+    fc=$(git diff --name-only | cat | wc -l | tr -d ' ')
+    if [[ $fc -eq 0 ]]; then
+        echo "auto-update-controllers.sh][ERROR] no changes to commit"
+        continue
+    fi
+
     # Add all the files & create a GitHub commit
     git add .
     COMMIT_MSG="Update project description files"
@@ -168,7 +176,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # in '$GITHUB_PR_BODY_FILE'
     MAKE_RUN_OUTPUT=$(cat "$MAKE_RUN_OUTPUT_FILE")
     GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
-    GITHUB_PR_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_update_controller_pr_body
+    GITHUB_PR_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_pr_body_update_controller
     eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
 
     open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
