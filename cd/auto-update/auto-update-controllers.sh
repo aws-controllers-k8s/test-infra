@@ -18,7 +18,7 @@ Environment variables:
                        be created when auto-update of project description files
                        for service controller fails. Defaults to 'community'
   GITHUB_LABEL:        Label to add to issue and pull requests.
-                       Defaults to 'ack-bot-autoupdate'
+                       Defaults to 'ack-bot-autogen'
   GITHUB_LABEL_COLOR:  Color for GitHub label. Defaults to '3C6110'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
@@ -47,7 +47,7 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
 
-DEFAULT_GITHUB_LABEL="ack-bot-autoupdate"
+DEFAULT_GITHUB_LABEL="ack-bot-autogen"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
 DEFAULT_GITHUB_LABEL_COLOR="3C6110"
@@ -140,7 +140,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # Ensure there are changes in project description file(s) to commit
     fc=$(git diff --name-only | cat | wc -l | tr -d ' ')
     if [[ $fc -eq 0 ]]; then
-        echo "auto-update-controllers.sh][ERROR] no changes to commit"
+        echo "auto-update-controllers.sh][ERROR] no changes to commit for $CONTROLLER_NAME"
         continue
     fi
 
