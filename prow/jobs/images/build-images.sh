@@ -29,6 +29,7 @@ docker build -f "$IMAGE_DIR/Dockerfile.docs" --quiet=$QUIET -t "prow/docs" "${IM
 docker build -f "$IMAGE_DIR/Dockerfile.olm-bundle-pr" --quiet=$QUIET -t "prow/olm-bundle-pr" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.olm-test" --quiet=$QUIET -t "prow/olm-test" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.auto-generate-controllers" --quiet=$QUIET -t "prow/auto-generate-controllers" "${IMAGE_DIR}"
+docker build -f "$IMAGE_DIR/Dockerfile.auto-update-controllers" --quiet=$QUIET -t "prow/auto-update-controllers" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.controller-release-tag" --quiet=$QUIET -t "prow/controller-release-tag" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.soak" --quiet=$QUIET --build-arg DEPLOY_BASE_TAG="prow/deploy" -t "prow/soak" "${IMAGE_DIR}"
 
