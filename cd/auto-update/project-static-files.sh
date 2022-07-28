@@ -84,14 +84,14 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
   cd "$CONTROLLER_BOOTSTRAP_DIR"
 
-  echo -n "auto-update-controllers.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
+  echo -n "project-static-files.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
   if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
     echo ""
-    echo "auto-update-controllers.sh][INFO] Could not find label $GITHUB_LABEL in repo $GITHUB_ORG/$CONTROLLER_NAME"
+    echo "project-static-files.sh][INFO] Could not find label $GITHUB_LABEL in repo $GITHUB_ORG/$CONTROLLER_NAME"
     echo -n "Creating new GitHub label $GITHUB_LABEL ... "
     if ! gh api -X POST repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels -f name="$GITHUB_LABEL" -f color="$GITHUB_LABEL_COLOR" >/dev/null; then
       echo ""
-      echo "auto-update-controllers.sh][ERROR] Failed to create label $GITHUB_LABEL. Skipping $CONTROLLER_NAME"
+      echo "project-static-files.sh][ERROR] Failed to create label $GITHUB_LABEL. Skipping $CONTROLLER_NAME"
       continue
     else
       echo "ok"
@@ -100,14 +100,14 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     echo "ok"
   fi
 
-  echo "auto-update-controllers.sh][INFO] Updating project description files of existing controller using command 'make run'"
+  echo "project-static-files.sh][INFO] Updating project description files of existing controller using command 'make run'"
   export SERVICE=$SERVICE_NAME
   MAKE_RUN_OUTPUT_FILE=/tmp/"$SERVICE_NAME"_make_run_output
   MAKE_RUN_ERROR_FILE=/tmp/"$SERVICE_NAME"_make_run_error
   if ! make run > "$MAKE_RUN_OUTPUT_FILE" 2> "$MAKE_RUN_ERROR_FILE"; then
     cat "$MAKE_RUN_ERROR_FILE"
 
-    echo "auto-update-controllers.sh][ERROR] Failure while executing 'make run' command. Creating/Updating GitHub issue"
+    echo "project-static-files.sh][ERROR] Failure while executing 'make run' command. Creating/Updating GitHub issue"
     ISSUE_TITLE="Errors while updating project description files for $CONTROLLER_NAME"
 
     # Capture 'make run' command output & error, then persist
@@ -129,10 +129,10 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     GITHUB_CONTROLLER_ORG_REPO="$GITHUB_ORG/$CONTROLLER_NAME"
 
     # add git remote
-    echo -n "auto-update-controllers.sh][INFO] Adding git remote ... "
+    echo -n "project-static-files.sh][INFO] Adding git remote ... "
     if ! git remote add origin "https://github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" >/dev/null; then
       echo ""
-      echo "auto-update-controllers.sh][ERROR] Unable to add git remote. Skipping $CONTROLLER_NAME"
+      echo "project-static-files.sh][ERROR] Unable to add git remote. Skipping $CONTROLLER_NAME"
       continue
     fi
     echo "ok"
@@ -140,26 +140,26 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # Ensure there are changes in project description file(s) to commit
     fc=$(git diff --name-only | cat | wc -l | tr -d ' ')
     if [[ $fc -eq 0 ]]; then
-        echo "auto-update-controllers.sh][ERROR] no changes to commit for $CONTROLLER_NAME"
+        echo "project-static-files.sh][ERROR] no changes to commit for $CONTROLLER_NAME"
         continue
     fi
 
     # Add all the files & create a GitHub commit
     git add .
     COMMIT_MSG="Update project description files"
-    echo -n "auto-update-controllers.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
+    echo -n "project-static-files.sh][INFO] Adding commit with message: '$COMMIT_MSG' ... "
     if ! git commit -m "$COMMIT_MSG" >/dev/null; then
       echo ""
-      echo "auto-update-controllers.sh][ERROR] Failed to add commit message for $CONTROLLER_NAME repository. Skipping $CONTROLLER_NAME"
+      echo "project-static-files.sh][ERROR] Failed to add commit message for $CONTROLLER_NAME repository. Skipping $CONTROLLER_NAME"
       continue
     fi
     echo "ok"
 
     # Force push the new changes into '$PR_SOURCE_BRANCH'
-    echo -n "auto-update-controllers.sh][INFO] Pushing changes to branch '$PR_SOURCE_BRANCH' ... "
+    echo -n "project-static-files.sh][INFO] Pushing changes to branch '$PR_SOURCE_BRANCH' ... "
     if ! git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null 2>&1; then
       echo ""
-      echo "auto-update-controllers.sh][ERROR] Failed to push the latest changes into remote repository. Skipping $CONTROLLER_NAME"
+      echo "project-static-files.sh][ERROR] Failed to push the latest changes into remote repository. Skipping $CONTROLLER_NAME"
       continue
     fi
     echo "ok"
@@ -180,12 +180,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
 
     open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
-    echo "auto-update-controllers.sh][INFO] Done :) "
+    echo "project-static-files.sh][INFO] Done :) "
     # PRs created from this script trigger the presubmit prowjobs.
     # To control the number of presubmit prowjobs that will run in parallel,
     # adding sleep of 2 minutes. This will help distribute the load on prow
     # cluster.
-    echo "auto-update-controllers.sh][INFO] Sleeping for 2 minutes before updating project description files for next service controller."
+    echo "project-static-files.sh][INFO] Sleeping for 2 minutes before updating project description files for next service controller."
     sleep 120
   popd >/dev/null
 done
