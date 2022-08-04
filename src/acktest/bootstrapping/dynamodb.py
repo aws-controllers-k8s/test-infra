@@ -13,6 +13,7 @@ class Table(Bootstrappable):
     attribute_definitions: List[dict]
     key_schema: List[dict]
     stream_specification: dict
+    provisioned_throughput: dict
 
     # Outputs
     name: str = field(init=False)
@@ -35,6 +36,7 @@ class Table(Bootstrappable):
             KeySchema=self.key_schema,
             AttributeDefinitions=self.attribute_definitions,
             StreamSpecification=self.stream_specification,
+            ProvisionedThroughput=self.provisioned_throughput,
         )
         self.latest_stream_arn = table.latest_stream_arn
 
