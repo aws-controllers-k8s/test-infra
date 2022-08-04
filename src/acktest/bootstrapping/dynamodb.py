@@ -31,7 +31,7 @@ class Table(Bootstrappable):
         """Creates a Dynamodb table with an auto-generated name.
         """
         self.name = resources.random_suffix_name(self.name_prefix, 63)
-        table = self.dynamodb_client.create_table(
+        table = self.dynamodb_resource.create_table(
             TableName=self.name,
             KeySchema=self.key_schema,
             AttributeDefinitions=self.attribute_definitions,
