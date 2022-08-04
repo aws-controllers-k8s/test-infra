@@ -34,7 +34,7 @@ class SigningProfile(Bootstrappable):
     def bootstrap(self):
         """Creates a Signing profile with a generated name
         """
-        self.name = resources.random_suffix_name(self.name_prefix, 32)
+        self.name = resources.random_suffix_name(self.name_prefix, 32, delimiter="_")
         signing_profile = self.signer_client.put_signing_profile(
             profileName=self.name,
             platformId=self.signing_platform_id,
