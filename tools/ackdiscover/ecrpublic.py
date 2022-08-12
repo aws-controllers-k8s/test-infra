@@ -117,6 +117,8 @@ def get_repository_latest_tag(ep_client, repo):
         except ep_client.exceptions.RepositoryNotFoundException:
             return latest_tag
         for image in images["imageDetails"]:
+            if not 'imageTags' in image:
+                continue
             pushed_at = image["imagePushedAt"]
             if most_recent is None or pushed_at > most_recent:
                 most_recent = pushed_at
