@@ -3,7 +3,7 @@ images:
   docs: prow-docs-0.0.6
 
   unit-test: prow-unit-0.0.2
-  integration-test: prow-integration-0.0.9
+  integration-test: prow-integration-0.0.10
   soak-test: prow-soak-0.0.3
 
   auto-generate-controllers: prow-auto-generate-controllers-0.0.7
@@ -12,4 +12,4 @@ images:
   deploy: prow-deploy-0.0.7
 
   olm-test: prow-olm-test-0.0.5
-  olm-bundle-pr: prow-olm-bundle-pr-0.0.5
+  olm-bundle-pr: prow-olm-bundle-pr-0.0.6

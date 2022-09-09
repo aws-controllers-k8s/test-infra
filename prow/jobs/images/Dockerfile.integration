@@ -5,8 +5,8 @@ FROM $TEST_BASE_TAG as base
 ARG DOCKER_VERSION=19.03.15
 ENV DOCKER_VERSION=${DOCKER_VERSION}
 
-RUN echo "Installing controller-gen ..." \
-    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1" \
+RUN echo "Installing controller-gen v0.9.2..." \
+    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.2" \
     && mv $GOPATH/bin/controller-gen /usr/bin/controller-gen
 
 RUN echo "Installing Kustomize ..." \
