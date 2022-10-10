@@ -133,3 +133,4 @@ dmypy.json
 /test_config.yaml
 
 # End of https://www.gitignore.io/api/python
+/scripts/web-identity-token

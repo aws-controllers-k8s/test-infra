@@ -105,6 +105,7 @@ run_pytest_image() {
     params=()
     if [[ "$identity_file" != "" ]]; then
         params+=(-e AWS_WEB_IDENTITY_TOKEN_FILE="$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE")
+        params+=(-v "$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE":/root/web-identity-token)
     fi
 
     docker run --rm -t \
