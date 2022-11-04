@@ -45,4 +45,10 @@ soak_test_on_release_service_names: []
 code_gen_presubmit_services:
 - dynamodb
 - ecr
+- eks
+- iam
+- lambda
+- prometheusservice
+- rds
 - s3
+- sfn
