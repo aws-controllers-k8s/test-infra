@@ -533,7 +533,7 @@
         {
           "datasource": "$datasource",
           "exemplar": true,
-          "expr": "etcd_object_counts{resource=~\".*\\\\.services\\\\.k8s\\\\.aws\"} / on(instance) group_left topk(1, group by (instance) (etcd_object_counts))",
+          "expr": "apiserver_storage_objects{resource=~\".*\\\\.services\\\\.k8s\\\\.aws\"} / on(instance) group_left topk(1, group by (instance) (apiserver_storage_objects))",
           "interval": "",
           "legendFormat": "{{resource}}",
           "refId": "A"
