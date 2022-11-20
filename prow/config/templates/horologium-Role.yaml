@@ -24,3 +24,4 @@ rules:
     verbs:
       - create
       - list
+      - watch

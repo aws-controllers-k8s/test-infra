@@ -53,9 +53,10 @@ spec:
         - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
-        - --github-token-path=/etc/github/token
         - --github-workers=10
         - --kubernetes-blob-storage-workers=10
+        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-private-key-path=/etc/github/cert
         volumeMounts:
         - name: config
           mountPath: /etc/config

@@ -108,7 +108,7 @@ export class CICluster extends cdk.Construct {
       chart: 'external-dns',
       repository: 'https://charts.bitnami.com/bitnami',
       namespace: EXTERNAL_DNS_NAMESPACE,
-      version: '4.11.1',
+      version: '6.12.0',
       values: {
         namespace: PROW_NAMESPACE, // Limit only to DNS in Prow
         sources: ["ingress"],

@@ -4,26 +4,29 @@ import * as kplus from 'cdk8s-plus-20';
 import { PROW_NAMESPACE, PROW_JOB_NAMESPACE } from '../test-ci-stack';
 
 export interface ProwSecretsChartProps {
-  readonly botPersonalAccessToken: string;
-  readonly webhookHMACToken: string;
+  readonly githubAppId: string;
+  readonly githubAppPrivateKey: string;
+  readonly githubAppWebhookSecret: string;
 }
 
 export class ProwSecretsChart extends cdk8s.Chart {
-  readonly botPATSecret: kplus.Secret;
-  // github token to be used by prowjobs in PROW_JOB_NAMESPACE
-  readonly prowjobBotPATSecret: kplus.Secret;
-  readonly webhookHMACSecret: kplus.Secret;
+  readonly githubToken: kplus.Secret;
+  // github client secret to be used by prowjobs in PROW_JOB_NAMESPACE
+  readonly prowjobGithubToken: kplus.Secret;
+  readonly hmacToken: kplus.Secret;
 
   constructor(scope: constructs.Construct, id: string, props: ProwSecretsChartProps) {
     super(scope, id);
 
-    if (props.botPersonalAccessToken === undefined || props.webhookHMACToken === undefined) {
-      throw new Error(`Expected bot personal access token and webhook HMAC token to be specified`);
+    if (props.githubAppPrivateKey === undefined || props.githubAppWebhookSecret === undefined || props.githubAppId === undefined) {
+      console.trace()
+      throw new Error(`Expected GitHub app ID & app private key & app webhook HMAC token to be specified`);
     }
 
-    this.botPATSecret = new kplus.Secret(this, 'github-token', {
+    this.githubToken = new kplus.Secret(this, 'github-token', {
       stringData: {
-        'token': props.botPersonalAccessToken
+        'cert': props.githubAppPrivateKey,
+        'appid': props.githubAppId
       },
       metadata: {
         name: 'github-token',
@@ -31,9 +34,10 @@ export class ProwSecretsChart extends cdk8s.Chart {
       }
     });
 
-    this.prowjobBotPATSecret = new kplus.Secret(this, 'prowjob-github-token', {
+    this.prowjobGithubToken = new kplus.Secret(this, 'prowjob-github-token', {
       stringData: {
-        'token': props.botPersonalAccessToken
+        'cert': props.githubAppPrivateKey,
+        'appid': props.githubAppId
       },
       metadata: {
         name: 'prowjob-github-token',
@@ -41,9 +45,9 @@ export class ProwSecretsChart extends cdk8s.Chart {
       }
     });
 
-    this.webhookHMACSecret = new kplus.Secret(this, 'hmac-token', {
+    this.hmacToken = new kplus.Secret(this, 'hmac-token', {
       stringData: {
-        'hmac': props.webhookHMACToken
+        'hmac': props.githubAppWebhookSecret
       },
       metadata: {
         name: 'hmac-token',
