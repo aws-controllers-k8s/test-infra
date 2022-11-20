@@ -263,7 +263,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -365,7 +365,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -491,7 +491,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -616,7 +616,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -642,7 +642,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -675,7 +675,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -801,7 +801,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -827,7 +827,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -860,7 +860,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -986,7 +986,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1012,7 +1012,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1045,7 +1045,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1170,8 +1170,8 @@ postsubmits:
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: prowjob-github-token
-                key: token
+                name: prowjob-github-secret
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1197,7 +1197,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1230,7 +1230,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1356,7 +1356,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1382,7 +1382,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1415,7 +1415,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1541,7 +1541,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1567,7 +1567,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1600,7 +1600,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1726,7 +1726,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1752,7 +1752,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1785,7 +1785,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1911,7 +1911,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -1937,7 +1937,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -1970,7 +1970,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2096,7 +2096,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -2122,7 +2122,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2155,7 +2155,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2281,7 +2281,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -2307,7 +2307,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2340,7 +2340,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2466,7 +2466,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -2492,7 +2492,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2525,7 +2525,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2651,7 +2651,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -2677,7 +2677,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2710,7 +2710,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2836,7 +2836,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -2862,7 +2862,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -2895,7 +2895,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3021,7 +3021,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3047,7 +3047,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3080,7 +3080,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3206,7 +3206,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3232,7 +3232,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3265,7 +3265,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3391,7 +3391,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3417,7 +3417,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3450,7 +3450,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3576,7 +3576,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3602,7 +3602,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3635,7 +3635,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3761,7 +3761,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3787,7 +3787,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3820,7 +3820,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -3946,7 +3946,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -3972,7 +3972,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4005,7 +4005,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4131,7 +4131,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -4157,7 +4157,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4190,7 +4190,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4316,7 +4316,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -4342,7 +4342,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4375,7 +4375,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4501,7 +4501,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -4527,7 +4527,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4560,7 +4560,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4686,7 +4686,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -4712,7 +4712,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4745,7 +4745,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4871,7 +4871,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -4897,7 +4897,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -4930,7 +4930,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -5056,7 +5056,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -5082,7 +5082,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -5115,7 +5115,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -5241,7 +5241,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -5267,7 +5267,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -5300,7 +5300,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -5405,7 +5405,7 @@ postsubmits:
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
