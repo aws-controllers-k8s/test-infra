@@ -17,7 +17,7 @@
             valueFrom:
               secretKeyRef:
                 name: prowjob-github-token
-                key: token
+                key: cert
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX

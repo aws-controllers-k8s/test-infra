@@ -50,7 +50,6 @@ spec:
         image: {{ .Values.horologium.image }}
         args:
         - --dry-run={{ .Values.dryRun }}
-        - --deck-url=http://deck/
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
         volumeMounts:

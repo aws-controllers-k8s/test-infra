@@ -50,16 +50,21 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: GITHUB_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: appid
         image: {{ .Values.hook.image }}
         imagePullPolicy: Always
         args:
         - --dry-run={{ .Values.dryRun }}
-        - --deck-url=http://deck/
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
-        - --github-token-path=/etc/github/token
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
+        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-private-key-path=/etc/github/cert
         ports:
           - name: http
             containerPort: 8888

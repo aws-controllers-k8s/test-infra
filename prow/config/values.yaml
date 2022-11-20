@@ -19,14 +19,14 @@ ingress:
 
 crier:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/crier:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/crier:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
 deck:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/deck:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/deck:v20221121-dfec9ce18d
   service:
     type: 'ClusterIP'
   serviceAccount:
@@ -35,12 +35,12 @@ deck:
 
 ghproxy:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/ghproxy:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/ghproxy:v20221121-dfec9ce18d
   volumeSize: 100
 
 hook:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/hook:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/hook:v20221121-dfec9ce18d
   service:
     type: 'LoadBalancer'
   serviceAccount:
@@ -49,44 +49,45 @@ hook:
 
 horologium:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/horologium:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/horologium:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
 prowControllerManager:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/prow-controller-manager:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/prow-controller-manager:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
 sinker:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/sinker:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/sinker:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
 statusreconciler:
-  image: gcr.io/k8s-prow/status-reconciler:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/status-reconciler:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
 tide:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/tide:v20210422-d12e80af3e
+  image: gcr.io/k8s-prow/tide:v20221121-dfec9ce18d
   serviceAccount:
     create: false
     name: ''
 
-githubToken:
+githubApp:
   secret:
    create: false
-  token: ''
+  appId: ''
+  cert: ''
 
-hmacToken:
+githubWebhookToken:
   secret:
     create: false
   hmac: ''
@@ -96,7 +97,7 @@ s3Credentials:
     create: true
 
 utility_images:
-  clonerefs: gcr.io/k8s-prow/clonerefs:v20210422-d12e80af3e
-  entrypoint: gcr.io/k8s-prow/entrypoint:v20210422-d12e80af3e
-  initupload: gcr.io/k8s-prow/initupload:v20210422-d12e80af3e
-  sidecar: gcr.io/k8s-prow/sidecar:v20210422-d12e80af3e
+  clonerefs: gcr.io/k8s-prow/clonerefs:v20221121-dfec9ce18d
+  entrypoint: gcr.io/k8s-prow/entrypoint:v20221121-dfec9ce18d
+  initupload: gcr.io/k8s-prow/initupload:v20221121-dfec9ce18d
+  sidecar: gcr.io/k8s-prow/sidecar:v20221121-dfec9ce18d

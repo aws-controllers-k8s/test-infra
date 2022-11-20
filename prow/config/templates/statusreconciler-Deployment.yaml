@@ -42,16 +42,16 @@ spec:
         image: {{ .Values.statusreconciler.image }}
         args:
         - --dry-run={{ .Values.dryRun }}
-        - --deck-url=http://deck/
         - --continue-on-error=true
         - --plugin-config=/etc/plugins/plugins.yaml
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
-        - --github-token-path=/etc/github/token
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
         - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --status-path=s3://{{ .Values.prow.tideStatusReconcilerBucketName }}/status-reconciler-status
+        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-private-key-path=/etc/github/cert
         volumeMounts:
         - name: github-token
           mountPath: /etc/github
