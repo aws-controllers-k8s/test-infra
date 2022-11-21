@@ -107,7 +107,7 @@ data:
           preset-test-config: "true"
         env:
         - name: TEST_CONFIG_PATH
-.         value: "/etc/config/test_config.yaml"
+          value: "/etc/config/test_config.yaml"
         volumes:
         - name: config-volume
           configMap:
