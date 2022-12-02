@@ -1,0 +1,35 @@
+- name: label-sync
+  labels:
+    app: label-sync
+  decorate: true
+  annotations:
+    description: Runs label_sync to synchronize GitHub repo labels with the label config defined in label_sync/labels.yaml.
+  agent: kubernetes
+  spec:
+    containers:
+    - name: label-sync
+      image: gcr.io/k8s-prow/label_sync:v20220330-40eb179576
+      command:
+      - label_sync
+      args:
+      - --config=/etc/config/labels.yaml
+      - --confirm=true
+      - --orgs=aws-controllers-k8s
+      - --token=/etc/github/oauth
+      - --github-endpoint=http://ghproxy
+      - --github-endpoint=https://api.github.com
+      - --debug
+      volumeMounts:
+      - name: github-token
+        mountPath: /etc/github
+        readOnly: true
+      - name: config
+        mountPath: /etc/config
+        readOnly: true
+    volumes:
+    - name: github-token
+      secret:
+        secretName: prowjob-github-token
+    - name: config
+      configMap:
+        name: label-config

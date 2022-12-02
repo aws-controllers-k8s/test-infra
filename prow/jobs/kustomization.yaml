@@ -16,3 +16,8 @@ configMapGenerator:
   behavior: create
   files:
   - test_config.yaml
+- name: label-config
+  namespace: prow
+  behavior: create
+  files:
+  - labels.yaml
