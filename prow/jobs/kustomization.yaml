@@ -17,7 +17,7 @@ configMapGenerator:
   files:
   - test_config.yaml
 - name: label-config
-  namespace: prow
+  namespace: test-pods
   behavior: create
   files:
   - labels.yaml
