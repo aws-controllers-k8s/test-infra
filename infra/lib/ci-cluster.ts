@@ -25,7 +25,7 @@ export class CICluster extends cdk.Construct {
     super(scope, id);
 
     this.testCluster = new eks.Cluster(scope, 'TestInfraCluster', {
-      version: eks.KubernetesVersion.V1_20,
+      version: eks.KubernetesVersion.V1_21,
       defaultCapacity: 0
     })
     this.testNodegroup = this.testCluster.addNodegroupCapacity('TestInfraNodegroup', {
