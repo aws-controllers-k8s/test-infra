@@ -45,6 +45,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: GITHUB_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: appid
         image: {{ .Values.crier.image }}
         args:
         - --blob-storage-workers=10
@@ -55,7 +60,7 @@ spec:
         - --github-endpoint=https://api.github.com
         - --github-workers=10
         - --kubernetes-blob-storage-workers=10
-        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         volumeMounts:
         - name: config
