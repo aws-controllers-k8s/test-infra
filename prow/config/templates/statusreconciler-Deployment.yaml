@@ -39,6 +39,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: GITHUB_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: github-token
+              key: appid
         image: {{ .Values.statusreconciler.image }}
         args:
         - --dry-run={{ .Values.dryRun }}
@@ -50,7 +55,7 @@ spec:
         - --github-endpoint=https://api.github.com
         - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --status-path=s3://{{ .Values.prow.tideStatusReconcilerBucketName }}/status-reconciler-status
-        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         volumeMounts:
         - name: github-token

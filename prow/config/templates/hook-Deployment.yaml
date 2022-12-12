@@ -63,7 +63,7 @@ spec:
         - --job-config-path=/etc/job-config
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
-        - --github-app-id={{ .Values.githubApp.appId }}
+        - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         ports:
           - name: http
