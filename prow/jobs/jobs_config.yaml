@@ -18,6 +18,7 @@ aws_services:
 - elasticache
 - emrcontainers
 - iam
+- kafka
 - kinesis
 - kms
 - lambda
