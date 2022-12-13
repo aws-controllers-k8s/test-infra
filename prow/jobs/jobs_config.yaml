@@ -31,6 +31,7 @@ aws_services:
 - sagemaker
 - sfn
 - sns
+- sqs
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
