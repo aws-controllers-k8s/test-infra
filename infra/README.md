@@ -13,7 +13,7 @@
 To deploy the CDK stacks, you must have the appropriate permissions to create
 the CloudFormation stack and associated resources in a given AWS account.
 
-You will also need to **manually** create and configure a GitHub app for Prow as [documented here](https://github.com/kubernetes-sigs/prow/blob/main/site/content/en/docs/Legacy%20Snapshot/prow/getting_started_deploy.md#github-app).
+You will also need to **manually** create and configure a GitHub app for Prow as [documented here](https://github.com/kubernetes-sigs/prow/blob/main/site/content/en/docs/getting-started-deploy.md#github-app).
 
 Once the GitHub app is configured, you will need three data elements from the app's settings page to pass to the CDK deployment:
 
