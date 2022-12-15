@@ -22,7 +22,7 @@ new TestCIStack(app, 'TestCIStack', {
   clusterConfig: {
     githubPersonalAccessToken: app.node.tryGetContext('pat') || process.env.GITHUB_PAT,
     githubAppId: app.node.tryGetContext('app_id') || process.env.GITHUB_APP_ID,
-    githubClientId: app.node.tryGetContext('client_id') || process.env.GITHUB_CLIENT_ID,
+    githubAppClientId: app.node.tryGetContext('client_id') || process.env.GITHUB_APP_CLIENT_ID,
     githubAppPrivateKey: app.node.tryGetContext('app_private_key') || process.env.GITHUB_APP_PRIVATE_KEY,
     githubAppWebhookSecret: app.node.tryGetContext('app_webhook_secret') || process.env.GITHUB_APP_WEBHOOK_SECRET
   },
