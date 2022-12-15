@@ -64,8 +64,8 @@
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: prowjob-github-token
-                key: cert
+                name: prowjob-github-pat-token
+                key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_ID
@@ -90,8 +90,8 @@
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: prowjob-github-token
-                key: cert
+                name: prowjob-github-pat-token
+                key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
@@ -123,8 +123,8 @@
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: prowjob-github-token
-                key: cert
+                name: prowjob-github-pat-token
+                key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"
           - name: GITHUB_EMAIL_PREFIX
