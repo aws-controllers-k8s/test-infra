@@ -17,6 +17,7 @@ aws_services:
 - eks
 - elasticache
 - emrcontainers
+- eventbridge
 - iam
 - kafka
 - kinesis
