@@ -10,6 +10,13 @@ default:
   labels:
     # Area labels
     - color: 0052cc
+      description: Issues or PRs related to ACK Adopted Resources
+      name: area/adopted-resource
+      target: both
+      addedBy: label
+      previously:
+        - name: AdoptedResource
+    - color: 0052cc
       description: Issues or PRs related to AWS APIs
       name: area/api/aws
       target: both
@@ -32,9 +39,18 @@ default:
       target: both
       addedBy: label
     - color: 0052cc
+      description: Issues or PRs related to crossplane
+      name: area/crossplane
+      previously:
+        - name: Crossplane
+      target: both
+      addedBy: label
+    - color: 0052cc
       description: Issues or PRs related to dependency changes
       name: area/dependency
       target: both
+      previously:
+        - name: dependencies
       addedBy: label
     - color: 0052cc
       description: Issues or PRs related to documentation and examples
@@ -44,10 +60,24 @@ default:
       previously:
         - name: documentation
     - color: 0052cc
+      description: Issues or PRs related to Field Export
+      name: area/field-export
+      target: both
+      previously:
+        - name: FieldExport
+      addedBy: label
+    - color: 0052cc
       description: Issues or PRs as related to our testing infrastructure, prow/flux configuration etc...
       name: area/infra
       target: both
       addedBy: label
+    - color: 0052cc
+      description: Issues or PRs related to Prow
+      name: area/prow
+      target: both
+      addedBy: label
+      previously:
+        - name: prow
     - color: 0052cc
       description: Issues or PRs related to multi version support
       name: area/multi-version
@@ -181,12 +211,22 @@ default:
       name: kind/design
       target: both
       prowPlugin: label
+      previously:
+        - name: design
       addedBy: anyone
     - color: c7def8
       description: Categorizes issue or PR as related to documentation.
       name: kind/documentation
       target: both
       prowPlugin: label
+      addedBy: anyone
+    - color: c7def8
+      description: Categorizes issue or PR as related to existing feature enhancements.
+      name: kind/enhancement
+      target: both
+      prowPlugin: label
+      previously:
+        - name: enhancement
       addedBy: anyone
     - color: c7def8
       description: Categorizes issue or PR as related to a new feature.
@@ -404,13 +444,13 @@ default:
 repos:
   aws-controllers-k8s/community:
     labels:
-    - color: dd7215
+    - color: ffddbf
       description: Indicates issues or PRs related to all the service controllers.
       name: service/all
       target: issues
       addedBy: anyone
 
-    - color: dd7215
+    - color: ffddbf
       description: Indicates issues or PRs that are not related to any of the service controllers.
       name: service/none
       target: issues
@@ -418,7 +458,7 @@ repos:
 
     # AWS services labels
     {% for service in aws_services %}
-    - color: dd7215
+    - color: f59745
       description: Indicates issues or PRs that are related to {{ service }}-controller.
       name: service/{{ service }}
       target: issues
