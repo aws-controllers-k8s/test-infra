@@ -14,14 +14,40 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 setup_kind_cluster() {
     local __cluster_name=$1
     local __controller_namespace=$2
-    local kubeconfig_path="$ROOT_DIR/build/clusters/$__cluster_name/kubeconfig"
+    local kind_cluster_build_dir="$ROOT_DIR/build/clusters/$__cluster_name"
+    local kubeconfig_path="$kind_cluster_build_dir/kubeconfig"
+    local kubecontext="kind-$__cluster_name"
+    local kubecontext_path="$kind_cluster_build_dir/kubecontext"
 
     info_msg "Creating cluster with name \"$__cluster_name\""
     _create_kind_cluster "$__cluster_name" "$kubeconfig_path"
 
-    info_msg "Exporting KUBECONFIG=$kubeconfig_path"
-    export KUBECONFIG=$kubeconfig_path
+    debug_msg "Creating kubecontext file $kubecontext_path ... "
+    cat <<EOF > "$kubecontext_path"
+export KUBECONFIG="$kubeconfig_path"
+export KUBECONTEXT="$kubecontext"
+kubectl config use-context "$kubecontext"
+kubectl config set-context --current --namespace=ack-system
 
+controller_pod() {
+  local __service_name="\$1"
+  if [ -z "\$__service_name" ]; then
+    echo "Call controller_pod with the name of the service controller you wish to"
+    echo "find an ID for. For example: controller_pod s3"
+    return
+  fi
+  echo \$(kubectl get pods -o json | jq -r ".items[] | select(.metadata.name | test(\"ack-\$__service_name-controller\")).metadata.name")
+}
+EOF
+    info_msg ""
+    info_msg "*******************************************"
+    info_msg "* To execute kubectl in the test context: *"
+    info_msg "*******************************************"
+    echo ""
+    echo "source $kubecontext_path"
+    echo ""
+
+    export KUBECONFIG="$kubeconfig_path"
     _install_additional_controllers "$__controller_namespace"
 }
 
