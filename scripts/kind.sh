@@ -14,14 +14,34 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 setup_kind_cluster() {
     local __cluster_name=$1
     local __controller_namespace=$2
-    local kubeconfig_path="$ROOT_DIR/build/clusters/$__cluster_name/kubeconfig"
+    local kind_cluster_build_dir="$ROOT_DIR/build/clusters/$__cluster_name"
+    local kubeconfig_path="$kind_cluster_build_dir/kubeconfig"
+    local kubecontext="kind-$__cluster_name"
+    local kubecontext_path="$kind_cluster_build_dir/kubecontext"
 
     info_msg "Creating cluster with name \"$__cluster_name\""
     _create_kind_cluster "$__cluster_name" "$kubeconfig_path"
 
-    info_msg "Exporting KUBECONFIG=$kubeconfig_path"
-    export KUBECONFIG=$kubeconfig_path
+    info_msg "Creating kubecontext file $kubecontext_path ... "
+    cat <<EOF > "$kubecontext_path"
+export KUBECONFIG="$kubeconfig_path"
+export KUBECONTEXT="$kubecontext"
+kubectl config use-context "$kubecontext"
+kubectl config set-context --current --namespace=ack-system
 
+controller_pod() {
+  echo \$(kubectl get pods -ojsonpath='{.items[0].metadata.name}')
+}
+EOF
+    echo ""
+    echo "*******************************************"
+    echo "* To execute kubectl in the test context: *"
+    echo "*******************************************"
+    echo ""
+    echo "source $kubecontext_path"
+    echo ""
+
+    export KUBECONFIG="$kubeconfig_path"
     _install_additional_controllers "$__controller_namespace"
 }
 
@@ -42,7 +62,7 @@ _create_kind_cluster() {
             kind create cluster --name "$__cluster_name" \
                 ${cluster_version:+ --image kindest/node:v$cluster_version} \
                 --config "$config_file_path" \
-                --kubeconfig $__kubeconfig_path 1>&2 || :
+                --kubeconfig $__kubeconfig_path 1>&2 2>/dev/null || :
         else
             break
         fi
