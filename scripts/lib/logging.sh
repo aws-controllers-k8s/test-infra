@@ -15,7 +15,7 @@ _indented_msg() {
         indent="$( for each in $( seq 0 $__indent_level ); do printf " "; done )"
     fi
 
-    local timestamp=$(date -Is)
+    local timestamp=$(date +"%Y-%m-%dT%H:%M:%S")
 
     echo "$timestamp $__indent$__msg"
 }
