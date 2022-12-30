@@ -24,7 +24,7 @@
     "@aws-cdk/aws-eks": "^1.150.0",
     "@aws-cdk/core": "^1.150.0",
     "@aws-cdk/region-info": "^1.150.0",
-    "cdk8s": "^1.5.54",
+    "cdk8s": "^1.9.3",
     "cdk8s-plus-20": "^1.0.0-beta.123",
     "constructs": "^3.3.252",
     "set-value": ">=4.0.1",
