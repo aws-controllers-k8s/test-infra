@@ -126,10 +126,13 @@ def _get_k8s_api_client() -> ApiClient:
     return config.new_client_from_config()
 
 
-def create_k8s_namespace(namespace_name: str):
+def create_k8s_namespace(namespace_name: str, annotations: dict = {}):
     _api_client = _get_k8s_api_client()
-    return client.CoreV1Api(_api_client).create_namespace(
-        client.V1Namespace(name=namespace_name.lower()))
+
+    namespace = client.V1Namespace(metadata=client.V1ObjectMeta(
+        name=namespace_name.lower(),annotations=annotations))
+
+    return client.CoreV1Api(_api_client).create_namespace(namespace)
 
 
 def delete_k8s_namespace(namespace_name: str):
