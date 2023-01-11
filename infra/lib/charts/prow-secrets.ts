@@ -29,8 +29,11 @@ export class ProwSecretsChart extends cdk8s.Chart {
         props.githubAppClientId === undefined ||
         props.githubAppWebhookSecret === undefined ||
         props.githubAppId === undefined) {
-      console.trace()
       throw new Error(`Expected: GitHub bot PAT, GitHub bot Webhook HMAC, GitHub app ID, client ID, app private key, & app webhook HMAC token`);
+    }
+    if (props.githubAppPrivateKey.length < 1500) {
+      console.error("Found invalid app private key:  ", props.githubAppPrivateKey);
+      throw new Error(`Expected GitHub app private key to be in valid PEM format (and >= 1500 bytes)`);
     }
 
     // a GitHub PAT for use by various scripts for deploying code to repos
