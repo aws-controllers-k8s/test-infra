@@ -5,6 +5,7 @@
 
 # List of AWS services supported in ACK testing infrastructure.
 aws_services:
+- acm
 - acmpca
 - apigatewayv2
 - applicationautoscaling
