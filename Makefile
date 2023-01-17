@@ -34,6 +34,7 @@ test-recommended-policy:
 
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
+	@rm -rf build/*
 
 help:           ## Show this help.
 	@grep -F -h "##" $(MAKEFILE_LIST) | grep -F -v grep | sed -e 's/\\$$//' \
