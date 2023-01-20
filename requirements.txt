@@ -1,4 +1,4 @@
-boto3==1.24.35
+boto3==1.26.54
 kubernetes==12.0.1
 PyYAML==5.4
 pytest-xdist==2.2.0
