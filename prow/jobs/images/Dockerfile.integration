@@ -6,8 +6,7 @@ ARG DOCKER_VERSION=19.03.15
 ENV DOCKER_VERSION=${DOCKER_VERSION}
 
 RUN echo "Installing controller-gen v0.9.2..." \
-    && go get "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.2" \
-    && mv $GOPATH/bin/controller-gen /usr/bin/controller-gen
+    && go install "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.2"
 
 RUN echo "Installing Kustomize ..." \
     && export KUSTOMIZE_TARBALL="kustomize.tar.gz" \
@@ -42,6 +41,5 @@ RUN echo "Ensuring Legacy Iptables ..." \
     && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true \
     && update-alternatives --set arptables /usr/sbin/arptables-legacy || true
 
-RUN curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.10.0/kind-linux-amd64 && \
-    chmod +x ./kind && \
-    mv ./kind /usr/bin/kind
+RUN echo "Installing Kind v0.17.0..." \
+    && go install "sigs.k8s.io/kind@v0.17.0"
