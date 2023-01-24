@@ -43,20 +43,20 @@ payload="{
 
 base64_encode()
 {
-	declare input=${1:-$(</dev/stdin)}
+	local input=${1:-$(</dev/stdin)}
 	# Use `tr` to URL encode the output from base64.
-	printf '%s' "${input}" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n'
+	echo "${input}" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n'
 }
 
 json() {
-	declare input=${1:-$(</dev/stdin)}
-	printf '%s' "${input}" | jq -c .
+	local input=${1:-$(</dev/stdin)}
+	echo "${input}" | jq -c .
 }
 
 hmacsha256_sign()
 {
-	declare input=${1:-$(</dev/stdin)}
-	printf '%s' "${input}" | openssl dgst -binary -sha256 -sign "${GITHUB_PRIVATE_KEY_PATH}"
+	local input=${1:-$(</dev/stdin)}
+	echo "${input}" | openssl dgst -binary -sha256 -sign "${GITHUB_PRIVATE_KEY_PATH}"
 }
 
 header_base64=$(echo "${header}" | json | base64_encode)
