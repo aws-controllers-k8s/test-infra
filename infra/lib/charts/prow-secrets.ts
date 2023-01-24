@@ -3,43 +3,43 @@ import * as constructs from 'constructs';
 import * as kplus from 'cdk8s-plus-20';
 import { PROW_NAMESPACE, PROW_JOB_NAMESPACE } from '../test-ci-stack';
 
-export interface ProwSecretsChartProps {
-  readonly githubPersonalAccessToken: string;
-  readonly githubAppId: string;
-  readonly githubAppClientId: string;
-  readonly githubAppPrivateKey: string;
-  readonly githubAppWebhookSecret: string;
+export interface ProwGitHubSecretsChartProps {
+  readonly personalAccessToken: string;
+  readonly appId: string;
+  readonly appClientId: string;
+  readonly appPrivateKey: string;
+  readonly appWebhookSecret: string;
 }
 
-export class ProwSecretsChart extends cdk8s.Chart {
-  readonly githubPAT: kplus.Secret;
-  readonly prowjobGithubPAT: kplus.Secret;
+export class ProwGitHubSecretsChart extends cdk8s.Chart {
+  readonly pat: kplus.Secret;
+  readonly prowjobPAT: kplus.Secret;
 
-  readonly githubToken: kplus.Secret;
+  readonly token: kplus.Secret;
   // github client secret to be used by prowjobs in PROW_JOB_NAMESPACE
-  readonly prowjobGithubToken: kplus.Secret;
+  readonly prowjobToken: kplus.Secret;
   readonly hmacToken: kplus.Secret;
 
-  constructor(scope: constructs.Construct, id: string, props: ProwSecretsChartProps) {
+  constructor(scope: constructs.Construct, id: string, props: ProwGitHubSecretsChartProps) {
     super(scope, id);
 
     if (
-        props.githubPersonalAccessToken === undefined ||
-        props.githubAppPrivateKey === undefined ||
-        props.githubAppClientId === undefined ||
-        props.githubAppWebhookSecret === undefined ||
-        props.githubAppId === undefined) {
-      throw new Error(`Expected: GitHub bot PAT, GitHub bot Webhook HMAC, GitHub app ID, client ID, app private key, & app webhook HMAC token`);
+        props.personalAccessToken === undefined ||
+        props.appPrivateKey === undefined ||
+        props.appClientId === undefined ||
+        props.appWebhookSecret === undefined ||
+        props.appId === undefined) {
+      throw new Error(`Expected: GitHub bot PAT, bot Webhook HMAC, app ID, client ID, app private key, & app webhook HMAC token`);
     }
-    if (props.githubAppPrivateKey.length < 1500) {
-      console.error("Found invalid app private key:  ", props.githubAppPrivateKey);
+    if (props.appPrivateKey.length < 1500) {
+      console.error("Found invalid app private key:  ", props.appPrivateKey);
       throw new Error(`Expected GitHub app private key to be in valid PEM format (and >= 1500 bytes)`);
     }
 
     // a GitHub PAT for use by various scripts for deploying code to repos
-    this.githubPAT = new kplus.Secret(this, 'github-pat-token', {
+    this.pat = new kplus.Secret(this, 'github-pat-token', {
       stringData: {
-        'token': props.githubPersonalAccessToken
+        'token': props.personalAccessToken
       },
       metadata: {
         name: 'github-pat-token',
@@ -48,9 +48,9 @@ export class ProwSecretsChart extends cdk8s.Chart {
     });
 
     // a GitHub PAT for use by various Prow jobs
-    this.prowjobGithubPAT = new kplus.Secret(this, 'prowjob-github-pat-token', {
+    this.prowjobPAT = new kplus.Secret(this, 'prowjob-github-pat-token', {
       stringData: {
-        'token': props.githubPersonalAccessToken
+        'token': props.personalAccessToken
       },
       metadata: {
         name: 'prowjob-github-pat-token',
@@ -59,11 +59,11 @@ export class ProwSecretsChart extends cdk8s.Chart {
     });
 
     // three pieces of important data from the GitHub app:  the private key, the app ID, and the client ID
-    this.githubToken = new kplus.Secret(this, 'github-token', {
+    this.token = new kplus.Secret(this, 'github-token', {
       stringData: {
-        'cert': props.githubAppPrivateKey,
-        'appid': props.githubAppId,
-        'clientid': props.githubAppClientId
+        'cert': props.appPrivateKey,
+        'appid': props.appId,
+        'clientid': props.appClientId
       },
       metadata: {
         name: 'github-token',
@@ -71,11 +71,11 @@ export class ProwSecretsChart extends cdk8s.Chart {
       }
     });
 
-    this.prowjobGithubToken = new kplus.Secret(this, 'prowjob-github-token', {
+    this.prowjobToken = new kplus.Secret(this, 'prowjob-github-token', {
       stringData: {
-        'cert': props.githubAppPrivateKey,
-        'appid': props.githubAppId,
-        'clientid': props.githubAppClientId
+        'cert': props.appPrivateKey,
+        'appid': props.appId,
+        'clientid': props.appClientId
       },
       metadata: {
         name: 'prowjob-github-token',
@@ -85,7 +85,7 @@ export class ProwSecretsChart extends cdk8s.Chart {
 
     this.hmacToken = new kplus.Secret(this, 'hmac-token', {
       stringData: {
-        'hmac': props.githubAppWebhookSecret
+        'hmac': props.appWebhookSecret
       },
       metadata: {
         name: 'hmac-token',
