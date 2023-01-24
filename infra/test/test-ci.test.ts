@@ -7,8 +7,11 @@ test('Empty Stack', () => {
     // WHEN
     const stack = new TestCI.TestCIStack(app, 'MyTestStack', {
       clusterConfig: {
-        botPersonalAccessToken: "abc123",
-        webhookHMACToken: "def456"
+        githubAppId: "12345",
+        githubAppPrivateKey: "abc123",
+        githubAppWebhookSecret: "def456",
+        githubAppClientId: "1234567890",
+        githubPersonalAccessToken: "987654321"
       },
       logsBucketName: "my-log-bucket",
       pvreBucketName: undefined
