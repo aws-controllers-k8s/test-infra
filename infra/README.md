@@ -30,7 +30,7 @@ export GITHUB_APP_WEBHOOK_SECRET='<GitHub app webhook secret>'
 export LOGS_BUCKET='<S3 bucket name for logs>' # Optional
 export AWS_DEFAULT_REGION=us-west-2
 
-cd <test-infra root>/infra
+cd test-infra/infra
 cdk bootstrap
 cdk deploy
 ```
@@ -39,7 +39,7 @@ or, via command line arguments:
 ```bash
 export AWS_DEFAULT_REGION=us-west-2
 
-cd <test-infra root>/infra
+cd test-infra/infra
 cdk bootstrap
 cdk deploy -c app_id="<GitHub app ID>" \
            -c app_private_key="<GitHub app private RSA key in PEM format>" \
