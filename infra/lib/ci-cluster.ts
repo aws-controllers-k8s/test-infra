@@ -5,7 +5,7 @@ import * as ec2 from "@aws-cdk/aws-ec2";
 import * as iam from "@aws-cdk/aws-iam";
 import * as cdk8s from "cdk8s";
 import { policies as ALBPolicies } from "./policies/aws-load-balancer-controller-policy";
-import { ProwGithubSecretsChart, ProwGithubSecretsChartProps } from "./charts/prow-secrets";
+import { ProwGitHubSecretsChart, ProwGitHubSecretsChartProps } from "./charts/prow-secrets";
 import {
   EXTERNAL_DNS_NAMESPACE,
   FLUX_NAMESPACE,
@@ -15,7 +15,7 @@ import {
 import { KubernetesManifest } from "@aws-cdk/aws-eks";
 import { Chart } from "cdk8s";
 
-export type CIClusterCompileTimeProps = ProwGithubSecretsChartProps;
+export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps;
 
 export type CIClusterRuntimeProps = {};
 
@@ -39,6 +39,12 @@ export class CICluster extends cdk.Construct {
       minSize: 2,
       diskSize: 150,
     })
+
+    this.namespaceManifests = [
+      EXTERNAL_DNS_NAMESPACE,
+      PROW_JOB_NAMESPACE,
+      PROW_NAMESPACE,
+    ].map(this.createNamespace);
 
     this.installProwRequirements(props);
     this.installFlux();
@@ -117,11 +123,11 @@ export class CICluster extends cdk.Construct {
     fluxBootstrap.node.addDependency(fluxChart);
   };
 
-  installProwRequirements = (secretsProps: ProwGithubSecretsChartProps) => {
+  installProwRequirements = (secretsProps: ProwGitHubSecretsChartProps) => {
     const prowSecretsApp = new cdk8s.App();
     const prowSecretsChart = this.testCluster.addCdk8sChart(
       "prow-secrets",
-      new ProwGithubSecretsChart(prowSecretsApp, "ProwSecrets", secretsProps)
+      new ProwGitHubSecretsChart(prowSecretsApp, "ProwSecrets", secretsProps)
     );
 
     // Ensure namespaces are created before secrets
