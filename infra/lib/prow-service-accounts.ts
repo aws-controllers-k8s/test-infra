@@ -12,9 +12,9 @@ export type ProwServiceAccountsProps = {
   prowCluster: eks.Cluster;
   namespaceManifests: eks.KubernetesManifest[];
 
-  tideStatusBucket: s3.Bucket;
-  presubmitsBucket: s3.Bucket;
-  postsubmitsBucket: s3.Bucket;
+  tideStatusBucket: s3.IBucket;
+  presubmitsBucket: s3.IBucket;
+  postsubmitsBucket: s3.IBucket;
 };
 
 export class ProwServiceAccounts extends cdk.Construct {

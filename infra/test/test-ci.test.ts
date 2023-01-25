@@ -14,6 +14,7 @@ test('Empty Stack', () => {
         personalAccessToken: "987654321"
       },
       logsBucketName: "my-log-bucket",
+      logsBucketImport: false,
       pvreBucketName: undefined
     });
     // THEN
