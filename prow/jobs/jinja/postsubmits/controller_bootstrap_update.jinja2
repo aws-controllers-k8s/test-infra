@@ -16,7 +16,7 @@
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: prowjob-github-pat-token
+                name: prowjob-github-token
                 key: token
           - name: GITHUB_ACTOR
             value: "ack-bot"

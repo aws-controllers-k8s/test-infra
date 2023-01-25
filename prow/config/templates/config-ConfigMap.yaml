@@ -15,6 +15,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  namespace: prow
   name: config
 data:
   config.yaml: |
@@ -147,4 +148,4 @@ data:
           - name: cgroup
             hostPath:
               path: /sys/fs/cgroup
-              type: Directory
+              type: Directory 
