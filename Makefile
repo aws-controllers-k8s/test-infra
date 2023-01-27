@@ -4,7 +4,7 @@ PROW_JOBS_PATH="./prow/jobs"
 
 AWS_SERVICE=$(shell echo $(SERVICE) | tr '[:upper:]' '[:lower:]')
 
-.PHONY: build-prow-jobs
+.PHONY: build-prow-jobs lint-shell
 
 # Assumes python3 is installed as default python on the host.
 build-prow-jobs: ## Compiles the Prow jobs
@@ -35,6 +35,9 @@ test-recommended-policy:
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
 	@rm -rf build/*
+
+lint-shell:	## Run linters against all of the bash scripts
+	@find . -type f -name "*.sh" ! -path "./infra/*" | xargs shellcheck -e SC1091,SC2015
 
 help:           ## Show this help.
 	@grep -F -h "##" $(MAKEFILE_LIST) | grep -F -v grep | sed -e 's/\\$$//' \

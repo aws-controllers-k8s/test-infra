@@ -55,20 +55,22 @@ _create_kind_cluster() {
     local __cluster_name=$1
     local __kubeconfig_path=$2
 
-    local config_file_name="$(get_cluster_configuration_file_name)"
-    local cluster_version="$(get_cluster_k8s_version)"
+    local config_file_name
+    config_file_name="$(get_cluster_configuration_file_name)"
+    local cluster_version
+    cluster_version="$(get_cluster_k8s_version)"
 
     local config_file_path=$SCRIPTS_DIR/kind-configurations/$config_file_name
     
     info_msg "Using configuration \"$config_file_name\""
     debug_msg "Using K8s version \"$cluster_version\""
 
-    for i in $(seq 0 3); do
-        if [[ -z $(kind get clusters 2>/dev/null | grep "$__cluster_name") ]]; then
+    for _ in $(seq 0 3); do
+        if ! grep -q "$(kind get clusters 2>/dev/null | grep "$__cluster_name")"; then
             kind create cluster --name "$__cluster_name" \
                 ${cluster_version:+ --image kindest/node:v$cluster_version} \
                 --config "$config_file_path" \
-                --kubeconfig $__kubeconfig_path 1>&2 || :
+                --kubeconfig "$__kubeconfig_path" 1>&2 || :
         else
             break
         fi
@@ -76,26 +78,33 @@ _create_kind_cluster() {
 }
 
 _get_kind_cluster_name() {
-    local cluster_name=$(get_cluster_name)
+    local cluster_name
+    cluster_name=$(get_cluster_name)
 
     if [[ "$cluster_name" == "" ]]; then
-        local name_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+        local name_uuid
+        name_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
         cluster_name="ack-test-${name_uuid}"
     fi
-    echo $cluster_name
+    echo "$cluster_name"
 }
 
 _install_additional_controllers() {
     local __controller_namespace=$1
 
-    local install_region=$(get_aws_region)
+    local install_region
+    install_region=$(get_aws_region)
+    # shellcheck disable=SC2207  # Don't warn about command splitting - this
+    # isn't for a command
     local additional_controllers=( $(get_cluster_additional_controllers | yq -o=j -I=0 '.[]' -) )
     for controller_version_pair in "${additional_controllers[@]}"; do
-        local controller_name=$(echo $controller_version_pair | tr -d '"' | cut -d "@" -f 1)
-        local controller_version=$(echo $controller_version_pair | tr -d '"' | cut -d "@" -f 2)
+        local controller_name
+        local controller_version
+        controller_name=$(echo "$controller_version_pair" | tr -d '"' | cut -d "@" -f 1)
+        controller_version=$(echo "$controller_version_pair" | tr -d '"' | cut -d "@" -f 2)
 
         # Strip the `-controller` from the name
-        local controller_service=$(echo $controller_name | sed 's/-controller//')
+        local controller_service="${controller_name//-controller/}"
 
         if (_is_additional_controller_installed "$controller_service" "$__controller_namespace"); then
             info_msg "$controller_name already installed. Skipping"
@@ -110,7 +119,8 @@ _is_additional_controller_installed() {
     local __controller_service=$1
     local __controller_namespace=$2
     
-    local exists="$(helm list -q -n "$__controller_namespace" --filter "$__controller_service-chart+" 2>/dev/null)"
+    local exists
+    exists="$(helm list -q -n "$__controller_namespace" --filter "$__controller_service-chart+" 2>/dev/null)"
     [[ "$exists" == "" ]] && return 1 || return 0
 }
 
@@ -124,8 +134,8 @@ _install_additional_controller() {
     _perform_helm_login
 
     helm install --create-namespace -n "$__controller_namespace" \
-        oci://public.ecr.aws/aws-controllers-k8s/$__controller_service-chart \
-        --version=$__controller_version --generate-name --set=aws.region=$__region
+        "oci://public.ecr.aws/aws-controllers-k8s/$__controller_service-chart" \
+        "--version=$__controller_version" --generate-name "--set=aws.region=$__region"
 }
 
 _perform_helm_login() {

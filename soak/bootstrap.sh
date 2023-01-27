@@ -46,7 +46,7 @@ fi
 
 # Bootstrapping configuration
 AWS_SERVICE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-CONTROLLER_TAG="v$(echo $2 | tr -d "v")"
+CONTROLLER_TAG="v$(echo "$2" | tr -d "v")"
 DEPLOY_REGION=${DEPLOY_REGION:-"us-west-2"}
 
 SOAK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -65,17 +65,10 @@ DEFAULT_CONTROLLER_IMAGE_REPO="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-c
 CONTROLLER_IMAGE_REPO=${CONTROLLER_IMAGE_REPO:-$DEFAULT_CONTROLLER_IMAGE_REPO}
 # AWS Region for ACK service controller
 CONTROLLER_AWS_REGION="us-west-2"
-# AWS Account Id for ACK service controller
-CONTROLLER_AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 # Release name of controller helm chart
 CONTROLLER_CHART_RELEASE_NAME="soak-test"
 # Namespace for the controller and its resources
 CONTROLLER_NAMESPACE="ack-system"
-# K8s Service name for <aws-service-name>-controller
-# K8s servcie name has following format inside helm chart
-# "{{ .Chart.Name | trimSuffix "-chart" | trunc 44 }}-controller-metrics"
-K8S_SERVICE_NAME_PREFIX=$(echo "$AWS_SERVICE" | cut -c -44)
-K8S_SERVICE_NAME="$K8S_SERVICE_NAME_PREFIX-controller-metrics"
 
 ### PROMETHEUS, GRAFANA CONFIGURATION ###
 # Local helm repository name for the prometheus repository
@@ -94,8 +87,6 @@ LOKI_CHART_RELEASE_NAME="loki"
 PROM_NAMESPACE="prometheus"
 # Size of the Loki persistence PersistentVolumeClaim
 LOKI_PERSISTENCE_SIZE="15Gi"
-# Local port to access Prometheus dashbaord
-LOCAL_PROMETHEUS_PORT=9090
 # Local port to access Prometheus dashbaord
 LOCAL_GRAFANA_PORT=3000
 
@@ -119,7 +110,7 @@ SOAK_RUNNER_CHART_RELEASE_NAME="soak-test-runner"
 TEST_DURATION_DAYS=${TEST_DURATION_DAYS:-1}
 TEST_DURATION_HOURS=${TEST_DURATION_HOURS:-0}
 TEST_DURATION_MINUTES=${TEST_DURATION_MINUTES:-0}
-NET_SOAK_TEST_DURATION_MINUTES=$(($TEST_DURATION_MINUTES + $TEST_DURATION_HOURS*60 + $TEST_DURATION_DAYS*24*60))
+NET_SOAK_TEST_DURATION_MINUTES=$((TEST_DURATION_MINUTES + TEST_DURATION_HOURS*60 + TEST_DURATION_DAYS*24*60))
 
 export HELM_EXPERIMENTAL_OCI=1
 
@@ -129,28 +120,28 @@ AWS_ECR_PUBLIC_CLI="aws --region us-east-1 ecr-public"
 [ ! -d "$CONTROLLER_DIR" ] && { >&2 echo "Error: Service controller directory does not exist: $CONTROLLER_DIR"; exit 1; }
 
 # Check and create the public ECR repository
-if $AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_NAME > /dev/null 2>&1; then
+if $AWS_ECR_PUBLIC_CLI describe-repositories --repository-name "$SOAK_IMAGE_REPO_NAME" > /dev/null 2>&1; then
     echo "ECR public repository already exists"
 else
     echo -n "Creating ECR public repository ... "
-    $AWS_ECR_PUBLIC_CLI create-repository --repository-name $SOAK_IMAGE_REPO_NAME > /dev/null 2>&1
+    $AWS_ECR_PUBLIC_CLI create-repository --repository-name "$SOAK_IMAGE_REPO_NAME" > /dev/null 2>&1
     echo "ok."
 fi
 
 # Check and create the EKS cluster
-CLUSTER_NAME=$(yq eval -e ".metadata.name" $CLUSTER_CONFIG_PATH 2> /dev/null) || CLUSTER_NAME=$DEFAULT_CLUSTER_NAME
-if $AWS_CLI eks describe-cluster --name $CLUSTER_NAME > /dev/null 2>&1; then
+CLUSTER_NAME=$(yq eval -e ".metadata.name" "$CLUSTER_CONFIG_PATH" 2> /dev/null) || CLUSTER_NAME=$DEFAULT_CLUSTER_NAME
+if $AWS_CLI eks describe-cluster --name "$CLUSTER_NAME" > /dev/null 2>&1; then
     echo "EKS cluster already exists"
 else
     echo "Creating EKS cluster ... "
-    eksctl create cluster -f $CLUSTER_CONFIG_PATH
+    eksctl create cluster -f "$CLUSTER_CONFIG_PATH"
     echo "ok."
 fi
 
-$AWS_CLI eks update-kubeconfig --name $CLUSTER_NAME > /dev/null
+$AWS_CLI eks update-kubeconfig --name "$CLUSTER_NAME" > /dev/null
 
 # Install the controller into the cluster
-CONTROLLER_SERVICE_ACCOUNT_NAME=$(yq eval -e ".iam.serviceAccounts[0].metadata.name" $CLUSTER_CONFIG_PATH 2> /dev/null) || \
+CONTROLLER_SERVICE_ACCOUNT_NAME=$(yq eval -e ".iam.serviceAccounts[0].metadata.name" "$CLUSTER_CONFIG_PATH" 2> /dev/null) || \
     { >&2 echo "Error: IRSA is not included in this cluster config. IRSA is required for soak testing"; exit 1; }
 
 if helm list -n $CONTROLLER_NAMESPACE 2> /dev/null | grep -q $CONTROLLER_CHART_RELEASE_NAME; then
@@ -163,8 +154,8 @@ helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
     --set metrics.service.create="true" --set metrics.service.type="ClusterIP" \
     --set aws.region=$CONTROLLER_AWS_REGION --set serviceAccount.create="false" \
     --set serviceAccount.name="$CONTROLLER_SERVICE_ACCOUNT_NAME" \
-    --set image.Repository=$CONTROLLER_IMAGE_REPO \
-    --set image.Tag=$CONTROLLER_TAG \
+    --set image.Repository="$CONTROLLER_IMAGE_REPO" \
+    --set image.Tag="$CONTROLLER_TAG" \
     $CONTROLLER_CHART_RELEASE_NAME "$CONTROLLER_DIR/helm" 1> /dev/null
 echo "ok."
 
@@ -214,17 +205,17 @@ echo "ok."
 kubectl apply -n $PROM_NAMESPACE -k github.com/aws-controllers-k8s/test-infra/soak/monitoring/grafana?ref=main
 
 # Build and publish the soak test runner image
-SOAK_IMAGE_REPO_URI="$($AWS_ECR_PUBLIC_CLI describe-repositories --repository-name $SOAK_IMAGE_REPO_NAME --output text --query "repositories[0].repositoryUri")" || \
+SOAK_IMAGE_REPO_URI="$($AWS_ECR_PUBLIC_CLI describe-repositories --repository-name "$SOAK_IMAGE_REPO_NAME" --output text --query "repositories[0].repositoryUri")" || \
     { >&2 echo "Error: Could not get the soak test image repository URI"; exit 1; }
 
 echo "Building soak test image ... "
-$OCI_BUILDER build --platform $SOAK_IMAGE_PLATFORM -t $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG \
-    --build-arg AWS_SERVICE=$AWS_SERVICE --build-arg E2E_GIT_REF=$CONTROLLER_TAG "$TEST_INFRA_DIR/soak"
+$OCI_BUILDER build --platform $SOAK_IMAGE_PLATFORM -t "$SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG" \
+    --build-arg AWS_SERVICE="$AWS_SERVICE" --build-arg E2E_GIT_REF="$CONTROLLER_TAG" "$TEST_INFRA_DIR/soak"
 echo "ok."
 
 echo -n "Pushing soak test image to ECR public ... "
 $AWS_ECR_PUBLIC_CLI get-login-password | $OCI_BUILDER login --username AWS --password-stdin public.ecr.aws 1> /dev/null 2>&1
-$OCI_BUILDER push $SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG 1> /dev/null
+$OCI_BUILDER push "$SOAK_IMAGE_REPO_URI:$SOAK_IMAGE_TAG" 1> /dev/null
 echo "ok."
 
 # Install the soak test runner
@@ -240,8 +231,8 @@ fi
 
 echo -n "Installing soak test chart ... "
 helm upgrade --install --create-namespace -n $CONTROLLER_NAMESPACE \
-    --set awsService=$AWS_SERVICE --set soak.imageRepo=$SOAK_IMAGE_REPO_URI \
-    --set soak.imageTag=$SOAK_IMAGE_TAG --set soak.startTimeEpochSeconds=$(date +%s) \
+    --set awsService="$AWS_SERVICE" --set soak.imageRepo="$SOAK_IMAGE_REPO_URI" \
+    --set soak.imageTag=$SOAK_IMAGE_TAG --set soak.startTimeEpochSeconds="$(date +%s)" \
     --set soak.durationMinutes=$NET_SOAK_TEST_DURATION_MINUTES \
     $SOAK_RUNNER_CHART_RELEASE_NAME "$SOAK_DIR/helm/ack-soak-test" 1> /dev/null
 echo "ok."

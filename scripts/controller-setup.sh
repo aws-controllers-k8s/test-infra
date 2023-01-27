@@ -35,14 +35,15 @@ build_and_install_controller() {
     _load_controller_image "$__cluster_name" "$__img_name"
 
     info_msg "Installing controller deployment ... "
-    _install_deployment "$__controller_namespace" "$__img_name"
+    _install_deployment "$__controller_namespace" "$__img_name" "$__cluster_name"
 }
 
 _build_controller_image() {
     local __img_name=$1
 
-    local local_build="$(get_is_local_build)"
-    LOCAL_MODULES="$local_build" AWS_SERVICE_DOCKER_IMG="$__img_name" ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null
+    local local_build
+    local_build="$(get_is_local_build)"
+    LOCAL_MODULES="$local_build" AWS_SERVICE_DOCKER_IMG="$__img_name" "${CODE_GENERATOR_SCRIPTS_DIR}"/build-controller-image.sh "${AWS_SERVICE}" 1>/dev/null
 }
 
 _load_controller_image() {
@@ -55,10 +56,11 @@ _load_controller_image() {
 _install_deployment() {
     local __controller_namespace=$1
     local __img_name=$2
+    local __cluster_name=$3
 
     local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
     local service_config_dir="$service_controller_source_dir/config"
-    local test_config_dir="$ROOT_DIR/build/clusters/$cluster_name/config/test"
+    local test_config_dir="$ROOT_DIR/build/clusters/$__cluster_name/config/test"
 
     # Register the ACK service controller's CRDs in the target k8s cluster
     debug_msg "Loading CRD manifests for $AWS_SERVICE into the cluster ... "
@@ -72,7 +74,7 @@ _install_deployment() {
     done
 
     debug_msg "Creating $__controller_namespace namespace"
-    kubectl create namespace $__controller_namespace 2>/dev/null || true
+    kubectl create namespace "$__controller_namespace" 2>/dev/null || true
 
     debug_msg "Loading RBAC manifests for $AWS_SERVICE into the cluster ... "
     kustomize build "$service_config_dir"/rbac | kubectl apply -f - 1>/dev/null
@@ -90,7 +92,7 @@ resources:
 EOF
 
     debug_msg "Loading service controller Deployment for $AWS_SERVICE into the cluster ..."
-    pushd $test_config_dir 2>/dev/null 1>& 2
+    pushd "$test_config_dir" 2>/dev/null 1>& 2
     kustomize edit set image controller="$__img_name"
     popd 2>/dev/null 1>& 2
     kustomize build "$test_config_dir" | kubectl apply -f - 1>/dev/null
@@ -99,9 +101,10 @@ EOF
     debug_msg "Generating AWS temporary credentials and adding to env vars map ... "
     aws_generate_temp_creds
 
-    local region=$(get_aws_region)
+    local region
+    region=$(get_aws_region)
 
-    kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
+    kubectl -n "$__controller_namespace" set env deployment/ack-"$AWS_SERVICE"-controller \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
@@ -114,7 +117,8 @@ EOF
     # Static sleep to ensure controller is up and running
     sleep 5
 
-    local dump_logs=$(get_dump_controller_logs)
+    local dump_logs
+    dump_logs=$(get_dump_controller_logs)
 
     _loop_rotate_temp_creds 3000 "$__controller_namespace" "ack-$AWS_SERVICE-controller" "$dump_logs" &
 }
@@ -130,13 +134,14 @@ dump_controller_logs() {
         error_msg "Skipping controller logs capture"
     else
         # Use the first pod in the `ack-system` namespace
-        POD=$(kubectl get pods -n $__controller_namespace -o name | grep $AWS_SERVICE-controller | head -n 1)
-        kubectl logs -n $__controller_namespace $POD >> $ARTIFACTS/controller_logs
+        POD=$(kubectl get pods -n "$__controller_namespace" -o name | grep "$AWS_SERVICE-controller" | head -n 1)
+        kubectl logs -n "$__controller_namespace" "$POD" >> "$ARTIFACTS/controller_logs"
     fi
 }
 
 _stop_loop_rotating_creds() {
-    local bg_jobs_pids=$(jobs -p)
+    local bg_jobs_pids
+    bg_jobs_pids=$(jobs -p)
     if [[ -n $bg_jobs_pids ]]; then
         debug_msg "cleaning background jobs with pids : $bg_jobs_pids"
         kill "$bg_jobs_pids"
@@ -149,8 +154,10 @@ _loop_rotate_temp_creds() {
     local __deployment_name=$3
     local __dump_logs=$4
 
+    # shellcheck disable=SC2317  # Don't warn about unreachable function
     function _kill_sleep() {
-        local bg_jobs_pids=$(jobs -p)
+        local bg_jobs_pids
+        bg_jobs_pids=$(jobs -p)
         if [[ -n $bg_jobs_pids ]]; then
           debug_msg "cleaning background jobs with pids : $bg_jobs_pids"
           kill "$bg_jobs_pids"
@@ -160,7 +167,7 @@ _loop_rotate_temp_creds() {
 
     while true; do
         info_msg "Sleeping for $__rotation_time_in_seconds seconds before rotating temporary aws credentials"
-        sleep $__rotation_time_in_seconds & wait
+        sleep "$__rotation_time_in_seconds" & wait
 
         rotate_temp_creds "$__controller_namespace" "$__deployment_name" "$__dump_logs"
     done
@@ -177,12 +184,12 @@ rotate_temp_creds() {
 
     aws_generate_temp_creds
 
-    kubectl -n $__controller_namespace set env deployment/$__deployment_name \
+    kubectl -n "$__controller_namespace" set env "deployment/$__deployment_name" \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"  1>/dev/null
 
-    kubectl -n $__controller_namespace rollout restart deployment $__deployment_name >/dev/null
+    kubectl -n "$__controller_namespace" rollout restart deployment "$__deployment_name" >/dev/null
     info_msg "Successfully rotated AWS credentials and restarted controller deployment"
 }
 

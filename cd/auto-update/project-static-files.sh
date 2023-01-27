@@ -80,7 +80,7 @@ pushd "$WORKSPACE_DIR" >/dev/null
 popd >/dev/null
 
 for CONTROLLER_NAME in $CONTROLLER_NAMES; do
-  SERVICE_NAME=$(echo "$CONTROLLER_NAME"| sed 's/-controller$//g')
+  SERVICE_NAME=${CONTROLLER_NAME//-controller/}
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
   cd "$CONTROLLER_BOOTSTRAP_DIR"
 
@@ -113,10 +113,11 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # Capture 'make run' command output & error, then persist
     # in '$GITHUB_ISSUE_BODY_FILE'
     MAKE_RUN_OUTPUT=$(cat "$MAKE_RUN_OUTPUT_FILE")
+    # shellcheck disable=SC2034 # Variables are used in templates
     MAKE_RUN_ERROR_OUTPUT=$(cat "$MAKE_RUN_ERROR_FILE")
     GITHUB_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_update_controller_template.txt"
     GITHUB_ISSUE_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_issue_update_controller
-    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > $GITHUB_ISSUE_BODY_FILE
+    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > "$GITHUB_ISSUE_BODY_FILE"
 
     open_gh_issue "$GITHUB_ISSUE_ORG_REPO" "$ISSUE_TITLE" "$GITHUB_ISSUE_BODY_FILE"
     # Skip creating PR for this service controller after updating GitHub issue.
@@ -174,10 +175,11 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Capture 'make run' command output, then persist
     # in '$GITHUB_PR_BODY_FILE'
+    # shellcheck disable=SC2034 # Variables are used in templates
     MAKE_RUN_OUTPUT=$(cat "$MAKE_RUN_OUTPUT_FILE")
     GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
     GITHUB_PR_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_pr_body_update_controller
-    eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
+    eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > "$GITHUB_PR_BODY_FILE"
 
     open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
     echo "project-static-files.sh][INFO] Done :) "

@@ -42,7 +42,6 @@ export ACK_GENERATE_OLM=true
 
 # Important Directory references based on prowjob configuration.
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-OLM_DIR=$THIS_DIR
 CD_DIR=$THIS_DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
@@ -111,7 +110,9 @@ if ! ./scripts/build-controller-release.sh "$SERVICE" > "$OLM_BUNDLE_STDOUT_FILE
   ISSUE_TITLE="Errors while generating olm bundle for \`$CONTROLLER_NAME-$RELEASE_VERSION\`"
   # Capture 'build-controller-release.sh' command output & error, then persist
   # in '$GITHUB_ISSUE_BODY_FILE_PATH'
+  # shellcheck disable=SC2034 # Variables are used in templates
   OLM_BUNDLE_STDOUT=$(cat "$OLM_BUNDLE_STDOUT_FILE")
+  # shellcheck disable=SC2034 # Variables are used in templates
   OLM_BUNDLE_STDERR=$(cat "$OLM_BUNDLE_STDERR_FILE")
   GITHUB_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_olm_create_error_template.txt"
   GITHUB_ISSUE_BODY_FILE_PATH=/tmp/"$SERVICE"_gh_issue_body
@@ -125,7 +126,6 @@ fi
 for OH_ORG_REPO in k8s-operatorhub/community-operators redhat-openshift-ecosystem/community-operators-prod
 do
   cd "$WORKSPACE_DIR"
-  OH_ORG=$(echo "$OH_ORG_REPO" | cut -d"/" -f1)
   OH_REPO=$(echo "$OH_ORG_REPO" | cut -d"/" -f2)
   echo -n "olm-bundle-pr.sh][INFO] forking and cloning $OH_ORG_REPO... "
   if ! gh repo fork "$OH_ORG_REPO" --clone=true --remote=true >/dev/null; then

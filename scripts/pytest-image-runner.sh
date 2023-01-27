@@ -43,11 +43,15 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 build_pytest_image() {
     local __image_tag=$1
 
-    local assumed_role_arn=$(get_assumed_role_arn)
-    local identity_file="$(get_aws_token_file)"
+    local assumed_role_arn
+    local identity_file
+    # shellcheck disable=SC2034 # Used in templates
+    assumed_role_arn=$(get_assumed_role_arn)
+    identity_file="$(get_aws_token_file)"
 
     # If 'AWS_PROFILE' variable is set, use it as source profile for 'ack-test'
     # profile. Use 'default' as fallback
+    # shellcheck disable=SC2034 # Used in templates
     local ack_test_source_aws_profile=${get_aws_profile:-"default"}
     local aws_creds_file_location="$HOME/.aws/credentials"
 
@@ -68,6 +72,7 @@ build_pytest_image() {
         # other profiles
         local local_aws_creds_content=""
         if [[ -f $aws_creds_file_location ]]; then
+            # shellcheck disable=SC2034 # Used in templates
             local_aws_creds_content=$(cat "$aws_creds_file_location")
         fi
 
@@ -79,26 +84,29 @@ build_pytest_image() {
 
     # Move into the aws-controllers-k8s/ context
     # This will provide access to both the service-controller and the test-infra directory
-    pushd "${ROOT_DIR}/.." 1> /dev/null
+    pushd "${ROOT_DIR}/.." 1> /dev/null || return
         info_msg "Building e2e test container for $AWS_SERVICE ..."
         # Build using the e2e test Dockerfile
-        local test_docker_sha="$(docker build --file "${e2e_test_dockerfile}" \
-        --tag $__image_tag \
+        local test_docker_sha
+        test_docker_sha="$(docker build --file "${e2e_test_dockerfile}" \
+        --tag "$__image_tag" \
         --build-arg AWS_SERVICE="${AWS_SERVICE}" \
         --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" \
         --quiet . )"
         debug_msg "Built PyTest image $__image_tag ($test_docker_sha)"
-    popd 1>/dev/null
+    popd 1>/dev/null || return
 }
 
 run_pytest_image() {
     local __image_tag=$1
 
-    local region=$(get_aws_region)
-    local identity_file="$(get_aws_token_file)"
+    local region
+    local identity_file
+    region=$(get_aws_region)
+    identity_file="$(get_aws_token_file)"
 
     # Copy the test config into the temporary path
-    cp "$(get_test_config_path)" $TMP_TEST_CONFIG_FILE_LOCATION
+    cp "$(get_test_config_path)" "$TMP_TEST_CONFIG_FILE_LOCATION"
 
     info_msg "Running e2e test container for $AWS_SERVICE ..."
 

@@ -29,16 +29,19 @@ AWS_CLI_VERSION=${DEFAULT_AWS_CLI_VERSION:-"2.0.52"}
 # To use a specific version of the AWS CLI, set the ACK_AWS_CLI_IMAGE_VERSION
 # environment variable, otherwise the value of DEFAULT_AWS_CLI_VERSION is used.
 daws() {
-    local profile="$(get_aws_profile)"
-    local identity_file="$(get_aws_token_file)"
-    local default_region="$(get_aws_region)"
+    local profile
+    local identity_file
+    local default_region
+    profile="$(get_aws_profile)"
+    identity_file="$(get_aws_token_file)"
+    default_region="$(get_aws_region)"
 
-    aws_cli_profile_env=$([ ! -z "$profile" ] && echo "--env AWS_PROFILE=$profile")
-    aws_cli_web_identity_env="$([ ! -z "$identity_file" ] && \
+    aws_cli_profile_env=$([ -n "$profile" ] && echo "--env AWS_PROFILE=$profile")
+    aws_cli_web_identity_env="$([ -n "$identity_file" ] && \
         echo "--env AWS_WEB_IDENTITY_TOKEN_FILE=/root/aws_token --env AWS_ROLE_ARN -v $identity_file:/root/aws_token:ro" )"
     aws_cli_img="amazon/aws-cli:$AWS_CLI_VERSION"
 
-    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
+    docker run --rm -v ~/.aws:/root/.aws:z "$aws_cli_profile_env" "$aws_cli_web_identity_env" --env "AWS_DEFAULT_REGION=$default_region" -v "$(pwd)":/aws "$aws_cli_img" "$@"
 }
 
 # ensure_aws_credentials() calls the STS::GetCallerIdentity API call and
@@ -51,23 +54,30 @@ ensure_aws_credentials() {
 # generate_aws_temp_creds function will generate temporary AWS credentials which
 # are valid for 3600 seconds
 aws_generate_temp_creds() {
-    local __uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+    local __uuid
+    __uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
 
-    local assumed_role=$(get_assumed_role_arn)
+    local assumed_role
+    assumed_role=$(get_assumed_role_arn)
 
-    local json=$(daws sts assume-role \
+    local json
+    json=$(daws sts assume-role \
            --role-arn "$assumed_role"  \
            --role-session-name tmp-role-"$__uuid" \
            --duration-seconds 3600 \
            --output json || exit 1)
 
+    # shellcheck disable=SC2034 # Access keys are used externally
     AWS_ACCESS_KEY_ID=$(echo "${json}" | jq --raw-output ".Credentials[\"AccessKeyId\"]")
+    # shellcheck disable=SC2034
     AWS_SECRET_ACCESS_KEY=$(echo "${json}" | jq --raw-output ".Credentials[\"SecretAccessKey\"]")
+    # shellcheck disable=SC2034
     AWS_SESSION_TOKEN=$(echo "${json}" | jq --raw-output ".Credentials[\"SessionToken\"]")
 }
 
 aws_account_id() {
-    local json=$(daws sts get-caller-identity --output json || exit 1)
+    local json
+    json=$(daws sts get-caller-identity --output json || exit 1)
     echo "${json}" | jq --raw-output ".Account"
 }
 

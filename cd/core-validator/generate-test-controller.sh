@@ -12,7 +12,6 @@ Environment variables:
 
 # Important Directory references based on prowjob configuration.
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-CORE_VALIDATOR_DIR=$THIS_DIR
 CD_DIR=$THIS_DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..

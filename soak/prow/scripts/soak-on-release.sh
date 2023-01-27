@@ -24,10 +24,8 @@ VERSION=$PULL_BASE_REF
 
 # Important directory references based on prowjob configuration.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SCRIPTS_DIR=$DIR
 SOAK_PROW_DIR=$DIR/..
 SOAK_DIR=$SOAK_PROW_DIR/..
-SOAK_HELM_DIR=$SOAK_DIR/helm
 TEST_INFRA_DIR=$SOAK_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
 SERVICE_CONTROLLER_DIR="$WORKSPACE_DIR/$AWS_SERVICE-controller"
@@ -47,13 +45,14 @@ perform_buildah_and_helm_login
 assume_soak_creds() {
   # unset previously assumed creds, and assume new creds using IRSA of postsubmit prowjob.
   unset AWS_ACCESS_KEY_ID && unset AWS_SECRET_ACCESS_KEY && unset AWS_SESSION_TOKEN
-  local _ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
-  eval $_ASSUME_COMMAND
+  local _ASSUME_COMMAND
+  _ASSUME_COMMAND=$(aws sts assume-role --role-arn "$ASSUMED_ROLE_ARN" --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+  eval "$_ASSUME_COMMAND"
   echo "soak-on-release.sh] [INFO] Assumed ASSUMED_ROLE_ARN"
 }
 
 ASSUME_EXIT_VALUE=0
-ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name "/ack/prow/service_team_role/$AWS_SERVICE" --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   echo "soak-on-release.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
   exit 1
@@ -62,7 +61,7 @@ export ASSUMED_ROLE_ARN
 echo "soak-on-release.sh] [SETUP] Exported ASSUMED_ROLE_ARN"
 
 ASSUME_EXIT_VALUE=0
-IRSA_ARN=$(aws ssm get-parameter --name /ack/prow/soak/irsa/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+IRSA_ARN=$(aws ssm get-parameter --name "/ack/prow/soak/irsa/$AWS_SERVICE" --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
   echo "soak-on-release.sh] [SETUP] Could not find irsa to run soak tests for $AWS_SERVICE"
   exit 1
@@ -70,8 +69,8 @@ fi
 export IRSA_ARN
 echo "soak-on-release.sh] [SETUP] Exported IRSA_ARN"
 
-ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
-eval $ASSUME_COMMAND
+ASSUME_COMMAND=$(aws sts assume-role --role-arn "$ASSUMED_ROLE_ARN" --role-session-name 'ack-soak-test' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+eval "$ASSUME_COMMAND"
 echo "soak-on-release.sh] [SETUP] Assumed ASSUMED_ROLE_ARN"
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
@@ -110,12 +109,12 @@ cd "$TEST_INFRA_DIR"/soak
 SOAK_RUNNER_IMAGE="public.ecr.aws/m5q3e4b2/soak:$AWS_SERVICE"
 buildah bud \
   -q \
-  -t $SOAK_RUNNER_IMAGE \
-  --build-arg AWS_SERVICE=$AWS_SERVICE \
-  --build-arg E2E_GIT_REF=$VERSION \
+  -t "$SOAK_RUNNER_IMAGE" \
+  --build-arg AWS_SERVICE="$AWS_SERVICE" \
+  --build-arg E2E_GIT_REF="$VERSION" \
   . >/dev/null
 
-buildah push $SOAK_RUNNER_IMAGE >/dev/null
+buildah push "$SOAK_RUNNER_IMAGE" >/dev/null
 echo "soak-on-release.sh] [INFO] Successfully built and pushed soak runner image $SOAK_RUNNER_IMAGE"
 
 # Check for already existing soak-test-runner helm chart
@@ -127,17 +126,17 @@ chart_name=$(helm list -f '^soak-test-runner$' -o json | jq -r '.[]|.name')
 
 cd "$TEST_INFRA_DIR"/soak/helm/ack-soak-test
 helm install $SOAK_CHART_RELEASE_NAME . \
-    --set awsService=$AWS_SERVICE \
+    --set awsService="$AWS_SERVICE" \
     --set soak.imageRepo="public.ecr.aws/m5q3e4b2/soak" \
-    --set soak.imageTag=$AWS_SERVICE \
-    --set soak.startTimeEpochSeconds=$(date +%s) \
+    --set soak.imageTag="$AWS_SERVICE" \
+    --set soak.startTimeEpochSeconds="$(date +%s)" \
     --set soak.durationMinutes=1440 >/dev/null
 
 # Loop until the Job executing soak test does not complete. Check again with 30 minutes interval.
-while kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r --exit-status '.status.completionTime'>/dev/null; [ $? -ne 0 ]
+while ! kubectl get "jobs/$AWS_SERVICE-soak-test" -o=json | jq -r --exit-status '.status.completionTime'>/dev/null
 do
   echo "soak-on-release.sh] [INFO] Current soak Job(default/$AWS_SERVICE-soak-test) status is: "
-  kubectl get jobs/$AWS_SERVICE-soak-test -o=json | jq -r '.status'
+  kubectl get "jobs/$AWS_SERVICE-soak-test" -o=json | jq -r '.status'
   echo "soak-on-release.sh] [INFO] Completion time is not present in the soak Job status. Soak Job is still running."
   echo "soak-on-release.sh] [INFO] Current time is $(date) . Sleeping for 30 mins ..."
   sleep 1800

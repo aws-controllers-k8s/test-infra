@@ -24,7 +24,7 @@ Environment variables:
   DEFAULT_SOAK_DURATION_MINUTES: Default duration of soak test execution in minutes.
 "
 
-SOAK_DURATION_MINUTES=$(yq eval ".durationMinutes // \"$DEFAULT_SOAK_DURATION_MINUTES\"" $SOAK_CONFIG_PATH) #default: $DEFAULT_SOAK_DURATION_MINUTES
+SOAK_DURATION_MINUTES=$(yq eval ".durationMinutes // \"$DEFAULT_SOAK_DURATION_MINUTES\"" "$SOAK_CONFIG_PATH") #default: $DEFAULT_SOAK_DURATION_MINUTES
 echo "[INFO] Starting the soak test run."
 echo "[INFO] START_TIME_EPOCH_SECONDS is $START_TIME_EPOCH_SECONDS"
 ((END_TIME_EPOCH_SECONDS= "$START_TIME_EPOCH_SECONDS" + "$SOAK_DURATION_MINUTES"*60))
@@ -35,17 +35,17 @@ pushd "${CONTROLLER_E2E_PATH}" 1>/dev/null
 export PYTHONPATH=..
 python service_bootstrap.py
 set +e
-ALL_PYTEST_MARKERS=$(yq eval '.pytestMarkers|keys|.[]' $SOAK_CONFIG_PATH)
+ALL_PYTEST_MARKERS=$(yq eval '.pytestMarkers|keys|.[]' "$SOAK_CONFIG_PATH")
 #If current time is less than $END_TIME_EPOCH_SECONDS, keep executing the e2e tests.
-while [ $(date +%s) -le $END_TIME_EPOCH_SECONDS ]
+while [ "$(date +%s)" -le $END_TIME_EPOCH_SECONDS ]
 do
   echo "[INFO] Current time is $(date +%s%3N) and end time is $END_TIME_EPOCH_SECONDS in epoch seconds. Executing e2e tests..."
-  for marker in `echo $ALL_PYTEST_MARKERS`
+  for marker in $ALL_PYTEST_MARKERS
   do
-	  log_level=$(yq eval ".pytestMarkers.$marker.logLevel // \"info\"" $SOAK_CONFIG_PATH) #default: info
-	  num_threads=$(yq eval ".pytestMarkers.$marker.numThreads // \"auto\"" $SOAK_CONFIG_PATH) #default: auto
-	  dist=$(yq eval ".pytestMarkers.$marker.dist // \"no\"" $SOAK_CONFIG_PATH) # default: no
-	  pytest -m $marker -n $num_threads --dist $dist -o log_cli=true --log-cli-level $log_level --log-level $log_level .
+	  log_level=$(yq eval ".pytestMarkers.$marker.logLevel // \"info\"" "$SOAK_CONFIG_PATH") #default: info
+	  num_threads=$(yq eval ".pytestMarkers.$marker.numThreads // \"auto\"" "$SOAK_CONFIG_PATH") #default: auto
+	  dist=$(yq eval ".pytestMarkers.$marker.dist // \"no\"" "$SOAK_CONFIG_PATH") # default: no
+	  pytest -m "$marker" -n "$num_threads" --dist "$dist" -o log_cli=true --log-cli-level "$log_level" --log-level "$log_level" .
   done
 done
 

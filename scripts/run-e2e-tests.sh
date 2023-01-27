@@ -16,7 +16,7 @@ CONTROLLER_NAMESPACE=${CONTROLLER_NAMESPACE:-"ack-system"}
 DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH="$ROOT_DIR/../$AWS_SERVICE-controller"
 SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH}
 
-VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
+VERSION=$(git "--git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git" describe --tags --always --dirty || echo "unknown")
 CONTROLLER_IMAGE_TAG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
 
 source "$SCRIPTS_DIR/lib/aws.sh"
@@ -29,9 +29,11 @@ source "$SCRIPTS_DIR/kind.sh"
 source "$SCRIPTS_DIR/pytest-image-runner.sh"
 
 ensure_cluster() {
-    local cluster_create="$(get_cluster_create)"
+    local cluster_create
+    cluster_create="$(get_cluster_create)"
     if [[ "$cluster_create" == true ]]; then
-        local cluster_name=$(_get_kind_cluster_name)
+        local cluster_name
+        cluster_name=$(_get_kind_cluster_name)
 
         info_msg "Creating KIND cluster ..."
         setup_kind_cluster "$cluster_name" "$CONTROLLER_NAMESPACE"
@@ -44,7 +46,8 @@ ensure_cluster() {
 }
 
 ensure_debug_mode() {
-    local debug_enabled="$(get_debug_enabled)"
+    local debug_enabled
+    debug_enabled="$(get_debug_enabled)"
     if [[ "$debug_enabled" == true && ${ACK_TEST_DEBUGGING_MODE-""} == "" ]]; then
         export ACK_TEST_DEBUGGING_MODE="true"
         debug_msg "Debug mode enabled"
@@ -52,10 +55,12 @@ ensure_debug_mode() {
 }
 
 build_and_run_tests() {
-    local run_locally=$(get_run_tests_locally)
+    local run_locally
+    run_locally=$(get_run_tests_locally)
     local test_exit_code=0
     if [[ "$run_locally" == true ]]; then
-        local region=$(get_aws_region)
+        local region
+        region=$(get_aws_region)
         source "$SCRIPTS_DIR/pytest-local-runner.sh"
 
         set +e
@@ -63,7 +68,8 @@ build_and_run_tests() {
         test_exit_code=$?
         set -e
     else
-        local image_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+        local image_uuid
+        image_uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
         local image_name="ack-test-${AWS_SERVICE}-${image_uuid}"
 
         build_pytest_image "$image_name"
@@ -74,7 +80,8 @@ build_and_run_tests() {
         set -e
     fi
 
-    local dump_logs=$(get_dump_controller_logs)
+    local dump_logs
+    dump_logs=$(get_dump_controller_logs)
     if [[ "$dump_logs" == "true" ]]; then
         dump_controller_logs "$CONTROLLER_NAMESPACE"
     fi

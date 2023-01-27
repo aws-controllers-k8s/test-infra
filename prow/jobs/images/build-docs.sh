@@ -21,7 +21,7 @@ DOCS_PATH="${COMMUNITY_PATH}/docs"
 
 # Generate new reference sources
 
-pushd $DOCS_PATH 1> /dev/null
+pushd "$DOCS_PATH" 1> /dev/null
 
 echo "build-docs.sh] 📝 Installing requirements file... "
 pip install -r requirements.txt

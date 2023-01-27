@@ -15,7 +15,7 @@ AWS_SERVICE=$(echo "${AWS_SERVICE:-""}" | tr '[:upper:]' '[:lower:]')
 DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH="$ROOT_DIR/../$AWS_SERVICE-controller"
 SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVICE_CONTROLLER_SOURCE_PATH}
 
-VERSION=$(git --git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git describe --tags --always --dirty || echo "unknown")
+VERSION=$(git "--git-dir=$SERVICE_CONTROLLER_SOURCE_PATH/.git" describe --tags --always --dirty || echo "unknown")
 CONTROLLER_IMAGE_TAG="aws-controllers-k8s:${AWS_SERVICE}-${VERSION}"
 
 source "$SCRIPTS_DIR/lib/aws.sh"
@@ -33,8 +33,10 @@ install_chart_and_run_tests() {
     local chart_name="ack-$AWS_SERVICE-helm-test"
 
     # Cut the repository and tag out of the build tag
-    local image_repo=$(echo "$__image_tag" | cut -d":" -f1)
-    local image_tag=$(echo "$__image_tag" | cut -d":" -f2)
+    local image_repo
+    local image_tag
+    image_repo=$(echo "$__image_tag" | cut -d":" -f1)
+    image_tag=$(echo "$__image_tag" | cut -d":" -f2)
 
     info_msg "Installing the controller Helm chart ..."
     _cleanup_helm_chart "$__chart_namespace" "$chart_name"
@@ -61,7 +63,8 @@ _helm_install() {
     local __image_repository=$3
     local __image_tag=$4
     
-    local region=$(get_aws_region)
+    local region
+    region=$(get_aws_region)
 
     helm install --create-namespace \
         --namespace "$__chart_namespace" \
@@ -70,9 +73,10 @@ _helm_install() {
         --set image.tag="$__image_tag" \
         --set installScope="namespace" \
         --set metrics.service.create=true \
-        "$__chart_name" $HELM_DIR
+        "$__chart_name" "$HELM_DIR"
 
-    local controller_deployment_name=$(kubectl get deployments -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name")
+    local controller_deployment_name
+    controller_deployment_name=$(kubectl get deployments -n "$__chart_namespace" -ojson | jq -r ".items[0].metadata.name")
     [[ -z "$controller_deployment_name" ]] && { error_msg "Unable to find Helm deployment"; exit 1; }
 
     rotate_temp_creds "$__chart_namespace" "$controller_deployment_name" false

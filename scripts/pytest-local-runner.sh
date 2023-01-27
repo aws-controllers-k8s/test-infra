@@ -34,22 +34,24 @@ cleanup_tests() {
 }
 
 run_python_tests() {
-    local markers_args=""
-    local method_args=""
+    local markers_args=()
+    local method_args=()
 
     for (( i=0; i<$(get_test_markers | yq '. | length' -); i++)); do
-        local test_marker="$(get_test_markers | I=$i yq '.[env(I)]' -)"
-        markers_args="$markers_args -m "$test_marker""
+        local test_marker
+        test_marker="$(get_test_markers | I=$i yq '.[env(I)]' -)"
+        markers_args=("${markers_args[@]}" -m "$test_marker")
     done
 
     for (( i=0; i<$(get_test_methods | yq '. | length' -); i++)); do
-        local test_method="$(get_test_methods | I=$i yq '.[env(I)]' -)"
-        method_args="$method_args -k $test_method"
+        local test_method
+        test_method="$(get_test_methods | I=$i yq '.[env(I)]' -)"
+        method_args=("${method_args[@]}" -k "$test_method")
     done
 
     pushd "${SERVICE_CONTROLLER_E2E_TEST_PATH}" 1> /dev/null
-        pytest -n ${PYTEST_NUM_THREADS} --dist no -o log_cli=true ${markers_args} \
-            ${method_args} --log-cli-level "${PYTEST_LOG_LEVEL}" \
+        pytest -n "${PYTEST_NUM_THREADS}" --dist no -o log_cli=true "${markers_args[@]}" \
+            "${method_args[@]}" --log-cli-level "${PYTEST_LOG_LEVEL}" \
             --log-level "${PYTEST_LOG_LEVEL}" .
         local test_exit_code=$?
     popd 1> /dev/null

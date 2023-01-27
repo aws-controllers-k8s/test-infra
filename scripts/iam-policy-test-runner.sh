@@ -44,7 +44,7 @@ assert_iam_policies() {
     fi
 
     info_msg "Validating contents of recommended-policy-arn ..."
-    for policy_arn in $(awk NF=NF FS="\n" $recommended_policy_path); do
+    for policy_arn in $(awk NF=NF FS="\n" "$recommended_policy_path"); do
         debug_msg "Validating \"$policy_arn\" ..."
         if ! (aws iam get-policy --policy-arn "$policy_arn" >/dev/null); then
             error_msg "\"$policy_arn\" is not a valid managed IAM policy ARN"

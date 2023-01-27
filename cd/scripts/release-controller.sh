@@ -34,7 +34,6 @@ VERSION=$PULL_BASE_REF
 
 # Important Directory references based on prowjob configuration.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SCRIPTS_DIR=$DIR
 CD_DIR=$DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
@@ -52,8 +51,8 @@ check_is_installed yq
 if [[ $PULL_BASE_REF = stable ]]; then
   pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller 1>/dev/null
   echo "Triggering for the stable branch"
-  _semver_tag=$(git describe --tags --abbrev=0 2>/dev/null)
-  if [[ $? -ne 0 ]]; then
+  _semver_tag=""
+  if ! _semver_tag=$(git describe --tags --abbrev=0 2>/dev/null); then
     echo "Unable to find semver tag on the 'stable' branch"
     exit 2
   fi
@@ -82,7 +81,7 @@ else
       echo "release-controller.sh] [ERROR] 'image.repository' value in release artifacts should be public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller. Current value: $_repository"
       exit 1
     fi
-    if [[ $_image_tag != $VERSION ]]; then
+    if [[ $_image_tag != "$VERSION" ]]; then
       echo "release-controller.sh] [ERROR] 'image.tag' value in release artifacts should be $VERSION. Current value: $_image_tag"
       exit 1
     fi
@@ -101,8 +100,8 @@ fi
 export ECR_PUBLISH_ARN
 echo "release-controller.sh] [SETUP] exported ECR_PUBLISH_ARN"
 
-ASSUME_COMMAND=$(aws sts assume-role --role-arn $ECR_PUBLISH_ARN --role-session-name 'publish-images' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
-eval $ASSUME_COMMAND
+ASSUME_COMMAND=$(aws sts assume-role --role-arn "$ECR_PUBLISH_ARN" --role-session-name 'publish-images' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+eval "$ASSUME_COMMAND"
 echo "release-controller.sh] [SETUP] Assumed ECR_PUBLISH_ARN"
 
 # Setup the destination repository for buildah and helm
@@ -136,7 +135,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
   fi
 
   # build controller image
-  buildah bud \
+  if ! buildah bud \
     --quiet="$QUIET" \
     -t "$AWS_SERVICE_DOCKER_IMG" \
     -f "$CONTROLLER_IMAGE_DOCKERFILE_PATH" \
@@ -144,17 +143,13 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
     --build-arg service_controller_git_version="$VERSION" \
     --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
     --build-arg build_date="$BUILD_DATE" \
-    "${DOCKER_BUILD_CONTEXT}"
-
-  if [ $? -ne 0 ]; then
+    "${DOCKER_BUILD_CONTEXT}"; then
     exit 2
   fi
 
   echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG}"
 
-  buildah push "${AWS_SERVICE_DOCKER_IMG}"
-
-  if [ $? -ne 0 ]; then
+  if ! buildah push "${AWS_SERVICE_DOCKER_IMG}"; then
     exit 2
   fi
 fi

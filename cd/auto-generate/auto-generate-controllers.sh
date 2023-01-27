@@ -29,7 +29,6 @@ Environment variables:
 
 # Important Directory references based on prowjob configuration.
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-AUTO_GEN_DIR=$THIS_DIR
 CD_DIR=$THIS_DIR/..
 TEST_INFRA_DIR=$CD_DIR/..
 WORKSPACE_DIR=$TEST_INFRA_DIR/..
@@ -75,7 +74,7 @@ git config --global user.email "${USER_EMAIL}" >/dev/null
 # Find the runtime semver from the code-generator repo
 cd "$CODEGEN_DIR"
 ACK_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
-if [[ $ACK_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
+if [[ $ACK_RUNTIME_VERSION == "$RUNTIME_MISSING_VERSION" ]]; then
   echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from code-generator/go.mod file. Exiting"
   exit 1
 else
@@ -102,7 +101,7 @@ pushd "$WORKSPACE_DIR" >/dev/null
 popd >/dev/null
 
 for CONTROLLER_NAME in $CONTROLLER_NAMES; do
-  SERVICE_NAME=$(echo "$CONTROLLER_NAME"| sed 's/-controller$//g')
+  SERVICE_NAME="${CONTROLLER_NAME//-controller/}"
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
   cd "$CODEGEN_DIR"
 
@@ -117,13 +116,13 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   pushd "$CONTROLLER_DIR" >/dev/null
     SERVICE_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime 2>/dev/null || echo "$RUNTIME_MISSING_VERSION")
 
-    if [[ $SERVICE_RUNTIME_VERSION == $RUNTIME_MISSING_VERSION ]]; then
+    if [[ $SERVICE_RUNTIME_VERSION == "$RUNTIME_MISSING_VERSION" ]]; then
       echo "auto-generate-controllers.sh][ERROR] Unable to determine ACK runtime version from $CONTROLLER_NAME/go.mod file. Skipping $CONTROLLER_NAME"
       continue
     fi
 
     # If the current runtime version is the same as latest ACK runtime version, skip over runtime updates.
-    if [[ $SERVICE_RUNTIME_VERSION == $ACK_RUNTIME_VERSION ]]; then
+    if [[ $SERVICE_RUNTIME_VERSION == "$ACK_RUNTIME_VERSION" ]]; then
       echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK runtime version $ACK_RUNTIME_VERSION"
     else
       echo "auto-generate-controllers.sh][INFO] ACK runtime version for new controller will be $ACK_RUNTIME_VERSION. Current version is $SERVICE_RUNTIME_VERSION"
@@ -161,7 +160,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     fi
 
     SERVICE_AVAILABLE_API_VERSION=$(yq e '.api_versions[] | select(.status == "available") | .api_version' metadata.yaml)
-    SERVICE_CODE_GEN_VERSION=$(yq e '.ack_generate_info.version' apis/$SERVICE_AVAILABLE_API_VERSION/ack-generate-metadata.yaml)
+    SERVICE_CODE_GEN_VERSION=$(yq e '.ack_generate_info.version' "apis/$SERVICE_AVAILABLE_API_VERSION/ack-generate-metadata.yaml")
     # If the current version was generated with the latest ACK code-gen binary version, skip over the controller entirely
     if [[ "$SERVICE_CODE_GEN_VERSION" == "$ACK_CODE_GEN_VERSION" ]]; then
       echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK code-gen version $ACK_CODE_GEN_VERSION. Skipping ... "
@@ -191,11 +190,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     echo "auto-generate-controllers.sh][INFO] Finding new release version for $CONTROLLER_NAME"
     # Find the latest tag on repository and only increment patch version
     LATEST_TAG=$(git describe --abbrev=0 --tags 2>/dev/null || echo "$MISSING_GIT_TAG")
-    if [[ $LATEST_TAG == $MISSING_GIT_TAG ]]; then
+    if [[ $LATEST_TAG == "$MISSING_GIT_TAG" ]]; then
       echo "auto-generate-controllers.sh][INFO] Unable to find latest git tag for $CONTROLLER_NAME"
       unset RELEASE_VERSION
     else
-      export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+      RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+      export RELEASE_VERSION
       echo "auto-generate-controllers.sh][INFO] Using $RELEASE_VERSION as new release version. Previous version: $LATEST_TAG"
     fi
   popd >/dev/null
@@ -213,10 +213,11 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # Capture 'make build-controller' command output & error, then persist
     # in '$GITHUB_ISSUE_BODY_FILE'
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
+    # shellcheck disable=SC2034 # Variables are used in the templates
     MAKE_BUILD_ERROR_OUTPUT=$(cat "$MAKE_BUILD_ERROR_FILE")
     GITHUB_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_body_template.txt"
     GITHUB_ISSUE_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_issue_body
-    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > $GITHUB_ISSUE_BODY_FILE
+    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > "$GITHUB_ISSUE_BODY_FILE"
 
     open_gh_issue "$GITHUB_ISSUE_ORG_REPO" "$ISSUE_TITLE" "$GITHUB_ISSUE_BODY_FILE"
     # Skip creating PR for this service controller after updating GitHub issue.
@@ -267,11 +268,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     # Capture 'make build-controller' command output, then persist
     # in '$GITHUB_PR_BODY_FILE'
+    # shellcheck disable=SC2034 # Variable is used in templates
     MAKE_BUILD_OUTPUT=$(cat "$MAKE_BUILD_OUTPUT_FILE")
     PR_BODY_TEMPLATE_FILE_NAME=$([[ -z "$RELEASE_VERSION" ]] && echo "gh_pr_body_template.txt" || echo "gh_pr_body_new_release_template.txt")
     GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/$PR_BODY_TEMPLATE_FILE_NAME"
     GITHUB_PR_BODY_FILE=/tmp/"$SERVICE_NAME"_gh_pr_body
-    eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > $GITHUB_PR_BODY_FILE
+    eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > "$GITHUB_PR_BODY_FILE"
 
     open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
     echo "auto-generate-controllers.sh][INFO] Done :) "

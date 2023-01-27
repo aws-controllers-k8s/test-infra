@@ -16,8 +16,9 @@ Usage:
 Pushes all of the tagged 'prow/*' images into a public ECR repository. Use
 DOCKER_REPOSITORY to specify the ECR repository URI. Use VERSION to set the 
 SemVer value in the image tag.
-Valid IMAGE_TYPE are "deploy", "docs", "soak", "integration", "auto-generate-controllers",
-"auto-update-controllers", "olm-bundle-pr", "olm-test", "controller-release-tag" and "unit"
+Valid IMAGE_TYPE are \"deploy\", \"docs\", \"soak\", \"integration\",
+\"auto-generate-controllers\", \"auto-update-controllers\", \"olm-bundle-pr\",
+\"olm-test\", \"controller-release-tag\" and \"unit\"
 
 Example:
 $(basename "$0") integration
@@ -39,13 +40,10 @@ fi
 
 IMAGE_TYPE=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
-# Important Directory references
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-IMAGE_DIR=$DIR
-
 docker_login() {
   #ecr-public only exists in us-east-1 so use that region specifically
-  local __pw=$(aws ecr-public get-login-password --region us-east-1)
+  local __pw
+  __pw=$(aws ecr-public get-login-password --region us-east-1)
   echo "$__pw" | docker login -u AWS --password-stdin public.ecr.aws
 }
 
@@ -57,5 +55,5 @@ image_tag() {
 
 docker_login
 
-docker tag prow/$IMAGE_TYPE $(image_tag $IMAGE_TYPE)
-docker push $(image_tag $IMAGE_TYPE)
+docker tag "prow/$IMAGE_TYPE" "$(image_tag "$IMAGE_TYPE")"
+docker push "$(image_tag "$IMAGE_TYPE")"

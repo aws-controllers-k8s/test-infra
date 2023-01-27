@@ -26,8 +26,8 @@ open_gh_issue() {
   fi
 
   echo -n "gh.sh][INFO] Querying already open GitHub issue ... "
-  local __issue_number=$(gh issue list -R "$__org_repo" -L 1 -s open --json number -S "$__issue_title" --jq '.[0].number' -A @me $__label_arg)
-  if [[ $? -ne 0 ]]; then
+  local __issue_number
+  if ! __issue_number=$(gh issue list -R "$__org_repo" -L 1 -s open --json number -S "$__issue_title" --jq '.[0].number' -A @me "$__label_arg"); then
     echo ""
     echo "gh.sh][ERROR] Unable to query open github issues."
   else
@@ -36,7 +36,7 @@ open_gh_issue() {
 
   if [[ -z $__issue_number ]]; then
     echo -n "gh.sh][INFO] No open issues exist. Creating a new GitHub issue inside $__org_repo ... "
-    if ! gh issue create -R "$__org_repo" -t "$__issue_title" -F "$__issue_body_file_path" $__label_arg >/dev/null ; then
+    if ! gh issue create -R "$__org_repo" -t "$__issue_title" -F "$__issue_body_file_path" "$__label_arg" >/dev/null ; then
       echo ""
       echo "gh.sh][ERROR] Unable to create GitHub issue"
     else
@@ -83,8 +83,8 @@ open_pull_request() {
   fi
 
   echo -n "gh.sh][INFO] Finding existing open pull requests ... "
-  local __pr_number=$(gh pr list -R "$__org_repo" -A @me -L 1 -s open --json number -S "$__commit_msg" --jq '.[0].number' $__label_arg)
-  if [[ $? -ne 0 ]]; then
+  local __pr_number
+  if ! __pr_number=$(gh pr list -R "$__org_repo" -A @me -L 1 -s open --json number -S "$__commit_msg" --jq '.[0].number' "$__label_arg"); then
     echo ""
     echo "gh.sh][ERROR] Failed to query for an existing pull request for $__org_repo , from $__source_branch -> $__target_branch branch"
   else
@@ -93,7 +93,7 @@ open_pull_request() {
 
   if [[ -z $__pr_number ]]; then
     echo -n "gh.sh][INFO] No Existing PRs found. Creating a new pull request for $__org_repo , from $__source_branch -> $__target_branch branch... "
-    if ! gh pr create -R "$__org_repo" -t "$__commit_msg" -F "$__pr_body_file_path" -B "$__target_branch" $__label_arg >/dev/null ; then
+    if ! gh pr create -R "$__org_repo" -t "$__commit_msg" -F "$__pr_body_file_path" -B "$__target_branch" "$__label_arg" >/dev/null ; then
       echo ""
       echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
       return 1

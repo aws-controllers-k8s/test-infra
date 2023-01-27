@@ -37,8 +37,9 @@ docker build -f "$IMAGE_DIR/Dockerfile.auto-update-controllers" "${docker_build_
 docker build -f "$IMAGE_DIR/Dockerfile.controller-release-tag" "${docker_build_args[@]}" -t "prow/controller-release-tag" "${IMAGE_DIR}"
 docker build -f "$IMAGE_DIR/Dockerfile.soak" "${docker_build_args[@]}" --build-arg DEPLOY_BASE_TAG="prow/deploy" -t "prow/soak" "${IMAGE_DIR}"
 
-export TEST_BASE_TAG=$(echo "prow/test-$(uuidgen | cut -c1-8)" | tr '[:upper:]' '[:lower:]')
-docker build -f "$IMAGE_DIR/Dockerfile.test" "${docker_build_args[@]}" -t $TEST_BASE_TAG "${IMAGE_DIR}"
+TEST_BASE_TAG=$(echo "prow/test-$(uuidgen | cut -c1-8)" | tr '[:upper:]' '[:lower:]')
+export TEST_BASE_TAG
+docker build -f "$IMAGE_DIR/Dockerfile.test" "${docker_build_args[@]}" -t "$TEST_BASE_TAG" "${IMAGE_DIR}"
 
 for IMAGE_TYPE in integration unit; do
   docker build -f "$IMAGE_DIR/Dockerfile.$IMAGE_TYPE" "${docker_build_args[@]}" --build-arg TEST_BASE_TAG -t "prow/$IMAGE_TYPE" "${IMAGE_DIR}"

@@ -35,7 +35,7 @@ check_is_installed() {
 
 is_installed() {
     local __name="$1"
-    if $(which $__name >/dev/null 2>&1); then
+    if which "$__name" >/dev/null 2>&1; then
         return 0
     else
         return 1

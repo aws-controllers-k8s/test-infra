@@ -21,23 +21,26 @@ source "$SCRIPTS_DIR/controller-setup.sh"
 _assert_pod_running() {
     local __chart_namespace=$1
 
-    local controller_pod_name=$(kubectl get pods -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name")
+    local controller_pod_name
+    controller_pod_name=$(kubectl get pods -n "$__chart_namespace" -ojson | jq -r ".items[0].metadata.name")
     [[ -z "$controller_pod_name" ]] && { error_msg "Unable to find controller pod"; return 1; }
 
     debug_msg "ACK $AWS_SERVICE controller pod name is $__chart_namespace/$controller_pod_name"
     info_msg "Verifying that pod status is in Running state ... "
 
-    local pod_status=$(kubectl get pod/"$controller_pod_name" -n $__chart_namespace -ojson | jq -r ".status.phase")
+    local pod_status
+    pod_status=$(kubectl get pod/"$controller_pod_name" -n "$__chart_namespace" -ojson | jq -r ".status.phase")
     [[ $pod_status != Running ]] && { error_msg "Pod is in status '$pod_status'. Expected 'Running' "; return 1; }
 
     info_msg "Verifying that there are no ERROR in controller logs ... "
 
-    local controller_logs=$(kubectl logs pod/"$controller_pod_name" -n $__chart_namespace)
+    local controller_logs
+    controller_logs=$(kubectl logs pod/"$controller_pod_name" -n "$__chart_namespace")
     [[ -z "$controller_logs" ]] && { error_msg "Unable to find controller logs"; return 1; }
 
     if (echo "$controller_logs" | grep -q "ERROR"); then
         error_msg "Found following ERROR statements in controller logs:"
-        error_msg "$(echo $controller_logs | grep "ERROR")"
+        error_msg "$(echo "$controller_logs" | grep "ERROR")"
         return 1
     fi
 }

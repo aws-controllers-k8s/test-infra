@@ -20,9 +20,9 @@ _get_config_field() {
     local __default="${2:-""}"
 
     if [[ "$__default" != "" ]]; then
-        yq "$__field_path // \"$__default\"" $TEST_CONFIG_PATH 2>/dev/null
+        yq "$__field_path // \"$__default\"" "$TEST_CONFIG_PATH" 2>/dev/null
     else
-        yq "$__field_path // \"\"" $TEST_CONFIG_PATH 2>/dev/null
+        yq "$__field_path // \"\"" "$TEST_CONFIG_PATH" 2>/dev/null
     fi
 }
 
@@ -33,11 +33,12 @@ _get_config_boolean() {
     local __field_path="$1"
     local __default="${2:-""}"
 
-    local ret=$(yq "$__field_path" $TEST_CONFIG_PATH 2>/dev/null)
+    local ret
+    ret=$(yq "$__field_path" "$TEST_CONFIG_PATH" 2>/dev/null)
     if [[ "$ret" == "null" ]]; then
-        echo $__default
+        echo "$__default"
     fi
-    echo $ret
+    echo "$ret"
 }
 
 get_cluster_create() { _get_config_boolean ".cluster.create"; }
@@ -49,7 +50,7 @@ get_aws_profile() { _get_config_field ".aws.profile"; }
 get_aws_token_file() { _get_config_field ".aws.token_file"; }
 get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
 get_assumed_role_arn() {
-    [[ ! -z "${ASSUMED_ROLE_ARN}" ]] && echo "${ASSUMED_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
+    [[ -n "${ASSUMED_ROLE_ARN}" ]] && echo "${ASSUMED_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
 }
 get_test_markers() { _get_config_field ".tests.markers"; }
 get_test_methods() { _get_config_field ".tests.methods"; }
@@ -70,7 +71,7 @@ ensure_required_fields() {
 
     local required_field_paths=( ".cluster.create" )
     for path in "${required_field_paths[@]}"; do
-        [[ -z $(_get_config_boolean $path) ]] && { error_msg "Required config path \`$path\` not provided"; exit 1; } || :
+        [[ -z $(_get_config_boolean "$path") ]] && { error_msg "Required config path \`$path\` not provided"; exit 1; } || :
     done
 }
 
