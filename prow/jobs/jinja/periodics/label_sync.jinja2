@@ -16,7 +16,7 @@
       - --config=/etc/config/labels.yaml
       - --confirm=true
       - --orgs=aws-controllers-k8s
-      - --token=/etc/github/oauth
+      - --token=/etc/github/token
       - --github-endpoint=http://ghproxy
       - --github-endpoint=https://api.github.com
       - --debug
@@ -30,7 +30,7 @@
     volumes:
     - name: github-token
       secret:
-        secretName: prowjob-github-token
+        secretName: prowjob-github-pat-token
     - name: config
       configMap:
         name: label-config

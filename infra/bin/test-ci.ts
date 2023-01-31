@@ -20,9 +20,13 @@ new TestCIStack(app, 'TestCIStack', {
 
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
   clusterConfig: {
-    botPersonalAccessToken: app.node.tryGetContext('bot_pat') || process.env.BOT_PAT,
-    webhookHMACToken: app.node.tryGetContext('webhook_hmac') || process.env.WEBHOOK_HMAC
+    personalAccessToken: app.node.tryGetContext('pat') || process.env.GITHUB_PAT,
+    appId: app.node.tryGetContext('app_id') || process.env.GITHUB_APP_ID,
+    appClientId: app.node.tryGetContext('client_id') || process.env.GITHUB_APP_CLIENT_ID,
+    appPrivateKey: app.node.tryGetContext('app_private_key') || process.env.GITHUB_APP_PRIVATE_KEY,
+    appWebhookSecret: app.node.tryGetContext('app_webhook_secret') || process.env.GITHUB_APP_WEBHOOK_SECRET
   },
   logsBucketName: app.node.tryGetContext('logs_bucket') || process.env.LOGS_BUCKET,
+  logsBucketImport: app.node.tryGetContext('logs_bucket_import') || process.env.LOGS_BUCKET_IMPORT || false,
   pvreBucketName: app.node.tryGetContext('pvre_bucket') || process.env.PVRE_BUCKET,
 });
