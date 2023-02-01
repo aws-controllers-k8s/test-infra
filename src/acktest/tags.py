@@ -108,6 +108,14 @@ def assert_equal(expected: Union[dict, list],
     """
     assert len(actual) == len(expected), \
         'length of "expected" and "actual" tags is not same'
+
+    # Convert the expected input to have the same format as the actual input.
+    # Some service APIs return a list of tag objects with `key` and `value` in lower case,
+    # however, some other APIs use capitalized `Key` and `Value` (CloudTrail, EventBridge APIs).
+    # In the latter case, using this function will not work properly without transforming the
+    # expected objects to be similar to the actual ones.
+    expected = {key_member_name: v for k, v in expected.iteritems()}
+
     assert_present(
         expected=expected,
         actual=actual,
@@ -129,6 +137,7 @@ def assert_equal_without_ack_tags(expected: Union[dict, list],
     Default for 'key_member_name' is 'Key' and default for 'value_member_name' is 'Value'
 
     """
+
     clean_expected = clean(tags=expected, key_member_name=key_member_name)
     clean_actual = clean(tags=actual, key_member_name=key_member_name)
     assert_equal(
