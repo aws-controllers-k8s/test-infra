@@ -4,7 +4,7 @@ PROW_JOBS_PATH="./prow/jobs"
 
 AWS_SERVICE=$(shell echo $(SERVICE) | tr '[:upper:]' '[:lower:]')
 
-.PHONY: build-prow-jobs
+.PHONY: gen-all
 
 # Assumes python3 is installed as default python on the host.
 build-prow-jobs: ## Compiles the Prow jobs
