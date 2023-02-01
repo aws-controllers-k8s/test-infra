@@ -31,6 +31,7 @@ Environment variables:
 # find out the service name and semver tag from the prow environment variables.
 AWS_SERVICE=$(echo "$REPO_NAME" | rev | cut -d"-" -f2- | rev | tr '[:upper:]' '[:lower:]')
 VERSION=$PULL_BASE_REF
+GOARCH=${GOARCH:-"$(go env GOARCH)"}
 
 # Important Directory references based on prowjob configuration.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -135,8 +136,13 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
       echo " git commit: $SERVICE_CONTROLLER_GIT_COMMIT"
   fi
 
+  pushd "$CODE_GEN_DIR" 1>/dev/null
+    # Get the golang version from the code-generator
+    GOLANG_VERSION=${GOLANG_VERSION:-"$(go list -f \{\{.GoVersion\}\} -m)"}
+  popd 1>/dev/null
+
   # build controller image
-  buildah bud \
+  if ! buildah bud \
     --quiet="$QUIET" \
     -t "$AWS_SERVICE_DOCKER_IMG" \
     -f "$CONTROLLER_IMAGE_DOCKERFILE_PATH" \
@@ -144,17 +150,15 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
     --build-arg service_controller_git_version="$VERSION" \
     --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
     --build-arg build_date="$BUILD_DATE" \
-    "${DOCKER_BUILD_CONTEXT}"
-
-  if [ $? -ne 0 ]; then
+    --build-arg golang_version="$GOLANG_VERSION" \
+    --build-arg go_arch="$GOARCH" \
+    "$DOCKER_BUILD_CONTEXT"; then
     exit 2
   fi
 
   echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG}"
 
-  buildah push "${AWS_SERVICE_DOCKER_IMG}"
-
-  if [ $? -ne 0 ]; then
+  if ! buildah push "${AWS_SERVICE_DOCKER_IMG}"; then
     exit 2
   fi
 fi
