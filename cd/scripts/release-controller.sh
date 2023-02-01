@@ -31,7 +31,7 @@ Environment variables:
 # find out the service name and semver tag from the prow environment variables.
 AWS_SERVICE=$(echo "$REPO_NAME" | rev | cut -d"-" -f2- | rev | tr '[:upper:]' '[:lower:]')
 VERSION=$PULL_BASE_REF
-GOARCH=${GOARCH:-"amd64"}
+GOARCH=${GOARCH:-"$(go env GOARCH)"}
 
 # Important Directory references based on prowjob configuration.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
