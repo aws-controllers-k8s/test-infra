@@ -50,6 +50,7 @@ export class TestCIStack extends cdk.Stack {
         tideStatusBucket: logsBucket.bucket,
         presubmitsBucket: logsBucket.bucket,
         postsubmitsBucket: logsBucket.bucket,
+        periodicsBucket: logsBucket.bucket,
       }
     );
     prowServiceAccounts.node.addDependency(testCluster);
