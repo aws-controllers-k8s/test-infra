@@ -5,7 +5,10 @@ import * as ec2 from "@aws-cdk/aws-ec2";
 import * as iam from "@aws-cdk/aws-iam";
 import * as cdk8s from "cdk8s";
 import { policies as ALBPolicies } from "./policies/aws-load-balancer-controller-policy";
-import { ProwGitHubSecretsChart, ProwGitHubSecretsChartProps } from "./charts/prow-secrets";
+import {
+  ProwGitHubSecretsChart,
+  ProwGitHubSecretsChartProps,
+} from "./charts/prow-secrets";
 import {
   EXTERNAL_DNS_NAMESPACE,
   FLUX_NAMESPACE,
@@ -30,15 +33,20 @@ export class CICluster extends cdk.Construct {
   constructor(scope: cdk.Construct, id: string, props: CIClusterProps) {
     super(scope, id);
 
-    this.testCluster = new eks.Cluster(scope, 'TestInfraCluster', {
+    this.testCluster = new eks.Cluster(scope, "TestInfraCluster", {
       version: eks.KubernetesVersion.V1_21,
-      defaultCapacity: 0
-    })
-    this.testNodegroup = this.testCluster.addNodegroupCapacity('TestInfraNodegroup', {
-      instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8)],
-      minSize: 2,
-      diskSize: 150,
-    })
+      defaultCapacity: 0,
+    });
+    this.testNodegroup = this.testCluster.addNodegroupCapacity(
+      "TestInfraNodegroup",
+      {
+        instanceTypes: [
+          ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8),
+        ],
+        minSize: 2,
+        diskSize: 150,
+      }
+    );
 
     this.namespaceManifests = [
       EXTERNAL_DNS_NAMESPACE,
@@ -195,7 +203,7 @@ export class CICluster extends cdk.Construct {
       chart: "aws-load-balancer-controller",
       repository: "https://aws.github.io/eks-charts",
       namespace: "kube-system",
-      version: "1.1.6",
+      version: "1.4.7",
       values: {
         clusterName: this.testCluster.clusterName,
         serviceAccount: {
