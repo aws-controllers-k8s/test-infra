@@ -5,7 +5,7 @@
     description: Moves stale issues to rotten state after 30d of inactivity
   agent: kubernetes
   spec:
-    serviceAccountName: pre-submit-service-account
+    serviceAccountName: periodic-service-account
     containers:
       - image: gcr.io/k8s-prow/commenter:v20210422-d12e80af3e
         command:

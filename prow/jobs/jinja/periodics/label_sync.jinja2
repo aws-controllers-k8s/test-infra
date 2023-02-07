@@ -7,6 +7,7 @@
     description: Runs label_sync to synchronize GitHub repo labels with the label config defined in label_sync/labels.yaml.
   agent: kubernetes
   spec:
+    serviceAccountName: periodic-service-account
     containers:
     - name: label-sync
       image: gcr.io/k8s-prow/label_sync:v20221205-a1b0b85d88
@@ -16,8 +17,9 @@
       - --config=/etc/config/labels.yaml
       - --confirm=true
       - --orgs=aws-controllers-k8s
-      - --token=/etc/github/token
-      - --github-endpoint=http://ghproxy
+      - --github-app-id=260409
+      - --github-app-private-key-path=/etc/github/cert
+      - --github-endpoint=http://ghproxy.prow.svc.cluster.local
       - --github-endpoint=https://api.github.com
       - --debug
       volumeMounts:
@@ -30,7 +32,7 @@
     volumes:
     - name: github-token
       secret:
-        secretName: prowjob-github-pat-token
+        secretName: prowjob-github-token
     - name: config
       configMap:
         name: label-config

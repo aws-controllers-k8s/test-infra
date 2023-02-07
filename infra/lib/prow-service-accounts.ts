@@ -15,12 +15,14 @@ export type ProwServiceAccountsProps = {
   tideStatusBucket: s3.IBucket;
   presubmitsBucket: s3.IBucket;
   postsubmitsBucket: s3.IBucket;
+  periodicsBucket: s3.IBucket;
 };
 
 export class ProwServiceAccounts extends cdk.Construct {
   readonly deploymentServiceAccount: eks.ServiceAccount;
   readonly presubmitJobServiceAccount: eks.ServiceAccount;
   readonly postsubmitJobServiceAccount: eks.ServiceAccount;
+  readonly periodicJobServiceAccount: eks.ServiceAccount;
 
   constructor(
     scope: cdk.Construct,
@@ -43,16 +45,8 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
-    const preAssumeRolePolicy = new iam.PolicyStatement({
-      actions: ["sts:AssumeRole"],
-      resources: ["*"],
-    });
 
-    // Used to validate recommended-policy-arn in service controllers repository
-    const preGetPolicyPolicy = new iam.PolicyStatement({
-      actions: ["iam:GetPolicy"],
-      resources: ["*"],
-    });
+    // ** Pre-submit job policies
 
     const preBucketAccessPolicy = new iam.PolicyStatement({
       actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
@@ -62,12 +56,6 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
-    const preParamStoreAccessPolicy = new iam.PolicyStatement({
-      actions: ["ssm:Get*"],
-      resources: [
-        `arn:${props.stackPartition}:ssm:${props.region}:${props.account}:parameter/*`,
-      ],
-    });
 
     const preECRPublicReadOnlyPolicy = new iam.PolicyStatement({
       actions: [
@@ -84,6 +72,26 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
       resources: ["*"],
     });
+
+    const preAssumeRolePolicy = new iam.PolicyStatement({
+      actions: ["sts:AssumeRole"],
+      resources: ["*"],
+    });
+
+    // Used to validate recommended-policy-arn in service controllers repository
+    const preGetPolicyPolicy = new iam.PolicyStatement({
+      actions: ["iam:GetPolicy"],
+      resources: ["*"],
+    });
+
+    const preParamStoreAccessPolicy = new iam.PolicyStatement({
+      actions: ["ssm:Get*"],
+      resources: [
+        `arn:${props.stackPartition}:ssm:${props.region}:${props.account}:parameter/*`,
+      ],
+    });
+
+    // ** Post-submit job policies
 
     const postBucketAccessPolicy = new iam.PolicyStatement({
       actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
@@ -138,8 +146,18 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
-    // Service account for each of the Prow deployments
-    // TODO(RedbackThomson): Split by service and assign individual permissions to each
+    // ** Periodic job policies
+
+    const periodicBucketAccessPolicy = new iam.PolicyStatement({
+      actions: ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+      resources: [
+        `arn:${props.stackPartition}:s3:::${props.periodicsBucket.bucketName}/*`,
+        `arn:${props.stackPartition}:s3:::${props.periodicsBucket.bucketName}`,
+      ],
+    });
+
+    // ** Service accounts for each of the Prow deployments
+    //    TODO(RedbackThomson): Split by service and assign individual permissions to each
     this.deploymentServiceAccount = props.prowCluster.addServiceAccount(
       "ProwDeploymentServiceAccount",
       {
@@ -157,6 +175,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     );
     this.deploymentServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
     this.deploymentServiceAccount.addToPrincipalPolicy(postBucketAccessPolicy);
+    this.deploymentServiceAccount.addToPrincipalPolicy(periodicBucketAccessPolicy);
 
     new cdk.CfnOutput(scope, "DeploymentServiceAccountRoleOutput", {
       value: this.deploymentServiceAccount.role.roleName,
@@ -164,7 +183,8 @@ export class ProwServiceAccounts extends cdk.Construct {
       description: "Role ARN for the Prow deployments service account",
     });
 
-    // Service account for presubmit jobs
+    // ** Pre-submit job service account
+
     this.presubmitJobServiceAccount = props.prowCluster.addServiceAccount(
       "PreSubmitJobServiceAccount",
       {
@@ -192,7 +212,8 @@ export class ProwServiceAccounts extends cdk.Construct {
       description: "Role ARN for the Prow presubmit jobs' service account",
     });
 
-    // Service account for postsubmit jobs
+    // ** Post-submit job service account
+
     this.postsubmitJobServiceAccount = props.prowCluster.addServiceAccount(
       "PostSubmitJobServiceAccount",
       {
@@ -219,6 +240,27 @@ export class ProwServiceAccounts extends cdk.Construct {
       value: this.postsubmitJobServiceAccount.role.roleName,
       exportName: "PostSubmitServiceAccountRoleName",
       description: "Role ARN for the Prow postsubmit jobs' service account",
+    });
+
+    // ** Periodic job service account
+
+    this.periodicJobServiceAccount = props.prowCluster.addServiceAccount(
+      "PeriodicJobServiceAccount",
+      {
+        namespace: PROW_JOB_NAMESPACE,
+        name: "periodic-service-account",
+      }
+    );
+    this.periodicJobServiceAccount.node.addDependency(
+      ...props.namespaceManifests
+    );
+    this.periodicJobServiceAccount.addToPrincipalPolicy(
+      periodicBucketAccessPolicy
+    );
+    new cdk.CfnOutput(scope, "PeriodicServiceAccountRoleOutput", {
+      value: this.periodicJobServiceAccount.role.roleName,
+      exportName: "PeriodicServiceAccountRoleName",
+      description: "Role ARN for the Prow periodic jobs' service account",
     });
   }
 }

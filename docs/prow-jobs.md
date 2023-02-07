@@ -11,7 +11,8 @@ We break down jobs into "presubmit", "postsubmit" and "periodic" types.
 "Presubmit" jobs must pass before a PR can be merged and are triggered by an 
 `/ok-to-test` command in the PR comments. "Postsubmit" jobs are triggered by the
 merging of a pull request and are typically used for publishing artifacts.
-"Periodic" jobs run on a set interval and are currently not used by ACK.
+"Periodic" jobs run on a set interval and are currently used to update the
+labels associated with outstanding GitHub issues and to close old issues.
 
 The container images we use for Prow jobs are located in the `prow/jobs/images`
 directory. For information about how to build and release new versions of these
