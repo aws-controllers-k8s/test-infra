@@ -13,30 +13,36 @@
 # limitations under the License.
 
 {{ if .Values.ingress.create }}
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
 {{ toYaml .Values.ingress.annotations| indent 4 }}
   name: prow
 spec:
-  backend:
-    serviceName: deck
-    servicePort: 80
   rules:
   - host: {{ .Values.prow.domain }}
     http:
       paths:
-      - backend:
-          serviceName: ssl-redirect
-          servicePort: use-annotation
-        path: /
-      - backend:
-          serviceName: deck
-          servicePort: 80
-        path: /
-      - backend:
-          serviceName: hook
-          servicePort: 8888
-        path: /hook
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: deck
+            port:
+              number: 80
+      - path: /hook
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: hook
+            port:
+              number: 8888
+      - path: /metrics
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: pushgateway-external
+            port:
+              number: 80
 {{ end }}

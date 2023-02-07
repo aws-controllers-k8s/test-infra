@@ -1,0 +1,43 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: GitRepository
+metadata:
+  name: k8s-test-infra
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  url: https://github.com/kubernetes/test-infra.git
+  ref:
+    branch: master
+    commit: "e8f9572fbaf56fa815a4ac5fd8aec1577ffb2d0a"
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+kind: Kustomization
+metadata:
+  name: prow-crds
+  namespace: flux-system
+spec:
+  interval: 1h
+  sourceRef:
+    kind: GitRepository
+    name: k8s-test-infra
+  path: ./config/prow/cluster/prowjob-crd
+  prune: true
+  validation: client
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+kind: Kustomization
+metadata:
+  name: prow-charts
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/prow-charts
+  prune: true
+  targetNamespace: flux-system
+  validation: client
+  dependsOn:
+  - name: prow-crds
