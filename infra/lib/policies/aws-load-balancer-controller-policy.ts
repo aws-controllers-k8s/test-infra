@@ -1,4 +1,4 @@
-import * as iam from '@aws-cdk/aws-iam';
+import { aws_iam as iam } from "aws-cdk-lib";
 
 export const policies: iam.PolicyStatement[] = [
   new iam.PolicyStatement({
@@ -29,7 +29,7 @@ export const policies: iam.PolicyStatement[] = [
       "elasticloadbalancing:CreateListener",
       "elasticloadbalancing:DeleteListener",
       "elasticloadbalancing:CreateRule",
-      "elasticloadbalancing:DeleteRule"
+      "elasticloadbalancing:DeleteRule",
     ],
     resources: ["*"],
   }),
@@ -51,102 +51,95 @@ export const policies: iam.PolicyStatement[] = [
       "shield:GetSubscriptionState",
       "shield:DescribeProtection",
       "shield:CreateProtection",
-      "shield:DeleteProtection"
+      "shield:DeleteProtection",
     ],
     resources: ["*"],
-  }),
-  new iam.PolicyStatement({
-    actions: [
-      "ec2:AuthorizeSecurityGroupIngress",
-      "ec2:RevokeSecurityGroupIngress"
-    ],
-    resources: ["*"],
-  }),
-  new iam.PolicyStatement({
-    actions: [
-      "ec2:CreateSecurityGroup"
-    ],
-    resources: ["*"],
-  }),
-  new iam.PolicyStatement({
-    actions: [
-      "ec2:CreateTags"
-    ],
-    resources: ["arn:aws:ec2:*:*:security-group/*"],
-    conditions: {
-      "StringEquals": {
-        "ec2:CreateAction": "CreateSecurityGroup"
-      },
-      "Null": {
-        "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
-      }
-    }
-  }),
-  new iam.PolicyStatement({
-    actions: [
-      "ec2:CreateTags",
-      "ec2:DeleteTags"
-    ],
-    resources: ["arn:aws:ec2:*:*:security-group/*"],
-    conditions: {
-      "Null": {
-        "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
-        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-      }
-    }
   }),
   new iam.PolicyStatement({
     actions: [
       "ec2:AuthorizeSecurityGroupIngress",
       "ec2:RevokeSecurityGroupIngress",
-      "ec2:DeleteSecurityGroup"
+    ],
+    resources: ["*"],
+  }),
+  new iam.PolicyStatement({
+    actions: ["ec2:CreateSecurityGroup"],
+    resources: ["*"],
+  }),
+  new iam.PolicyStatement({
+    actions: ["ec2:CreateTags"],
+    resources: ["arn:aws:ec2:*:*:security-group/*"],
+    conditions: {
+      StringEquals: {
+        "ec2:CreateAction": "CreateSecurityGroup",
+      },
+      Null: {
+        "aws:RequestTag/elbv2.k8s.aws/cluster": "false",
+      },
+    },
+  }),
+  new iam.PolicyStatement({
+    actions: ["ec2:CreateTags", "ec2:DeleteTags"],
+    resources: ["arn:aws:ec2:*:*:security-group/*"],
+    conditions: {
+      Null: {
+        "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
+        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false",
+      },
+    },
+  }),
+  new iam.PolicyStatement({
+    actions: [
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:DeleteSecurityGroup",
     ],
     resources: ["*"],
     conditions: {
-      "Null": {
-        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-      }
-    }
+      Null: {
+        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false",
+      },
+    },
   }),
   new iam.PolicyStatement({
     actions: [
       "elasticloadbalancing:CreateLoadBalancer",
-      "elasticloadbalancing:CreateTargetGroup"
+      "elasticloadbalancing:CreateTargetGroup",
     ],
     resources: ["*"],
     conditions: {
-      "Null": {
+      Null: {
         "aws:RequestTag/elbv2.k8s.aws/cluster": "false",
-      }
-    }
+      },
+    },
   }),
   new iam.PolicyStatement({
     actions: [
       "elasticloadbalancing:AddTags",
-      "elasticloadbalancing:RemoveTags"
+      "elasticloadbalancing:RemoveTags",
     ],
     resources: [
       "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*",
       "arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*",
-      "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"
+      "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*",
     ],
     conditions: {
-      "Null": {
+      Null: {
         "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
-        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-      }
-    }
+        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false",
+      },
+    },
   }),
   new iam.PolicyStatement({
     actions: [
       "elasticloadbalancing:AddTags",
-      "elasticloadbalancing:RemoveTags"
+      "elasticloadbalancing:RemoveTags",
     ],
     resources: [
       "arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*",
       "arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*",
       "arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*",
-      "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"
+      "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*",
     ],
   }),
   new iam.PolicyStatement({
@@ -158,19 +151,19 @@ export const policies: iam.PolicyStatement[] = [
       "elasticloadbalancing:DeleteLoadBalancer",
       "elasticloadbalancing:ModifyTargetGroup",
       "elasticloadbalancing:ModifyTargetGroupAttributes",
-      "elasticloadbalancing:DeleteTargetGroup"
+      "elasticloadbalancing:DeleteTargetGroup",
     ],
     resources: ["*"],
     conditions: {
-      "Null": {
-        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-      }
-    }
+      Null: {
+        "aws:ResourceTag/elbv2.k8s.aws/cluster": "false",
+      },
+    },
   }),
   new iam.PolicyStatement({
     actions: [
       "elasticloadbalancing:RegisterTargets",
-      "elasticloadbalancing:DeregisterTargets"
+      "elasticloadbalancing:DeregisterTargets",
     ],
     resources: ["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"],
   }),
@@ -180,8 +173,8 @@ export const policies: iam.PolicyStatement[] = [
       "elasticloadbalancing:ModifyListener",
       "elasticloadbalancing:AddListenerCertificates",
       "elasticloadbalancing:RemoveListenerCertificates",
-      "elasticloadbalancing:ModifyRule"
+      "elasticloadbalancing:ModifyRule",
     ],
     resources: ["*"],
-  })
+  }),
 ];
