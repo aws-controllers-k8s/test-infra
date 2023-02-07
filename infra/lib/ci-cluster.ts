@@ -29,7 +29,7 @@ export class CICluster extends Construct {
     super(scope, id);
 
     this.testCluster = new eks.Cluster(scope, "TestInfraCluster", {
-      version: eks.KubernetesVersion.V1_21,
+      version: eks.KubernetesVersion.V1_24,
       defaultCapacity: 0,
     });
     this.testNodegroup = this.testCluster.addNodegroupCapacity(
