@@ -1,8 +1,5 @@
-import * as path from "path";
-import * as cdk from "@aws-cdk/core";
-import * as eks from "@aws-cdk/aws-eks";
-import * as ec2 from "@aws-cdk/aws-ec2";
-import * as iam from "@aws-cdk/aws-iam";
+import { Construct } from "constructs";
+import { aws_eks as eks, aws_ec2 as ec2, aws_iam as iam } from "aws-cdk-lib";
 import * as cdk8s from "cdk8s";
 import { policies as ALBPolicies } from "./policies/aws-load-balancer-controller-policy";
 import {
@@ -15,8 +12,6 @@ import {
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
 } from "./test-ci-stack";
-import { KubernetesManifest } from "@aws-cdk/aws-eks";
-import { Chart } from "cdk8s";
 
 export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps;
 
@@ -24,17 +19,17 @@ export type CIClusterRuntimeProps = {};
 
 export type CIClusterProps = CIClusterCompileTimeProps & CIClusterRuntimeProps;
 
-export class CICluster extends cdk.Construct {
+export class CICluster extends Construct {
   readonly testCluster: eks.Cluster;
   readonly testNodegroup: eks.Nodegroup;
 
   readonly namespaceManifests: eks.KubernetesManifest[];
 
-  constructor(scope: cdk.Construct, id: string, props: CIClusterProps) {
+  constructor(scope: Construct, id: string, props: CIClusterProps) {
     super(scope, id);
 
     this.testCluster = new eks.Cluster(scope, "TestInfraCluster", {
-      version: eks.KubernetesVersion.V1_21,
+      version: eks.KubernetesVersion.V1_24,
       defaultCapacity: 0,
     });
     this.testNodegroup = this.testCluster.addNodegroupCapacity(
@@ -61,7 +56,7 @@ export class CICluster extends cdk.Construct {
   }
 
   createNamespace = (name: string) => {
-    return new KubernetesManifest(
+    return new eks.KubernetesManifest(
       this.testCluster.stack,
       `${name}-namespace-struct`,
       {

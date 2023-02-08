@@ -1,7 +1,10 @@
-import * as cdk from "@aws-cdk/core";
-import * as eks from "@aws-cdk/aws-eks";
-import * as s3 from "@aws-cdk/aws-s3";
-import * as iam from "@aws-cdk/aws-iam";
+import { Construct } from "constructs";
+import {
+  aws_s3 as s3,
+  aws_eks as eks,
+  aws_iam as iam,
+  CfnOutput,
+} from "aws-cdk-lib";
 import { PROW_JOB_NAMESPACE, PROW_NAMESPACE } from "./test-ci-stack";
 
 export type ProwServiceAccountsProps = {
@@ -18,17 +21,13 @@ export type ProwServiceAccountsProps = {
   periodicsBucket: s3.IBucket;
 };
 
-export class ProwServiceAccounts extends cdk.Construct {
+export class ProwServiceAccounts extends Construct {
   readonly deploymentServiceAccount: eks.ServiceAccount;
   readonly presubmitJobServiceAccount: eks.ServiceAccount;
   readonly postsubmitJobServiceAccount: eks.ServiceAccount;
   readonly periodicJobServiceAccount: eks.ServiceAccount;
 
-  constructor(
-    scope: cdk.Construct,
-    id: string,
-    props: ProwServiceAccountsProps
-  ) {
+  constructor(scope: Construct, id: string, props: ProwServiceAccountsProps) {
     super(scope, id);
 
     // Necessary only when splitting control and data plane
@@ -45,7 +44,6 @@ export class ProwServiceAccounts extends cdk.Construct {
       ],
     });
 
-
     // ** Pre-submit job policies
 
     const preBucketAccessPolicy = new iam.PolicyStatement({
@@ -55,7 +53,6 @@ export class ProwServiceAccounts extends cdk.Construct {
         `arn:${props.stackPartition}:s3:::${props.presubmitsBucket.bucketName}`,
       ],
     });
-
 
     const preECRPublicReadOnlyPolicy = new iam.PolicyStatement({
       actions: [
@@ -175,9 +172,11 @@ export class ProwServiceAccounts extends cdk.Construct {
     );
     this.deploymentServiceAccount.addToPrincipalPolicy(preBucketAccessPolicy);
     this.deploymentServiceAccount.addToPrincipalPolicy(postBucketAccessPolicy);
-    this.deploymentServiceAccount.addToPrincipalPolicy(periodicBucketAccessPolicy);
+    this.deploymentServiceAccount.addToPrincipalPolicy(
+      periodicBucketAccessPolicy
+    );
 
-    new cdk.CfnOutput(scope, "DeploymentServiceAccountRoleOutput", {
+    new CfnOutput(scope, "DeploymentServiceAccountRoleOutput", {
       value: this.deploymentServiceAccount.role.roleName,
       exportName: "DeploymentServiceAccountRoleName",
       description: "Role ARN for the Prow deployments service account",
@@ -206,7 +205,7 @@ export class ProwServiceAccounts extends cdk.Construct {
       preECRPublicReadOnlyPolicy
     );
 
-    new cdk.CfnOutput(scope, "PreSubmitServiceAccountRoleOutput", {
+    new CfnOutput(scope, "PreSubmitServiceAccountRoleOutput", {
       value: this.presubmitJobServiceAccount.role.roleName,
       exportName: "PreSubmitServiceAccountRoleName",
       description: "Role ARN for the Prow presubmit jobs' service account",
@@ -236,7 +235,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     this.postsubmitJobServiceAccount.addToPrincipalPolicy(
       postParamStoreAccessPolicy
     );
-    new cdk.CfnOutput(scope, "PostSubmitServiceAccountRoleOutput", {
+    new CfnOutput(scope, "PostSubmitServiceAccountRoleOutput", {
       value: this.postsubmitJobServiceAccount.role.roleName,
       exportName: "PostSubmitServiceAccountRoleName",
       description: "Role ARN for the Prow postsubmit jobs' service account",
@@ -257,7 +256,7 @@ export class ProwServiceAccounts extends cdk.Construct {
     this.periodicJobServiceAccount.addToPrincipalPolicy(
       periodicBucketAccessPolicy
     );
-    new cdk.CfnOutput(scope, "PeriodicServiceAccountRoleOutput", {
+    new CfnOutput(scope, "PeriodicServiceAccountRoleOutput", {
       value: this.periodicJobServiceAccount.role.roleName,
       exportName: "PeriodicServiceAccountRoleName",
       description: "Role ARN for the Prow periodic jobs' service account",

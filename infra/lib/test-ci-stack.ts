@@ -1,22 +1,23 @@
-import * as cdk from "@aws-cdk/core";
+import { Construct } from "constructs";
 import { CICluster, CIClusterCompileTimeProps } from "./ci-cluster";
 import { LogBucket, LogBucketCompileProps } from "./log-bucket";
 import { ClusterSSM, ClusterSSMCompileProps } from "./ssm";
 import { ProwServiceAccounts } from "./prow-service-accounts";
+import { Stack, StackProps } from "aws-cdk-lib";
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
 export const EXTERNAL_DNS_NAMESPACE = "external-dns";
 export const FLUX_NAMESPACE = "flux-system";
 
-export type TestCIStackProps = cdk.StackProps &
+export type TestCIStackProps = StackProps &
   LogBucketCompileProps &
   ClusterSSMCompileProps & {
     clusterConfig: CIClusterCompileTimeProps;
   };
 
-export class TestCIStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props: TestCIStackProps) {
+export class TestCIStack extends Stack {
+  constructor(scope: Construct, id: string, props: TestCIStackProps) {
     super(scope, id, props);
 
     const logsBucket = new LogBucket(this, "LogBucketConstruct", {
