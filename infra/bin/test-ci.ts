@@ -34,6 +34,8 @@ new TestCIStack(app, "TestCIStack", {
     appWebhookSecret:
       app.node.tryGetContext("app_webhook_secret") ||
       process.env.GITHUB_APP_WEBHOOK_SECRET,
+    hostedZoneId:
+      app.node.tryGetContext("hosted_zone_id") || process.env.HOSTED_ZONE_ID,
   },
   logsBucketName:
     app.node.tryGetContext("logs_bucket") || process.env.LOGS_BUCKET,
@@ -41,6 +43,4 @@ new TestCIStack(app, "TestCIStack", {
     app.node.tryGetContext("logs_bucket_import") ||
     process.env.LOGS_BUCKET_IMPORT ||
     false,
-  pvreBucketName:
-    app.node.tryGetContext("pvre_bucket") || process.env.PVRE_BUCKET,
 });

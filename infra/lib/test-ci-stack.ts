@@ -1,7 +1,6 @@
 import { Construct } from "constructs";
 import { CICluster, CIClusterCompileTimeProps } from "./ci-cluster";
 import { LogBucket, LogBucketCompileProps } from "./log-bucket";
-import { ClusterSSM, ClusterSSMCompileProps } from "./ssm";
 import { ProwServiceAccounts } from "./prow-service-accounts";
 import { Stack, StackProps } from "aws-cdk-lib";
 
@@ -11,8 +10,7 @@ export const EXTERNAL_DNS_NAMESPACE = "external-dns";
 export const FLUX_NAMESPACE = "flux-system";
 
 export type TestCIStackProps = StackProps &
-  LogBucketCompileProps &
-  ClusterSSMCompileProps & {
+  LogBucketCompileProps & {
     clusterConfig: CIClusterCompileTimeProps;
   };
 
@@ -27,14 +25,6 @@ export class TestCIStack extends Stack {
 
     const testCluster = new CICluster(this, "CIClusterConstruct", {
       ...props.clusterConfig,
-    });
-
-    const clusterSSM = new ClusterSSM(this, "CIClusterSSM", {
-      ...props,
-      account: this.account,
-      region: this.region,
-      cluster: testCluster.testCluster,
-      nodes: testCluster.testNodegroup,
     });
 
     const prowServiceAccounts = new ProwServiceAccounts(

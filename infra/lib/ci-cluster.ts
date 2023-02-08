@@ -1,7 +1,12 @@
 import { Construct } from "constructs";
-import { aws_eks as eks, aws_ec2 as ec2, aws_iam as iam } from "aws-cdk-lib";
+import {
+  aws_eks as eks,
+  aws_ec2 as ec2,
+  aws_iam as iam,
+  Stack,
+} from "aws-cdk-lib";
+import * as blueprints from "@aws-quickstart/eks-blueprints";
 import * as cdk8s from "cdk8s";
-import { policies as ALBPolicies } from "./policies/aws-load-balancer-controller-policy";
 import {
   ProwGitHubSecretsChart,
   ProwGitHubSecretsChartProps,
@@ -12,8 +17,15 @@ import {
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
 } from "./test-ci-stack";
+import {
+  GlobalResources,
+  ImportHostedZoneProvider,
+} from "@aws-quickstart/eks-blueprints";
+import { InstanceType } from "aws-cdk-lib/aws-ec2";
 
-export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps;
+export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps & {
+  hostedZoneId: string;
+};
 
 export type CIClusterRuntimeProps = {};
 
@@ -21,27 +33,48 @@ export type CIClusterProps = CIClusterCompileTimeProps & CIClusterRuntimeProps;
 
 export class CICluster extends Construct {
   readonly testCluster: eks.Cluster;
-  readonly testNodegroup: eks.Nodegroup;
 
   readonly namespaceManifests: eks.KubernetesManifest[];
 
   constructor(scope: Construct, id: string, props: CIClusterProps) {
     super(scope, id);
 
-    this.testCluster = new eks.Cluster(scope, "TestInfraCluster", {
-      version: eks.KubernetesVersion.V1_24,
-      defaultCapacity: 0,
-    });
-    this.testNodegroup = this.testCluster.addNodegroupCapacity(
-      "TestInfraNodegroup",
-      {
-        instanceTypes: [
-          ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8),
-        ],
-        minSize: 2,
-        diskSize: 150,
-      }
-    );
+    const clusterVersion = eks.KubernetesVersion.V1_23;
+
+    const mngProps: blueprints.MngClusterProviderProps = {
+      minSize: 2,
+      maxSize: 8,
+      desiredSize: 2,
+      diskSize: 150,
+      version: clusterVersion,
+      instanceTypes: [
+        ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8),
+      ],
+      amiType: eks.NodegroupAmiType.AL2_X86_64,
+      nodeGroupCapacityType: eks.CapacityType.ON_DEMAND,
+    };
+
+    const blueprintStack = blueprints.EksBlueprint.builder()
+      .account(Stack.of(this).account)
+      .region(Stack.of(this).region)
+      .version(clusterVersion)
+      .clusterProvider(new blueprints.MngClusterProvider(mngProps))
+      .resourceProvider(
+        GlobalResources.HostedZone,
+        new ImportHostedZoneProvider(props.hostedZoneId)
+      )
+      .addOns(
+        new blueprints.addons.VpcCniAddOn(),
+        new blueprints.addons.KarpenterAddOn(),
+        new blueprints.addons.AwsLoadBalancerControllerAddOn(),
+        new blueprints.addons.EbsCsiDriverAddOn(),
+        new blueprints.addons.ExternalDnsAddOn({
+          hostedZoneResources: [GlobalResources.HostedZone],
+        })
+      )
+      .build(this, "TestInfraCluster");
+
+    this.testCluster = blueprintStack.getClusterInfo().cluster;
 
     this.namespaceManifests = [
       EXTERNAL_DNS_NAMESPACE,
@@ -51,8 +84,6 @@ export class CICluster extends Construct {
 
     this.installProwRequirements(props);
     this.installFlux();
-    this.installExternalDNS();
-    this.installAWSLoadBalancer();
   }
 
   createNamespace = (name: string) => {
@@ -138,74 +169,5 @@ export class CICluster extends Construct {
     prowSecretsApp.charts.forEach((chart) =>
       chart.addDependency(...this.namespaceManifests)
     );
-  };
-
-  installExternalDNS = () => {
-    const externalDNSServiceAccount = this.testCluster.addServiceAccount(
-      "external-dns-service-account",
-      {
-        namespace: EXTERNAL_DNS_NAMESPACE,
-      }
-    );
-    externalDNSServiceAccount.node.addDependency(...this.namespaceManifests);
-
-    externalDNSServiceAccount.addToPrincipalPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["route53:ChangeResourceRecordSets"],
-        resources: ["arn:aws:route53:::hostedzone/*"],
-      })
-    );
-    externalDNSServiceAccount.addToPrincipalPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["route53:ListHostedZones", "route53:ListResourceRecordSets"],
-        resources: ["*"],
-      })
-    );
-
-    const helmChart = this.testCluster.addHelmChart("external-dns", {
-      chart: "external-dns",
-      repository: "https://charts.bitnami.com/bitnami",
-      namespace: EXTERNAL_DNS_NAMESPACE,
-      version: "6.12.0",
-      values: {
-        namespace: PROW_NAMESPACE, // Limit only to DNS in Prow
-        sources: ["ingress"],
-        policy: "upsert-only",
-        serviceAccount: {
-          create: false,
-          name: externalDNSServiceAccount.serviceAccountName,
-        },
-        aws: {
-          zoneType: "public",
-        },
-      },
-    });
-    helmChart.node.addDependency(...this.namespaceManifests);
-  };
-
-  installAWSLoadBalancer = () => {
-    const serviceAccount = this.testCluster.addServiceAccount(
-      "alb-service-account",
-      {
-        namespace: "kube-system",
-      }
-    );
-    ALBPolicies.map((policy) => serviceAccount.addToPrincipalPolicy(policy));
-
-    this.testCluster.addHelmChart("aws-load-balancer-controller", {
-      chart: "aws-load-balancer-controller",
-      repository: "https://aws.github.io/eks-charts",
-      namespace: "kube-system",
-      version: "1.4.7",
-      values: {
-        clusterName: this.testCluster.clusterName,
-        serviceAccount: {
-          create: false,
-          name: serviceAccount.serviceAccountName,
-        },
-      },
-    });
   };
 }
