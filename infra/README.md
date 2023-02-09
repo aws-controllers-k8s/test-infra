@@ -31,6 +31,7 @@ export GITHUB_APP_CLIENT_ID=<Client ID from GH app settings>
 export GITHUB_APP_WEBHOOK_SECRET=<Webhook secret from GH app settings>
 export LOGS_BUCKET=<S3 bucket name for logs> # Optional
 export LOGS_BUCKET_IMPORT=false # NOTE: optional, use this and set to true if you want to import an existing bucket
+export HOSTED_ZONE_ID=<Your Route53 HostedZone> # The hosted zone used for your cluster ingress domain
 
 export AWS_DEFAULT_REGION=us-west-2
 
@@ -45,14 +46,15 @@ export AWS_DEFAULT_REGION=us-west-2
 
 cd test-infra/infra
 cdk bootstrap
-cdk deploy \
+cdk deploy --all \
            -c pat="<personal access token>" \
            -c app_id="<GitHub app ID>" \
            -c client_id="<GitHub app client ID>" \
            -c app_private_key="<GitHub app private RSA key in PEM format>" \
            -c app_webhook_secret="<GitHub app webhook secret>" \
            -c logs_bucket="<S3 bucket name for logs>" \
-           -c logs_bucket_import=<true|false>
+           -c logs_bucket_import=<true|false> \
+           -c hosted_zone_id="<Route53 hostedzone ID>"
 ```
 
 An example:
@@ -60,8 +62,9 @@ An example:
 export AWS_DEFAULT_REGION=us-west-2
 cd $GOPATH/src/github.com/aws-controllers-k8s/test-infra/infra
 cdk bootstrap
-cdk deploy -c pat="12345" -c app_id="123456" -c client_id="12345" \
+cdk deploy --all -c pat="12345" -c app_id="123456" -c client_id="12345" \
     -c app_private_key="$(cat ./github_app_cert.pem)" \
     -c app_webhook_secret="081d23f783c016e91950c92a4fe4f87bfe61ca8b" \
     -c logs_bucket="ack-prow-logs-1234567890"
+    -c hosted_zone_id="Z0123456789ABCDEFGHIJ"
 ```
