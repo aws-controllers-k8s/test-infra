@@ -42,7 +42,7 @@ hook:
   scrapeMetrics: false
   image: gcr.io/k8s-prow/hook:v20221121-dfec9ce18d
   service:
-    type: 'LoadBalancer'
+    type: 'ClusterIP'
   serviceAccount:
     create: false
     name: ''

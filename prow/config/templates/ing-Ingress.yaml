@@ -24,13 +24,6 @@ spec:
   - host: {{ .Values.prow.domain }}
     http:
       paths:
-      - path: /*
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: deck
-            port:
-              number: 80
       - path: /hook
         pathType: ImplementationSpecific
         backend:
@@ -43,6 +36,13 @@ spec:
         backend:
           service:
             name: pushgateway-external
+            port:
+              number: 80
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: deck
             port:
               number: 80
 {{ end }}
