@@ -1,10 +1,5 @@
 import { Construct } from "constructs";
-import {
-  aws_eks as eks,
-  aws_ec2 as ec2,
-  aws_iam as iam,
-  Stack,
-} from "aws-cdk-lib";
+import { aws_eks as eks, aws_ec2 as ec2, Stack } from "aws-cdk-lib";
 import * as blueprints from "@aws-quickstart/eks-blueprints";
 import * as cdk8s from "cdk8s";
 import {
@@ -12,7 +7,6 @@ import {
   ProwGitHubSecretsChartProps,
 } from "./charts/prow-secrets";
 import {
-  EXTERNAL_DNS_NAMESPACE,
   FLUX_NAMESPACE,
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
@@ -21,7 +15,6 @@ import {
   GlobalResources,
   ImportHostedZoneProvider,
 } from "@aws-quickstart/eks-blueprints";
-import { InstanceType } from "aws-cdk-lib/aws-ec2";
 
 export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps & {
   hostedZoneId: string;
@@ -76,11 +69,9 @@ export class CICluster extends Construct {
 
     this.testCluster = blueprintStack.getClusterInfo().cluster;
 
-    this.namespaceManifests = [
-      EXTERNAL_DNS_NAMESPACE,
-      PROW_JOB_NAMESPACE,
-      PROW_NAMESPACE,
-    ].map(this.createNamespace);
+    this.namespaceManifests = [PROW_JOB_NAMESPACE, PROW_NAMESPACE].map(
+      this.createNamespace
+    );
 
     this.installProwRequirements(props);
     this.installFlux();
@@ -107,6 +98,7 @@ export class CICluster extends Construct {
 
   installFlux = () => {
     const fluxChart = this.testCluster.addHelmChart("flux2", {
+      release: "flux2",
       chart: "flux2",
       repository: "https://fluxcd-community.github.io/helm-charts",
       namespace: FLUX_NAMESPACE,

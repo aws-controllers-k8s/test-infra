@@ -6,7 +6,6 @@ import { Stack, StackProps } from "aws-cdk-lib";
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
-export const EXTERNAL_DNS_NAMESPACE = "external-dns";
 export const FLUX_NAMESPACE = "flux-system";
 
 export type TestCIStackProps = StackProps &
