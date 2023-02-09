@@ -49,6 +49,10 @@ soak_test_on_release_service_names: []
 # Since there can be some breaking changes, these tests are marked optional for
 # prow merge criteria.
 code_gen_presubmit_services:
+- apigatewayv2
 - dynamodb
+- ec2
 - ecr
+- iam
+- lambda
 - s3
