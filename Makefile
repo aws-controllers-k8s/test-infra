@@ -4,7 +4,8 @@ PROW_JOBS_PATH="./prow/jobs"
 
 AWS_SERVICE=$(shell echo $(SERVICE) | tr '[:upper:]' '[:lower:]')
 
-.PHONY: build-prow-jobs
+.PHONY: gen-all
+gen-all: build-prow-jobs build-label-config
 
 # Assumes python3 is installed as default python on the host.
 build-prow-jobs: ## Compiles the Prow jobs
@@ -20,8 +21,6 @@ build-label-config:
 	echo "Success! Configuration file available at $(PROW_JOBS_PATH)/labels.yaml" || \
 	echo "Error while generating label_sync config"; \
 	popd 1>/dev/null
-
-gen-all: build-prow-jobs build-label-config
 
 kind-test: ## Run functional tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-e2e-tests.sh
