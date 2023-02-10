@@ -43,7 +43,7 @@
 {% for service in code_gen_presubmit_services  %}
   - name: {{ service }}-controller-test
     decorate: true
-    optional: true
+    optional: false
     always_run: true
     labels:
       preset-dind-enabled: "true"
