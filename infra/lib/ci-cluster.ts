@@ -57,13 +57,12 @@ export class CICluster extends Construct {
         new ImportHostedZoneProvider(props.hostedZoneId)
       )
       .addOns(
-        new blueprints.addons.VpcCniAddOn(),
-        new blueprints.addons.KarpenterAddOn(),
-        new blueprints.addons.AwsLoadBalancerControllerAddOn(),
-        new blueprints.addons.EbsCsiDriverAddOn(),
-        new blueprints.addons.ExternalDnsAddOn({
-          hostedZoneResources: [GlobalResources.HostedZone],
-        })
+        new blueprints.CertManagerAddOn,
+        new blueprints.AwsLoadBalancerControllerAddOn,
+        new blueprints.VpcCniAddOn,
+        new blueprints.KarpenterAddOn,
+        new blueprints.EbsCsiDriverAddOn,
+        new blueprints.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
       )
       .build(this, "TestInfraCluster");
 
