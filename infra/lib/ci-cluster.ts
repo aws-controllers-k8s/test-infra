@@ -34,35 +34,58 @@ export class CICluster extends Construct {
 
     const clusterVersion = eks.KubernetesVersion.V1_23;
 
-    const mngProps: blueprints.MngClusterProviderProps = {
-      minSize: 2,
-      maxSize: 8,
-      desiredSize: 2,
-      diskSize: 150,
-      version: clusterVersion,
-      instanceTypes: [
-        ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8),
+    const karpenterAddonProps = {
+      requirements: [
+          {
+            key: 'node.kubernetes.io/instance-type',
+            op: "In" as const,
+            vals: ['m5.xlarge','m5.2xlarge','m5.4xlarge','m5.8xlarge'],
+          },
+          {
+            key: 'kubernetes.io/arch',
+            op: "In" as const,
+            vals: ['amd64']
+          },
+          {
+            key: 'karpenter.sh/capacity-type',
+            op: "In" as const,
+            vals: ['on-demand']
+          },
       ],
-      amiType: eks.NodegroupAmiType.AL2_X86_64,
-      nodeGroupCapacityType: eks.CapacityType.ON_DEMAND,
-    };
+      subnetTags: {
+        "Name": "TestCIStack/CIClusterConstruct/TestInfraCluster/TestInfraCluster-vpc/PrivateSubnet*",
+      },
+      securityGroupTags: {
+        "kubernetes.io/cluster/TestInfraCluster": "owned",
+      },
+      taints: [{
+        key: "workload",
+        value: "test",
+        effect: "NoSchedule" as const,
+      }],
+      amiFamily: "AL2" as const,
+      consolidation: { enabled: true },
+      ttlSecondsUntilExpired: 2592000,
+      weight: 20,
+      interruptionHandling: true,
+    }
+    const karpenterAddOn = new blueprints.addons.KarpenterAddOn(karpenterAddonProps);
 
     const blueprintStack = blueprints.EksBlueprint.builder()
       .account(Stack.of(this).account)
       .region(Stack.of(this).region)
       .version(clusterVersion)
-      .clusterProvider(new blueprints.MngClusterProvider(mngProps))
       .resourceProvider(
         GlobalResources.HostedZone,
         new ImportHostedZoneProvider(props.hostedZoneId)
       )
       .addOns(
-        new blueprints.CertManagerAddOn,
-        new blueprints.AwsLoadBalancerControllerAddOn,
-        new blueprints.VpcCniAddOn,
-        new blueprints.KarpenterAddOn,
-        new blueprints.EbsCsiDriverAddOn,
-        new blueprints.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
+        new blueprints.addons.CertManagerAddOn,
+        new blueprints.addons.AwsLoadBalancerControllerAddOn,
+        new blueprints.addons.VpcCniAddOn,
+        karpenterAddOn,
+        new blueprints.addons.EbsCsiDriverAddOn,
+        new blueprints.addons.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
       )
       .build(this, "TestInfraCluster");
 
