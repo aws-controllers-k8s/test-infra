@@ -36,6 +36,7 @@ aws_services:
 - sfn
 - sns
 - sqs
+- ssm
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
