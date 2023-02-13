@@ -60,14 +60,9 @@ export class CICluster extends Construct {
       ],
       subnetTags: { "Name": subnetTagPattern },
       securityGroupTags: { securityGroupTagPattern : "owned" },
-      taints: [{
-        key: "workload",
-        value: "test",
-        effect: "NoSchedule" as const,
-      }],
       amiFamily: "AL2" as const,
       consolidation: { enabled: true },
-      ttlSecondsUntilExpired: 2592000,
+      ttlSecondsUntilExpired: 30 * 24 * 60 * 60, // 30 days in seconds
       weight: 20,
       interruptionHandling: true,
     }
