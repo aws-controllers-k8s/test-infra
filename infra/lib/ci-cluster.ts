@@ -39,6 +39,9 @@ export class CICluster extends Construct {
 
     const subnetTagPattern = `${STACK_NAME}/${CLUSTER_CONSTRUCT_NAME}/${CLUSTER_NAME}/${CLUSTER_NAME}-vpc/PrivateSubnet*`;
     const securityGroupTagPattern = "kubernetes.io/cluster/" + CLUSTER_NAME;
+    const securityGroupTags = {
+      [securityGroupTagPattern] : "owned",
+    };
 
     const karpenterAddonProps = {
       requirements: [
@@ -59,7 +62,7 @@ export class CICluster extends Construct {
           },
       ],
       subnetTags: { "Name": subnetTagPattern },
-      securityGroupTags: { securityGroupTagPattern : "owned" },
+      securityGroupTags: securityGroupTags,
       amiFamily: "AL2" as const,
       consolidation: { enabled: true },
       ttlSecondsUntilExpired: 30 * 24 * 60 * 60, // 30 days in seconds
