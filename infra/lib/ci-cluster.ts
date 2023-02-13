@@ -65,8 +65,7 @@ export class CICluster extends Construct {
       securityGroupTags: securityGroupTags,
       amiFamily: "AL2" as const,
       consolidation: { enabled: true },
-      ttlSecondsUntilExpired: 30 * 24 * 60 * 60, // 30 days in seconds
-      weight: 20,
+      ttlSecondsUntilExpired: 1 * 60 * 60, // 1 hour in seconds
       interruptionHandling: true,
     }
     const karpenterAddOn = new blueprints.addons.KarpenterAddOn(karpenterAddonProps);
