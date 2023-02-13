@@ -7,9 +7,12 @@ import {
   ProwGitHubSecretsChartProps,
 } from "./charts/prow-secrets";
 import {
+  STACK_NAME,
   FLUX_NAMESPACE,
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
+  CLUSTER_NAME,
+  CLUSTER_CONSTRUCT_NAME,
 } from "./test-ci-stack";
 import {
   GlobalResources,
@@ -34,6 +37,9 @@ export class CICluster extends Construct {
 
     const clusterVersion = eks.KubernetesVersion.V1_23;
 
+    const subnetTagPattern = `${STACK_NAME}/${CLUSTER_CONSTRUCT_NAME}/${CLUSTER_NAME}/${CLUSTER_NAME}-vpc/PrivateSubnet*`;
+    const securityGroupTagPattern = "kubernetes.io/cluster/" + CLUSTER_NAME;
+
     const karpenterAddonProps = {
       requirements: [
           {
@@ -52,12 +58,8 @@ export class CICluster extends Construct {
             vals: ['on-demand']
           },
       ],
-      subnetTags: {
-        "Name": "TestCIStack/CIClusterConstruct/TestInfraCluster/TestInfraCluster-vpc/PrivateSubnet*",
-      },
-      securityGroupTags: {
-        "kubernetes.io/cluster/TestInfraCluster": "owned",
-      },
+      subnetTags: { "Name": subnetTagPattern },
+      securityGroupTags: { securityGroupTagPattern : "owned" },
       taints: [{
         key: "workload",
         value: "test",
@@ -87,7 +89,7 @@ export class CICluster extends Construct {
         new blueprints.addons.EbsCsiDriverAddOn,
         new blueprints.addons.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
       )
-      .build(this, "TestInfraCluster");
+      .build(this, CLUSTER_NAME);
 
     this.testCluster = blueprintStack.getClusterInfo().cluster;
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import "source-map-support/register";
 import { App } from "aws-cdk-lib";
-import { TestCIStack } from "../lib/test-ci-stack";
+import { TestCIStack, STACK_NAME } from "../lib/test-ci-stack";
 
 const app = new App();
-new TestCIStack(app, "TestCIStack", {
+new TestCIStack(app, STACK_NAME, {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */
