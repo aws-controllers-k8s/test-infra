@@ -46,11 +46,21 @@ default:
       target: both
       addedBy: label
     - color: 0052cc
+      description: Issues or PRs related to deletion policy.
+      name: area/deletion-policy
+      target: both
+      addedBy: label
+    - color: 0052cc
       description: Issues or PRs related to dependency changes
       name: area/dependency
       target: both
       previously:
         - name: dependencies
+      addedBy: label
+    - color: 0052cc
+      description: Issues or PRs related to drift remediation.
+      name: area/drift-remediation
+      target: both
       addedBy: label
     - color: 0052cc
       description: Issues or PRs related to documentation and examples
@@ -70,6 +80,13 @@ default:
       description: Issues or PRs as related to our testing infrastructure, prow/flux configuration etc...
       name: area/infra
       target: both
+      addedBy: label
+    - color: 0052cc
+      description: Issues or PRs related to our installation tools, configurations, helm charts, etc...
+      name: area/installation
+      target: both
+      previously:
+        - name: install-setup
       addedBy: label
     - color: 0052cc
       description: Issues or PRs related to Prow
@@ -233,6 +250,14 @@ default:
       name: kind/feature
       target: both
       prowPlugin: label
+      addedBy: anyone
+    - color: 59bbaa
+      description: Categorizes issue or PR as related to a new service.
+      name: kind/new-service
+      target: both
+      prowPlugin: label
+      previously:
+        - name: Service Controller
       addedBy: anyone
     - color: e11d21
       description: Categorizes issue or PR as related to a regression from a prior release.
