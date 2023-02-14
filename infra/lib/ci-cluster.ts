@@ -44,6 +44,7 @@ export class CICluster extends Construct {
     };
 
     const karpenterAddonProps = {
+      version: "v0.24.0",
       requirements: [
           {
             key: 'node.kubernetes.io/instance-type',
