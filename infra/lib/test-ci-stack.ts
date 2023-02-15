@@ -4,9 +4,13 @@ import { LogBucket, LogBucketCompileProps } from "./log-bucket";
 import { ProwServiceAccounts } from "./prow-service-accounts";
 import { Stack, StackProps } from "aws-cdk-lib";
 
+export const STACK_NAME = "TestCIStack";
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
 export const FLUX_NAMESPACE = "flux-system";
+
+export const CLUSTER_NAME = "TestInfraCluster";
+export const CLUSTER_CONSTRUCT_NAME = "CIClusterConstruct";
 
 export type TestCIStackProps = StackProps &
   LogBucketCompileProps & {
@@ -22,7 +26,7 @@ export class TestCIStack extends Stack {
       account: this.account,
     });
 
-    const testCluster = new CICluster(this, "CIClusterConstruct", {
+    const testCluster = new CICluster(this, CLUSTER_CONSTRUCT_NAME, {
       ...props.clusterConfig,
     });
 

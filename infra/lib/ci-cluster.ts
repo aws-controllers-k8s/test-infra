@@ -7,9 +7,12 @@ import {
   ProwGitHubSecretsChartProps,
 } from "./charts/prow-secrets";
 import {
+  STACK_NAME,
   FLUX_NAMESPACE,
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
+  CLUSTER_NAME,
+  CLUSTER_CONSTRUCT_NAME,
 } from "./test-ci-stack";
 import {
   GlobalResources,
@@ -34,38 +37,57 @@ export class CICluster extends Construct {
 
     const clusterVersion = eks.KubernetesVersion.V1_23;
 
-    const mngProps: blueprints.MngClusterProviderProps = {
-      minSize: 2,
-      maxSize: 8,
-      desiredSize: 2,
-      diskSize: 150,
-      version: clusterVersion,
-      instanceTypes: [
-        ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE8),
-      ],
-      amiType: eks.NodegroupAmiType.AL2_X86_64,
-      nodeGroupCapacityType: eks.CapacityType.ON_DEMAND,
+    const subnetTagPattern = `${STACK_NAME}/${CLUSTER_CONSTRUCT_NAME}/${CLUSTER_NAME}/${CLUSTER_NAME}-vpc/PrivateSubnet*`;
+    const securityGroupTagPattern = "kubernetes.io/cluster/" + CLUSTER_NAME;
+    const securityGroupTags = {
+      [securityGroupTagPattern] : "owned",
     };
+
+    const karpenterAddonProps = {
+      version: "v0.24.0",
+      requirements: [
+          {
+            key: 'node.kubernetes.io/instance-type',
+            op: "In" as const,
+            vals: ['m5.xlarge','m5.2xlarge','m5.4xlarge','m5.8xlarge'],
+          },
+          {
+            key: 'kubernetes.io/arch',
+            op: "In" as const,
+            vals: ['amd64']
+          },
+          {
+            key: 'karpenter.sh/capacity-type',
+            op: "In" as const,
+            vals: ['on-demand']
+          },
+      ],
+      subnetTags: { "Name": subnetTagPattern },
+      securityGroupTags: securityGroupTags,
+      amiFamily: "AL2" as const,
+      consolidation: { enabled: true },
+      ttlSecondsUntilExpired: 1 * 60 * 60, // 1 hour in seconds
+      interruptionHandling: true,
+    }
+    const karpenterAddOn = new blueprints.addons.KarpenterAddOn(karpenterAddonProps);
 
     const blueprintStack = blueprints.EksBlueprint.builder()
       .account(Stack.of(this).account)
       .region(Stack.of(this).region)
       .version(clusterVersion)
-      .clusterProvider(new blueprints.MngClusterProvider(mngProps))
       .resourceProvider(
         GlobalResources.HostedZone,
         new ImportHostedZoneProvider(props.hostedZoneId)
       )
       .addOns(
-        new blueprints.addons.VpcCniAddOn(),
-        new blueprints.addons.KarpenterAddOn(),
-        new blueprints.addons.AwsLoadBalancerControllerAddOn(),
-        new blueprints.addons.EbsCsiDriverAddOn(),
-        new blueprints.addons.ExternalDnsAddOn({
-          hostedZoneResources: [GlobalResources.HostedZone],
-        })
+        new blueprints.addons.CertManagerAddOn,
+        new blueprints.addons.AwsLoadBalancerControllerAddOn,
+        new blueprints.addons.VpcCniAddOn,
+        karpenterAddOn,
+        new blueprints.addons.EbsCsiDriverAddOn,
+        new blueprints.addons.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
       )
-      .build(this, "TestInfraCluster");
+      .build(this, CLUSTER_NAME);
 
     this.testCluster = blueprintStack.getClusterInfo().cluster;
 
