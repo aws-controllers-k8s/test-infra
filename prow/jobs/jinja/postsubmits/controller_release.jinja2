@@ -15,6 +15,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["deploy"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
@@ -34,6 +40,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["soak-test"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -60,6 +72,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["docs"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -86,6 +104,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["controller-release-tag"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -119,6 +143,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["olm-bundle-pr"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:

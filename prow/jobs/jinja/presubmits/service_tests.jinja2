@@ -26,6 +26,9 @@
         resources:
           limits:
             cpu: 8
+          requests:
+            cpu: 1
+            memory: "500Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -57,6 +60,9 @@
         resources:
           limits:
             cpu: 8
+          requests:
+            cpu: 1
+            memory: "500Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -95,6 +101,9 @@
         resources:
           limits:
             cpu: 2
+          requests:
+            cpu: 1
+            memory: "500Gi"
         env:
         - name: SERVICE
           value: {{ service }}
