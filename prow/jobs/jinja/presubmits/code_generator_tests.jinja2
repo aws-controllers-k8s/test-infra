@@ -12,7 +12,7 @@
             cpu: 1
           requests:
             cpu: 1
-            memory: "500Gi"
+            memory: "500Mi"
             ephemeral-storage: "100Gi"
         command: ["make", "test"]
 
@@ -42,7 +42,7 @@
             cpu: 1
           requests:
             cpu: 1
-            memory: "500Gi"
+            memory: "500Mi"
             ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
@@ -82,7 +82,7 @@
             cpu: 1
           requests:
             cpu: 1
-            memory: "500Gi"
+            memory: "500Mi"
             ephemeral-storage: "100Gi"
         securityContext:
           privileged: true
