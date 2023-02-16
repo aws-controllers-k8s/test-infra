@@ -29,6 +29,7 @@
           requests:
             cpu: 1
             memory: "500Gi"
+            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -63,6 +64,7 @@
           requests:
             cpu: 1
             memory: "500Gi"
+            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -83,6 +85,13 @@
       serviceAccountName: pre-submit-service-account
       containers:
       - image: {{ image_context.images["integration-test"] }}
+        resources:
+          limits:
+            cpu: 2
+          requests:
+            cpu: 1
+            memory: "500Gi"
+            ephemeral-storage: "100Gi"
         securityContext:
           runAsUser: 0
         env:
@@ -104,6 +113,7 @@
           requests:
             cpu: 1
             memory: "500Gi"
+            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}

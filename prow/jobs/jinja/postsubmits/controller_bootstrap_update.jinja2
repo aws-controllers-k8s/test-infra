@@ -12,6 +12,13 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["auto-update-controllers"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Gi"
+              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:

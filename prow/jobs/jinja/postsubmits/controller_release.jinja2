@@ -21,6 +21,7 @@
             requests:
               cpu: 1
               memory: "500Gi"
+              ephemeral-storage: "100Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
@@ -46,6 +47,7 @@
             requests:
               cpu: 1
               memory: "500Gi"
+              ephemeral-storage: "100Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -78,6 +80,7 @@
             requests:
               cpu: 1
               memory: "500Gi"
+              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -110,6 +113,7 @@
             requests:
               cpu: 1
               memory: "500Gi"
+              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -149,6 +153,7 @@
             requests:
               cpu: 1
               memory: "500Gi"
+              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
