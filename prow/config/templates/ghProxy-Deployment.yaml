@@ -50,7 +50,6 @@ spec:
         args:
         - --cache-dir=/cache
         - --cache-sizeGB={{ add .Values.ghproxy.volumeSize -1 }}
-        - --push-gateway=pushgateway
         - --serve-metrics=true
         ports:
         - containerPort: 8888
