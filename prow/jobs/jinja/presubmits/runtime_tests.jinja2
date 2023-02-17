@@ -9,6 +9,9 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
+            cpu: 4
+          requests:
             cpu: 1
+            memory: "500Mi"
         command: ["make", "test"]
 

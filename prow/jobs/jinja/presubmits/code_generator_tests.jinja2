@@ -9,7 +9,10 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
+            cpu: 2
+          requests:
             cpu: 1
+            memory: "500Mi"
         command: ["make", "test"]
 
   - name: s3-olm-test
@@ -33,6 +36,12 @@
       serviceAccountName: pre-submit-service-account
       containers:
       - image: {{ image_context.images["olm-test"] }}
+        resources:
+          limits:
+            cpu: 2
+          requests:
+            cpu: 1
+            memory: "500Mi"
         env:
         - name: SERVICE
           value: "s3"
@@ -66,6 +75,12 @@
       serviceAccountName: pre-submit-service-account
       containers:
       - image: {{ image_context.images["integration-test"] }}
+        resources:
+          limits:
+            cpu: 4
+          requests:
+            cpu: 1
+            memory: "500Mi"
         securityContext:
           privileged: true
         env:

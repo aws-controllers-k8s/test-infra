@@ -15,6 +15,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["docs"] }}
+          resources:
+            limits:
+              cpu: 1
+            requests:
+              cpu: 1
+              memory: "500Mi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:

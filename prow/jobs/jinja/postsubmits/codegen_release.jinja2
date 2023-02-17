@@ -20,6 +20,12 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{ image_context.images["auto-generate-controllers"] }}
+          resources:
+            limits:
+              cpu: 2
+            requests:
+              cpu: 1
+              memory: "500Mi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:

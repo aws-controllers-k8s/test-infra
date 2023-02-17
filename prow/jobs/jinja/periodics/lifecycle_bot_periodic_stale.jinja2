@@ -8,6 +8,12 @@
     serviceAccountName: periodic-service-account
     containers:
       - image: gcr.io/k8s-prow/commenter:v20210422-d12e80af3e
+        resources:
+          limits:
+            cpu: 1
+          requests:
+            cpu: 1
+            memory: "500Mi"
         command:
           - /app/robots/commenter/app.binary
         args:
