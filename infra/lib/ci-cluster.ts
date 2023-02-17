@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { aws_eks as eks, aws_ec2 as ec2, Stack } from "aws-cdk-lib";
+import { aws_eks as eks, aws_ec2 as ec2, Stack, Tags } from "aws-cdk-lib";
 import * as blueprints from "@aws-quickstart/eks-blueprints";
 import * as cdk8s from "cdk8s";
 import {
@@ -17,6 +17,7 @@ import {
 import {
   GlobalResources,
   ImportHostedZoneProvider,
+  KarpenterAddOn,
 } from "@aws-quickstart/eks-blueprints";
 
 export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps & {
@@ -37,39 +38,8 @@ export class CICluster extends Construct {
 
     const clusterVersion = eks.KubernetesVersion.V1_23;
 
-    const subnetTagPattern = `${STACK_NAME}/${CLUSTER_CONSTRUCT_NAME}/${CLUSTER_NAME}/${CLUSTER_NAME}-vpc/PrivateSubnet*`;
-    const securityGroupTagPattern = "kubernetes.io/cluster/" + CLUSTER_NAME;
-    const securityGroupTags = {
-      [securityGroupTagPattern] : "owned",
-    };
-
-    const karpenterAddonProps = {
-      version: "v0.24.0",
-      requirements: [
-          {
-            key: 'node.kubernetes.io/instance-type',
-            op: "In" as const,
-            vals: ['m5.xlarge','m5.2xlarge','m5.4xlarge','m5.8xlarge'],
-          },
-          {
-            key: 'kubernetes.io/arch',
-            op: "In" as const,
-            vals: ['amd64']
-          },
-          {
-            key: 'karpenter.sh/capacity-type',
-            op: "In" as const,
-            vals: ['on-demand']
-          },
-      ],
-      subnetTags: { "Name": subnetTagPattern },
-      securityGroupTags: securityGroupTags,
-      amiFamily: "AL2" as const,
-      consolidation: { enabled: true },
-      ttlSecondsUntilExpired: 1 * 60 * 60, // 1 hour in seconds
-      interruptionHandling: true,
-    }
-    const karpenterAddOn = new blueprints.addons.KarpenterAddOn(karpenterAddonProps);
+    const karpenterTagKey = `kubernetes.io/cluster/${CLUSTER_NAME}`;
+    const karpenterTagValue = "owned";
 
     const blueprintStack = blueprints.EksBlueprint.builder()
       .account(Stack.of(this).account)
@@ -80,16 +50,28 @@ export class CICluster extends Construct {
         new ImportHostedZoneProvider(props.hostedZoneId)
       )
       .addOns(
-        new blueprints.addons.CertManagerAddOn,
-        new blueprints.addons.AwsLoadBalancerControllerAddOn,
-        new blueprints.addons.VpcCniAddOn,
-        karpenterAddOn,
-        new blueprints.addons.EbsCsiDriverAddOn,
-        new blueprints.addons.ExternalDnsAddOn({ hostedZoneResources: [GlobalResources.HostedZone] })
+        new blueprints.addons.CertManagerAddOn(),
+        new blueprints.addons.AwsLoadBalancerControllerAddOn(),
+        new blueprints.addons.VpcCniAddOn(),
+        new blueprints.addons.KarpenterAddOn({ version: "v0.24.0" }),
+        new blueprints.addons.EbsCsiDriverAddOn(),
+        new blueprints.addons.ExternalDnsAddOn({
+          hostedZoneResources: [GlobalResources.HostedZone],
+        })
       )
       .build(this, CLUSTER_NAME);
 
     this.testCluster = blueprintStack.getClusterInfo().cluster;
+
+    // Update the subnet and security group tags to match the Karpenter
+    // configuration in the cluster
+    this.testCluster.vpc.privateSubnets.forEach((subnet) =>
+      Tags.of(subnet).add(karpenterTagKey, karpenterTagValue)
+    );
+    Tags.of(this.testCluster.clusterSecurityGroup).add(
+      karpenterTagKey,
+      karpenterTagValue
+    );
 
     this.namespaceManifests = [PROW_JOB_NAMESPACE, PROW_NAMESPACE].map(
       this.createNamespace

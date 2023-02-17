@@ -1,0 +1,36 @@
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: default
+spec:
+  consolidation:
+    enabled: false
+  limits:
+    resources:
+      cpu: 1k
+      memory: 1000Gi
+      storage: 5000Gi
+  requirements:
+  # Include general purpose instance families
+  - key: karpenter.k8s.aws/instance-family
+    operator: In
+    values: [c6g, c7g, c6a, c6i, m6a, m6g, m6i, r6a, r6g, r6i]
+  # Exclude small instance sizes
+  - key: karpenter.k8s.aws/instance-size
+    operator: In
+    values: [medium, large, xlarge, xlarge, 2xlarge, 4xlarge, 8xlarge]
+  - key: kubernetes.io/arch
+    operator: In
+    values:
+    - amd64
+  - key: karpenter.sh/capacity-type
+    operator: In
+    values:
+    - on-demand
+  - key: kubernetes.io/os
+    operator: In
+    values:
+    - linux
+  ttlSecondsUntilExpired: 36000 # 1 hour
+  providerRef:
+    name: prowjob-node-provider

@@ -1,0 +1,16 @@
+apiVersion: karpenter.k8s.aws/v1alpha1
+kind: AWSNodeTemplate
+metadata:
+  name: prowjob-node-provider
+spec:
+  securityGroupSelector:
+    kubernetes.io/cluster/TestInfraCluster: owned
+  subnetSelector:
+    kubernetes.io/cluster/TestInfraCluster: owned
+  amiFamily: AL2
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeType: gp3
+        volumeSize: 200Gi
+        deleteOnTermination: true
