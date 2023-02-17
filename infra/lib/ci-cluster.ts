@@ -1,4 +1,4 @@
-import { Construct } from "constructs";
+import { Construct, IConstruct } from "constructs";
 import { aws_eks as eks, Stack, Tags } from "aws-cdk-lib";
 import * as blueprints from "@aws-quickstart/eks-blueprints";
 import * as cdk8s from "cdk8s";
@@ -6,6 +6,10 @@ import {
   ProwGitHubSecretsChart,
   ProwGitHubSecretsChartProps,
 } from "./charts/prow-secrets";
+import {
+  KarpenterTagsChart,
+  KarpenterTagsChartProps,
+} from "./charts/karpenter-tags";
 import {
   FLUX_NAMESPACE,
   PROW_JOB_NAMESPACE,
@@ -75,7 +79,14 @@ export class CICluster extends Construct {
     );
 
     this.installProwRequirements(props);
-    this.installFlux();
+    const fluxChart = this.installFlux();
+    this.installKarpenterTagConfigMap(
+      {
+        tagKey: karpenterTagKey,
+        tagValue: karpenterTagValue,
+      },
+      fluxChart
+    );
   }
 
   createNamespace = (name: string) => {
@@ -148,6 +159,7 @@ export class CICluster extends Construct {
       ]
     );
     fluxBootstrap.node.addDependency(fluxChart);
+    return fluxChart;
   };
 
   installProwRequirements = (secretsProps: ProwGitHubSecretsChartProps) => {
@@ -161,6 +173,22 @@ export class CICluster extends Construct {
     prowSecretsChart.node.addDependency(...this.namespaceManifests);
     prowSecretsApp.charts.forEach((chart) =>
       chart.addDependency(...this.namespaceManifests)
+    );
+  };
+
+  installKarpenterTagConfigMap = (
+    tagProps: KarpenterTagsChartProps,
+    namespaceDependency: IConstruct
+  ) => {
+    const karpenterTagApp = new cdk8s.App();
+    const karpenterTagChart = this.testCluster.addCdk8sChart(
+      "karpenter-tags",
+      new KarpenterTagsChart(karpenterTagApp, "KarpenterTags", tagProps)
+    );
+
+    karpenterTagChart.node.addDependency(namespaceDependency);
+    karpenterTagApp.charts.forEach((chart) =>
+      chart.addDependency(namespaceDependency)
     );
   };
 }

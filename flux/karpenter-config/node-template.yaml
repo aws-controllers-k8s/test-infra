@@ -4,9 +4,9 @@ metadata:
   name: prowjob-node-provider
 spec:
   securityGroupSelector:
-    kubernetes.io/cluster/TestInfraCluster: owned
+    ${tagKey}: ${tagValue}
   subnetSelector:
-    kubernetes.io/cluster/TestInfraCluster: owned
+    ${tagKey}: ${tagValue}
   amiFamily: AL2
   blockDeviceMappings:
     - deviceName: /dev/xvda

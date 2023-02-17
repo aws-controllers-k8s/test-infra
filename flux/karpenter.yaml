@@ -12,3 +12,7 @@ spec:
   prune: true
   targetNamespace: karpenter
   validation: client
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: karpenter-tags # Installed as part of the CDK
