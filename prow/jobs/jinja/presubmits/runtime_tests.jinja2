@@ -9,10 +9,9 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
-            cpu: 1
+            cpu: 4
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         command: ["make", "test"]
 

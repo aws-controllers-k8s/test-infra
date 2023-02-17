@@ -9,11 +9,10 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
-            cpu: 1
+            cpu: 2
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         command: ["make", "test"]
 
   - name: s3-olm-test
@@ -39,11 +38,10 @@
       - image: {{ image_context.images["olm-test"] }}
         resources:
           limits:
-            cpu: 1
+            cpu: 2
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: "s3"
@@ -79,11 +77,10 @@
       - image: {{ image_context.images["integration-test"] }}
         resources:
           limits:
-            cpu: 1
+            cpu: 4
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         securityContext:
           privileged: true
         env:

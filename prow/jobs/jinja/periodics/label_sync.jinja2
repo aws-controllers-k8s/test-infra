@@ -13,11 +13,10 @@
       image: gcr.io/k8s-prow/label_sync:v20221205-a1b0b85d88
       resources:
         limits:
-          cpu: 1
+          cpu: 2
         requests:
           cpu: 1
           memory: "500Mi"
-          ephemeral-storage: "100Gi"
       command:
       - label_sync
       args:

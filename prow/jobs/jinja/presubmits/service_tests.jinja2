@@ -29,7 +29,6 @@
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -64,7 +63,6 @@
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -91,7 +89,6 @@
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         securityContext:
           runAsUser: 0
         env:
@@ -109,11 +106,10 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
-            cpu: 2
+            cpu: 4
           requests:
             cpu: 1
             memory: "500Mi"
-            ephemeral-storage: "100Gi"
         env:
         - name: SERVICE
           value: {{ service }}

@@ -17,11 +17,10 @@
         - image: {{ image_context.images["deploy"] }}
           resources:
             limits:
-              cpu: 1
+              cpu: 2
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
@@ -43,11 +42,10 @@
         - image: {{ image_context.images["soak-test"] }}
           resources:
             limits:
-              cpu: 1
+              cpu: 2
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -80,7 +78,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -113,7 +110,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
@@ -153,7 +149,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:

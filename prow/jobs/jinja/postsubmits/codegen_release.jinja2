@@ -22,11 +22,10 @@
         - image: {{ image_context.images["auto-generate-controllers"] }}
           resources:
             limits:
-              cpu: 1
+              cpu: 2
             requests:
               cpu: 1
               memory: "500Mi"
-              ephemeral-storage: "100Gi"
           env:
           - name: GITHUB_TOKEN
             valueFrom:
