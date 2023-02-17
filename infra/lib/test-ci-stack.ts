@@ -4,7 +4,6 @@ import { LogBucket, LogBucketCompileProps } from "./log-bucket";
 import { ProwServiceAccounts } from "./prow-service-accounts";
 import { Stack, StackProps } from "aws-cdk-lib";
 
-export const STACK_NAME = "TestCIStack";
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
 export const FLUX_NAMESPACE = "flux-system";

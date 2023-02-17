@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { aws_eks as eks, aws_ec2 as ec2, Stack, Tags } from "aws-cdk-lib";
+import { aws_eks as eks, Stack, Tags } from "aws-cdk-lib";
 import * as blueprints from "@aws-quickstart/eks-blueprints";
 import * as cdk8s from "cdk8s";
 import {
@@ -7,17 +7,14 @@ import {
   ProwGitHubSecretsChartProps,
 } from "./charts/prow-secrets";
 import {
-  STACK_NAME,
   FLUX_NAMESPACE,
   PROW_JOB_NAMESPACE,
   PROW_NAMESPACE,
   CLUSTER_NAME,
-  CLUSTER_CONSTRUCT_NAME,
 } from "./test-ci-stack";
 import {
   GlobalResources,
   ImportHostedZoneProvider,
-  KarpenterAddOn,
 } from "@aws-quickstart/eks-blueprints";
 
 export type CIClusterCompileTimeProps = ProwGitHubSecretsChartProps & {
