@@ -42,6 +42,14 @@ export class CICluster extends Construct {
     const karpenterTagKey = `kubernetes.io/cluster/${CLUSTER_NAME}`;
     const karpenterTagValue = "owned";
 
+    // Create a set of fargate profiles that run the required services within
+    // the cluster. Without Flux and Karpenter, the cluster can't load the
+    // appropriate settings to autoscale for the rest of the namespaces
+    const fargateProfiles: Map<string, eks.FargateProfileOptions> = new Map([
+      ["flux", { selectors: [{ namespace: "flux-system" }] }],
+      ["karpenter", { selectors: [{ namespace: "karpenter" }] }],
+    ]);
+
     const blueprintStack = blueprints.EksBlueprint.builder()
       .account(Stack.of(this).account)
       .region(Stack.of(this).region)
@@ -49,6 +57,12 @@ export class CICluster extends Construct {
       .resourceProvider(
         GlobalResources.HostedZone,
         new ImportHostedZoneProvider(props.hostedZoneId)
+      )
+      .clusterProvider(
+        new blueprints.FargateClusterProvider({
+          version: clusterVersion,
+          fargateProfiles,
+        })
       )
       .addOns(
         new blueprints.addons.CertManagerAddOn(),
