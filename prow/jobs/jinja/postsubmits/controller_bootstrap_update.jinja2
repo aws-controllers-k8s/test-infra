@@ -1,6 +1,8 @@
   aws-controllers-k8s/controller-bootstrap:
   - name: auto-update-controllers
     decorate: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     extra_refs:
 {% for service in aws_services  %}
     - org: aws-controllers-k8s

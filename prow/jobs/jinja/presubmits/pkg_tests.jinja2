@@ -3,6 +3,8 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:

@@ -4,6 +4,8 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -38,6 +40,8 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -72,6 +76,8 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     labels:
       preset-test-config: "true"
     extra_refs:
@@ -100,6 +106,8 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:

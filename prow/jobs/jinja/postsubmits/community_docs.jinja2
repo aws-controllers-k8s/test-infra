@@ -1,6 +1,8 @@
   aws-controllers-k8s/community:
   - name: community-docs-release
     decorate: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: runtime
