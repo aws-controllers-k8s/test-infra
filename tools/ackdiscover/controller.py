@@ -18,6 +18,10 @@ import github
 
 from . import ecrpublic, maintenance_phases, project_stages, service
 
+GITHUB_ORG_NAME = "aws-controllers-k8s"
+GITHUB_ISSUE_REPO = "community"
+SERVICE_CONTROLLER_LABEL = "kind/new-service"
+
 # A cache of Github Issues for new service controllers
 _sc_issues = None
 # The Github Project for tracking service controllers
@@ -53,7 +57,7 @@ def collect_all(writer, gh, ep_client, services):
     describing the ACK controllers.
     """
     writer.debug("[controller.collect_all] collecting ACK controller information ... ")
-    ack_org = gh.get_organization("aws-controllers-k8s")
+    ack_org = gh.get_organization(GITHUB_ORG_NAME)
     result= {}
 
     for service_package_name, service in services.items():
@@ -167,15 +171,15 @@ def get_controller_request_issue(writer, gh, service):
     exists.
     """
     global _sc_issues
-    ack_org = gh.get_organization("aws-controllers-k8s")
-    community_repo = ack_org.get_repo("community")
+    ack_org = gh.get_organization(GITHUB_ORG_NAME)
+    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
     writer.debug(f"[controller.get_github_issue] finding Github Issue for {service.package_name} ...")
     if _sc_issues is None:
-        sc_label = community_repo.get_label(name="Service Controller")
+        sc_label = community_repo.get_label(name=SERVICE_CONTROLLER_LABEL)
         _sc_issues = community_repo.get_issues(labels=[sc_label])
 
     for issue in _sc_issues:
-        # The GH issues with label "Service Controller" all have the same title
+        # The GH issues with SERVICE_CONTROLLER_LABEL label all have the same title
         # pattern: "<Service Name> service controller"
         issue_title = issue.title.lower().replace("service controller", "")
         issue_title = issue_title.strip()
@@ -196,8 +200,8 @@ def get_service_controller_project(writer, gh):
     """Returns the GH project for tracking service controllers.
     """
     global _sc_proj
-    ack_org = gh.get_organization("aws-controllers-k8s")
-    community_repo = ack_org.get_repo("community")
+    ack_org = gh.get_organization(GITHUB_ORG_NAME)
+    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
     writer.debug(f"[controller.get_service_controller_project] finding service controller Github Project ...")
     if _sc_proj is None:
         projs = community_repo.get_projects()
@@ -213,8 +217,8 @@ def is_planned(writer, gh, gh_issue):
     in the Planned board on our Service Controller Github Project.
     """
     global _sc_proj_planned_cards
-    ack_org = gh.get_organization("aws-controllers-k8s")
-    community_repo = ack_org.get_repo("community")
+    ack_org = gh.get_organization(GITHUB_ORG_NAME)
+    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
     writer.debug(f"[controller.is_planned] looking up project card matching Github Issue {gh_issue.id} ...")
     if _sc_proj_planned_cards is None:
         sc_proj = get_service_controller_project(writer, gh)
