@@ -9,6 +9,7 @@ aws_services:
 - acmpca
 - apigatewayv2
 - applicationautoscaling
+- cloudfront
 - cloudtrail
 - cloudwatch
 - cloudwatchlogs
@@ -28,10 +29,12 @@ aws_services:
 - mq
 - opensearchservice
 - organizations
+- pipes
 - prometheusservice
 - rds
 - route53
 - s3
+- servicecatalog
 - sagemaker
 - sfn
 - sns
