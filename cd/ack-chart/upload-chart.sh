@@ -75,7 +75,7 @@ _package_chart() {
     local __output_dir=$2
 
     echo "Packaging Helm chart package"
-    helm package --dependency-update "$ACK_CHART_DIR" -d "$__output_dir" 2>/dev/null
+    helm package --dependency-update "$ACK_CHART_DIR" -d "$__output_dir"
 }
 
 _upload_chart() {
@@ -85,7 +85,7 @@ _upload_chart() {
 
     local chart_package
     chart_package="$__output_dir/$__name-$__version.tgz"
-    helm push "$chart_package" "oci://$HELM_REGISTRY" 2>/dev/null
+    helm push "$chart_package" "oci://$HELM_REGISTRY"
 }
 
 run() {
