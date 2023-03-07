@@ -186,10 +186,15 @@
       repo: code-generator
       base_ref: main
       workdir: false
+    - org: aws-controllers-k8s
+      repo: ack-chart
+      base_ref: main
+      workdir: false
     {% for other_service in aws_services if not other_service == service %}
     - org: aws-controllers-k8s
       repo: {{ other_service }}-controller
       base_ref: main
+      workdir: false
     {% endfor %}
     spec:
       serviceAccountName: post-submit-service-account
