@@ -238,7 +238,7 @@ _commit_chart_changes() {
         echo "Adding commit with message: '$COMMIT_MSG' ... "
         git commit -m "$COMMIT_MSG" >/dev/null
 
-        git pull --rebase
+        git pull --rebase upstream "$COMMIT_TARGET_BRANCH"
 
         echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
         git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
