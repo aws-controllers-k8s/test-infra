@@ -225,29 +225,31 @@ _add_chart_values_section() {
 }
 
 _commit_chart_changes() {
-    echo "Adding git remote ... "
-    git remote add upstream "https://github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
+    pushd "$ACK_CHART_DIR" >/dev/null
+        echo "Adding git remote ... "
+        git remote add upstream "https://github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
 
-    git fetch --all >/dev/null
-    git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :
+        git fetch --all >/dev/null
+        git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :
 
-    # Add all the files & create a GitHub commit
-    git add .
-    COMMIT_MSG="Updating chart dependencies" # TODO: Add a more descriptive commit message using the version diffs
-    echo "Adding commit with message: '$COMMIT_MSG' ... "
-    git commit -m "$COMMIT_MSG" >/dev/null
+        # Add all the files & create a GitHub commit
+        git add .
+        COMMIT_MSG="Updating chart dependencies" # TODO: Add a more descriptive commit message using the version diffs
+        echo "Adding commit with message: '$COMMIT_MSG' ... "
+        git commit -m "$COMMIT_MSG" >/dev/null
 
-    git pull --rebase
+        git pull --rebase
 
-    echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
-    git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
+        echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
+        git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
 
-    local new_chart_version
-    new_chart_version="$(yq '.version' "$PARENT_CHART_CONFIG")"
+        local new_chart_version
+        new_chart_version="$(yq '.version' "$PARENT_CHART_CONFIG")"
 
-    echo "Pushing tag to upstream ..."
-    git tag "$new_chart_version"
-    git push upstream "$new_chart_version"
+        echo "Pushing tag to upstream ..."
+        git tag "$new_chart_version"
+        git push upstream "$new_chart_version"
+    popd >/dev/null
 }
 
 run() {
