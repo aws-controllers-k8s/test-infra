@@ -227,7 +227,7 @@ _add_chart_values_section() {
 _commit_chart_changes() {
     pushd "$ACK_CHART_DIR" >/dev/null
         echo "Adding git remote ... "
-        git remote add upstream "https://github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
+        git remote add upstream "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
 
         git fetch --all >/dev/null
         git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :
@@ -241,7 +241,7 @@ _commit_chart_changes() {
         git pull --rebase upstream "$COMMIT_TARGET_BRANCH"
 
         echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
-        git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
+        git push upstream "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
 
         local new_chart_version
         new_chart_version="$(yq '.version' "$PARENT_CHART_CONFIG")"
