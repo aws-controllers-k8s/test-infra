@@ -213,7 +213,7 @@ _rebuild_chart_dependencies() {
     ecr_pw=$(aws ecr-public get-login-password --region us-east-1)
     echo "$ecr_pw" | helm registry login -u AWS --password-stdin public.ecr.aws
 
-    helm dependency update
+    helm dependency update "$ACK_CHART_DIR"
 }
 
 _add_chart_values_section() {
