@@ -21,6 +21,10 @@ Environment variables:
   GITHUB_REPO:          Name of the GitHub repository where committed changes to
                         the chart will be pushed.
                         Defaults to 'ack-chart'
+  GITHUB_ACTOR:         Name of the GitHub account creating the issues & PR.
+  GITHUB_DOMAIN:        Domain for GitHub. Defaults to 'github.com'
+  GITHUB_EMAIL_PREFIX:  The 7 digit unique id for no-reply email of
+                        '$GITHUB_ACTOR'
   GITHUB_TOKEN:         Personal Access Token for '$GITHUB_ACTOR'
 "
 
@@ -35,6 +39,11 @@ TEST_INFRA_LIB_DIR="$TEST_INFRA_DIR/scripts/lib"
 
 PARENT_CHART_CONFIG="$ACK_CHART_DIR/Chart.yaml"
 PARENT_CHART_VALUES="$ACK_CHART_DIR/values.yaml"
+
+GITHUB_USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
+if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
+    GITHUB_USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${GITHUB_USER_EMAIL}"
+fi
 
 LOCAL_GIT_BRANCH="main"
 
@@ -213,7 +222,7 @@ _rebuild_chart_dependencies() {
     ecr_pw=$(aws ecr-public get-login-password --region us-east-1)
     echo "$ecr_pw" | helm registry login -u AWS --password-stdin public.ecr.aws
 
-    helm dependency update
+    helm dependency update "$ACK_CHART_DIR"
 }
 
 _add_chart_values_section() {
@@ -224,30 +233,35 @@ _add_chart_values_section() {
     }' "$PARENT_CHART_VALUES"
 }
 
-_commit_chart_changes() {
-    echo "Adding git remote ... "
-    git remote add upstream "https://github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
+_commit_chart_changes() { 
+    git config --global user.name "${GITHUB_ACTOR}" >/dev/null
+    git config --global user.email "${GITHUB_USER_EMAIL}" >/dev/null
 
-    git fetch --all >/dev/null
-    git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :
+    pushd "$ACK_CHART_DIR" >/dev/null
+        echo "Adding git remote ... "
+        git remote add upstream "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
 
-    # Add all the files & create a GitHub commit
-    git add .
-    COMMIT_MSG="Updating chart dependencies" # TODO: Add a more descriptive commit message using the version diffs
-    echo "Adding commit with message: '$COMMIT_MSG' ... "
-    git commit -m "$COMMIT_MSG" >/dev/null
+        git fetch --all >/dev/null
+        git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :
 
-    git pull --rebase
+        # Add all the files & create a GitHub commit
+        git add .
+        COMMIT_MSG="Updating chart dependencies" # TODO: Add a more descriptive commit message using the version diffs
+        echo "Adding commit with message: '$COMMIT_MSG' ... "
+        git commit -m "$COMMIT_MSG" >/dev/null
 
-    echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
-    git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
+        git pull --rebase upstream "$COMMIT_TARGET_BRANCH"
 
-    local new_chart_version
-    new_chart_version="$(yq '.version' "$PARENT_CHART_CONFIG")"
+        echo "Pushing changes to branch '$COMMIT_TARGET_BRANCH' ... "
+        git push upstream "$LOCAL_GIT_BRANCH:$COMMIT_TARGET_BRANCH" 2>&1
 
-    echo "Pushing tag to upstream ..."
-    git tag "$new_chart_version"
-    git push upstream "$new_chart_version"
+        local new_chart_version
+        new_chart_version="$(yq '.version' "$PARENT_CHART_CONFIG")"
+
+        echo "Pushing tag to upstream ..."
+        git tag "$new_chart_version"
+        git push upstream "$new_chart_version"
+    popd >/dev/null
 }
 
 run() {
