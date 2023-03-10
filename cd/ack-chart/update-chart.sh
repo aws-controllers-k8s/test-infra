@@ -26,6 +26,9 @@ Environment variables:
   GITHUB_EMAIL_PREFIX:  The 7 digit unique id for no-reply email of
                         '$GITHUB_ACTOR'
   GITHUB_TOKEN:         Personal Access Token for '$GITHUB_ACTOR'
+  REPO_NAME:            The name of the repository that launched the ProwJob
+                        running the current script. Prow will automatically
+                        inject this variable.
 "
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
