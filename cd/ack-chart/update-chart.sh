@@ -218,13 +218,11 @@ _upgrade_chart_dependency() {
 }
 
 _rebuild_chart_dependencies() {
-    helm dependency update "$ACK_CHART_DIR"
-}
-
-_helm_ecr_public_login() {
     local ecr_pw
     ecr_pw=$(aws ecr-public get-login-password --region us-east-1)
     echo "$ecr_pw" | helm registry login -u AWS --password-stdin public.ecr.aws
+
+    helm dependency update "$ACK_CHART_DIR"
 }
 
 _add_chart_values_section() {
@@ -298,8 +296,6 @@ _poll_for_upgraded_chart() {
 }
 
 run() {
-    _helm_ecr_public_login
-
     # Poll until the triggering repo has uploaded the latest Helm chart
     _poll_for_upgraded_chart
 
