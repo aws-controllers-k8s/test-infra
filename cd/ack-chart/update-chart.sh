@@ -26,6 +26,9 @@ Environment variables:
   GITHUB_EMAIL_PREFIX:  The 7 digit unique id for no-reply email of
                         '$GITHUB_ACTOR'
   GITHUB_TOKEN:         Personal Access Token for '$GITHUB_ACTOR'
+  REPO_NAME:            The name of the repository that launched the ProwJob
+                        running the current script. Prow will automatically
+                        inject this variable.
 "
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -264,7 +267,41 @@ _commit_chart_changes() {
     popd >/dev/null
 }
 
+_poll_for_upgraded_chart() {
+    local triggering_chart_dir
+    triggering_chart_dir="$WORKSPACE_DIR/$REPO_NAME"
+
+    local newest_chart_version
+    newest_chart_version="$(yq '.version' "$triggering_chart_dir/helm/Chart.yaml")"
+
+    echo "Fetching ECR public bearer token"
+
+    local tag_list_authentication_token
+    tag_list_authentication_token=$(curl -ss -k https://public.ecr.aws/token/ | jq -r '.token')
+
+    local chart_name
+    chart_name="aws-controllers-k8s/${REPO_NAME//-controller/-chart}"
+
+    echo "Waiting until $chart_name@$newest_chart_version becomes available on ECR public"
+    # Use SECONDS as timeout counter
+    until curl -ss -k -H "Authorization: Bearer $tag_list_authentication_token" \
+        "https://public.ecr.aws/v2/$chart_name/tags/list" \
+        | jq --exit-status --arg CHART_VERSION "$newest_chart_version" \
+        'any(.tags[]; . == $CHART_VERSION)' &> /dev/null; do
+        
+        if (( SECONDS > 60*5 )); then
+            >&2 echo "Timed out waiting for chart to become available"
+            exit 1
+        fi
+
+        sleep 5
+    done
+}
+
 run() {
+    # Poll until the triggering repo has uploaded the latest Helm chart
+    _poll_for_upgraded_chart
+
     # Upgrade all the version numbers
     _upgrade_dependency_and_chart_versions
 
