@@ -2,7 +2,12 @@ prowJobNamespace: "prow" # Namespace in which to post the created ProwJobs
 podNamespace: "test-pods" # Namespace in which to run test pods
 
 github:
-  organisation: aws-controllers-k8s
+  organisation: ''
+  bot:
+    username: ''
+    emailID: '' # The suffix given to Github email addresses <username>-<suffix>@users.noreply.github.com
+    personalAccessToken:
+      secretName: ''
 
 prow:
   domain: ''

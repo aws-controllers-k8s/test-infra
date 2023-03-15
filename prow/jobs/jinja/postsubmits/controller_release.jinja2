@@ -61,6 +61,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: community
@@ -84,16 +86,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_ID
-            value: "82905295"
           command: ["/docs/build-docs.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
@@ -103,6 +95,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -118,16 +112,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_PREFIX
-            value: "82905295"
           command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-tag.sh"]
     branches:
     - main
@@ -136,6 +120,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -159,16 +145,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_PREFIX
-            value: "82905295"
           command: ["/bin/bash", "-c", "./cd/olm/olm-bundle-pr.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
@@ -177,6 +153,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -206,16 +184,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_PREFIX
-            value: "82905295"
           command: ["/bin/bash", "-c", "cd cd/ack-chart && ./update-chart.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$

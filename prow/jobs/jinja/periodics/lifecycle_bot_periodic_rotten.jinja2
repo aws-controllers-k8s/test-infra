@@ -4,6 +4,8 @@
   annotations:
     description: Moves stale issues to rotten state after 30d of inactivity
     karpenter.sh/do-not-evict: "true"
+  labels:
+    preset-github-secrets: "true"
   agent: kubernetes
   spec:
     serviceAccountName: periodic-service-account
@@ -31,11 +33,3 @@
           - --template
           - --confirm
           - --ceiling=10
-        volumeMounts:
-          - name: github-token
-            mountPath: /etc/github
-            readOnly: true
-    volumes:
-      - name: github-token
-        secret:
-          secretName: prowjob-github-pat-token

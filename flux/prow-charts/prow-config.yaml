@@ -7,6 +7,13 @@ spec:
   interval: 5m
   targetNamespace: prow
   values:
+    github:
+      organisation: "aws-controllers-k8s"
+      bot:
+        username: "ack-bot"
+        emailID: "82905295"
+        personalAccessToken:
+          secretName: "prowjob-github-pat-token"
     region: "us-west-2"
     ingress:
       create: true

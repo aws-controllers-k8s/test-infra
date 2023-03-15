@@ -6,6 +6,8 @@
   annotations:
     description: Runs label_sync to synchronize GitHub repo labels with the label config defined in label_sync/labels.yaml.
     karpenter.sh/do-not-evict: "true"
+  labels:
+    preset-github-secrets: "true"
   agent: kubernetes
   spec:
     serviceAccountName: periodic-service-account
@@ -30,16 +32,10 @@
       - --github-endpoint=https://api.github.com
       - --debug
       volumeMounts:
-      - name: github-token
-        mountPath: /etc/github
-        readOnly: true
       - name: config
         mountPath: /etc/config
         readOnly: true
     volumes:
-    - name: github-token
-      secret:
-        secretName: prowjob-github-token
     - name: config
       configMap:
         name: label-config
