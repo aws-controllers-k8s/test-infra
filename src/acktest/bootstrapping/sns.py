@@ -4,16 +4,18 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
+from ..aws.identity import get_region, get_account_id
 
 @dataclass
 class Topic(Bootstrappable):
     # Inputs
     name_prefix: str
     policy: str = ""
+    policy_vars: dict = field(default_factory=dict)
 
     # Outputs
     arn: str = field(init=False)
-    
+
     @property
     def sns_client(self):
         return boto3.client("sns", region_name=self.region)
@@ -30,6 +32,15 @@ class Topic(Bootstrappable):
         create_attributes = {}
 
         if self.policy != "":
+            self.policy_vars.update({
+                "$NAME": self.name,
+                "$ACCOUNT_ID": str(get_account_id()),
+                "$REGION": get_region(),
+            })
+
+            for key, value in self.policy_vars.items():
+                self.policy = self.policy.replace(key, value)
+
             create_attributes["Policy"] = self.policy
 
         topic = self.sns_client.create_topic(

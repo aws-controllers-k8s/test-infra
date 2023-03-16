@@ -17,7 +17,7 @@ class Bucket(Bootstrappable):
 
     # Outputs
     name: str = field(init=False)
-    
+
     @property
     def s3_client(self):
         return boto3.client("s3", region_name=self.region)
