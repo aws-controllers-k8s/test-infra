@@ -8,7 +8,7 @@ from pathlib import Path
 from dataclasses import dataclass, fields, asdict
 from typing import Iterable, Iterator
 
-from ..aws.identity import get_region
+from ..aws.identity import get_region, get_account_id
 
 BOOTSTRAP_RETRIES = 3
 CLEANUP_RETRIES = 3
@@ -53,10 +53,14 @@ class BootstrapFailureException(Exception):
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
-   
+
     @property
     def region(self):
         return get_region()
+
+    @property
+    def account_id(self):
+        return str(get_account_id())
 
     @abc.abstractmethod
     def bootstrap(self):
@@ -68,7 +72,7 @@ class Bootstrappable(abc.ABC):
 
     @property
     def iter_bootstrappable(self) -> Iterator[Bootstrappable]:
-        """Iterates over the values of each field that extends the 
+        """Iterates over the values of each field that extends the
             `BootstrappableResource` type
 
         Yields:
@@ -85,16 +89,16 @@ class Bootstrappable(abc.ABC):
             yield attr
 
     def _bootstrap_subresources(self):
-        """Iterates through every `Bootstrappable` field and attempts to 
+        """Iterates through every `Bootstrappable` field and attempts to
             bootstrap it for a given number of retries.
 
-        If the bootstrapping fails, it will attempt to cleanup the previous 
+        If the bootstrapping fails, it will attempt to cleanup the previous
         attempt's subresources and try again. After reaching the maximum number
-        of retries, it will clean up any resources that were successfully 
+        of retries, it will clean up any resources that were successfully
         bootstrapped and then fail with a `BootstrapFailureException`.
 
         Raises:
-            BootstrapFailureException: If bootstrapping attempts reached the 
+            BootstrapFailureException: If bootstrapping attempts reached the
                 maximum number of retries.
         """
         bootstrapped = []
@@ -124,7 +128,7 @@ class Bootstrappable(abc.ABC):
                     continue
             else:
                 logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping {resource_name}")
-            
+
             if should_cleanup:
                 # Attempt to clean up successfully bootstrapped elements
                 self._cleanup_resources(bootstrapped)
@@ -138,7 +142,7 @@ class Bootstrappable(abc.ABC):
             them up for a given number of retries.
 
         Args:
-            resources (Iterable[Bootstrappable]): The resources to attempt to 
+            resources (Iterable[Bootstrappable]): The resources to attempt to
                 clean up.
         """
         # Iterate through list in reverse order, so that resources created last
@@ -164,14 +168,14 @@ class Bootstrappable(abc.ABC):
 @dataclass
 class Resources(Serializable, Bootstrappable):
     def bootstrap(self):
-        """Runs the `bootstrap` method for every `BootstrappableResource` 
+        """Runs the `bootstrap` method for every `BootstrappableResource`
             subclass in the bootstrap dictionary.
         """
         logging.info("🛠️ Bootstrapping resources ...")
-        self._bootstrap_subresources()                
+        self._bootstrap_subresources()
 
     def cleanup(self):
-        """Runs the `cleanup` method for every `BootstrappableResource` 
+        """Runs the `cleanup` method for every `BootstrappableResource`
             subclass in the bootstrap dictionary.
         """
         logging.info("🧹 Cleaning up resources ...")
