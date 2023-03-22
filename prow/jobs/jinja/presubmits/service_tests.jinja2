@@ -147,6 +147,6 @@
         env:
         - name: SERVICE
           value: {{ service }}
-        command: ["wrapper.sh", "bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
+        command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
 {% endfor %}
