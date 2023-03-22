@@ -31,6 +31,9 @@ kind-helm-test: ## Run the Helm tests for SERVICE
 test-recommended-policy:
 	@AWS_SERVICE=$(AWS_SERVICE) source ./scripts/iam-policy-test-runner.sh && assert_iam_policies
 
+test-metadata-file:
+	@AWS_SERVICE=$(AWS_SERVICE) source ./scripts/metadata-file-test-runner.sh && assert_metadata_file
+
 delete-all-kind-clusters:	## Delete all local kind clusters
 	@kind delete clusters --all
 	@rm -rf build/*
