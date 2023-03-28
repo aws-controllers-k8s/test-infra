@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
-from ..aws.identity import get_region, get_account_id
 
 @dataclass
 class Topic(Bootstrappable):
@@ -14,7 +13,11 @@ class Topic(Bootstrappable):
     policy_vars: dict = field(default_factory=dict)
 
     # Outputs
+    name: str = field(init=False)
     arn: str = field(init=False)
+
+    def __post_init__(self):
+        self.name = resources.random_suffix_name(self.name_prefix, 63)
 
     @property
     def sns_client(self):
@@ -27,15 +30,13 @@ class Topic(Bootstrappable):
     def bootstrap(self):
         """Creates an SNS topic with an auto-generated name.
         """
-        self.name = resources.random_suffix_name(self.name_prefix, 63)
-
         create_attributes = {}
 
         if self.policy != "":
             self.policy_vars.update({
                 "$NAME": self.name,
-                "$ACCOUNT_ID": str(get_account_id()),
-                "$REGION": get_region(),
+                "$ACCOUNT_ID": self.account_id,
+                "$REGION": self.region,
             })
 
             for key, value in self.policy_vars.items():
