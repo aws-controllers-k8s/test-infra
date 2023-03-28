@@ -43,4 +43,7 @@ new TestCIStack(app, "TestCIStack", {
     app.node.tryGetContext("logs_bucket_import") ||
     process.env.LOGS_BUCKET_IMPORT ||
     false,
+
+    inventoryBucketName: app.node.tryGetContext("inventory_bucket") || process.env.INVENTORY_BUCKET,
+    inventoryBucketRegion: app.node.tryGetContext("inventory_bucket_region") || process.env.INVENTORY_BUCKET_REGION,
 });

@@ -3,6 +3,7 @@ import { CICluster, CIClusterCompileTimeProps } from "./ci-cluster";
 import { LogBucket, LogBucketCompileProps } from "./log-bucket";
 import { ProwServiceAccounts } from "./prow-service-accounts";
 import { Stack, StackProps } from "aws-cdk-lib";
+import { SSMInventory, SSMInventoryCompileProps } from './ssm-inventory';
 
 export const PROW_NAMESPACE = "prow";
 export const PROW_JOB_NAMESPACE = "test-pods";
@@ -11,6 +12,7 @@ export const FLUX_NAMESPACE = "flux-system";
 export const CLUSTER_NAME = "TestInfraCluster";
 
 export type TestCIStackProps = StackProps &
+  SSMInventoryCompileProps &
   LogBucketCompileProps & {
     clusterConfig: CIClusterCompileTimeProps;
   };
@@ -46,5 +48,10 @@ export class TestCIStack extends Stack {
       }
     );
     prowServiceAccounts.node.addDependency(testCluster);
+
+    new SSMInventory(this, "SSMInventoryConstruct", {
+      ...props,
+      account: this.account
+    })
   }
 }
