@@ -3,6 +3,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: community
@@ -23,16 +25,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_ID
-            value: "82905295"
           command: ["/docs/build-docs.sh"]
     run_if_changed: "apis/core/.*"
     branches:

@@ -68,6 +68,9 @@ data:
           timeout: 48h
           grace_period: 1h
           censor_secrets: true
+          censoring_options:
+            include_directories:
+              - "/etc/github"
           gcs_configuration:
             bucket: s3://{{ .Values.prow.presubmitsBucketName }}
             path_strategy: explicit
@@ -105,32 +108,32 @@ data:
       - labels:
           preset-test-config: "true"
         env:
-        - name: TEST_CONFIG_PATH
-          value: "/etc/config/test_config.yaml"
+          - name: TEST_CONFIG_PATH
+            value: "/etc/config/test_config.yaml"
         volumes:
-        - name: config-volume
-          configMap:
-            name: test-config
+          - name: config-volume
+            configMap:
+              name: test-config
         volumeMounts:
-        - mountPath: /etc/config
-          name: config-volume
+          - mountPath: /etc/config
+            name: config-volume
       - labels:
           preset-dind-enabled: "true"
         env:
-        - name: DOCKER_IN_DOCKER_ENABLED
-          value: "true"
+          - name: DOCKER_IN_DOCKER_ENABLED
+            value: "true"
         volumes:
-        # kubekins-e2e legacy path
-        - name: docker-graph
-          emptyDir: {}
-        # krte (normal) path
-        - name: docker-root
-          emptyDir: {}
+          # kubekins-e2e legacy path
+          - name: docker-graph
+            emptyDir: {}
+          # krte (normal) path
+          - name: docker-root
+            emptyDir: {}
         volumeMounts:
-        - name: docker-graph
-          mountPath: /docker-graph
-        - name: docker-root
-          mountPath: /var/lib/docker
+          - name: docker-graph
+            mountPath: /docker-graph
+          - name: docker-root
+            mountPath: /var/lib/docker
       - labels:
           preset-kind-volume-mounts: "true"
         volumeMounts:
@@ -148,3 +151,23 @@ data:
             hostPath:
               path: /sys/fs/cgroup
               type: Directory
+      - labels:
+          preset-github-secrets: "true"
+        env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
+                key: token
+          - name: GITHUB_ACTOR
+            value: {{ .Values.github.bot.username | required "github.bot.username is required" | quote }}
+          - name: GITHUB_EMAIL_ID
+            value: {{ .Values.github.bot.emailID | required "github.bot.emailID is required" | quote }}
+        volumes:
+          - name: github-token
+            secret:
+              secretName: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
+        volumeMounts:
+          - name: github-token
+            mountPath: /etc/github
+            readOnly: true
