@@ -24,7 +24,7 @@
     "typescript": "~3.9.7"
   },
   "dependencies": {
-    "@aws-quickstart/eks-blueprints": "^1.5.4",
+    "@aws-quickstart/eks-blueprints": "^1.6.1",
     "cdk8s": "^2.0.0",
     "cdk8s-plus-24": "^2.0.0",
     "set-value": ">=4.0.1",
