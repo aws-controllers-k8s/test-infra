@@ -28,6 +28,9 @@ kind-test: ## Run functional tests for SERVICE
 kind-helm-test: ## Run the Helm tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-helm-tests.sh
 
+kind-dev: ## Run a dev cluster for SERVICE
+	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-ack-dev.sh
+
 test-recommended-policy:
 	@AWS_SERVICE=$(AWS_SERVICE) source ./scripts/iam-policy-test-runner.sh && assert_iam_policies
 
