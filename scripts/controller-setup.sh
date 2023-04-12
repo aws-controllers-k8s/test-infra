@@ -38,6 +38,30 @@ build_and_install_controller() {
     _install_deployment "$__controller_namespace" "$__img_name"
 }
 
+install_crd_and_rbac(){
+    local __controller_namespace=$1
+
+    local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
+    local service_config_dir="$service_controller_source_dir/config"
+
+    # Register the ACK service controller's CRDs in the target k8s cluster
+    debug_msg "Loading CRD manifests for $AWS_SERVICE into the cluster ... "
+    for crd_file in $service_config_dir/crd/bases; do
+        kubectl apply -f "$crd_file" --validate=false 1>/dev/null
+    done
+
+    debug_msg "Loading common manifests into the cluster ... "
+    for crd_file in $service_config_dir/crd/common/bases; do
+        kubectl apply -f "$crd_file" --validate=false 1>/dev/null
+    done
+
+    debug_msg "Creating $__controller_namespace namespace"
+    kubectl create namespace $__controller_namespace 2>/dev/null || true
+
+    debug_msg "Loading RBAC manifests for $AWS_SERVICE into the cluster ... "
+    kustomize build "$service_config_dir"/rbac | kubectl apply -f - 1>/dev/null
+}
+
 _build_controller_image() {
     local __img_name=$1
 
@@ -56,26 +80,11 @@ _install_deployment() {
     local __controller_namespace=$1
     local __img_name=$2
 
+    install_crd_and_rbac "$__controller_namespace"
+
     local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
     local service_config_dir="$service_controller_source_dir/config"
     local test_config_dir="$ROOT_DIR/build/clusters/$cluster_name/config/test"
-
-    # Register the ACK service controller's CRDs in the target k8s cluster
-    debug_msg "Loading CRD manifests for $AWS_SERVICE into the cluster ... "
-    for crd_file in $service_config_dir/crd/bases; do
-        kubectl apply -f "$crd_file" --validate=false 1>/dev/null
-    done
-
-    debug_msg "Loading common manifests into the cluster ... "
-    for crd_file in $service_config_dir/crd/common/bases; do
-        kubectl apply -f "$crd_file" --validate=false 1>/dev/null
-    done
-
-    debug_msg "Creating $__controller_namespace namespace"
-    kubectl create namespace $__controller_namespace 2>/dev/null || true
-
-    debug_msg "Loading RBAC manifests for $AWS_SERVICE into the cluster ... "
-    kustomize build "$service_config_dir"/rbac | kubectl apply -f - 1>/dev/null
 
     # Create the ACK service controller Deployment in the target k8s cluster
     mkdir -p "$test_config_dir"
