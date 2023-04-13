@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# ./scripts/run-e2e-tests.sh is the entrypoint for ACK integration testing. It
-# ensures that a K8s cluster is acsessible, then configures the ACK controller
-# under test onto the cluster before finally running the Python tests.
+# ./scripts/run-dev.sh quickly setup cluster for ACK development. It
+# ensures that a K8s cluster is accessible, then configures the ACK CRD, RBAC
+# but not install the controller
 
 set -Eeo pipefail
 
