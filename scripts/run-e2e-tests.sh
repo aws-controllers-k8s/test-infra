@@ -30,16 +30,29 @@ source "$SCRIPTS_DIR/pytest-image-runner.sh"
 
 ensure_cluster() {
     local cluster_create="$(get_cluster_create)"
-    if [[ "$cluster_create" == true ]]; then
-        local cluster_name=$(_get_kind_cluster_name)
+
+    if [[ "$cluster_create" != true ]]; then
+        info_msg "Testing connection to existing cluster ..."
+        _ensure_existing_context
+    else
+        local cluster_name=$(get_cluster_name)
+        local controller_install=${2:-true}
+        # naming cluster in the following order:
+        # 1. cluster_name is set in config file
+        # 2. cluster_name is passed as function argument. using this for dev cluster
+        # 3. generate cluster_name with random prefix
+        [ -z "$cluster_name" ] && cluster_name=$1
+        [ -z "$cluster_name" ] && cluster_name=$(_get_kind_cluster_name)
 
         info_msg "Creating KIND cluster ..."
         setup_kind_cluster "$cluster_name" "$CONTROLLER_NAMESPACE"
 
-        build_and_install_controller "$cluster_name" "$CONTROLLER_NAMESPACE" "$CONTROLLER_IMAGE_TAG"
-    else
-        info_msg "Testing connection to existing cluster ..."
-        _ensure_existing_context
+        info_msg "Installing CRDs , common and RBAC manifest..."
+        install_crd_and_rbac "$CONTROLLER_NAMESPACE"
+
+        if [[ "$controller_install" == true ]]; then
+            build_and_install_controller "$cluster_name" "$CONTROLLER_NAMESPACE" "$CONTROLLER_IMAGE_TAG"
+        fi
     fi
 }
 
@@ -92,7 +105,7 @@ _ensure_existing_context() {
 
 run() {
     ensure_aws_credentials
-    ensure_cluster
+    ensure_cluster ""
     
     build_and_run_tests
     exit $?

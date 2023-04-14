@@ -35,7 +35,7 @@ build_and_install_controller() {
     _load_controller_image "$__cluster_name" "$__img_name"
 
     info_msg "Installing controller deployment ... "
-    _install_deployment "$__controller_namespace" "$__img_name"
+    _install_deployment "$__cluster_name" "$__controller_namespace" "$__img_name"
 }
 
 install_crd_and_rbac(){
@@ -77,14 +77,13 @@ _load_controller_image() {
 }
 
 _install_deployment() {
-    local __controller_namespace=$1
-    local __img_name=$2
-
-    install_crd_and_rbac "$__controller_namespace"
+    local __cluster_name=$1
+    local __controller_namespace=$2
+    local __img_name=$3
 
     local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
     local service_config_dir="$service_controller_source_dir/config"
-    local test_config_dir="$ROOT_DIR/build/clusters/$cluster_name/config/test"
+    local test_config_dir="$ROOT_DIR/build/clusters/$__cluster_name/config/test"
 
     # Create the ACK service controller Deployment in the target k8s cluster
     mkdir -p "$test_config_dir"

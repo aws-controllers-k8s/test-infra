@@ -22,18 +22,19 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 
 source "$SCRIPTS_DIR/controller-setup.sh"
 source "$SCRIPTS_DIR/kind.sh"
+source "$SCRIPTS_DIR/run-e2e-tests.sh"
 
-ensure_cluster() {
-      info_msg "Creating KIND cluster ..."
-      setup_kind_cluster "$CLUSTER_NAME" "$CONTROLLER_NAMESPACE"
-
-      info_msg "Installing CRDs , common and RBAC manifest..."
-      install_crd_and_rbac "$CONTROLLER_NAMESPACE"
-}
+#ensure_cluster() {
+#      info_msg "Creating KIND cluster ..."
+#      setup_kind_cluster "$CLUSTER_NAME" "$CONTROLLER_NAMESPACE"
+#
+#      info_msg "Installing CRDs , common and RBAC manifest..."
+#      install_crd_and_rbac "$CONTROLLER_NAMESPACE"
+#}
 
 run() {
     ensure_aws_credentials
-    ensure_cluster
+    ensure_cluster "$CLUSTER_NAME" false
     local kubeconfig_path="$ROOT_DIR/build/clusters/$CLUSTER_NAME/kubeconfig"
     info_msg "After executing the above source command to set the kubeconfig to environment, "
     info_msg "run the following command to start the controller from the controller repo:"
