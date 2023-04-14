@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# ./scripts/run-dev.sh quickly setup cluster for ACK development. It
+# ./scripts/create-dev-cluster.sh quickly setup cluster for ACK development. It
 # ensures that a K8s cluster is accessible, then configures the ACK CRD, RBAC
 # but not install the controller
 
@@ -35,11 +35,10 @@ run() {
     ensure_aws_credentials
     ensure_cluster
     local kubeconfig_path="$ROOT_DIR/build/clusters/$CLUSTER_NAME/kubeconfig"
-    info_msg "Before running the controller, you need kubeconfig and aws credentials."
     info_msg "After executing the above source command to set the kubeconfig to environment, "
     info_msg "run the following command to start the controller from the controller repo:"
     echo ""
-    echo "go run ./cmd/controller/main.go --aws-region eu-central-1 --log-level debug --enable-development-logging"
+    echo "go run ./cmd/controller/main.go --aws-region $(get_aws_region) --log-level debug --enable-development-logging"
     echo ""
     info_msg "if you run the controller from your code editor/IDE, you can set the following environment variables:"
     echo "KUBECONFIG=$kubeconfig_path"
