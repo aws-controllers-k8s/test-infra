@@ -24,14 +24,6 @@ source "$SCRIPTS_DIR/controller-setup.sh"
 source "$SCRIPTS_DIR/kind.sh"
 source "$SCRIPTS_DIR/run-e2e-tests.sh"
 
-#ensure_cluster() {
-#      info_msg "Creating KIND cluster ..."
-#      setup_kind_cluster "$CLUSTER_NAME" "$CONTROLLER_NAMESPACE"
-#
-#      info_msg "Installing CRDs , common and RBAC manifest..."
-#      install_crd_and_rbac "$CONTROLLER_NAMESPACE"
-#}
-
 run() {
     ensure_aws_credentials
     ensure_cluster "$CLUSTER_NAME" false
@@ -41,8 +33,6 @@ run() {
     echo ""
     echo "go run ./cmd/controller/main.go --aws-region $(get_aws_region) --log-level debug --enable-development-logging"
     echo ""
-    info_msg "if you run the controller from your code editor/IDE, you can set the following environment variables:"
-    echo "KUBECONFIG=$kubeconfig_path"
     exit $?
 }
 
