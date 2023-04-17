@@ -24,7 +24,11 @@ class LogGroup(Bootstrappable):
     name_prefix: str
 
     # Outputs
+    name: str = field(init=False)
     arn: str = field(init=False)
+
+    def __post_init__(self):
+        self.name = resources.random_suffix_name(self.name_prefix, 63)
 
     @property
     def logs_client(self):
@@ -37,8 +41,6 @@ class LogGroup(Bootstrappable):
     def bootstrap(self):
         """Creates a CW Log group with an auto-generated name.
         """
-        self.name = resources.random_suffix_name(self.name_prefix, 63)
-
         log_group = self.logs_client.create_log_group(
             logGroupName=self.name,
         )
