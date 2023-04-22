@@ -29,19 +29,20 @@ source "$SCRIPTS_DIR/kind.sh"
 source "$SCRIPTS_DIR/pytest-image-runner.sh"
 
 ensure_cluster() {
+    local cluster_name_via_arg=${1:-""}
+    local controller_install=${2:-true}
     local cluster_create="$(get_cluster_create)"
+    local cluster_name=$(get_cluster_name)
 
     if [[ "$cluster_create" != true ]]; then
         info_msg "Testing connection to existing cluster ..."
         _ensure_existing_context
     else
-        local cluster_name=$(get_cluster_name)
-        local controller_install=${2:-true}
         # naming cluster in the following order:
         # 1. cluster_name is set in config file
         # 2. cluster_name is passed as function argument. using this for dev cluster
         # 3. generate cluster_name with random prefix
-        [ -z "$cluster_name" ] && cluster_name=$1
+        [ -z "$cluster_name" ] && cluster_name=$cluster_name_via_arg
         [ -z "$cluster_name" ] && cluster_name=$(_get_kind_cluster_name)
 
         info_msg "Creating KIND cluster ..."
@@ -105,7 +106,7 @@ _ensure_existing_context() {
 
 run() {
     ensure_aws_credentials
-    ensure_cluster ""
+    ensure_cluster
     
     build_and_run_tests
     exit $?
