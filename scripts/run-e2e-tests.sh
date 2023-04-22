@@ -48,7 +48,7 @@ ensure_cluster() {
         info_msg "Creating KIND cluster ..."
         setup_kind_cluster "$cluster_name" "$CONTROLLER_NAMESPACE"
 
-        info_msg "Installing CRDs , common and RBAC manifest..."
+        info_msg "Installing CRD and RBAC manifests..."
         install_crd_and_rbac "$CONTROLLER_NAMESPACE"
 
         if [[ "$controller_install" == true ]]; then
