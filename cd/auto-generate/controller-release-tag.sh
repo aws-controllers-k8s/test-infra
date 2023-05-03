@@ -96,7 +96,7 @@ else
   NEXT_GIT_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
 fi
 
-if [[ $HELM_IMAGE_TAG != "$NEXT_GIT_TAG" ]]; then
+if [[ $HELM_IMAGE_TAG != $NEXT_GIT_TAG ]]; then
   echo "controller-release-tag.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is not the next patch release for current $LATEST_GIT_TAG release"
   echo "controller-release-tag.sh][INFO] Not tagging the GitHub repository with $HELM_IMAGE_TAG tag"
   exit 0
