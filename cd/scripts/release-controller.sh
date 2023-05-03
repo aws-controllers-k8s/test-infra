@@ -182,7 +182,7 @@ if [[ -d "$SERVICE_CONTROLLER_DIR/helm" ]]; then
     echo -n "Generating Helm chart package for $AWS_SERVICE@$CHART_VERSION ... "
     helm package "$SERVICE_CONTROLLER_DIR"/helm/
     echo "ok."
-    # Path to tarballed package (eg. `s3-chart-v0.0.1.tgz`)
+    # Path to tarballed package (eg. `s3-chart-0.0.1.tgz`)
     CHART_PACKAGE="$HELM_REPO-$CHART_VERSION.tgz"
 
     helm push "$CHART_PACKAGE" "oci://$HELM_REGISTRY"
