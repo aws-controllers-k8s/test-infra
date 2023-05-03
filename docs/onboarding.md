@@ -43,7 +43,7 @@ policy, although your team can adjust policies for stricter requirements in
 the future. Set the role name to `<service>-ack-test-role-DO-NOT-DELETE`.
 
 > **Note:** This role is also used for creating the EKS cluster, which is needed
-for soak test execution. Make sure this Role has atleast EKS admin privileges to
+for soak test execution. Make sure this Role has at least EKS admin privileges to
 create the EKS cluster for soak tests.
 
 The testing infrastructure will need to assume this role for the duration of the
