@@ -27,6 +27,7 @@ aws_services:
 - lambda
 - memorydb
 - mq
+- networkfirewall
 - opensearchservice
 - organizations
 - pipes
