@@ -78,7 +78,8 @@ else
   pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller/helm 1>/dev/null
     # helm directory will be existing due to release-test presubmit job
     _repository=$(yq eval ".image.repository" values.yaml)
-    _image_tag=$(yq eval ".image.tag" values.yaml)
+    # Prefix the image tag with a v so it can be compared with Git tags
+    _image_tag="v$(yq eval ".image.tag" values.yaml)"
     if [[ $_repository != public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller ]]; then
       echo "release-controller.sh] [ERROR] 'image.repository' value in release artifacts should be public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller. Current value: $_repository"
       exit 1
@@ -92,6 +93,11 @@ else
 fi
 
 echo "VERSION is $VERSION"
+
+# Use a separate variable to hold the VERSION string without the v prefix. 
+# Helm charts should not be published with a v prefix, and should reference
+# an image without a v prefix.
+CHART_VERSION=${VERSION//v/}
 
 ASSUME_EXIT_VALUE=0
 ECR_PUBLISH_ARN=$(aws ssm get-parameter --name /ack/prow/cd/public_ecr/publish_role --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
@@ -110,7 +116,7 @@ echo "release-controller.sh] [SETUP] Assumed ECR_PUBLISH_ARN"
 perform_buildah_and_helm_login
 
 # Do not rebuild controller image for stable releases
-if ! (echo "$VERSION" | grep -Eq "stable$"); then
+if ! (echo "$CHART_VERSION" | grep -Eq "stable$"); then
   # Determine parameters for docker-build command
   pushd "$WORKSPACE_DIR"/"$AWS_SERVICE"-controller 1>/dev/null
 
@@ -124,7 +130,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
 
   ensure_repository "$AWS_SERVICE"
 
-  AWS_SERVICE_DOCKER_IMG=${AWS_SERVICE_DOCKER_IMG:-"$DOCKER_REPOSITORY:$VERSION"}
+  AWS_SERVICE_DOCKER_IMG=${AWS_SERVICE_DOCKER_IMG:-"$DOCKER_REPOSITORY:$CHART_VERSION"}
   DOCKER_BUILD_CONTEXT="$WORKSPACE_DIR"
 
   popd 1>/dev/null
@@ -147,7 +153,7 @@ if ! (echo "$VERSION" | grep -Eq "stable$"); then
     -t "$AWS_SERVICE_DOCKER_IMG" \
     -f "$CONTROLLER_IMAGE_DOCKERFILE_PATH" \
     --build-arg service_alias="$AWS_SERVICE" \
-    --build-arg service_controller_git_version="$VERSION" \
+    --build-arg service_controller_git_version="$CHART_VERSION" \
     --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
     --build-arg build_date="$BUILD_DATE" \
     --build-arg golang_version="$GOLANG_VERSION" \
@@ -173,11 +179,11 @@ HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}
 export HELM_EXPERIMENTAL_OCI=1
 
 if [[ -d "$SERVICE_CONTROLLER_DIR/helm" ]]; then
-    echo -n "Generating Helm chart package for $AWS_SERVICE@$VERSION ... "
+    echo -n "Generating Helm chart package for $AWS_SERVICE@$CHART_VERSION ... "
     helm package "$SERVICE_CONTROLLER_DIR"/helm/
     echo "ok."
-    # Path to tarballed package (eg. `s3-chart-v0.0.1.tgz`)
-    CHART_PACKAGE="$HELM_REPO-$VERSION.tgz"
+    # Path to tarballed package (eg. `s3-chart-0.0.1.tgz`)
+    CHART_PACKAGE="$HELM_REPO-$CHART_VERSION.tgz"
 
     helm push "$CHART_PACKAGE" "oci://$HELM_REGISTRY"
 else
