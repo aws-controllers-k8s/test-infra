@@ -231,7 +231,7 @@ _rebuild_chart_dependencies() {
 _add_chart_values_section() {
     local __service_name=$1
 
-    SERVICE_NAME=$__service_name yq --inplace '.[env(SERVICE_NAME)+"-chart"] += {
+    SERVICE_NAME=$__service_name yq --inplace '.[env(SERVICE_NAME)] += {
         "enabled": false
     }' "$PARENT_CHART_VALUES"
 }
