@@ -142,7 +142,7 @@ _get_chart_dependency_version() {
     local __dependency_name=$1
 
     local dependency_version
-    dependency_version="$(NAME=$__dependency_name yq '.dependencies[] | select(.name == env(NAME)) | .version' "$PARENT_CHART_CONFIG")"
+    dependency_version="$(NAME=$__dependency_name yq '.dependencies[] | select(.name == env(NAME)) | .version | sub("v(.+)", "$1")' "$PARENT_CHART_CONFIG" )"
     echo "$dependency_version"
 }
 
@@ -150,18 +150,11 @@ _get_semver_diff() {
     local __current_version=$1
     local __new_version=$2
 
-    local trimmed_current
-    local trimmed_new
-
-    # This assumes the version takes the form of `vX.Y.Z`
-    trimmed_current="$(echo "$__current_version" | cut -c2-)"
-    trimmed_new="$(echo "$__new_version" | cut -c2-)"
-
-    if [[ "$(echo "$trimmed_current" | cut -d"." -f1)" != "$(echo "$trimmed_new" | cut -d"." -f1)" ]]; then
+    if [[ "$(echo "$__current_version" | cut -d"." -f1)" != "$(echo "$__new_version" | cut -d"." -f1)" ]]; then
         echo "$DEPENDENCY_DIFF_MAJOR"
-    elif [[ "$(echo "$trimmed_current" | cut -d"." -f2)" != "$(echo "$trimmed_new" | cut -d"." -f2)" ]]; then
+    elif [[ "$(echo "$__current_version" | cut -d"." -f2)" != "$(echo "$__new_version" | cut -d"." -f2)" ]]; then
         echo "$DEPENDENCY_DIFF_MINOR"
-    elif [[ "$(echo "$trimmed_current" | cut -d"." -f3)" != "$(echo "$trimmed_new" | cut -d"." -f3)" ]]; then
+    elif [[ "$(echo "$__current_version" | cut -d"." -f3)" != "$(echo "$__new_version" | cut -d"." -f3)" ]]; then
         echo "$DEPENDENCY_DIFF_PATCH"
     else
         echo ""
