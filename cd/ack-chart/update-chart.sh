@@ -90,9 +90,9 @@ _upgrade_dependency_and_chart_versions() {
 
         # Determine if the chart is in GA
         # shellcheck disable=SC2016
-        chart_major_version="$(yq '.version | split(".") | .[0]' "$controller_chart")"
+        chart_major_version="$(yq '.version | split(".") | .[0] | sub("v(\d+)", "$1")' "$controller_chart")"
         if [[ "$chart_major_version" == "0" ]]; then
-            >&2 echo "Skipping $controller_name - no GA releases"
+        >&2 echo "Skipping $controller_name - no GA releases"
             continue
         fi
 
