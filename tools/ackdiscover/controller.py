@@ -124,7 +124,7 @@ def collect_all(writer, gh, ep_client, services):
                 ep_client, chart_repo,
             )
             latest_release.chart_version = chart_repo_latest_version
-            if ecrpublic.chart_has_stable_tag(ep_client, chart_repo):
+            if ecrpublic.chart_has_nonzero_major_version(ep_client, chart_repo):
                 maintenance_phase = maintenance_phases.GENERAL_AVAILABILITY
 
         controller = Controller(
