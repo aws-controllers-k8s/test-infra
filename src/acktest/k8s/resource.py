@@ -117,7 +117,7 @@ def load_and_create_resource(resource_directory: Path,
 
 
 def _get_k8s_api_client() -> ApiClient:
-    # Create new client everytime to avoid token refresh issues
+    # Create new client every time to avoid token refresh issues
     # https://github.com/kubernetes-client/python/issues/741
     # https://github.com/kubernetes-client/python-base/issues/125
     if bool(util.strtobool(os.environ.get('LOAD_IN_CLUSTER_KUBECONFIG', 'false'))):
@@ -236,7 +236,7 @@ def get_resource(reference: CustomResourceReference):
     """Get the resource from a given reference.
 
     Returns:
-        None or object: None if the resource doesnt exist in server, otherwise the
+        None or object: None if the resource does not exist in server, otherwise the
             custom object.
     """
     _api_client = _get_k8s_api_client()

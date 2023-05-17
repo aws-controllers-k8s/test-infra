@@ -59,7 +59,7 @@ GITHUB_REPO=${GITHUB_REPO:-$DEFAULT_GITHUB_REPO}
 DEFAULT_COMMIT_TARGET_BRANCH="main"
 COMMIT_TARGET_BRANCH=${COMMIT_TARGET_BRANCH:-$DEFAULT_COMMIT_TARGET_BRANCH}
 
-# DEPENDENCY_DIFF is an enumeration for storing how the chart depedencies have
+# DEPENDENCY_DIFF is an enumeration for storing how the chart dependencies have
 # changed between the last and current versions of the parent chart. Storing the
 # values as integers allows the script to compare values using mathematical
 # operators.
