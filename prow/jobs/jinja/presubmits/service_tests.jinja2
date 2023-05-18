@@ -104,7 +104,7 @@
 
   - name: {{ service }}-codespell
     decorate: true
-    optional: false
+    optional: true
     always_run: true
     annotations:
       karpenter.sh/do-not-evict: "true"
