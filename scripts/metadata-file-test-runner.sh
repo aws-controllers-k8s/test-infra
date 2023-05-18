@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# metadata-file-test-runner.sh contains functions used to test the existence and
+# metadata-file-test-runner.sh contains functions used to test the existance and
 # content of metadata.yaml files.
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -30,7 +30,7 @@ assert_metadata_file() {
     [[ $(yq .service.full_name < "$metadata_file_path") != "" ]] || exit 1
 
 
-    info_msg "Validating the existence of metadata URLs."
+    info_msg "Validating the existance of metadata URLs."
 
     ensure_url_healthy "$(yq .service.link < "$metadata_file_path")" || exit 1
     ensure_url_healthy "$(yq .service.documentation < "$metadata_file_path")" || exit 1

@@ -94,9 +94,9 @@ LOKI_CHART_RELEASE_NAME="loki"
 PROM_NAMESPACE="prometheus"
 # Size of the Loki persistence PersistentVolumeClaim
 LOKI_PERSISTENCE_SIZE="15Gi"
-# Local port to access Prometheus dashboard
+# Local port to access Prometheus dashbaord
 LOCAL_PROMETHEUS_PORT=9090
-# Local port to access Prometheus dashboard
+# Local port to access Prometheus dashbaord
 LOCAL_GRAFANA_PORT=3000
 
 ### SOAK TEST RUNNER CONFIGURATION ###

@@ -170,7 +170,7 @@ class ServiceLinkedRole(Bootstrappable):
                 Description=self.description
             )
         except self.iam_client.exceptions.InvalidInputException as e:
-            # Existence check for SLRs
+            # Existance check for SLRs
             if "taken in this account" in str(e):
                 logging.info(f"Service-linked role ({self.default_name}) already exists")
 

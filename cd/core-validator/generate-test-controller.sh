@@ -21,7 +21,7 @@ CONTROLLER_NAME="$SERVICE"-controller
 CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
 
 # Update the go.mod file in controller directory
-# Find out the runtime semver from the code-generator repo
+# Findout the runtime semver from the code-generator repo
 pushd "$CODEGEN_DIR" >/dev/null
   ACK_RUNTIME_VERSION=$(go list -m -f '{{ .Version }}' github.com/aws-controllers-k8s/runtime)
   if [[ -z $ACK_RUNTIME_VERSION ]]; then

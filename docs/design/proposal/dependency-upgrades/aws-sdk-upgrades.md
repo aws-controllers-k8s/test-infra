@@ -83,7 +83,7 @@ In the periodic job mentioned above, the ENTRYPOINT script will filter any
 new aws-sdk-go release for minor-version-upgrades and run the following
 "Verification" step. 
 
-aws-sdk-go patch releases will be ignored because ACK runtime does not need
+aws-sdk-go patch releases wil be ignored because ACK runtime does not need
 to be updated for every aws-sdk-go patch release(only *SDK Feature*
 updates and IAM service changes impact ACK runtime functionality).
 
