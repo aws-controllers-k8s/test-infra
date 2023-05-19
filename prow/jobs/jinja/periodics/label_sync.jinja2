@@ -35,7 +35,13 @@
       - name: config
         mountPath: /etc/config
         readOnly: true
+      - name: github-token
+        mountPath: /etc/github
+        readOnly: true
     volumes:
     - name: config
       configMap:
         name: label-config
+    - name: github-token
+      secret:
+        secretName: github-token
