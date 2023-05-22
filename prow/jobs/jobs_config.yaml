@@ -35,6 +35,7 @@ aws_services:
 - rds
 - route53
 - s3
+- secretsmanager
 - servicecatalog
 - sagemaker
 - sfn
