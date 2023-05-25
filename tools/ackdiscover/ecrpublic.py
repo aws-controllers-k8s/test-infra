@@ -129,10 +129,9 @@ def get_repository_latest_tag(ep_client, repo):
             break
     return latest_tag
 
-
-def chart_has_stable_tag(ep_client, chart_repo):
-    """Returns True if the supplied chart repository has a chart with a stable
-    tag, False otherwise.
+def chart_has_nonzero_major_version(ep_client, chart_repo):
+    """Returns True if the supplied chart repository has a chart with a major
+    version > 0, False otherwise.
     """
     try:
         images = ep_client.describe_images(
@@ -143,7 +142,7 @@ def chart_has_stable_tag(ep_client, chart_repo):
             if "imageTags" not in image:
                 continue
             tag = image["imageTags"][0]
-            if "stable" in tag:
+            if tag.startswith("1."):
                 return True
     except ep_client.exceptions.RepositoryNotFoundException:
         pass

@@ -35,8 +35,8 @@
 # * Project stage of ACK controller -- e.g. "Proposed" or "Released"
 # * Maintenance phase of ACK controller - e.g. "Preview" or "GA"
 # * ACK controller repository URL, if any -- e.g. github.com/aws-controllers-k8s/s3-controller
-# * Latest release version of ACK controller -- e.g. v0.0.6
-# * Latest Helm chart version for the ACK controller -- e.g. v0.0.6 or v0-stable
+# * Latest release version of ACK controller -- e.g. 0.0.6
+# * Latest Helm chart version for the ACK controller -- e.g. 0.0.6
 # * Version of ACK runtime used in latest controller release -- e.g. v0.17.0
 # * Version of aws-sdk-go used in latest controller release -- e.g. v1.40.24
 
