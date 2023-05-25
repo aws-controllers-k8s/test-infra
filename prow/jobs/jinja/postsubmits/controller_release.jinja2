@@ -28,7 +28,6 @@
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-    - stable
 {% if service in soak_test_on_release_service_names %}
 
   - name: {{ service }}-soak-on-release
@@ -89,7 +88,6 @@
           command: ["/docs/build-docs.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-    - stable
 
   - name: {{ service }}-controller-release-tag
     decorate: true
