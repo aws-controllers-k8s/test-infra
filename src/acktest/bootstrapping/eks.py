@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .. import resources
-from . import Bootstrappable
+from . import Bootstrappable, BootstrapFailureException
 from .vpc import VPC
 from .iam import Role
 
@@ -106,6 +106,15 @@ class Cluster(Bootstrappable):
         )
 
         waiter = self.eks_client.get_waiter('cluster_deleted')
-        waiter.wait(name=self.name)
+        err = waiter.wait(
+            name=self.name,
+            WaiterConfig={
+                'Delay': 30,
+                'MaxAttempts': 100
+            }
+        )
+
+        if err is not None:
+            raise BootstrapFailureException(err)
 
         super().cleanup()
