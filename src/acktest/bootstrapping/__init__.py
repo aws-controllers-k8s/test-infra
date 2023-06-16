@@ -69,19 +69,19 @@ class Bootstrappable(abc.ABC):
     def bootstrap(self):
         self._bootstrap_subresources()
 
-    @abc.abstractmethod
+    @property
     def bootstrap_retries(self):
         return BOOTSTRAP_RETRIES
 
-    @abc.abstractmethod
+    @property
     def bootstrap_interval_sec(self):
         return BOOTSTRAP_INTERVAL_SEC
 
-    @abc.abstractmethod
+    @property
     def cleanup_retries(self):
         return CLEANUP_RETRIES
 
-    @abc.abstractmethod
+    @property
     def cleanup_interval_sec(self):
         return CLEANUP_INTERVAL_SEC
 
