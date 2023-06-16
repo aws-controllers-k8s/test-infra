@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import pickle
 import logging
+import time
 
 from pathlib import Path
 from dataclasses import dataclass, fields, asdict
@@ -11,7 +12,9 @@ from typing import Iterable, Iterator
 from ..aws.identity import get_region, get_account_id
 
 BOOTSTRAP_RETRIES = 3
+BOOTSTRAP_INTERVAL_SEC = 0
 CLEANUP_RETRIES = 3
+CLEANUP_INTERVAL_SEC = 0
 
 class Serializable:
     """Represents a list of all bootstrappable resources required for a given
@@ -67,6 +70,22 @@ class Bootstrappable(abc.ABC):
         self._bootstrap_subresources()
 
     @abc.abstractmethod
+    def bootstrap_retries(self):
+        return BOOTSTRAP_RETRIES
+
+    @abc.abstractmethod
+    def bootstrap_interval_sec(self):
+        return BOOTSTRAP_INTERVAL_SEC
+
+    @abc.abstractmethod
+    def cleanup_retries(self):
+        return CLEANUP_RETRIES
+
+    @abc.abstractmethod
+    def cleanup_interval_sec(self):
+        return CLEANUP_INTERVAL_SEC
+
+    @abc.abstractmethod
     def cleanup(self):
         self._cleanup_subresources()
 
@@ -107,7 +126,7 @@ class Bootstrappable(abc.ABC):
 
             resource_name = type(resource).__name__
             logging.info(f"Attempting bootstrap {resource_name}")
-            for _ in range(BOOTSTRAP_RETRIES):
+            for _ in range(self.bootstrap_retries):
                 try:
                     # Bootstrap and add to list of successes
                     resource.bootstrap()
@@ -125,9 +144,10 @@ class Bootstrappable(abc.ABC):
                     logging.info(f"Cleaning up dependencies created by {resource_name}")
                     resource.cleanup()
                     logging.info(f"Retrying bootstrapping {resource_name}")
+                    time.sleep(self.bootstrap_interval_sec)
                     continue
             else:
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping {resource_name}")
+                logging.error(f"🚫 Exceeded maximum retries ({self.bootstrap_retries}) for bootstrapping {resource_name}")
 
             if should_cleanup:
                 # Attempt to clean up successfully bootstrapped elements
@@ -149,7 +169,7 @@ class Bootstrappable(abc.ABC):
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
             resource_name = type(resource).__name__
-            for _ in range(CLEANUP_RETRIES):
+            for _ in range(self.cleanup_retries):
                 try:
                     # Clean up and add to list of successes
                     logging.info(f"Attempting cleanup {resource_name}")
@@ -159,10 +179,11 @@ class Bootstrappable(abc.ABC):
                 except Exception as ex:
                     logging.error(f"Exception while cleaning up {resource_name}")
                     logging.exception(ex)
+                    time.sleep(self.cleanup_interval_sec)
                     continue
             else:
                 # Hit retry limit
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for cleaning up {resource_name}")
+                logging.error(f"🚫 Exceeded maximum retries ({self.cleanup_retries}) for cleaning up {resource_name}")
                 logging.error(f"Possibly dangling resource ({resource_name}): {asdict(resource)}")
 
 @dataclass
