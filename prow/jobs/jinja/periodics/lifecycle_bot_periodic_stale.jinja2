@@ -21,12 +21,12 @@
           - /app/robots/commenter/app.binary
         args:
           - --query=org:aws-controllers-k8s -label:lifecycle/frozen -label:lifecycle/rotten -label:lifecycle/stale
-          - --updated=2160h
+          - --updated=4320h
           - --token=/etc/github/token
           - |-
-            --comment=Issues go stale after 90d of inactivity.
+            --comment=Issues go stale after 180d of inactivity.
             Mark the issue as fresh with `/remove-lifecycle stale`.
-            Stale issues rot after an additional 30d of inactivity and eventually close.
+            Stale issues rot after an additional 60d of inactivity and eventually close.
             If this issue is safe to close now please do so with `/close`.
             Provide feedback via https://github.com/aws-controllers-k8s/community.
             /lifecycle stale
