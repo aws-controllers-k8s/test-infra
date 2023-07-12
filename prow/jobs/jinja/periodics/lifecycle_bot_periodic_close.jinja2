@@ -21,10 +21,10 @@
           - /app/robots/commenter/app.binary
         args:
           - --query=org:aws-controllers-k8s -label:lifecycle/frozen label:lifecycle/rotten
-          - --updated=720h
+          - --updated=1440h
           - --token=/etc/github/token
           - |-
-            --comment=Rotten issues close after 30d of inactivity.
+            --comment=Rotten issues close after 60d of inactivity.
             Reopen the issue with `/reopen`.
             Provide feedback via https://github.com/aws-controllers-k8s/community.
             /close
