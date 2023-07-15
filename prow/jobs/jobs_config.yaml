@@ -34,6 +34,7 @@ aws_services:
 - prometheusservice
 - rds
 - route53
+- route53resolver
 - s3
 - secretsmanager
 - servicecatalog
