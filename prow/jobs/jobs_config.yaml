@@ -64,3 +64,10 @@ code_gen_presubmit_services:
 - iam
 - lambda
 - s3
+
+# List of AWS services whose controller gets generated and e2e tested whenever
+# there is a new `acktest` library change.
+acktest_presubmit_services:
+- ecr
+- iam
+- s3

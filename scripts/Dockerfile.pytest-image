@@ -9,6 +9,7 @@ ARG CONTROLLER_E2E_PATH=./${AWS_SERVICE}-controller/test/e2e
 
 # Path to the test-infra directory in the build context
 ARG TEST_INFRA_PATH=./test-infra
+ARG LOCAL_ACKTEST_LIBRARY
 
 # Destination path for the test config YAML
 ARG TEST_CONFIG_PATH=/root/test-config.yaml
@@ -25,6 +26,14 @@ RUN wget https://github.com/mikefarah/yq/releases/download/v4.26.1/yq_linux_amd6
 
 # Install python dependencies
 COPY ${CONTROLLER_E2E_PATH}/requirements.txt .
+
+COPY ${TEST_INFRA_PATH}/ acktest
+
+RUN if [[ "$LOCAL_ACKTEST_LIBRARY" = "true" ]]; then \
+    echo "./acktest" > requirements.txt; \
+  fi
+
+# Install python dependencies
 RUN pip install -r requirements.txt
 
 COPY ${CONTROLLER_E2E_PATH} .
