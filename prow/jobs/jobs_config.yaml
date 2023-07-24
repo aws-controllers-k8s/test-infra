@@ -11,6 +11,7 @@ aws_services:
 - applicationautoscaling
 - cloudfront
 - cloudtrail
+- cloudwatch
 - cloudwatchevents
 - cloudwatchlogs
 - dynamodb
