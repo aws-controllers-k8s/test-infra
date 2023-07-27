@@ -1,8 +1,8 @@
+  aws-controllers-k8s/test-infra:
 {% for service in acktest_presubmit_services  %}
   - name: acktest-{{ service }}-e2e-tests
     decorate: true
     optional: false
-    always_run: true
     # only if src/acktest/ code changed
     run_if_changed: src/acktest/.*
     annotations:
