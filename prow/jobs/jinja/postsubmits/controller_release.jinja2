@@ -25,10 +25,12 @@
               memory: "500Mi"
           securityContext:
             privileged: true
+          env:
+          - name: GOLANG_VERSION
+            value: "1.19.8"
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-    - stable
 {% if service in soak_test_on_release_service_names %}
 
   - name: {{ service }}-soak-on-release
@@ -61,6 +63,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: community
@@ -84,25 +88,16 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_ID
-            value: "82905295"
           command: ["/docs/build-docs.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-    - stable
 
   - name: {{ service }}-controller-release-tag
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -118,16 +113,6 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_PREFIX
-            value: "82905295"
           command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-tag.sh"]
     branches:
     - main
@@ -136,6 +121,8 @@
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -159,17 +146,46 @@
             requests:
               cpu: 1
               memory: "500Mi"
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: prowjob-github-pat-token
-                key: token
-          - name: GITHUB_ACTOR
-            value: "ack-bot"
-          - name: GITHUB_EMAIL_PREFIX
-            value: "82905295"
           command: ["/bin/bash", "-c", "./cd/olm/olm-bundle-pr.sh"]
+    branches:
+    - ^v[0-9]+\.[0-9]+\.[0-9]+$
+
+  - name: update-ack-chart
+    decorate: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: code-generator
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: ack-chart
+      base_ref: main
+      workdir: false
+    {% for other_service in aws_services if not other_service == service %}
+    - org: aws-controllers-k8s
+      repo: {{ other_service }}-controller
+      base_ref: main
+      workdir: false
+    {% endfor %}
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: {{ image_context.images["deploy"] }}
+          resources:
+            limits:
+              cpu: 2
+            requests:
+              cpu: 1
+              memory: "500Mi"
+          command: ["/bin/bash", "-c", "cd cd/ack-chart && ./update-chart.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
 

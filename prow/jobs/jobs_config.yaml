@@ -9,8 +9,10 @@ aws_services:
 - acmpca
 - apigatewayv2
 - applicationautoscaling
+- cloudfront
 - cloudtrail
 - cloudwatch
+- cloudwatchevents
 - cloudwatchlogs
 - dynamodb
 - ec2
@@ -26,12 +28,17 @@ aws_services:
 - lambda
 - memorydb
 - mq
+- networkfirewall
 - opensearchservice
 - organizations
+- pipes
 - prometheusservice
 - rds
 - route53
+- route53resolver
 - s3
+- secretsmanager
+- servicecatalog
 - sagemaker
 - sfn
 - sns
@@ -56,4 +63,11 @@ code_gen_presubmit_services:
 - ecr
 - iam
 - lambda
+- s3
+
+# List of AWS services whose controller gets generated and e2e tested whenever
+# there is a new `acktest` library change.
+acktest_presubmit_services:
+- ecr
+- iam
 - s3

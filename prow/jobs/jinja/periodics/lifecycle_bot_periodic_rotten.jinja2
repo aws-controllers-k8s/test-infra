@@ -4,6 +4,8 @@
   annotations:
     description: Moves stale issues to rotten state after 30d of inactivity
     karpenter.sh/do-not-evict: "true"
+  labels:
+    preset-github-secrets: "true"
   agent: kubernetes
   spec:
     serviceAccountName: periodic-service-account
@@ -19,23 +21,15 @@
           - /app/robots/commenter/app.binary
         args:
           - --query=org:aws-controllers-k8s -label:lifecycle/frozen -label:lifecycle/rotten label:lifecycle/stale
-          - --updated=720h
+          - --updated=1440h
           - --token=/etc/github/token
           - |-
-            --comment=Stale issues rot after 30d of inactivity.
+            --comment=Stale issues rot after 60d of inactivity.
             Mark the issue as fresh with `/remove-lifecycle rotten`.
-            Rotten issues close after an additional 30d of inactivity.
+            Rotten issues close after an additional 60d of inactivity.
             If this issue is safe to close now please do so with `/close`.
             Provide feedback via https://github.com/aws-controllers-k8s/community.
             /lifecycle rotten
           - --template
           - --confirm
           - --ceiling=10
-        volumeMounts:
-          - name: github-token
-            mountPath: /etc/github
-            readOnly: true
-    volumes:
-      - name: github-token
-        secret:
-          secretName: prowjob-github-pat-token

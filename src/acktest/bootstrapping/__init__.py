@@ -3,15 +3,18 @@ from __future__ import annotations
 import abc
 import pickle
 import logging
+import time
 
 from pathlib import Path
 from dataclasses import dataclass, fields, asdict
 from typing import Iterable, Iterator
 
-from ..aws.identity import get_region
+from ..aws.identity import get_region, get_account_id
 
 BOOTSTRAP_RETRIES = 3
+BOOTSTRAP_INTERVAL_SEC = 0
 CLEANUP_RETRIES = 3
+CLEANUP_INTERVAL_SEC = 0
 
 class Serializable:
     """Represents a list of all bootstrappable resources required for a given
@@ -53,14 +56,34 @@ class BootstrapFailureException(Exception):
 class Bootstrappable(abc.ABC):
     """Represents a single bootstrappable resource.
     """
-   
+
     @property
     def region(self):
         return get_region()
 
+    @property
+    def account_id(self):
+        return str(get_account_id())
+
     @abc.abstractmethod
     def bootstrap(self):
         self._bootstrap_subresources()
+
+    @property
+    def bootstrap_retries(self):
+        return BOOTSTRAP_RETRIES
+
+    @property
+    def bootstrap_interval_sec(self):
+        return BOOTSTRAP_INTERVAL_SEC
+
+    @property
+    def cleanup_retries(self):
+        return CLEANUP_RETRIES
+
+    @property
+    def cleanup_interval_sec(self):
+        return CLEANUP_INTERVAL_SEC
 
     @abc.abstractmethod
     def cleanup(self):
@@ -68,7 +91,7 @@ class Bootstrappable(abc.ABC):
 
     @property
     def iter_bootstrappable(self) -> Iterator[Bootstrappable]:
-        """Iterates over the values of each field that extends the 
+        """Iterates over the values of each field that extends the
             `BootstrappableResource` type
 
         Yields:
@@ -85,16 +108,16 @@ class Bootstrappable(abc.ABC):
             yield attr
 
     def _bootstrap_subresources(self):
-        """Iterates through every `Bootstrappable` field and attempts to 
+        """Iterates through every `Bootstrappable` field and attempts to
             bootstrap it for a given number of retries.
 
-        If the bootstrapping fails, it will attempt to cleanup the previous 
+        If the bootstrapping fails, it will attempt to cleanup the previous
         attempt's subresources and try again. After reaching the maximum number
-        of retries, it will clean up any resources that were successfully 
+        of retries, it will clean up any resources that were successfully
         bootstrapped and then fail with a `BootstrapFailureException`.
 
         Raises:
-            BootstrapFailureException: If bootstrapping attempts reached the 
+            BootstrapFailureException: If bootstrapping attempts reached the
                 maximum number of retries.
         """
         bootstrapped = []
@@ -103,7 +126,7 @@ class Bootstrappable(abc.ABC):
 
             resource_name = type(resource).__name__
             logging.info(f"Attempting bootstrap {resource_name}")
-            for _ in range(BOOTSTRAP_RETRIES):
+            for _ in range(self.bootstrap_retries):
                 try:
                     # Bootstrap and add to list of successes
                     resource.bootstrap()
@@ -121,10 +144,11 @@ class Bootstrappable(abc.ABC):
                     logging.info(f"Cleaning up dependencies created by {resource_name}")
                     resource.cleanup()
                     logging.info(f"Retrying bootstrapping {resource_name}")
+                    time.sleep(self.bootstrap_interval_sec)
                     continue
             else:
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for bootstrapping {resource_name}")
-            
+                logging.error(f"🚫 Exceeded maximum retries ({self.bootstrap_retries}) for bootstrapping {resource_name}")
+
             if should_cleanup:
                 # Attempt to clean up successfully bootstrapped elements
                 self._cleanup_resources(bootstrapped)
@@ -138,14 +162,14 @@ class Bootstrappable(abc.ABC):
             them up for a given number of retries.
 
         Args:
-            resources (Iterable[Bootstrappable]): The resources to attempt to 
+            resources (Iterable[Bootstrappable]): The resources to attempt to
                 clean up.
         """
         # Iterate through list in reverse order, so that resources created last
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
             resource_name = type(resource).__name__
-            for _ in range(CLEANUP_RETRIES):
+            for _ in range(self.cleanup_retries):
                 try:
                     # Clean up and add to list of successes
                     logging.info(f"Attempting cleanup {resource_name}")
@@ -155,23 +179,24 @@ class Bootstrappable(abc.ABC):
                 except Exception as ex:
                     logging.error(f"Exception while cleaning up {resource_name}")
                     logging.exception(ex)
+                    time.sleep(self.cleanup_interval_sec)
                     continue
             else:
                 # Hit retry limit
-                logging.error(f"🚫 Exceeded maximum retries ({BOOTSTRAP_RETRIES}) for cleaning up {resource_name}")
+                logging.error(f"🚫 Exceeded maximum retries ({self.cleanup_retries}) for cleaning up {resource_name}")
                 logging.error(f"Possibly dangling resource ({resource_name}): {asdict(resource)}")
 
 @dataclass
 class Resources(Serializable, Bootstrappable):
     def bootstrap(self):
-        """Runs the `bootstrap` method for every `BootstrappableResource` 
+        """Runs the `bootstrap` method for every `BootstrappableResource`
             subclass in the bootstrap dictionary.
         """
         logging.info("🛠️ Bootstrapping resources ...")
-        self._bootstrap_subresources()                
+        self._bootstrap_subresources()
 
     def cleanup(self):
-        """Runs the `cleanup` method for every `BootstrappableResource` 
+        """Runs the `cleanup` method for every `BootstrappableResource`
             subclass in the bootstrap dictionary.
         """
         logging.info("🧹 Cleaning up resources ...")

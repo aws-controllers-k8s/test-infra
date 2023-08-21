@@ -75,8 +75,9 @@ if [[ $LATEST_GIT_TAG == $MISSING_GIT_TAG ]]; then
   echo "controller-release-tag.sh][INFO] No git tag exists for $CONTROLLER_NAME"
 fi
 
-# Find the image tag used in helm release artifacts
-HELM_IMAGE_TAG=$(yq eval '.image.tag' helm/values.yaml || echo "$MISSING_IMAGE_TAG")
+# Find the image tag used in helm release artifacts. Prefix the tag with a v so
+# it can be compared with the Git tags on the repository.
+HELM_IMAGE_TAG="v$(yq eval '.image.tag' helm/values.yaml || echo "$MISSING_IMAGE_TAG")"
 if [[ $HELM_IMAGE_TAG == $MISSING_IMAGE_TAG ]]; then
   echo "controller-release-tag.sh][ERROR] Unable to find image tag in helm/values.yaml for $CONTROLLER_NAME. Exiting"
   exit 1

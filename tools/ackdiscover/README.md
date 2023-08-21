@@ -1,7 +1,7 @@
 # ack-discover utility CLI tool
 
 The `ack-discover` tool collects information about AWS services and ACK
-controllers, including the latest release of a controller, the verison of the
+controllers, including the latest release of a controller, the version of the
 ACK runtime embedded in the controller, the version of aws-sdk-go used in the
 controller, the project stage and the maintenance phase of the controller.
 

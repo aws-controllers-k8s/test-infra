@@ -55,7 +55,7 @@ automatically refreshes the credentials before their expiry.
 
 To run the test container inside Prow, the `pytest-image-runner.sh` script
 mounts the local `~/.aws/credentials` file inside test container with an
-additionalS **"ack-test"** profile (which is used to run the e2e tests). The
+additional **"ack-test"** profile (which is used to run the e2e tests). The
 source profile for this "ack-test" profile is the IRSA identity of Prow job pod.
 See this [template](./creds-templates/prow-test-aws-creds-template.txt) for generated
 `~/.aws/credentials` file.

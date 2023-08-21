@@ -9,24 +9,7 @@ Before starting the onboarding process, the service team should have already
 created their service controller repository and have created a **_new_** AWS
 account solely for the purposes of hosting test resources.
 
-## 1. Configure [`ack-bot`][ack-bot] Access
-
-The [`ack-bot`][ack-bot] account exists for the Prow cluster to read and write 
-PR comments and to merge code into the `main` branch. The bot needs to be added
-individually to each Github repository, as it is not a member of the 
-`aws-controllers-k8s` organisation. 
-
-Contact the Amazon Open Source office to request the bot user be added to the 
-Github repository.
-
-[ack-bot]: https://github.com/ack-bot
-
-> **Note for Core Contributors:** Accept the invitation on behalf of the bot 
-account and change the bot to `Admin` role.  Admin role is required for successful
-prow job trigger functionality. Prow job trigger requires call to `ListCollaborators`
-API which is allowed only for a GitHub repository Admin.
-
-## 2. Create an ACK test role
+## 1. Create an ACK test role
 
 When running e2e or soak tests, the test infrastructure will assume a role and
 create AWS resources in your account. In this section we will create that role 
@@ -43,7 +26,7 @@ policy, although your team can adjust policies for stricter requirements in
 the future. Set the role name to `<service>-ack-test-role-DO-NOT-DELETE`.
 
 > **Note:** This role is also used for creating the EKS cluster, which is needed
-for soak test execution. Make sure this Role has atleast EKS admin privileges to
+for soak test execution. Make sure this Role has at least EKS admin privileges to
 create the EKS cluster for soak tests.
 
 The testing infrastructure will need to assume this role for the duration of the
@@ -91,7 +74,7 @@ aws ssm put-parameter --name "/ack/prow/service_team_role/$SERVICE" \
   --type String --value <provided-value> 
 ```
 
-## 3. Update `OWNERS_ALIASES` file
+## 2. Update `OWNERS_ALIASES` file
 
 Prow does not use Github teams as the source of truth for who has ownership 
 over any given repository. Instead it relies on the Kubernetes
@@ -120,7 +103,7 @@ contributor team who will subsequently approve and merge the request.
 being public members of the `aws-controllers-k8s` organisation. This should not
 affect their ability to approve or merge pull requests and can be ignored.
 
-## 4. Setup GitHub Action Workflow For Creating GitHub Release
+## 3. Setup GitHub Action Workflow For Creating GitHub Release
 
 ACK Prowjob automatically updates the ACK runtime dependency in the service controller
 repository whenever a new ACK runtime version is available and then creates a pull
@@ -139,7 +122,7 @@ controller repository.
 This is it. With 4 clicks, the automatic patch releases for your controller is
 setup now.
 
-## 5. Setup Soak Test Infrastructure
+## 4. Setup Soak Test Infrastructure
 
 Follow the guide [here](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/prow/README.md) to setup soak
 test infrastructure

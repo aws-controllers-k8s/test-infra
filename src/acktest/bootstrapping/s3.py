@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
-from ..aws.identity import get_region, get_account_id
 
 @dataclass
 class Bucket(Bootstrappable):
@@ -17,7 +16,10 @@ class Bucket(Bootstrappable):
 
     # Outputs
     name: str = field(init=False)
-    
+
+    def __post_init__(self):
+        self.name = resources.random_suffix_name(self.name_prefix, 63)
+
     @property
     def s3_client(self):
         return boto3.client("s3", region_name=self.region)
@@ -29,8 +31,6 @@ class Bucket(Bootstrappable):
     def bootstrap(self):
         """Creates an S3 bucket with an auto-generated name.
         """
-        self.name = resources.random_suffix_name(self.name_prefix, 63)
-
         if self.region == "us-east-1":
             self.s3_client.create_bucket(Bucket=self.name)
         else:
@@ -49,8 +49,8 @@ class Bucket(Bootstrappable):
         if self.policy != "":
             self.policy_vars.update({
                 "$NAME": self.name,
-                "$ACCOUNT_ID": str(get_account_id()),
-                "$REGION": get_region(),
+                "$ACCOUNT_ID": self.account_id,
+                "$REGION": self.region,
             })
 
             for key, value in self.policy_vars.items():

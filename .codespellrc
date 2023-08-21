@@ -1,0 +1,5 @@
+[codespell]
+skip = .codespellrc,./.git,*.svg,package-lock.json
+check-filenames =
+check-hidden =
+quiet = 2

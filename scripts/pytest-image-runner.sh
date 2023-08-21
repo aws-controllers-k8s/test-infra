@@ -19,6 +19,7 @@ SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVIC
 
 DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_SOURCE_PATH}/test/e2e"
 SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_E2E_TEST_PATH:-$DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH}"
+LOCAL_ACKTEST_LIBRARY="${LOCAL_ACKTEST_LIBRARY:-"false"}"
 
 # The location of new credential file which will be copied in test container
 # Keep this file in same location as '~/.aws/credentials' file
@@ -84,8 +85,10 @@ build_pytest_image() {
         # Build using the e2e test Dockerfile
         local test_docker_sha="$(docker build --file "${e2e_test_dockerfile}" \
         --tag $__image_tag \
+        --progress=plain \
         --build-arg AWS_SERVICE="${AWS_SERVICE}" \
-        --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" . )"
+        --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" \
+        --build-arg LOCAL_ACKTEST_LIBRARY=${LOCAL_ACKTEST_LIBRARY} . )"
         debug_msg "Built PyTest image $__image_tag ($test_docker_sha)"
     popd 1>/dev/null
 }

@@ -112,10 +112,13 @@ def collect_all(writer, gh, ep_client, services):
             latest_release.aws_sdk_go_version = aws_sdk_version
             
             try:
-                gh_release = repo.get_release(image_repo_latest_version)
+                gh_repo_release_version = image_repo_latest_version
+                if not gh_repo_release_version.startswith("v"):
+                    gh_repo_release_version = "v" + gh_repo_release_version
+                gh_release = repo.get_release(gh_repo_release_version)
                 latest_release.release_url = gh_release.html_url
             except github.UnknownObjectException:
-                writer.debug(f"[controller.collect_all] no github release associated with controller version {image_repo_latest_version}")
+                writer.debug(f"[controller.collect_all] no github release associated with controller version {gh_repo_release_version}")
 
         chart_repo_url = f"{ecrpublic.BASE_ECR_URL}/{service_package_name}-chart"
         chart_repo = ecrpublic.get_repository(writer, ep_client, chart_repo_url)
@@ -124,7 +127,7 @@ def collect_all(writer, gh, ep_client, services):
                 ep_client, chart_repo,
             )
             latest_release.chart_version = chart_repo_latest_version
-            if ecrpublic.chart_has_stable_tag(ep_client, chart_repo):
+            if ecrpublic.chart_has_nonzero_major_version(ep_client, chart_repo):
                 maintenance_phase = maintenance_phases.GENERAL_AVAILABILITY
 
         controller = Controller(

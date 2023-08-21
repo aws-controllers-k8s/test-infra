@@ -17,15 +17,15 @@
   "devDependencies": {
     "@types/jest": "^26.0.10",
     "@types/node": "10.17.27",
-    "aws-cdk-lib": "^2.60.0",
+    "aws-cdk-lib": "^2.80.0",
     "jest": "^26.4.2",
     "ts-jest": "^26.2.0",
     "ts-node": "^9.0.0",
     "typescript": "~3.9.7"
   },
   "dependencies": {
-    "@aws-quickstart/eks-blueprints": "^1.5.4",
-    "cdk8s": "^2.0.0",
+    "@aws-quickstart/eks-blueprints": "^1.6.1",
+    "cdk8s": "^2.7.64",
     "cdk8s-plus-24": "^2.0.0",
     "set-value": ">=4.0.1",
     "source-map-support": "^0.5.16"

@@ -3,8 +3,8 @@
 The ACK core team provides a soak testing framework and template cluster where
 service teams can execute long running soak tests to test the performance and
 stability of the service controllers. Running soak tests is one of the
-requirements for cutting the stable release for any service controller. Find
-more details on the release process
+requirements for cutting a new major version release for any service controller.
+Find more details on the release process
 [here](https://github.com/aws-controllers-k8s/community/blob/main/docs/content/docs/community/releases.md).
 
 Under the hood, the soak test introduces load by repeatedly running the
@@ -15,7 +15,7 @@ service-controller Github repository. i.e.
 Service teams are expected to deploy and maintain their own soak testing
 infrastructure in their own accounts, based off the templates and configuration
 provided in this repository. Soak tests will be started by Prow jobs before
-cutting a new `stable` release, but can also be manually triggered. Use the
+cutting a new major version release, but can also be manually triggered. Use the
 following guide to configure your soak testing infrastructure.
 
 ## Bootstrapping your soak test cluster

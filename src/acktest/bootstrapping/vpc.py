@@ -209,6 +209,14 @@ class VPC(Bootstrappable):
             vpc.delete()
             raise ex
 
+    @property
+    def cleanup_retries(self):
+        return 30
+
+    @property
+    def cleanup_interval_sec(self):
+        return 60 # one minute
+
     def cleanup(self):
         """Deletes a VPC.
         """
