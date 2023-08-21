@@ -85,8 +85,7 @@ build_pytest_image() {
         local test_docker_sha="$(docker build --file "${e2e_test_dockerfile}" \
         --tag $__image_tag \
         --build-arg AWS_SERVICE="${AWS_SERVICE}" \
-        --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" \
-        --quiet . )"
+        --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" . )"
         debug_msg "Built PyTest image $__image_tag ($test_docker_sha)"
     popd 1>/dev/null
 }
