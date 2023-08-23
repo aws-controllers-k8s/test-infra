@@ -88,8 +88,7 @@ build_pytest_image() {
         --progress=plain \
         --build-arg AWS_SERVICE="${AWS_SERVICE}" \
         --build-arg WEB_IDENTITY_TOKEN_DEST_PATH="${TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE}" \
-        --build-arg LOCAL_ACKTEST_LIBRARY=${LOCAL_ACKTEST_LIBRARY} \
-        --quiet . )"
+        --build-arg LOCAL_ACKTEST_LIBRARY=${LOCAL_ACKTEST_LIBRARY} . )"
         debug_msg "Built PyTest image $__image_tag ($test_docker_sha)"
     popd 1>/dev/null
 }
