@@ -4,7 +4,7 @@ FROM quay.io/containers/buildah:v1.20.1
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
 
-ARG GO_VERSION=1.19
+ARG GO_VERSION=1.21
 ENV GO_VERSION=${GO_VERSION}
 
 ENV GOPATH=/home/prow/go \
