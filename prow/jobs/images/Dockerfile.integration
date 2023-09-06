@@ -2,7 +2,7 @@
 ARG TEST_BASE_TAG
 FROM $TEST_BASE_TAG as base
 
-ARG DOCKER_VERSION=19.03.15
+ARG DOCKER_VERSION=24.0.5
 ENV DOCKER_VERSION=${DOCKER_VERSION}
 
 RUN echo "Installing controller-gen v0.9.2..." \
@@ -28,12 +28,13 @@ RUN echo "Installing Helm ... " \
     && rm "${HELM_TARBALL}"
 
 RUN echo "Installing Docker ..." \
-    && curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add - \
-    && add-apt-repository \
-        "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") \
-        $(lsb_release -cs) stable" \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+    "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce \
+    && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i 's/cgroupfs_mount$/#cgroupfs_mount\n/' /etc/init.d/docker
 
