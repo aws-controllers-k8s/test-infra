@@ -77,6 +77,11 @@ default:
         - name: FieldExport
       addedBy: label
     - color: 0052cc
+      description: Issues or PRs related to Helm charts
+      name: area/helm
+      target: both
+      addedBy: label
+    - color: 0052cc
       description: Issues or PRs as related to our testing infrastructure, prow/flux configuration etc...
       name: area/infra
       target: both
@@ -103,6 +108,11 @@ default:
         - name: multi-versioning
       addedBy: label
     - color: 0052cc
+      description: Issues or PRs related to resource references
+      name: area/resource-references
+      target: both
+      addedBy: label
+    - color: 0052cc
       description: Issues or PRs as related to controller runtime, common reconciliation logic, etc
       name: area/runtime
       target: both
@@ -112,6 +122,11 @@ default:
     - color: 0052cc
       description: Issues or PRs related to security topics
       name: area/security
+      target: both
+      addedBy: label
+    - color: 0052cc
+      description: Issues or PRs related to testing
+      name: area/testing
       target: both
       addedBy: label
 
@@ -322,6 +337,11 @@ default:
       target: prs
       prowPlugin: require-matching-label
       addedBy: prow
+    - color: e11d21
+      description: Indicates an issue needs some investigation.
+      name: needs-investigation
+      target: issues
+      addedBy: anyone
     - color: b60205
       # This is to prevent spam/abuse of our CI system, and can be circumvented by becoming an 
       # org member. Org members can remove this label with the `/ok-to-test` command.
