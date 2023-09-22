@@ -3,7 +3,7 @@ images:
   docs: prow-docs-0.0.9
 
   unit-test: prow-unit-0.0.7
-  integration-test: prow-integration-0.0.22
+  integration-test: prow-integration-0.0.23
   soak-test: prow-soak-0.0.6
 
   auto-generate-controllers: prow-auto-generate-controllers-0.0.13
