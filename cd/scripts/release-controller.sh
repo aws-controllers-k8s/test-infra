@@ -128,7 +128,7 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
-  --build-arg go_arch="linux/amd64" \
+  --build-arg target_arch="linux/amd64" \
   --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
   exit 2
@@ -143,7 +143,7 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
-  --build-arg go_arch="linux/arm64" \
+  --build-arg target_arch="linux/arm64" \
   --arch "arm64" \
   --variant v8 \
   "$DOCKER_BUILD_CONTEXT"; then
