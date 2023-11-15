@@ -34,6 +34,10 @@
         env:
         - name: SERVICE
           value: {{ service }}
+        # If not provided, the default will be picked from the version directive in
+        # the 'go.mod' file of the controller.
+        - name: GOLANG_VERSION
+          value: "1.21.5"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-release-test
@@ -70,6 +74,10 @@
         env:
         - name: SERVICE
           value: {{ service }}
+        # If not provided, the default will be picked from the version directive in
+        # the 'go.mod' file of the controller.
+        - name: GOLANG_VERSION
+          value: "1.21.5"
         command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-recommended-policy-test
