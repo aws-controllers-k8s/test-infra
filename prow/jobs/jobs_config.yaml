@@ -25,6 +25,7 @@ aws_services:
 - kafka
 - kinesis
 - kms
+- keyspaces
 - lambda
 - memorydb
 - mq
