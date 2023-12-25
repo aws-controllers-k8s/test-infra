@@ -30,7 +30,6 @@ Environment variables:
 # find out the service name and semver tag from the prow environment variables.
 AWS_SERVICE=$(echo "$REPO_NAME" | rev | cut -d"-" -f2- | rev | tr '[:upper:]' '[:lower:]')
 VERSION=$PULL_BASE_REF
-GOARCH=${GOARCH:-"$(go env GOARCH)"}
 
 # Important Directory references based on prowjob configuration.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -68,7 +67,7 @@ popd 1>/dev/null
 
 echo "VERSION is $VERSION"
 
-# Use a separate variable to hold the VERSION string without the v prefix. 
+# Use a separate variable to hold the VERSION string without the v prefix.
 # Helm charts should not be published with a v prefix, and should reference
 # an image without a v prefix.
 CHART_VERSION=${VERSION//v/}
@@ -122,21 +121,42 @@ popd 1>/dev/null
 # build controller image
 if ! buildah bud \
   --quiet="$QUIET" \
-  -t "$AWS_SERVICE_DOCKER_IMG" \
+  -t "$AWS_SERVICE_DOCKER_IMG"-amd64 \
   -f "$CONTROLLER_IMAGE_DOCKERFILE_PATH" \
   --build-arg service_alias="$AWS_SERVICE" \
   --build-arg service_controller_git_version="$CHART_VERSION" \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
-  --build-arg go_arch="$GOARCH" \
+  --build-arg target_arch="linux/amd64" \
+  --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
   exit 2
 fi
 
+if ! buildah bud \
+  --quiet="$QUIET" \
+  -t "$AWS_SERVICE_DOCKER_IMG"-arm64 \
+  -f "$CONTROLLER_IMAGE_DOCKERFILE_PATH" \
+  --build-arg service_alias="$AWS_SERVICE" \
+  --build-arg service_controller_git_version="$CHART_VERSION" \
+  --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
+  --build-arg build_date="$BUILD_DATE" \
+  --build-arg golang_version="$GOLANG_VERSION" \
+  --build-arg target_arch="linux/arm64" \
+  --arch "arm64" \
+  --variant v8 \
+  "$DOCKER_BUILD_CONTEXT"; then
+  exit 2
+fi
+
+buildah manifest create "$AWS_SERVICE_DOCKER_IMG"
+buildah manifest add --os=linux --arch=amd64 "$AWS_SERVICE_DOCKER_IMG" "$AWS_SERVICE_DOCKER_IMG"-amd64
+buildah manifest add --os=linux --arch=arm64 --variant v8 "$AWS_SERVICE_DOCKER_IMG" "$AWS_SERVICE_DOCKER_IMG"-arm64
+
 echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG}"
 
-if ! buildah push "${AWS_SERVICE_DOCKER_IMG}"; then
+if ! buildah manifest push --all "${AWS_SERVICE_DOCKER_IMG}" docker://"${AWS_SERVICE_DOCKER_IMG}"; then
   exit 2
 fi
 
