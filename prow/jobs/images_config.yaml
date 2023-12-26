@@ -9,7 +9,7 @@ images:
   auto-generate-controllers: prow-auto-generate-controllers-0.0.11
   auto-update-controllers: prow-auto-update-controllers-0.0.4
   controller-release-tag: prow-controller-release-tag-0.0.3
-  deploy: prow-deploy-0.0.13
+  deploy: prow-deploy-0.0.14
 
   olm-test: prow-olm-test-8106962
   olm-bundle-pr: prow-olm-bundle-pr-8106962
