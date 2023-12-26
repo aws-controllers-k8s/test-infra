@@ -11,23 +11,28 @@
     "cdk": "cdk"
   },
   "peerDependencies": {
-    "aws-cdk-lib": "2.60.0",
+    "aws-cdk-lib": "2.115.0",
     "constructs": "^10.0.0"
   },
   "devDependencies": {
     "@types/jest": "^26.0.10",
     "@types/node": "10.17.27",
-    "aws-cdk-lib": "^2.80.0",
+    "aws-cdk-lib": "2.115.0",
     "jest": "^26.4.2",
     "ts-jest": "^26.2.0",
-    "ts-node": "^9.0.0",
-    "typescript": "~3.9.7"
+    "ts-node": "^10.9.2",
+    "typescript": "^4.0.0"
   },
   "dependencies": {
-    "@aws-quickstart/eks-blueprints": "^1.6.1",
-    "cdk8s": "^2.7.64",
-    "cdk8s-plus-24": "^2.0.0",
+    "@aws-quickstart/eks-blueprints": "^1.13.1",
+    "bufferutil": "^4.0.1",
+    "canvas": "^2.5.0",
+    "cdk8s": "^2.68.22",
+    "cdk8s-plus-24": "^2.12.1",
+    "constructs": "^10.0.0",
+    "encoding": "^0.1.13",
     "set-value": ">=4.0.1",
-    "source-map-support": "^0.5.16"
+    "source-map-support": "^0.5.16",
+    "utf-8-validate": "^5.0.2"
   }
 }
