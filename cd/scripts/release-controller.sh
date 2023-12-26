@@ -118,7 +118,7 @@ pushd "$CODE_GEN_DIR" 1>/dev/null
   GOLANG_VERSION=${GOLANG_VERSION:-"$(go list -f \{\{.GoVersion\}\} -m)"}
 popd 1>/dev/null
 
-# build controller image
+# Build amd64 controller image
 if ! buildah bud \
   --quiet="$QUIET" \
   -t "$AWS_SERVICE_DOCKER_IMG"-amd64 \
@@ -128,12 +128,14 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
-  --build-arg target_arch="linux/amd64" \
+  --build-arg target_arch="amd64" \
   --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
   exit 2
 fi
 
+# Build amd64 controller image (default variant is v8 (https://go.dev/wiki/GoArm))
+# NOTE(a-hilaly): We're using amd64 as the base image for arm64 builds
 if ! buildah bud \
   --quiet="$QUIET" \
   -t "$AWS_SERVICE_DOCKER_IMG"-arm64 \
@@ -143,9 +145,8 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
-  --build-arg target_arch="linux/arm64" \
-  --arch "arm64" \
-  --variant v8 \
+  --build-arg target_arch="arm64" \
+  --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
   exit 2
 fi
