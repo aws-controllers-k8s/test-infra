@@ -1,5 +1,5 @@
 # Dockerfile for Prow CD postsubmit jobs
-FROM quay.io/containers/buildah:v1.20.1
+FROM quay.io/containers/buildah:v1.33.2
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
