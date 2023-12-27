@@ -27,7 +27,7 @@ echo "build-docs.sh] 📝 Installing requirements file... "
 pip install -r requirements.txt
 
 echo -n "build-docs.sh] 📄 Generating services page... "
-python3 ./scripts/gen_services.py
+python3 ./scripts/gen_services.py --debug
 echo "Done!"
 
 echo -n "build-docs.sh] 📄 Generating reference files... "

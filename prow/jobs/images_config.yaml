@@ -1,6 +1,6 @@
 image_repo: public.ecr.aws/m5q3e4b2/prow
 images:
-  docs: prow-docs-0.0.7
+  docs: prow-docs-0.0.8
 
   unit-test: prow-unit-0.0.5
   integration-test: prow-integration-0.0.17
