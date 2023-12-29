@@ -65,20 +65,15 @@ def get(writer, repo, model_name):
     writer.debug("[get_service] fetching service information for:", model_name)
     api_model_path = os.path.join(model_path, api_version, "api-2.json")
     with open(api_model_path, "r") as model_file:
-        # The first three lines of the file are always the following:
-        # {
-        #   "version":"2.0",
-        #   "metadata":{
-        next(model_file)
-        next(model_file)
-        next(model_file)
+        # Assuming that the information we're looking for is very likely going to
+        # be in the first 100 lines of the file...
+        lines_number = 100
+        head = [next(model_file) for _ in range(lines_number)]
 
-        # read in the metadata pieces...
-        line = next(model_file)
-        while True:
+        for line in head:
             parts = line.strip().split(":", 1)
             if len(parts) != 2:
-                break
+                continue
             key, val = parts
             key = key.replace("\"", "").strip()
             # Strip the trailing comma...
@@ -90,7 +85,8 @@ def get(writer, repo, model_name):
                 result.full_name = val
             elif key == "serviceAbbreviation":
                 result.abbrev_name = val
-            line = next(model_file)
+            if result.full_name != None and result.abbrev_name != None:
+                break
 
         pkg_name = package_name(result.abbrev_name, result.full_name)
         result.package_name = pkg_name
