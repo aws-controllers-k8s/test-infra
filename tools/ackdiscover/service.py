@@ -13,7 +13,7 @@
 
 import dataclasses
 import os
-
+import ijson
 
 @dataclasses.dataclass
 class Service:
@@ -35,6 +35,9 @@ def collect_all(writer, repo):
             continue
 
         service = get(writer, repo, fname)
+        if service is None:
+            writer.debug("[collect_services] skipping service:", fname)
+            continue
         result[service.package_name] = service
 
     return result
@@ -58,38 +61,22 @@ def get(writer, repo, model_name):
         api_version=api_version,
     )
 
-    # The api-2.json file can be very large, and we only want to check the
-    # metadata at the top of the file, so here we're going to just read a
-    # portion of the file and manually search for the metadata fields that are
-    # of interest to us.
+    # The api-2.json file can be fairly large (see ec2 api-2.JSON), but it is what it
+    # is. We're going to load it into memory and parse it as JSON.
     writer.debug("[get_service] fetching service information for:", model_name)
     api_model_path = os.path.join(model_path, api_version, "api-2.json")
     with open(api_model_path, "r") as model_file:
-        # Assuming that the information we're looking for is very likely going to
-        # be in the first 100 lines of the file...
-        lines_number = 100
-        head = [next(model_file) for _ in range(lines_number)]
+        metadata = ijson.items(model_file, "metadata")
+        if metadata is None:
+            return None
 
-        for line in head:
-            parts = line.strip().split(":", 1)
-            if len(parts) != 2:
-                continue
-            key, val = parts
-            key = key.replace("\"", "").strip()
-            # Strip the trailing comma...
-            if val.endswith(","):
-                val = val[:len(val)-1]
-            val = val.replace("\"", "").strip()
-
-            if key == "serviceFullName":
-                result.full_name = val
-            elif key == "serviceAbbreviation":
-                result.abbrev_name = val
-            if result.full_name != None and result.abbrev_name != None:
-                break
+        for obj in metadata:
+            result.full_name = obj.get("serviceFullName")
+            result.abbrev_name = obj.get("serviceAbbreviation")
 
         pkg_name = package_name(result.abbrev_name, result.full_name)
         result.package_name = pkg_name
+
     return result
 
 
