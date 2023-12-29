@@ -18,7 +18,7 @@ COMMUNITY_REPO="${COMMUNITY_REPO:-"aws-controllers-k8s/community"}"
 DEFAULT_COMMUNITY_PATH="${GITHUB_SRC_GOPATH}${COMMUNITY_REPO}"
 COMMUNITY_PATH="${COMMUNITY_PATH:-$DEFAULT_COMMUNITY_PATH}"
 DOCS_PATH="${COMMUNITY_PATH}/docs"
-DEBUG="${DEBUG:-"True"}"
+GEN_SERVICES_FLAGS="${GEN_SERVICES_FLAGS:-"--debug"}"
 
 # Generate new reference sources
 
@@ -28,7 +28,7 @@ echo "build-docs.sh] 📝 Installing requirements file... "
 pip install -r requirements.txt
 
 echo -n "build-docs.sh] 📄 Generating services page... "
-python3 ./scripts/gen_services.py --debug=${DEBUG}
+python3 ./scripts/gen_services.py ${GEN_SERVICES_FLAGS}
 echo "Done!"
 
 echo -n "build-docs.sh] 📄 Generating reference files... "
