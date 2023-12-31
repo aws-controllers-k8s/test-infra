@@ -153,7 +153,7 @@ fi
 
 buildah manifest create "$AWS_SERVICE_DOCKER_IMG"
 buildah manifest add --os=linux --arch=amd64 "$AWS_SERVICE_DOCKER_IMG" "$AWS_SERVICE_DOCKER_IMG"-amd64
-buildah manifest add --os=linux --arch=arm64 --variant v8 "$AWS_SERVICE_DOCKER_IMG" "$AWS_SERVICE_DOCKER_IMG"-arm64
+buildah manifest add --os=linux --arch=arm64 "$AWS_SERVICE_DOCKER_IMG" "$AWS_SERVICE_DOCKER_IMG"-arm64
 
 echo "Pushing '$AWS_SERVICE' controller image with tag: ${AWS_SERVICE_DOCKER_IMG}"
 
