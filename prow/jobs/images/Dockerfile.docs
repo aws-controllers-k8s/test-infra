@@ -1,4 +1,4 @@
-FROM alpine:3.13.6
+FROM alpine:3.17.2
 
 WORKDIR /docs
 COPY build-docs.sh /docs/build-docs.sh

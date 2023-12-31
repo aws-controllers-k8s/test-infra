@@ -66,3 +66,7 @@ RUN echo "Installing controller-gen v0.9.2 ..." \
     && go mod init tmp \
     && go get -d "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.2" \
     && go build -o "/usr/local/bin/controller-gen" sigs.k8s.io/controller-tools/cmd/controller-gen
+
+RUN echo "Installing yq ... " \
+    && curl -L -s https://github.com/mikefarah/yq/releases/download/v4.31.2/yq_linux_amd64 --output /usr/bin/yq \
+    && chmod +x /usr/bin/yq
