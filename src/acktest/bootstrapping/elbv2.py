@@ -16,7 +16,8 @@ import boto3
 from dataclasses import dataclass, field
 
 from .. import resources
-from . import Bootstrappable, VPC
+from . import Bootstrappable
+from .vpc import VPC
 
 
 @dataclass
