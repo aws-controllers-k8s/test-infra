@@ -17,8 +17,7 @@ import boto3
 from dataclasses import dataclass, field
 
 from .. import resources
-from . import Bootstrappable
-from e2e.bootstrap_resources import get_bootstrap_resources
+from . import Bootstrappable, VPC
 
 
 @dataclass
@@ -48,7 +47,8 @@ class NetworkLoadBalancer(Bootstrappable):
     super().bootstrap()
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
-    test_vpc = get_bootstrap_resources().SharedTestVPC
+    test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
+    test_vpc.bootstrap()
 
     network_load_balancer = self.elbv2_client.create_load_balancer(
       Name=self.name,
