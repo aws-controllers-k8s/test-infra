@@ -28,10 +28,12 @@ class NetworkLoadBalancer(Bootstrappable):
   type: str = "network"
   scheme: str = "internet-facing"
 
-  # Subresources
-
   # Outputs
   arn: str = field(init=False)
+
+  def __post_init__(self):
+    self.test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
+    self.test_vpc.bootstrap()
 
   @property
   def elbv2_client(self):
@@ -47,15 +49,14 @@ class NetworkLoadBalancer(Bootstrappable):
     super().bootstrap()
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
-    test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
-    test_vpc.bootstrap()
+    
 
     network_load_balancer = self.elbv2_client.create_load_balancer(
       Name=self.name,
       Scheme=self.scheme,
       Type=self.type,
       IpAddressType=self.ip_address_type,
-      Subnets=test_vpc.public_subnets.subnet_ids
+      Subnets=self.test_vpc.public_subnets.subnet_ids
     )
 
     self.arn = network_load_balancer.get("LoadBalancers")[0].get("LoadBalancerArn")
