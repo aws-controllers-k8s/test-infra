@@ -28,12 +28,14 @@ class NetworkLoadBalancer(Bootstrappable):
   type: str = "network"
   scheme: str = "internet-facing"
 
+  # Subresources
+  test_vpc: VPC = field(init=False, default=None)
+  
   # Outputs
   arn: str = field(init=False)
 
   def __post_init__(self):
     self.test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
-    self.test_vpc.bootstrap()
 
   @property
   def elbv2_client(self):
