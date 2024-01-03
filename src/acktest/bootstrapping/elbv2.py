@@ -10,15 +10,13 @@
 # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
-import time
 
 import boto3
 
 from dataclasses import dataclass, field
 
 from .. import resources
-from . import Bootstrappable
-from e2e.bootstrap_resources import get_bootstrap_resources
+from . import Bootstrappable, VPC
 
 
 @dataclass
@@ -30,9 +28,13 @@ class NetworkLoadBalancer(Bootstrappable):
   scheme: str = "internet-facing"
 
   # Subresources
-
+  test_vpc: VPC = field(init=False, default=None)
+  
   # Outputs
   arn: str = field(init=False)
+
+  def __post_init__(self):
+    self.test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
 
   @property
   def elbv2_client(self):
@@ -48,14 +50,14 @@ class NetworkLoadBalancer(Bootstrappable):
     super().bootstrap()
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
-    test_vpc = get_bootstrap_resources().SharedTestVPC
+    
 
     network_load_balancer = self.elbv2_client.create_load_balancer(
       Name=self.name,
       Scheme=self.scheme,
       Type=self.type,
       IpAddressType=self.ip_address_type,
-      Subnets=test_vpc.public_subnets.subnet_ids
+      Subnets=self.test_vpc.public_subnets.subnet_ids
     )
 
     self.arn = network_load_balancer.get("LoadBalancers")[0].get("LoadBalancerArn")
