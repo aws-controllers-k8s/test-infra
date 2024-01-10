@@ -15,7 +15,8 @@
       image: gcr.io/k8s-prow/label_sync:v20221205-a1b0b85d88
       resources:
         limits:
-          cpu: 2
+          cpu: 1
+          memory: "500Mi"
         requests:
           cpu: 1
           memory: "500Mi"
