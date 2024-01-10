@@ -19,8 +19,9 @@
           resources:
             limits:
               cpu: 2
+              memory: "500Mi"
             requests:
-              cpu: 1
+              cpu: 2
               memory: "500Mi"
           command: ["/bin/bash", "-c", "./cd/auto-update/project-static-files.sh"]
     branches: #supports tags too.

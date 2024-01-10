@@ -20,8 +20,9 @@
           resources:
             limits:
               cpu: 2
+              memory: "500Mi"
             requests:
-              cpu: 1
+              cpu: 2
               memory: "500Mi"
           securityContext:
             privileged: true
@@ -50,8 +51,8 @@
             limits:
               cpu: 2
             requests:
-              cpu: 1
-              memory: "500Mi"
+              cpu: 2
+              memory: "1000Mi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -85,6 +86,7 @@
           resources:
             limits:
               cpu: 1
+              memory: "500Mi"
             requests:
               cpu: 1
               memory: "500Mi"
@@ -110,6 +112,7 @@
           resources:
             limits:
               cpu: 1
+              memory: "500Mi"
             requests:
               cpu: 1
               memory: "500Mi"
@@ -143,6 +146,7 @@
           resources:
             limits:
               cpu: 1
+              memory: "500Mi"
             requests:
               cpu: 1
               memory: "500Mi"
@@ -182,8 +186,9 @@
           resources:
             limits:
               cpu: 2
+              memory: "500Mi"
             requests:
-              cpu: 1
+              cpu: 2
               memory: "500Mi"
           command: ["/bin/bash", "-c", "cd cd/ack-chart && ./update-chart.sh"]
     branches:

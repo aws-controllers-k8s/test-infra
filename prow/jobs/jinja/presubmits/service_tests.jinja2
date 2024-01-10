@@ -28,9 +28,10 @@
         resources:
           limits:
             cpu: 8
+            memory: "3000Mi"
           requests:
             cpu: 8
-            memory: "500Mi"
+            memory: "3000Mi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -68,9 +69,10 @@
         resources:
           limits:
             cpu: 8
+            memory: "3000Mi"
           requests:
-            cpu: 1
-            memory: "500Mi"
+            cpu: 8
+            memory: "3000Mi"
         env:
         - name: SERVICE
           value: {{ service }}
@@ -99,10 +101,11 @@
       - image: {{ image_context.images["integration-test"] }}
         resources:
           limits:
-            cpu: 2
+            cpu: 250m
+            memory: "256Mi"
           requests:
-            cpu: 1
-            memory: "500Mi"
+            cpu: 250m
+            memory: "256Mi"
         securityContext:
           runAsUser: 0
         env:
@@ -122,9 +125,10 @@
       - image: {{ image_context.images["unit-test"] }}
         resources:
           limits:
-            cpu: 4
+            cpu: 2
+            memory: "500Mi"
           requests:
-            cpu: 1
+            cpu: 2
             memory: "500Mi"
         env:
         - name: SERVICE
@@ -149,6 +153,7 @@
         resources:
           limits:
             cpu: 250m
+            memory: "256Mi"
           requests:
             cpu: 250m
             memory: "256Mi"

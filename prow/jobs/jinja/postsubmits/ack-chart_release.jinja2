@@ -14,9 +14,10 @@
         - image: {{ image_context.images["deploy"] }}
           resources:
             limits:
-              cpu: 1
+              cpu: 2
+              memory: "500Mi"
             requests:
-              cpu: 1
+              cpu: 2
               memory: "500Mi"
           command: ["/bin/bash", "-c", "cd cd/ack-chart && ./upload-chart.sh"]
     branches:

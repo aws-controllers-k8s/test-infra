@@ -12,8 +12,9 @@
         resources:
           limits:
             cpu: 2
+            memory: "500Mi"
           requests:
-            cpu: 1
+            cpu: 2
             memory: "500Mi"
         command: ["make", "test"]
 
@@ -43,8 +44,9 @@
         resources:
           limits:
             cpu: 2
+            memory: "500Mi"
           requests:
-            cpu: 1
+            cpu: 2
             memory: "500Mi"
         env:
         - name: SERVICE
@@ -85,7 +87,7 @@
           limits:
             cpu: 4
           requests:
-            cpu: 1
+            cpu: 4
             memory: "500Mi"
         securityContext:
           privileged: true
