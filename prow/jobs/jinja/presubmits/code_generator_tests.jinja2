@@ -12,10 +12,10 @@
         resources:
           limits:
             cpu: 2
-            memory: "500Mi"
+            memory: "1024Mi"
           requests:
             cpu: 2
-            memory: "500Mi"
+            memory: "1024Mi"
         command: ["make", "test"]
 
   - name: s3-olm-test
@@ -44,10 +44,10 @@
         resources:
           limits:
             cpu: 2
-            memory: "500Mi"
+            memory: "1024Mi"
           requests:
             cpu: 2
-            memory: "500Mi"
+            memory: "1024Mi"
         env:
         - name: SERVICE
           value: "s3"
@@ -88,7 +88,7 @@
             cpu: 4
           requests:
             cpu: 4
-            memory: "500Mi"
+            memory: "2048Mi"
         securityContext:
           privileged: true
         env:

@@ -20,10 +20,10 @@
           resources:
             limits:
               cpu: 2
-              memory: "500Mi"
+              memory: "1024Mi"
             requests:
               cpu: 2
-              memory: "500Mi"
+              memory: "1024Mi"
           securityContext:
             privileged: true
           env:
@@ -52,7 +52,7 @@
               cpu: 2
             requests:
               cpu: 2
-              memory: "1000Mi"
+              memory: "1024Mi"
           securityContext:
             privileged: true
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
@@ -146,10 +146,10 @@
           resources:
             limits:
               cpu: 1
-              memory: "500Mi"
+              memory: "1024Mi"
             requests:
               cpu: 1
-              memory: "500Mi"
+              memory: "1024Mi"
           command: ["/bin/bash", "-c", "./cd/olm/olm-bundle-pr.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
@@ -186,10 +186,10 @@
           resources:
             limits:
               cpu: 2
-              memory: "500Mi"
+              memory: "1024Mi"
             requests:
               cpu: 2
-              memory: "500Mi"
+              memory: "1024Mi"
           command: ["/bin/bash", "-c", "cd cd/ack-chart && ./update-chart.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
