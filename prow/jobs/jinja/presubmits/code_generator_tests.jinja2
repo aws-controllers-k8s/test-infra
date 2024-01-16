@@ -85,10 +85,10 @@
       - image: {{ image_context.images["integration-test"] }}
         resources:
           limits:
-            cpu: 4
+            cpu: 8
           requests:
-            cpu: 4
-            memory: "2048Mi"
+            cpu: 8
+            memory: "3072Mi"
         securityContext:
           privileged: true
         env:
