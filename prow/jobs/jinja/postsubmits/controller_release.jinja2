@@ -19,11 +19,11 @@
         - image: {{ image_context.images["deploy"] }}
           resources:
             limits:
-              cpu: 2
-              memory: "1024Mi"
+              cpu: 8
+              memory: "5120Mi"
             requests:
               cpu: 2
-              memory: "1024Mi"
+              memory: "5120Mi"
           securityContext:
             privileged: true
           env:
