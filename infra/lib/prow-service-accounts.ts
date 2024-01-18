@@ -12,7 +12,7 @@ export type ProwServiceAccountsProps = {
   stackPartition: string;
   region: string;
 
-  prowCluster: eks.Cluster;
+  prowCluster: eks.ICluster;
   namespaceManifests: eks.KubernetesManifest[];
 
   tideStatusBucket: s3.IBucket;
