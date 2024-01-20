@@ -21,10 +21,10 @@
           resources:
             limits:
               cpu: 1
-              memory: "500Mi"
+              memory: "2048Mi"
             requests:
               cpu: 1
-              memory: "500Mi"
+              memory: "2048Mi"
           command: ["/docs/build-docs.sh"]
     run_if_changed: "docs/.*"
     branches:
