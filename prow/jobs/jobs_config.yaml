@@ -14,6 +14,7 @@ aws_services:
 - cloudwatch
 - cloudwatchevents
 - cloudwatchlogs
+- documentdb
 - dynamodb
 - ec2
 - ecr
