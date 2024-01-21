@@ -1,6 +1,6 @@
 {
     "description": "Container images for the ${aws_service}-controller for AWS Controllers for Kubernetes (ACK)",
-    "architectures": ["x86-64"],
+    "architectures": ["x86-64", "ARM 64"],
     "operatingSystems": ["Linux"],
     "aboutText": "# ${aws_service}-controller for ACK\n\n[AWS Controllers for Kubernetes][ack] (ACK) is a collection of custom Kubernetes controllers allowing Kubernetes users to manage AWS resources.\n\n[ack]: https://aws-controllers-k8s.github.io/community/\n\nThis repository contains the container images for the ACK controller for the ${aws_service} AWS service.\n\nA corresponding repository ${aws_service}-chart contains Helm chart OCI artifacts allowing Helm users to install the container image for this controller.\n\n[Source code][source] for this controller is available on GitHub.\n\n[source]: https://github.com/aws-controllers-k8s/${aws_service}-controller",
     "usageText": "# Installation\n\n We [recommend][rec-helm] installing the ACK controller for ${aws_service} using the Kubernetes package manager, Helm.\n\n[rec-helm]: https://aws-controllers-k8s.github.io/community/docs/user-docs/install/#install-an-ack-service-controller-with-helm-recommended\n\nConsult our [installation docs][install-docs] for detailed instructions on how to install the ${aws_service} controller.\n\n[install-docs]: https://aws-controllers-k8s.github.io/community/docs/user-docs/install/"
