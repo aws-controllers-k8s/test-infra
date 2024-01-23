@@ -61,11 +61,16 @@ soak_test_on_release_service_names: []
 # prow merge criteria.
 code_gen_presubmit_services:
 - apigatewayv2
+- cloudfront
 - dynamodb
 - ec2
 - ecr
+- eks
+- eventbridge
 - iam
 - lambda
+- pipes
+- prometheusservice
 - s3
 
 # List of AWS services whose controller gets generated and e2e tested whenever
