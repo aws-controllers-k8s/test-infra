@@ -36,7 +36,8 @@ RUN echo "Installing Docker ..." \
     && apt-get update \
     && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/* \
-    && sed -i 's/cgroupfs_mount$/#cgroupfs_mount\n/' /etc/init.d/docker
+    && sed -i 's/cgroupfs_mount$/#cgroupfs_mount\n/' /etc/init.d/docker \
+    && sed -i 's/ulimit -Hn/# ulimit -Hn/g' /etc/init.d/docker \
 
 RUN echo "Ensuring Legacy Iptables ..." \
     && update-alternatives --set iptables  /usr/sbin/iptables-legacy || true \
