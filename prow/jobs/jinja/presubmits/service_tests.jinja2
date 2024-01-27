@@ -39,6 +39,10 @@
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
           value: "1.21.5"
+        {% if service in carm_test_services %}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {% endif %}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-release-test

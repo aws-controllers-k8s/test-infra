@@ -122,6 +122,9 @@ run_pytest_image() {
         -e PYTEST_NUM_THREADS \
         -e AWS_DEFAULT_REGION="$region" \
         -e AWS_PROFILE="$TEST_AWS_PROFILE_NAME" \
+        -e CARM_AWS_ACCESS_KEY_ID="$CARM_AWS_ACCESS_KEY_ID" \
+        -e CARM_AWS_SECRET_ACCESS_KEY="$CARM_AWS_SECRET_ACCESS_KEY" \
+        -e CARM_AWS_SESSION_TOKEN="$CARM_AWS_SESSION_TOKEN" \
         "${params[@]}" \
         "$__image_tag"
 }

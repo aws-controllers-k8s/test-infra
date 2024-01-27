@@ -48,6 +48,11 @@ aws_services:
 - sqs
 - ssm
 
+# List of service that will execute a set of tests for CARM
+# These service need a CARM_ENABLED environment variable set to true
+carm_test_services:
+- ecr
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
