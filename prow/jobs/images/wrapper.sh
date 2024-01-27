@@ -109,6 +109,28 @@ fi
 aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 >&2 echo "wrapper.sh] [SETUP] Logged in"
 
+# Setup credentials for controller CARM (Cross Account Resource Management) tests
+
+# Assume CARM role if CARM_TESTS are enabled
+if [[ ! -z "$CARM_TESTS_ENABLED" ]]; then
+  echo "wrapper.sh] [SETUP] CARM tests enabled, setting up credentials ..."
+
+  CARM_ASSUME_EXIT_VALUE=0
+  CARM_ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/carm_role --query Parameter.Value --output text 2>/dev/null) || CARM_ASSUME_EXIT_VALUE=$?
+  if [ "$CARM_ASSUME_EXIT_VALUE" -ne 0 ]; then
+    >&2 echo "wrapper.sh] [SETUP] Could not find role for CARM tests"
+    exit 1
+  fi
+  export CARM_ASSUMED_ROLE_ARN
+  >&2 echo "wrapper.sh] [SETUP] Exported CARM_ASSUMED_ROLE_ARN"
+
+  CARM_ASSUME_COMMAND=$(aws sts assume-role --role-arn $CARM_ASSUMED_ROLE_ARN --role-session-name "$PROW_JOB_ID-carm" --duration-seconds 3600 | jq -r '.Credentials | "export CARM_AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport CARM_AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport CARM_AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+  eval $CARM_ASSUME_COMMAND
+  >&2 echo "wrapper.sh] [SETUP] Exported credentials for CARM tests"
+fi
+
+# Setup credentials for controller basic e2e tests
+
 ASSUME_EXIT_VALUE=0
 ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then

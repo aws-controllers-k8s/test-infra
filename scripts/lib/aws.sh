@@ -51,13 +51,18 @@ ensure_aws_credentials() {
 # generate_aws_temp_creds function will generate temporary AWS credentials which
 # are valid for 3600 seconds
 aws_generate_temp_creds() {
-    local __uuid=$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+    local __role_suffix=""
+    # If CARM_TESTS_ENABLED is set, do not inject a uuid into the role name
+    if [[ -z "$CARM_TESTS_ENABLED" ]]; then
+        echo "CARM_TESTS_ENABLED is not set, injecting uuid into role name"
+        __role_suffix="-$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')"
+    fi
 
     local assumed_role=$(get_assumed_role_arn)
 
     local json=$(daws sts assume-role \
            --role-arn "$assumed_role"  \
-           --role-session-name tmp-role-"$__uuid" \
+           --role-session-name tmp-role"$__role_suffix" \
            --duration-seconds 3600 \
            --output json || exit 1)
 
