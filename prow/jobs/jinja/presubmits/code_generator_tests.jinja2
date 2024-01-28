@@ -95,6 +95,10 @@
         env:
         - name: SERVICE
           value: {{ service }}
+        {% if service in carm_test_services %}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {% endif %}
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
 
 {% endfor %}
