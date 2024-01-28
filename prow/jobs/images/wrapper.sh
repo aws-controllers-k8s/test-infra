@@ -16,6 +16,8 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+CARM_TESTS_ENABLED=${CARM_TESTS_ENABLED:-"false"}
+
 >&2 echo "wrapper.sh] [INFO] Wrapping Test Command: \`$*\`"
 printf '%0.s=' {1..80} >&2; echo >&2
 >&2 echo "wrapper.sh] [SETUP] Performing pre-test setup ..."
@@ -112,7 +114,7 @@ aws ecr-public get-login-password --region us-east-1 | docker login --username A
 # Setup credentials for controller CARM (Cross Account Resource Management) tests
 
 # Assume CARM role if CARM_TESTS are enabled
-if [[ ! -z "$CARM_TESTS_ENABLED" ]]; then
+if [[ "$CARM_TESTS_ENABLED" = "true" ]]; then
   echo "wrapper.sh] [SETUP] CARM tests enabled, setting up credentials ..."
 
   CARM_ASSUME_EXIT_VALUE=0

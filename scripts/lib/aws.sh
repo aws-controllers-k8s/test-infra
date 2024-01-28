@@ -53,7 +53,7 @@ ensure_aws_credentials() {
 aws_generate_temp_creds() {
     local __role_suffix=""
     # If CARM_TESTS_ENABLED is set, do not inject a uuid into the role name
-    if [[ -z "$CARM_TESTS_ENABLED" ]]; then
+    if [[ ! "$CARM_TESTS_ENABLED" = "true" ]]; then
         echo "CARM_TESTS_ENABLED is not set, injecting uuid into role name"
         __role_suffix="-$(uuidgen | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')"
     fi
