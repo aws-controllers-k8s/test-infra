@@ -35,30 +35,14 @@ build_and_install_controller() {
     _load_controller_image "$__cluster_name" "$__img_name"
 
     info_msg "Installing controller deployment ... "
-    _install_deployment "$__controller_namespace" "$__img_name"
+    _install_deployment "$__cluster_name" "$__controller_namespace" "$__img_name"
 }
 
-_build_controller_image() {
-    local __img_name=$1
-
-    local local_build="$(get_is_local_build)"
-    LOCAL_MODULES="$local_build" AWS_SERVICE_DOCKER_IMG="$__img_name" ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null
-}
-
-_load_controller_image() {
-    local __cluster_name=$1
-    local __img_name=$2
-
-    kind load docker-image --name "$__cluster_name" --nodes="$__cluster_name"-worker,"$__cluster_name"-control-plane "$__img_name"
-}
-
-_install_deployment() {
+install_crd_and_rbac(){
     local __controller_namespace=$1
-    local __img_name=$2
 
     local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
     local service_config_dir="$service_controller_source_dir/config"
-    local test_config_dir="$ROOT_DIR/build/clusters/$cluster_name/config/test"
 
     # Register the ACK service controller's CRDs in the target k8s cluster
     debug_msg "Loading CRD manifests for $AWS_SERVICE into the cluster ... "
@@ -76,6 +60,30 @@ _install_deployment() {
 
     debug_msg "Loading RBAC manifests for $AWS_SERVICE into the cluster ... "
     kustomize build "$service_config_dir"/rbac | kubectl apply -f - 1>/dev/null
+}
+
+_build_controller_image() {
+    local __img_name=$1
+
+    local local_build="$(get_is_local_build)"
+    LOCAL_MODULES="$local_build" AWS_SERVICE_DOCKER_IMG="$__img_name" ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null
+}
+
+_load_controller_image() {
+    local __cluster_name=$1
+    local __img_name=$2
+
+    kind load docker-image --name "$__cluster_name" --nodes="$__cluster_name"-worker,"$__cluster_name"-control-plane "$__img_name"
+}
+
+_install_deployment() {
+    local __cluster_name=$1
+    local __controller_namespace=$2
+    local __img_name=$3
+
+    local service_controller_source_dir="$ROOT_DIR/../$AWS_SERVICE-controller"
+    local service_config_dir="$service_controller_source_dir/config"
+    local test_config_dir="$ROOT_DIR/build/clusters/$__cluster_name/config/test"
 
     # Create the ACK service controller Deployment in the target k8s cluster
     mkdir -p "$test_config_dir"
