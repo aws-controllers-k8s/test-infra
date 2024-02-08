@@ -38,7 +38,7 @@
         # If not provided, the default will be picked from the version directive in
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
-          value: "1.21.5"
+          value: "1.22.0"
         {% if service in carm_test_services %}
         - name: CARM_TESTS_ENABLED
           value: "true"
@@ -83,7 +83,7 @@
         # If not provided, the default will be picked from the version directive in
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
-          value: "1.21.5"
+          value: "1.22.0"
         command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
   - name: {{ service }}-recommended-policy-test
