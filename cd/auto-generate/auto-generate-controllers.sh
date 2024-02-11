@@ -8,7 +8,7 @@ Usage:
 
 Environment variables:
   PR_SOURCE_BRANCH:    Name of the GitHub branch where auto-generated service
-                       controller code is pushed. Defaults to 'ack-bot-autogen'
+                       controller code is pushed. Defaults to 'prow/auto-gen'
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
   GITHUB_ORG:          Name of the GitHub organisation where GitHub issues will
@@ -18,7 +18,7 @@ Environment variables:
                        be created when autogeneration of service controller fails.
                        Defaults to 'community'
   GITHUB_LABEL:        Label to add to issue and pull requests.
-                       Defaults to 'ack-bot-autogen'
+                       Defaults to 'prow/auto-gen'
   GITHUB_LABEL_COLOR:  Color for GitHub label. Defaults to '3C6110'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
@@ -48,11 +48,8 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
 
-DEFAULT_GITHUB_LABEL="ack-bot-autogen"
+DEFAULT_GITHUB_LABEL="prow/auto-gen"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
-
-DEFAULT_GITHUB_LABEL_COLOR="3C6110"
-GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
 RUNTIME_MISSING_VERSION="missing-runtime-dependency"
 MISSING_GIT_TAG="missing-git-tag"
@@ -171,21 +168,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     fi
   popd >/dev/null
 
-  echo -n "auto-generate-controllers.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
-  if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
-    echo ""
-    echo "auto-generate-controllers.sh][INFO] Could not find label $GITHUB_LABEL in repo $GITHUB_ORG/$CONTROLLER_NAME"
-    echo -n "Creating new GitHub label $GITHUB_LABEL ... "
-    if ! gh api -X POST repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels -f name="$GITHUB_LABEL" -f color="$GITHUB_LABEL_COLOR" >/dev/null; then
-      echo ""
-      echo "auto-generate-controllers.sh][ERROR] Failed to create label $GITHUB_LABEL. Skipping $CONTROLLER_NAME"
-      continue
-    else
-      echo "ok"
-    fi
-  else
-    echo "ok"
-  fi
+  # Prow will sync the labels... so we don't need to check if the label exists
 
   pushd "$CONTROLLER_DIR" >/dev/null
     echo "auto-generate-controllers.sh][INFO] Finding new release version for $CONTROLLER_NAME"

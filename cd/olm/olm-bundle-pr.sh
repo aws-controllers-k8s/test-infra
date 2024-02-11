@@ -23,7 +23,7 @@ Environment variables:
                        be created when autogeneration of olm bundle fails.
                        Defaults to 'community'
   GITHUB_LABEL:        Label to add to GitHub issue.
-                       Defaults to 'ack-bot-olm'
+                       Defaults to 'prow/olm'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
   GITHUB_EMAIL_PREFIX: The 7 digit unique id for no-reply email of
@@ -63,7 +63,7 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 GITHUB_ISSUE_ORG_REPO="$GITHUB_ISSUE_ORG/$GITHUB_ISSUE_REPO"
 
-DEFAULT_GITHUB_LABEL="ack-bot-olm"
+DEFAULT_GITHUB_LABEL="prow/olm"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
 
 # Check all the dependencies are present in container.
@@ -190,7 +190,7 @@ do
   GITHUB_PR_BODY_TEMPLATE_FILE="$THIS_DIR/gh_pr_body_template.txt"
   GITHUB_PR_BODY_FILE_PATH=/tmp/"$SERVICE"_gh_pr_body
   eval "echo \"$(cat "$GITHUB_PR_BODY_TEMPLATE_FILE")\"" > "$GITHUB_PR_BODY_FILE_PATH"
-  # Because pull request is being opened in operatorhub repositories, 'ack-bot-olm'
+  # Because pull request is being opened in operatorhub repositories, 'prow/olm'
   # label does not exist in those repos. Unsetting the variable will not add this
   # label while creating pull requests.
   unset GITHUB_LABEL
