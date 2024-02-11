@@ -8,7 +8,7 @@ Usage:
 
 Environment variables:
   PR_SOURCE_BRANCH:    Name of the GitHub branch where auto-updated project description
-                       files are pushed. Defaults to 'ack-bot-autoupdate'
+                       files are pushed. Defaults to 'prow/auto-update'
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
   GITHUB_ORG:          Name of the GitHub organisation where GitHub issues will
@@ -18,7 +18,7 @@ Environment variables:
                        be created when auto-update of project description files
                        for service controller fails. Defaults to 'community'
   GITHUB_LABEL:        Label to add to issue and pull requests.
-                       Defaults to 'ack-bot-autogen'
+                       Defaults to 'prow/auto-gen'
   GITHUB_LABEL_COLOR:  Color for GitHub label. Defaults to '3C6110'
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_DOMAIN:       Domain for GitHub. Defaults to 'github.com'
@@ -47,11 +47,8 @@ GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
 
 GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
 
-DEFAULT_GITHUB_LABEL="ack-bot-autogen"
+DEFAULT_GITHUB_LABEL="prow/auto-gen"
 GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
-
-DEFAULT_GITHUB_LABEL_COLOR="3C6110"
-GITHUB_LABEL_COLOR=${GITHUB_LABEL_COLOR:-$DEFAULT_GITHUB_LABEL_COLOR}
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
@@ -84,21 +81,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
   CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
   cd "$CONTROLLER_BOOTSTRAP_DIR"
 
-  echo -n "project-static-files.sh][INFO] Ensuring that GitHub label $GITHUB_LABEL exists for $GITHUB_ORG/$CONTROLLER_NAME ... "
-  if ! gh api repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels/"$GITHUB_LABEL" --silent >/dev/null; then
-    echo ""
-    echo "project-static-files.sh][INFO] Could not find label $GITHUB_LABEL in repo $GITHUB_ORG/$CONTROLLER_NAME"
-    echo -n "Creating new GitHub label $GITHUB_LABEL ... "
-    if ! gh api -X POST repos/"$GITHUB_ORG"/"$CONTROLLER_NAME"/labels -f name="$GITHUB_LABEL" -f color="$GITHUB_LABEL_COLOR" >/dev/null; then
-      echo ""
-      echo "project-static-files.sh][ERROR] Failed to create label $GITHUB_LABEL. Skipping $CONTROLLER_NAME"
-      continue
-    else
-      echo "ok"
-    fi
-  else
-    echo "ok"
-  fi
+  # Prow will sync the labels... so we don't need to check if the label exists
 
   echo "project-static-files.sh][INFO] Updating project description files of existing controller using command 'make run'"
   export SERVICE=$SERVICE_NAME
