@@ -68,6 +68,7 @@ code_gen_presubmit_services:
 - acm
 - apigatewayv2
 - cloudfront
+- documentdb
 - dynamodb
 - ec2
 - ecr
