@@ -38,6 +38,10 @@
           value: {{ service }}
         - name: LOCAL_ACKTEST_LIBRARY
           value: "true"
+        {% if service in carm_test_services %}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {% endif %}
         command:
         - "wrapper.sh"
         - "bash"
