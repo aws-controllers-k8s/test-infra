@@ -18,9 +18,11 @@ aws_services:
 - dynamodb
 - ec2
 - ecr
+- ecs
 - efs
 - eks
 - elasticache
+- elbv2
 - emrcontainers
 - eventbridge
 - iam
