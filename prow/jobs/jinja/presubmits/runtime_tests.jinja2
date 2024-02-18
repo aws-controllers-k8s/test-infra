@@ -22,7 +22,6 @@
   - name: {{ service }}-controller-test
     decorate: true
     optional: false
-    always_run: true
     run_if_changed: ^(pkg|apis|go.mod|go.sum)
     annotations:
       karpenter.sh/do-not-evict: "true"
