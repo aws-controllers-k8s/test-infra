@@ -11,14 +11,14 @@ spec:
       memory: 1000Gi
       storage: 5000Gi
   requirements:
-  # Use CPU optimized instance families
+  # Include general purpose instance families
   - key: karpenter.k8s.aws/instance-family
     operator: In
-    values: [c6a, c7a, c6i, c7i]
+    values: [c6g, c7g, c6a, c6i, m6a, m6g, m6i, r6a, r6g, r6i]
   # Exclude small instance sizes
   - key: karpenter.k8s.aws/instance-size
     operator: In
-    values: [12xlarge, 16xlarge, 24xlarge, 32xlarge]
+    values: [xlarge, 2xlarge, 4xlarge, 8xlarge, 12xlarge, 16xlarge, 24xlarge, 32xlarge]
   - key: kubernetes.io/arch
     operator: In
     values:
