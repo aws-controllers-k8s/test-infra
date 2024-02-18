@@ -11,14 +11,14 @@ spec:
       memory: 1000Gi
       storage: 5000Gi
   requirements:
-  # Include general purpose instance families
+  # Use CPU optimized instance families
   - key: karpenter.k8s.aws/instance-family
     operator: In
-    values: [c6g, c7g, c6a, c6i, m6a, m6g, m6i, r6a, r6g, r6i]
+    values: [c6a, c7a, c6i, c7i]
   # Exclude small instance sizes
   - key: karpenter.k8s.aws/instance-size
     operator: In
-    values: [medium, large, xlarge, xlarge, 2xlarge, 4xlarge, 8xlarge]
+    values: [12xlarge, 16xlarge, 24xlarge, 32xlarge]
   - key: kubernetes.io/arch
     operator: In
     values:
@@ -31,6 +31,7 @@ spec:
     operator: In
     values:
     - linux
-  ttlSecondsUntilExpired: 36000 # 1 hour
+  ttlSecondsAfterEmpty: 900 # 15 minutes
+  ttlSecondsUntilExpired: 36000 # 10 hours
   providerRef:
     name: prowjob-node-provider
