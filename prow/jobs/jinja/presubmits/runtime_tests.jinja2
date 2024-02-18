@@ -18,3 +18,53 @@
             memory: "3072Mi"
         command: ["make", "test"]
 
+{% for service in runtime_presubmit_services  %}
+  - name: {{ service }}-controller-test
+    decorate: true
+    optional: false
+    always_run: true
+    run_if_changed: ^(pkg|apis|go.mod|go.sum)
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-dind-enabled: "true"
+      preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: {{ service }}-controller
+      base_ref: main
+      workdir: false
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: {{ image_context.images["integration-test"] }}
+        resources:
+          limits:
+            cpu: 8
+            memory: "3072Mi"
+          requests:
+            cpu: 8
+            memory: "3072Mi"
+        securityContext:
+          privileged: true
+        env:
+        - name: SERVICE
+          value: {{ service }}
+        - name: LOCAL_MODULES
+          value: "true"
+        {% if service in carm_test_services %}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {% endif %}
+        command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
+
+{% endfor %}

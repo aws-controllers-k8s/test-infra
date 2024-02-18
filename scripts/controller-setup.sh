@@ -41,8 +41,10 @@ build_and_install_controller() {
 _build_controller_image() {
     local __img_name=$1
 
-    local local_build="$(get_is_local_build)"
-    LOCAL_MODULES="$local_build" AWS_SERVICE_DOCKER_IMG="$__img_name" ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null
+    local local_build_default="$(get_is_local_build)"
+    LOCAL_MODULES=${LOCAL_MODULES:-$local_build_default}
+
+    AWS_SERVICE_DOCKER_IMG="$__img_name" ${CODE_GENERATOR_SCRIPTS_DIR}/build-controller-image.sh ${AWS_SERVICE} 1>/dev/null
 }
 
 _load_controller_image() {
