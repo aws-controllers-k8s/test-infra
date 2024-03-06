@@ -22,7 +22,7 @@ IMAGE_DIR=$DIR
 
 QUIET=${QUIET:-"false"}
 
-GO_VERSION=${GO_VERSION:-"1.22.0"}
+GO_VERSION=${GO_VERSION:-"1.22.1"}
 
 # check_is_installed docker
 
