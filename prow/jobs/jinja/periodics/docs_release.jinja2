@@ -1,0 +1,32 @@
+name: docs-release
+  decorate: true
+  interval: 24h
+  annotations:
+    karpenter.sh/do-not-evict: "true"
+  labels:
+    preset-github-secrets: "true"
+  extra_refs:
+  - org: aws-controllers-k8s
+    repo: community
+    base_ref: main
+    workdir: true
+  - org: aws-controllers-k8s
+    repo: runtime
+    base_ref: main
+  {% for other_service in aws_services if not other_service == service %}
+  - org: aws-controllers-k8s
+    repo: {{ other_service }}-controller
+    base_ref: main
+  {% endfor %}
+  spec:
+    serviceAccountName: post-submit-service-account
+    containers:
+      - image: {{ image_context.images["docs"] }}
+        resources:
+          limits:
+            cpu: 1
+            memory: "2048Mi"
+          requests:
+            cpu: 1
+            memory: "2048Mi"
+        command: ["/docs/build-docs.sh"]
