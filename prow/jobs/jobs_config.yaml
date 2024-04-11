@@ -9,6 +9,7 @@ aws_services:
 - acmpca
 - apigatewayv2
 - applicationautoscaling
+- batch
 - cloudfront
 - cloudtrail
 - cloudwatch
@@ -49,6 +50,7 @@ aws_services:
 - sns
 - sqs
 - ssm
+- wafv2
 
 # List of service that will execute a set of tests for CARM
 # These service need a CARM_ENABLED environment variable set to true
