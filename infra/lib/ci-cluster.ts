@@ -30,7 +30,7 @@ export type CIClusterRuntimeProps = {};
 export type CIClusterProps = CIClusterCompileTimeProps & CIClusterRuntimeProps;
 
 export class CICluster extends Construct {
-  readonly testCluster: eks.Cluster;
+  readonly testCluster: eks.ICluster;
 
   readonly namespaceManifests: eks.KubernetesManifest[];
 
@@ -45,11 +45,11 @@ export class CICluster extends Construct {
     // Create a set of fargate profiles that run the required services within
     // the cluster. Without Flux and Karpenter, the cluster can't load the
     // appropriate settings to autoscale for the rest of the namespaces
-    const fargateProfiles: Map<string, eks.FargateProfileOptions> = new Map([
+
+    const fargateProfiles: Map<string, { selectors: {namespace: string; }[]; }> = new Map([
       ["flux", { selectors: [{ namespace: "flux-system" }] }],
       ["karpenter", { selectors: [{ namespace: "karpenter" }] }],
     ]);
-
     const blueprintStack = blueprints.EksBlueprint.builder()
       .account(Stack.of(this).account)
       .region(Stack.of(this).region)
@@ -65,14 +65,16 @@ export class CICluster extends Construct {
         })
       )
       .addOns(
-        new blueprints.addons.CertManagerAddOn(),
+        // new blueprints.addons.ClusterAutoScalerAddOn(),
         new blueprints.addons.AwsLoadBalancerControllerAddOn(),
+        new blueprints.addons.CertManagerAddOn(),
+        new blueprints.addons.AdotCollectorAddOn(),
         new blueprints.addons.VpcCniAddOn(),
-        new blueprints.addons.KarpenterAddOn({ version: "v0.24.0" }),
         new blueprints.addons.EbsCsiDriverAddOn(),
+        new blueprints.addons.KarpenterAddOn({ version: "v0.31.3" }),
         new blueprints.addons.ExternalDnsAddOn({
           hostedZoneResources: [GlobalResources.HostedZone],
-        })
+        }),
       )
       .build(this, CLUSTER_NAME);
 
