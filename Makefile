@@ -10,14 +10,14 @@ gen-all: build-prow-jobs build-label-config
 # Assumes python3 is installed as default python on the host.
 build-prow-jobs: ## Compiles the Prow jobs
 	@pushd "$(PROW_JOBS_PATH)" 1>/dev/null; \
-	python generator.py jobs -o jobs.yaml && \
+	python3 generator.py jobs -o jobs.yaml && \
 	echo "Success! Prowjobs available at $(PROW_JOBS_PATH)/jobs.yaml" || \
 	echo "Error while generating Prowjobs"; \
 	popd 1>/dev/null
 
 build-label-config:
 	@pushd "$(PROW_JOBS_PATH)" 1>/dev/null; \
-	python generator.py labels -o labels.yaml && \
+	python3 generator.py labels -o labels.yaml && \
 	echo "Success! Configuration file available at $(PROW_JOBS_PATH)/labels.yaml" || \
 	echo "Error while generating label_sync config"; \
 	popd 1>/dev/null
