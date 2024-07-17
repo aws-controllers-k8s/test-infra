@@ -38,12 +38,10 @@ class Secret(Bootstrappable):
             Name=self.name, KmsKeyId=self.kms_key.id, SecretString=self.plain_text
         )
         self.arn = secret["ARN"]
-        print(f"Created secret with ARN: {self.arn}")
 
     def cleanup(self):
         """Schedules a secret for deletion and all subresources."""
         self.secretsmanager_client.delete_secret(
             SecretId=self.arn, RecoveryWindowInDays=7
         )
-        print(f"Scheduled secret with ARN {self.arn} for deletion")
         super().cleanup()

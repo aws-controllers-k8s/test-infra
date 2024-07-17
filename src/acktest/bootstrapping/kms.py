@@ -18,10 +18,8 @@ class Key(Bootstrappable):
         """Creates a key."""
         key = self.kms_client.create_key()
         self.id = key["KeyMetadata"]["KeyId"]
-        print(f"Created key with ID: {self.id}")
 
     def cleanup(self):
         """Disables a key and schedules it for deletion."""
         self.kms_client.disable_key(KeyId=self.id)
         self.kms_client.schedule_key_deletion(KeyId=self.id, PendingWindowInDays=7)
-        print(f"Scheduled key with ID {self.id} for deletion")
