@@ -31,7 +31,7 @@ pushd "$CODEGEN_DIR" >/dev/null
     echo "generate-test-controller.sh][INFO] ACK runtime version in code-generator/go.mod file is $ACK_RUNTIME_VERSION"
   fi
 
-  GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
+  GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+(\.[0-9]+)?$" go.mod | cut -d " " -f2)
   if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
     echo "generate-test-controller.sh][ERROR] Unable to determine go version from code-generator/go.mod file. Exiting"
     exit 1
