@@ -82,7 +82,7 @@ fi
 # Find the code-gen semver from the latest tag on the code-generator repo
 ACK_CODE_GEN_VERSION=$(git describe --tags --always --dirty)
 
-GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+$" go.mod | cut -d " " -f2)
+GO_VERSION_IN_GO_MOD=$(grep -E "^go [0-9]+\.[0-9]+(\.[0-9]+)?$" go.mod | cut -d " " -f2)
 if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
   echo "auto-generate-controllers.sh][ERROR] Unable to determine go version from code-generator/go.mod file. Exiting"
   exit 1
