@@ -48,9 +48,10 @@ aws_services:
 - route53
 - route53resolver
 - s3
+- sagemaker
 - secretsmanager
 - servicecatalog
-- sagemaker
+- ses
 - sfn
 - sns
 - sqs
