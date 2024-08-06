@@ -7,9 +7,12 @@
 aws_services:
 - acm
 - acmpca
+- apigateway
 - apigatewayv2
 - applicationautoscaling
+- athena
 - batch
+- cognitoidentity
 - cloudfront
 - cloudtrail
 - cloudwatch
@@ -17,6 +20,7 @@ aws_services:
 - cloudwatchlogs
 - documentdb
 - dynamodb
+- ebs
 - ec2
 - ecr
 - ecs
@@ -40,6 +44,7 @@ aws_services:
 - pipes
 - prometheusservice
 - rds
+- recyclebin
 - route53
 - route53resolver
 - s3
