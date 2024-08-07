@@ -12,3 +12,4 @@ images:
     soak-test: prow-soak-0.0.7
     unit-test: prow-unit-0.0.8
     upgrade-go-version: prow-upgrade-go-version-0.0.8
+    verify-attribution: prow-verify-attribution-0.0.1
