@@ -101,13 +101,8 @@ gh = github.Github(GH_TOKEN)
 args = setup()
 writer = printer.Writer(args)
 
-try:
-    ep_client = ecrpublic.get_client(writer)
-except Exception as e:
-    print("ERROR: failed to get client for ECR Public:", str(e))
-    sys.exit(255)
 
 repo = awssdkgo.get_repo(writer, GH_TOKEN, CACHE_DIR)
 services = service.collect_all(writer, repo)
-controllers = controller.collect_all(writer, gh, ep_client, services)
+controllers = controller.collect_all(writer, gh, services)
 writer.print_services(services, controllers)

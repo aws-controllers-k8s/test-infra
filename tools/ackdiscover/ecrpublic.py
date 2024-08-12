@@ -38,7 +38,7 @@ def _assume_reader_role(writer):
     resp = sts_client.assume_role(
         RoleArn=ECR_PUBLIC_READER_ROLE_ARN,
         RoleSessionName=role_session_name,
-        DurationSeconds=2*60*60,  # 2 hours...
+        DurationSeconds=60*60,  # 1 hour...
     )
     creds = resp['Credentials']
     return AWSCredentials(

@@ -13,6 +13,8 @@
 
 import dataclasses
 import os
+import sys
+import time
 
 import github
 
@@ -59,8 +61,21 @@ def collect_all(writer, gh, ep_client, services):
     writer.debug("[controller.collect_all] collecting ACK controller information ... ")
     ack_org = gh.get_organization(GITHUB_ORG_NAME)
     result= {}
+    # Assume the ECR Public reader role
+    ep_client = ecrpublic.get_client(writer)
+
+    # Note that in role chaining, the session token is only valid for 1 hour
+    # so we need to re-fetch the token for everytime we're close to the 1 hour
+    # mark.
+    now = time.time()
 
     for service_package_name, service in services.items():
+        # If we're close to the 1 hour mark, re-fetch the ECR Public client
+        if time.time() - now > 3480: # 3480 seconds == 58 minutes
+            writer.debug("[controller.collect_all] re-fetching ECR Public client ...")
+            ep_client = ecrpublic.get_client(writer)
+            now = time.time()
+
         writer.debug(f"[controller.collect_all] finding controller info for {service_package_name} ...")
 
         project_stage = project_stages.NONE
