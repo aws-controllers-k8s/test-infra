@@ -1,0 +1,16 @@
+ARG GO_VERSION=1.22.5
+
+FROM golang:${GO_VERSION}-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools .
+
+# Start a new stage from scratch
+FROM alpine:latest
+
+COPY --from=builder /app/ack-build-tools /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/ack-build-tools
