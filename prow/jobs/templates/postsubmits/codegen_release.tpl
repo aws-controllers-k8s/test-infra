@@ -14,16 +14,14 @@
       repo: runtime
       base_ref: main
       workdir: false
-{% for service in aws_services  %}
-    - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+      repo: {{ $service }}-controller
       base_ref: main
       workdir: false
-{% endfor %}
-    spec:
+    {{end}}spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["auto-generate-controllers"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-generate-controllers") }}
           resources:
             limits:
               cpu: 8

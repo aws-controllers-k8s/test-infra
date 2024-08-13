@@ -1,6 +1,6 @@
-{% for service in aws_services  %}
-  aws-controllers-k8s/{{ service }}-controller:
-  - name: {{ service }}-kind-e2e
+{{ range $_, $service := .Config.AWSServices }}
+  aws-controllers-k8s/{{ $service }}-controller:
+  - name: {{ $service }}-kind-e2e
     decorate: true
     optional: false
     always_run: true
@@ -22,7 +22,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         securityContext:
           privileged: true
         resources:
@@ -34,18 +34,18 @@
             memory: "3072Mi"
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         # If not provided, the default will be picked from the version directive in
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
           value: "1.22.5"
-        {% if service in carm_test_services %}
+        {{ if contains $.Config.CarmTestServices $service }}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {% endif %}
+        {{ end }}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
-  - name: {{ service }}-release-test
+  - name: {{ $service }}-release-test
     decorate: true
     optional: false
     always_run: true
@@ -67,7 +67,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         securityContext:
           privileged: true
         resources:
@@ -79,14 +79,14 @@
             memory: "3072Mi"
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         # If not provided, the default will be picked from the version directive in
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
           value: "1.22.5"
         command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
-  - name: {{ service }}-recommended-policy-test
+  - name: {{ $service }}-recommended-policy-test
     decorate: true
     optional: false
     always_run: true
@@ -102,7 +102,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
             cpu: 250m
@@ -114,10 +114,10 @@
           runAsUser: 0
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         command: ["wrapper.sh", "bash", "-c", "make test-recommended-policy SERVICE=$SERVICE"]
 
-  - name: {{ service }}-unit-test
+  - name: {{ $service }}-unit-test
     decorate: true
     optional: false
     always_run: true
@@ -126,7 +126,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["unit-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
             cpu: 8
@@ -136,10 +136,10 @@
             memory: "4048Mi"
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         command: ["make", "test"]
 
-  - name: {{ service }}-metadata-file-test
+  - name: {{ $service }}-metadata-file-test
     decorate: true
     optional: false
     always_run: true
@@ -153,7 +153,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["unit-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
             cpu: 250m
@@ -163,7 +163,7 @@
             memory: "256Mi"
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-{% endfor %}
+{{ end }}

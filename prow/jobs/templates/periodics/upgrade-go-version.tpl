@@ -10,7 +10,7 @@
   spec:
     serviceAccountName: periodic-service-account
     containers:
-      - image: {{ image_context.images["upgrade-go-version"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "upgrade-go-version") }}
         resources:
           limits:
             cpu: 1

@@ -535,14 +535,12 @@ repos:
       addedBy: anyone
 
     # AWS services labels
-    {% for service in aws_services %}
-    - color: f59745
-      description: Indicates issues or PRs that are related to {{ service }}-controller.
-      name: service/{{ service }}
+    {{range $_, $service := .AWSServices }}- color: f59745
+      description: Indicates issues or PRs that are related to {{ $service }}-controller.
+      name: service/{{ $service }}
       target: issues
       addedBy: anyone
-    {% endfor %}
-
+    {{ end }}
   # TODO(a-hilaly): Maybe these repository needs specific labels to them
   aws-controllers-k8s/runtime:
   aws-controllers-k8s/code-generator:

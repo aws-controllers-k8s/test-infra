@@ -8,7 +8,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["unit-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
             cpu: 2
@@ -17,9 +17,8 @@
             cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
-
-{% for service in runtime_presubmit_services  %}
-  - name: {{ service }}-controller-test
+{{ range $_, $service := .Config.RuntimePresubmitServices }}
+  - name: {{ $service }}-controller-test
     decorate: true
     optional: false
     run_if_changed: ^(pkg|apis|go.mod|go.sum)
@@ -39,13 +38,13 @@
       base_ref: main
       workdir: true
     - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+      repo: {{ $service }}-controller
       base_ref: main
       workdir: false
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
             cpu: 8
@@ -57,15 +56,14 @@
           privileged: true
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         - name: LOCAL_MODULES
           value: "true"
         - name: GOLANG_VERSION
           value: "1.22.5"
-        {% if service in carm_test_services %}
-        - name: CARM_TESTS_ENABLED
+        {{ if contains $.Config.CarmTestServices $service }}- name: CARM_TESTS_ENABLED
           value: "true"
-        {% endif %}
+        {{ end }}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
-{% endfor %}
+{{ end }}

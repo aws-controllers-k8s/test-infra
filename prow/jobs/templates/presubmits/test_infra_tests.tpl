@@ -1,6 +1,6 @@
   aws-controllers-k8s/test-infra:
-{% for service in acktest_presubmit_services  %}
-  - name: acktest-{{ service }}-e2e-tests
+{{ range $_, $service := .Config.ACKTestPresubmitServices }}
+  - name: acktest-{{ $service }}-e2e-tests
     decorate: true
     optional: false
     # only if src/acktest/ code changed
@@ -17,13 +17,13 @@
       base_ref: main
       workdir: false
     - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+      repo: {{ $service }}-controller
       base_ref: main
       workdir: false
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
             cpu: 8
@@ -35,16 +35,16 @@
           privileged: true
         env:
         - name: SERVICE
-          value: {{ service }}
+          value: {{ $service }}
         - name: LOCAL_ACKTEST_LIBRARY
           value: "true"
-        {% if service in carm_test_services %}
+        {{ if contains $.Config.CarmTestServices $service }}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {% endif %}
+        {{ end }}
         command:
         - "wrapper.sh"
         - "bash"
         - "-c"
         - "make kind-test SERVICE=$SERVICE LOCAL_ACKTEST_LIBRARY=$LOCAL_ACKTEST_LIBRARY"
-{% endfor %}
+{{ end }}

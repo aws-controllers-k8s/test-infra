@@ -8,7 +8,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["unit-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
             cpu: 1
@@ -17,4 +17,3 @@
             cpu: 1
             memory: "1024Mi"
         command: ["make", "test"]
-
