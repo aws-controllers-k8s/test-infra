@@ -14,7 +14,7 @@
 package main
 
 import (
-	"github.com/aws-controllers-k8s/test-infra/command"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command"
 )
 
 func main() {

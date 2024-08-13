@@ -1,6 +1,6 @@
-{% for service in aws_services  %}
-  aws-controllers-k8s/{{ service }}-controller:
-  - name: {{ service }}-post-submit
+  {{ range $_, $service := .Config.AWSServices  }}
+  aws-controllers-k8s/{{ $service }}-controller:
+  - name: {{ $service }}-post-submit
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
@@ -16,7 +16,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["deploy"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "deploy") }}
           resources:
             limits:
               cpu: 8
@@ -32,9 +32,8 @@
           command: ["/bin/bash", "-c", "cd cd/scripts && ./release-controller.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-{% if service in soak_test_on_release_service_names %}
-
-  - name: {{ service }}-soak-on-release
+  {{ if contains $.Config.SoakTestOnReleaseServiceNames $service }}
+  - name: {{ $service }}-soak-on-release
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
@@ -46,7 +45,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["soak-test"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "soak-test") }}
           resources:
             limits:
               cpu: 2
@@ -58,9 +57,8 @@
           command: ["/bin/bash", "-c", "cd soak/prow/scripts && ./soak-on-release.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-{% endif %}
-
-  - name: {{ service }}-controller-release-tag
+  {{ end }}
+  - name: {{ $service }}-controller-release-tag
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
@@ -74,7 +72,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["controller-release-tag"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "controller-release-tag") }}
           resources:
             limits:
               cpu: 1
@@ -85,8 +83,7 @@
           command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-tag.sh"]
     branches:
     - main
-
-  - name: {{ service }}-controller-olm-bundle-pr
+  - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
     annotations:
       karpenter.sh/do-not-evict: "true"
@@ -108,7 +105,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["olm-bundle-pr"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "olm-bundle-pr") }}
           resources:
             limits:
               cpu: 1
@@ -119,7 +116,7 @@
           command: ["/bin/bash", "-c", "./cd/olm/olm-bundle-pr.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
-
+  
   - name: update-ack-chart
     decorate: true
     annotations:
@@ -139,16 +136,14 @@
       repo: ack-chart
       base_ref: main
       workdir: false
-    {% for other_service in aws_services if not other_service == service %}
-    - org: aws-controllers-k8s
-      repo: {{ other_service }}-controller
+    {{ range $_, $otherService := $.Config.AWSServices}}{{ if ne $otherService $service }}- org: aws-controllers-k8s
+      repo: {{ $otherService }}-controller
       base_ref: main
       workdir: false
-    {% endfor %}
-    spec:
+    {{ end }}{{ end }}spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["deploy"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "deploy") }}
           resources:
             limits:
               cpu: 2
@@ -159,5 +154,5 @@
           command: ["/bin/bash", "-c", "cd cd/ack-chart && ./update-chart.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
+    {{ end }}
 
-{% endfor %}

@@ -10,15 +10,13 @@
       repo: community
       base_ref: main
       workdir: true
-    {% for service in aws_services %}
-    - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+      repo: {{ $service }}-controller
       base_ref: main
-    {% endfor %}
-    spec:
+    {{ end }}spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["docs"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "docs") }}
           resources:
             limits:
               cpu: 1

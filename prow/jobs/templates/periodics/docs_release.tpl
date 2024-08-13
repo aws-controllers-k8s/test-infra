@@ -13,15 +13,13 @@
   - org: aws-controllers-k8s
     repo: runtime
     base_ref: main
-  {% for other_service in aws_services if not other_service == service %}
-  - org: aws-controllers-k8s
-    repo: {{ other_service }}-controller
+  {{range $_, $otherService := .Config.AWSServices}}- org: aws-controllers-k8s
+    repo: {{$otherService}}-controller
     base_ref: main
-  {% endfor %}
-  spec:
+  {{end}}spec:
     serviceAccountName: post-submit-service-account
     containers:
-      - image: {{ image_context.images["docs"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "docs") }}
         resources:
           limits:
             cpu: 1

@@ -23,7 +23,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aquasecurity/go-version/pkg/semver"
-	"github.com/aws-controllers-k8s/test-infra/command/ecrpublic"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/ecrpublic"
 )
 
 const (

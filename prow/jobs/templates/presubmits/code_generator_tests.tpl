@@ -8,7 +8,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["unit-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
             cpu: 2
@@ -17,7 +17,6 @@
             cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
-
   - name: s3-olm-test
     decorate: true
     optional: true
@@ -40,7 +39,7 @@
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["olm-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "olm-test") }}
         resources:
           limits:
             cpu: 2
@@ -54,9 +53,7 @@
         - name: ACK_GENERATE_OLM
           value: "true"
         command: ["make", "build-controller"]
-
-{% for service in code_gen_presubmit_services  %}
-  - name: {{ service }}-controller-test
+  {{range $_, $service := .Config.CodegenPresubmitServices}}- name: {{ $service }}-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -76,13 +73,13 @@
       base_ref: main
       workdir: true
     - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+      repo: {{ $service }}-controller
       base_ref: main
       workdir: true
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
-      - image: {{ image_context.images["integration-test"] }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
             cpu: 8
@@ -94,11 +91,9 @@
           privileged: true
         env:
         - name: SERVICE
-          value: {{ service }}
-        {% if service in carm_test_services %}
+          value: {{ $service }}
+        {{ if contains $.Config.CarmTestServices $service }}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {% endif %}
-        command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-
-{% endfor %}
+        {{ end }}command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
+{{ end }}

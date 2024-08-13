@@ -6,16 +6,14 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
-{% for service in aws_services  %}
-    - org: aws-controllers-k8s
-      repo: {{ service }}-controller
+    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+      repo: {{ $service }}-controller
       base_ref: main
       workdir: false
-{% endfor %}
-    spec:
+    {{end}}spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["auto-update-controllers"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-update-controllers") }}
           resources:
             limits:
               cpu: 2

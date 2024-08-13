@@ -11,7 +11,7 @@
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: {{ image_context.images["deploy"] }}
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "deploy") }}
           resources:
             limits:
               cpu: 2
