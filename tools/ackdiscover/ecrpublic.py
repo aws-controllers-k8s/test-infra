@@ -125,7 +125,7 @@ def get_repository_latest_tag(ep_client, repo):
                 latest_tag = image["imageTags"][0]
         if 'nextToken' in images:
             next_token = images['nextToken']
-        if next_token is None:
+        else:
             break
     return latest_tag
 
