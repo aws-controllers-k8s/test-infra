@@ -21,9 +21,10 @@ import (
 )
 
 var (
-	OptJobsConfigPath string
+	OptJobsConfigPath    string
 	OptJobsTemplatesPath string
-	OptJobsOutputPath string
+	OptJobsOutputPath    string
+	OptProwEcrRepository string
 )
 
 var buildProwCmd = &cobra.Command{
@@ -42,6 +43,9 @@ func init() {
 	buildProwCmd.PersistentFlags().StringVar(
 		&OptJobsOutputPath, "jobs-output-path", "", "path to jobs.yaml where the generated jobs will be stored",
 	)
+	buildProwCmd.PersistentFlags().StringVar(
+		&OptJobsOutputPath, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
+	)
 	rootCmd.AddCommand(buildProwCmd)
 }
 
@@ -52,9 +56,9 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Successfully read versions in %s\n", OptImagesConfigPath)	
+	log.Printf("Successfully read versions in %s\n", OptImagesConfigPath)
 
-	imageDetails, err := listProwImageDetails(imagesConfig.ImageRepo)
+	imageDetails, err := listProwImageDetails(OptProwEcrRepository)
 	if err != nil {
 		return err
 	}
