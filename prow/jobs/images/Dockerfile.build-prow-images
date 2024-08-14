@@ -13,6 +13,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/job
 # Start a new stage from scratch
 FROM alpine:latest
 
+WORKDIR /go
+
 COPY --from=builder /go/ack-build-tools /usr/local/bin/
+COPY --from=gcr.io/kaniko-project/executor:amd64-454910f613d416fe143335657f2ffe583d0ca2c9 /kaniko/ /kaniko/
 
 RUN chmod +x /usr/local/bin/ack-build-tools
