@@ -53,7 +53,8 @@
         - name: ACK_GENERATE_OLM
           value: "true"
         command: ["make", "build-controller"]
-  {{range $_, $service := .Config.CodegenPresubmitServices}}- name: {{ $service }}-controller-test
+  {{- range $_, $service := .Config.CodegenPresubmitServices }}
+  - name: {{ $service }}-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -95,5 +96,6 @@
         {{ if contains $.Config.CarmTestServices $service }}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {{ end }}command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
+        {{ end -}}
+        command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
 {{ end }}

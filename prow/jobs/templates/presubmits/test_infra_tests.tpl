@@ -1,5 +1,5 @@
   aws-controllers-k8s/test-infra:
-{{ range $_, $service := .Config.ACKTestPresubmitServices }}
+{{- range $_, $service := .Config.ACKTestPresubmitServices }}
   - name: acktest-{{ $service }}-e2e-tests
     decorate: true
     optional: false
