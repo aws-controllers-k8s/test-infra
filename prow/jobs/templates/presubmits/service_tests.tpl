@@ -165,5 +165,4 @@
         - name: SERVICE
           value: {{ $service }}
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 {{ end }}

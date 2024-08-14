@@ -18500,7 +18500,8 @@ presubmits:
         - name: SERVICE
           value: acm
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: apigatewayv2-controller-test
+
+  - name: apigatewayv2-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18540,7 +18541,8 @@ presubmits:
         - name: SERVICE
           value: apigatewayv2
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: cloudfront-controller-test
+
+  - name: cloudfront-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18580,7 +18582,8 @@ presubmits:
         - name: SERVICE
           value: cloudfront
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: documentdb-controller-test
+
+  - name: documentdb-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18620,7 +18623,8 @@ presubmits:
         - name: SERVICE
           value: documentdb
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: dynamodb-controller-test
+
+  - name: dynamodb-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18660,7 +18664,8 @@ presubmits:
         - name: SERVICE
           value: dynamodb
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: ec2-controller-test
+
+  - name: ec2-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18700,7 +18705,8 @@ presubmits:
         - name: SERVICE
           value: ec2
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: ecr-controller-test
+
+  - name: ecr-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18743,7 +18749,8 @@ presubmits:
         - name: CARM_TESTS_ENABLED
           value: "true"
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: efs-controller-test
+
+  - name: efs-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18783,7 +18790,8 @@ presubmits:
         - name: SERVICE
           value: efs
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: eks-controller-test
+
+  - name: eks-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18823,7 +18831,8 @@ presubmits:
         - name: SERVICE
           value: eks
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: eventbridge-controller-test
+
+  - name: eventbridge-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18863,7 +18872,8 @@ presubmits:
         - name: SERVICE
           value: eventbridge
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: iam-controller-test
+
+  - name: iam-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18903,7 +18913,8 @@ presubmits:
         - name: SERVICE
           value: iam
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: lambda-controller-test
+
+  - name: lambda-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18943,7 +18954,8 @@ presubmits:
         - name: SERVICE
           value: lambda
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: pipes-controller-test
+
+  - name: pipes-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -18983,7 +18995,8 @@ presubmits:
         - name: SERVICE
           value: pipes
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: prometheusservice-controller-test
+
+  - name: prometheusservice-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -19023,7 +19036,8 @@ presubmits:
         - name: SERVICE
           value: prometheusservice
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-- name: s3-controller-test
+
+  - name: s3-controller-test
     decorate: true
     optional: false
     always_run: true
@@ -19432,7 +19446,6 @@ presubmits:
           value: acm
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/acmpca-controller:
   - name: acmpca-kind-e2e
     decorate: true
@@ -19596,7 +19609,6 @@ presubmits:
         - name: SERVICE
           value: acmpca
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/apigateway-controller:
   - name: apigateway-kind-e2e
@@ -19762,7 +19774,6 @@ presubmits:
           value: apigateway
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/apigatewayv2-controller:
   - name: apigatewayv2-kind-e2e
     decorate: true
@@ -19926,7 +19937,6 @@ presubmits:
         - name: SERVICE
           value: apigatewayv2
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/applicationautoscaling-controller:
   - name: applicationautoscaling-kind-e2e
@@ -20092,7 +20102,6 @@ presubmits:
           value: applicationautoscaling
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/athena-controller:
   - name: athena-kind-e2e
     decorate: true
@@ -20256,7 +20265,6 @@ presubmits:
         - name: SERVICE
           value: athena
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/batch-controller:
   - name: batch-kind-e2e
@@ -20422,7 +20430,6 @@ presubmits:
           value: batch
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/cognitoidentity-controller:
   - name: cognitoidentity-kind-e2e
     decorate: true
@@ -20586,7 +20593,6 @@ presubmits:
         - name: SERVICE
           value: cognitoidentity
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/cloudfront-controller:
   - name: cloudfront-kind-e2e
@@ -20752,7 +20758,6 @@ presubmits:
           value: cloudfront
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/cloudtrail-controller:
   - name: cloudtrail-kind-e2e
     decorate: true
@@ -20916,7 +20921,6 @@ presubmits:
         - name: SERVICE
           value: cloudtrail
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/cloudwatch-controller:
   - name: cloudwatch-kind-e2e
@@ -21082,7 +21086,6 @@ presubmits:
           value: cloudwatch
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/cloudwatchevents-controller:
   - name: cloudwatchevents-kind-e2e
     decorate: true
@@ -21246,7 +21249,6 @@ presubmits:
         - name: SERVICE
           value: cloudwatchevents
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/cloudwatchlogs-controller:
   - name: cloudwatchlogs-kind-e2e
@@ -21412,7 +21414,6 @@ presubmits:
           value: cloudwatchlogs
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/documentdb-controller:
   - name: documentdb-kind-e2e
     decorate: true
@@ -21576,7 +21577,6 @@ presubmits:
         - name: SERVICE
           value: documentdb
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/dynamodb-controller:
   - name: dynamodb-kind-e2e
@@ -21742,7 +21742,6 @@ presubmits:
           value: dynamodb
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/ebs-controller:
   - name: ebs-kind-e2e
     decorate: true
@@ -21907,7 +21906,6 @@ presubmits:
           value: ebs
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/ec2-controller:
   - name: ec2-kind-e2e
     decorate: true
@@ -22071,7 +22069,6 @@ presubmits:
         - name: SERVICE
           value: ec2
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/ecr-controller:
   - name: ecr-kind-e2e
@@ -22240,7 +22237,6 @@ presubmits:
           value: ecr
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/ecs-controller:
   - name: ecs-kind-e2e
     decorate: true
@@ -22404,7 +22400,6 @@ presubmits:
         - name: SERVICE
           value: ecs
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/efs-controller:
   - name: efs-kind-e2e
@@ -22570,7 +22565,6 @@ presubmits:
           value: efs
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/eks-controller:
   - name: eks-kind-e2e
     decorate: true
@@ -22734,7 +22728,6 @@ presubmits:
         - name: SERVICE
           value: eks
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/elasticache-controller:
   - name: elasticache-kind-e2e
@@ -22900,7 +22893,6 @@ presubmits:
           value: elasticache
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/elbv2-controller:
   - name: elbv2-kind-e2e
     decorate: true
@@ -23064,7 +23056,6 @@ presubmits:
         - name: SERVICE
           value: elbv2
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/emrcontainers-controller:
   - name: emrcontainers-kind-e2e
@@ -23230,7 +23221,6 @@ presubmits:
           value: emrcontainers
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/eventbridge-controller:
   - name: eventbridge-kind-e2e
     decorate: true
@@ -23394,7 +23384,6 @@ presubmits:
         - name: SERVICE
           value: eventbridge
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/iam-controller:
   - name: iam-kind-e2e
@@ -23560,7 +23549,6 @@ presubmits:
           value: iam
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/kafka-controller:
   - name: kafka-kind-e2e
     decorate: true
@@ -23724,7 +23712,6 @@ presubmits:
         - name: SERVICE
           value: kafka
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/kinesis-controller:
   - name: kinesis-kind-e2e
@@ -23890,7 +23877,6 @@ presubmits:
           value: kinesis
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/kms-controller:
   - name: kms-kind-e2e
     decorate: true
@@ -24054,7 +24040,6 @@ presubmits:
         - name: SERVICE
           value: kms
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/keyspaces-controller:
   - name: keyspaces-kind-e2e
@@ -24220,7 +24205,6 @@ presubmits:
           value: keyspaces
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/lambda-controller:
   - name: lambda-kind-e2e
     decorate: true
@@ -24384,7 +24368,6 @@ presubmits:
         - name: SERVICE
           value: lambda
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/memorydb-controller:
   - name: memorydb-kind-e2e
@@ -24550,7 +24533,6 @@ presubmits:
           value: memorydb
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/mq-controller:
   - name: mq-kind-e2e
     decorate: true
@@ -24714,7 +24696,6 @@ presubmits:
         - name: SERVICE
           value: mq
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/networkfirewall-controller:
   - name: networkfirewall-kind-e2e
@@ -24880,7 +24861,6 @@ presubmits:
           value: networkfirewall
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/opensearchservice-controller:
   - name: opensearchservice-kind-e2e
     decorate: true
@@ -25044,7 +25024,6 @@ presubmits:
         - name: SERVICE
           value: opensearchservice
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/organizations-controller:
   - name: organizations-kind-e2e
@@ -25210,7 +25189,6 @@ presubmits:
           value: organizations
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/pipes-controller:
   - name: pipes-kind-e2e
     decorate: true
@@ -25374,7 +25352,6 @@ presubmits:
         - name: SERVICE
           value: pipes
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/prometheusservice-controller:
   - name: prometheusservice-kind-e2e
@@ -25540,7 +25517,6 @@ presubmits:
           value: prometheusservice
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/rds-controller:
   - name: rds-kind-e2e
     decorate: true
@@ -25704,7 +25680,6 @@ presubmits:
         - name: SERVICE
           value: rds
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/recyclebin-controller:
   - name: recyclebin-kind-e2e
@@ -25870,7 +25845,6 @@ presubmits:
           value: recyclebin
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/route53-controller:
   - name: route53-kind-e2e
     decorate: true
@@ -26034,7 +26008,6 @@ presubmits:
         - name: SERVICE
           value: route53
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/route53resolver-controller:
   - name: route53resolver-kind-e2e
@@ -26200,7 +26173,6 @@ presubmits:
           value: route53resolver
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/s3-controller:
   - name: s3-kind-e2e
     decorate: true
@@ -26364,7 +26336,6 @@ presubmits:
         - name: SERVICE
           value: s3
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/sagemaker-controller:
   - name: sagemaker-kind-e2e
@@ -26530,7 +26501,6 @@ presubmits:
           value: sagemaker
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/secretsmanager-controller:
   - name: secretsmanager-kind-e2e
     decorate: true
@@ -26694,7 +26664,6 @@ presubmits:
         - name: SERVICE
           value: secretsmanager
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/servicecatalog-controller:
   - name: servicecatalog-kind-e2e
@@ -26860,7 +26829,6 @@ presubmits:
           value: servicecatalog
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/ses-controller:
   - name: ses-kind-e2e
     decorate: true
@@ -27024,7 +26992,6 @@ presubmits:
         - name: SERVICE
           value: ses
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/sfn-controller:
   - name: sfn-kind-e2e
@@ -27190,7 +27157,6 @@ presubmits:
           value: sfn
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/sns-controller:
   - name: sns-kind-e2e
     decorate: true
@@ -27354,7 +27320,6 @@ presubmits:
         - name: SERVICE
           value: sns
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/sqs-controller:
   - name: sqs-kind-e2e
@@ -27520,7 +27485,6 @@ presubmits:
           value: sqs
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
-
   aws-controllers-k8s/ssm-controller:
   - name: ssm-kind-e2e
     decorate: true
@@ -27684,7 +27648,6 @@ presubmits:
         - name: SERVICE
           value: ssm
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
-
 
   aws-controllers-k8s/wafv2-controller:
   - name: wafv2-kind-e2e
@@ -27851,9 +27814,7 @@ presubmits:
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
 
-
   aws-controllers-k8s/test-infra:
-
   - name: acktest-ecr-e2e-tests
     decorate: true
     optional: false
