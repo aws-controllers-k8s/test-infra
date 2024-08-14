@@ -44,7 +44,7 @@ func init() {
 		&OptJobsOutputPath, "jobs-output-path", "", "path to jobs.yaml where the generated jobs will be stored",
 	)
 	buildProwCmd.PersistentFlags().StringVar(
-		&OptJobsOutputPath, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
+		&OptProwEcrRepository, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
 	)
 	rootCmd.AddCommand(buildProwCmd)
 }
@@ -62,7 +62,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Successfully listed Prow Image details from %s\n", imagesConfig.ImageRepo)
+	log.Printf("Successfully listed Prow Image details from %s\n", OptProwEcrRepository)
 
 	versions := getECRConfigVersionList(imageDetails)
 	log.Println("Successfully retrieved version list from image details")
