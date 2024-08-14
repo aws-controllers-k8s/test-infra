@@ -45,6 +45,7 @@ func listProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
 	svc := ecrpublic.NewFromConfig(cfg)
 	describeImagesInput := &ecrpublic.DescribeImagesInput{
 		RepositoryName: aws.String(repositoryName),
+		MaxResults:     aws.Int32(ECR_TAGS_MAX_CAPACITY),
 	}
 
 	describeImagesOutput := &ecrpublic.DescribeImagesOutput{

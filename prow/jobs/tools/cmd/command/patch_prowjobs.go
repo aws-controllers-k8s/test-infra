@@ -58,6 +58,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Printf("Successfully read versions in %s\n", OptImagesConfigPath)
 
+	log.Printf("Attempting to list images from %s\n", OptProwEcrRepository)
 	imageDetails, err := listProwImageDetails(OptProwEcrRepository)
 	if err != nil {
 		return err

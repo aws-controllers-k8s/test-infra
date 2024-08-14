@@ -22,4 +22,6 @@
             "--images-config-path", "./prow/jobs/images_config.yaml", 
             "--jobs-config-path", "./prow/jobs/jobs_config.yaml",
             "--jobs-templates-path", "./prow/jobs/templates/",
-            "--jobs-output-path", "./prow/jobs/jobs.yaml"]
+            "--jobs-output-path", "./prow/jobs/jobs.yaml",
+            "--prow-ecr-repository", "prow"
+            ]
