@@ -50,7 +50,7 @@ func listGoVersion(repository string) ([]string, error) {
 
 func findHighestGoVersion(tags []string) (string, error) {
 	versions := make([]semver.Version, 0, len(tags))
-	regex, _ := regexp.Compile(`[a-z]`)
+	regex := regexp.MustCompile(`[a-z]`)
 
 	for _, tag := range tags {
 		temp := strings.Split(tag, ".")
