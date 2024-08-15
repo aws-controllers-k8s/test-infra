@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -122,7 +123,7 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 		}
 
 		if needToUpdate {
-			tagsToBuild[configTagKey] = latestTag
+			tagsToBuild[configTagKey] = strings.Join(temp, "-")
 		}
 	}
 
@@ -134,8 +135,13 @@ func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string
 	app := "/kaniko/executor"
 	imagesDir := "./prow/jobs/images"
 
-	for postfix, tag := range tagsToBuild {
-		context := "dir://prow/jobs/images"
+	sortedTagKeys := make([]string, 0, len(tagsToBuild))
+	for key := range tagsToBuild {
+		sortedTagKeys = append(sortedTagKeys, key)
+	}
+	sort.Strings(sortedTagKeys)
+	for _, postfix := range sortedTagKeys {
+		context := "dir://./prow/jobs/images"
 		if postfix == "ack-prow-tools" {
 			context = "dir://."
 		}
@@ -143,7 +149,7 @@ func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string
 			"--dockerfile",
 			fmt.Sprintf("%s/Dockerfile.%s", imagesDir, postfix),
 			"--destination",
-			fmt.Sprintf("%s:%s", imageRepository, tag),
+			fmt.Sprintf("%s:%s", imageRepository, tagsToBuild[postfix]),
 			"--context",
 			context,
 		}
