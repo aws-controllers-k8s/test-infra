@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-local ecr_publish_arn
+ecr_publish_arn=""
 if ! ecr_publish_arn="$(aws ssm get-parameter --name /ack/prow/cd/test-infra/publish-prow-images --query Parameter.Value --output text 2>/dev/null)"; then
     echo "Could not find the IAM role to publish images to the public ECR repository"
     exit 1
@@ -17,7 +17,7 @@ temp_creds=$(aws sts assume-role-with-web-identity \
 eval "$temp_creds"
 
 
-ack-build-tools build-prow-images \ 
+ack-build-tools build-prow-images \
     --images-config-path ./prow/jobs/images_config.yaml \
     --jobs-config-path ./prow/jobs/jobs_config.yaml \
     --jobs-templates-path ./prow/jobs/templates/ \
