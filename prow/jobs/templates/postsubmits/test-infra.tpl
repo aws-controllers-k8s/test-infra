@@ -1,5 +1,5 @@
   aws-controllers-k8s/test-infra:
-  - name: patch-prow-jobs
+  - name: build-prow-images
     decorate: true
     run_if_changed: ^(prow/jobs/images_config.yaml)
     annotations:
