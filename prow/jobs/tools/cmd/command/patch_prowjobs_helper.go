@@ -132,7 +132,7 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string) error {
 	// BuildImage("my-app", "my-app-0.0.9")
 	app := "/kaniko/executor"
-	imagesDir := "./prow/jobs/images/"
+	imagesDir := "./prow/jobs/images"
 
 	for postfix, tag := range tagsToBuild {
 		context := "dir://prow/jobs/images"
@@ -141,7 +141,7 @@ func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string
 		}
 		args := []string{
 			"--dockerfile",
-			fmt.Sprintf("%sDockerfile.%s", imagesDir, postfix),
+			fmt.Sprintf("%s/Dockerfile.%s", imagesDir, postfix),
 			"--destination",
 			fmt.Sprintf("%s:%s", imageRepository, tag),
 			"--context",
