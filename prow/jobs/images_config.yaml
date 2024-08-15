@@ -1,7 +1,7 @@
 #DO NOT MODIFY ORDER
 image_repo: public.ecr.aws/m5q3e4b2/prow
 images:
-  docs: prow-docs-0.0.9
+  docs: prow-docs-0.0.10
 
   unit-test: prow-unit-0.0.7
   integration-test: prow-integration-0.0.22
