@@ -4,6 +4,11 @@
   annotations:
     description: Querys go version in ECR and compare it with versuib in repository. Raises a PR with updated GO_VERSION and bumped prow image versions
     karpenter.sh/do-not-evict: "true"
+  extra_refs:
+  - org: aws-controllers-k8s
+    repo: community
+    base_ref: main
+    workdir: true
   labels:
     preset-github-secrets: "true"
   agent: kubernetes
