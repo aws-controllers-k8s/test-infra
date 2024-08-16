@@ -35,7 +35,7 @@ const (
 	patchJobPRDescription = "Regenerated jobs.yaml with new prow job versions"
 )
 
-func listProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
+func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
 	ctx := context.Background()
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
@@ -65,7 +65,7 @@ func listProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
 	return imageDetails, nil
 }
 
-func getECRConfigVersionList(imageDetails []types.ImageDetail) []string {
+func getEcrImageVersionList(imageDetails []types.ImageDetail) []string {
 
 	pattern := `-[0-9]`
 	regex := regexp.MustCompile(pattern)
@@ -82,19 +82,28 @@ func getECRConfigVersionList(imageDetails []types.ImageDetail) []string {
 	return versions
 }
 
-func cleanECRConfigVersionList(versions []string) map[string]string {
+func getHighestEcrImageVersionMap(versions []string) map[string]string {
 
-	imageTags := make(map[string]string)
+	imageTagsMap := make(map[string]string)
 
 	for _, version := range versions {
+		// skip tags with no prefix
 		temp := strings.Split(version, "-")
 		if len(temp) < 2 {
 			continue
 		}
-		imageTags[strings.Join(temp[:len(temp)-1], "-")] = temp[len(temp)-1]
+
+		tagInList := temp[len(temp)-1]
+		imageTagKey := strings.Join(temp[:len(temp)-1], "-")
+		currentTag, ok := imageTagsMap[imageTagKey]
+
+		// put tagInList in imageTagsMap it's not there, or if tagInList is greater than currentTag in map
+		if replace, err := isGreaterVersion(tagInList, currentTag); !ok || err == nil && replace {
+			imageTagsMap[imageTagKey] = tagInList
+		}
 	}
 
-	return imageTags
+	return imageTagsMap
 }
 
 func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[string]string, error) {
@@ -140,9 +149,10 @@ func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string
 		sortedTagKeys = append(sortedTagKeys, key)
 	}
 	sort.Strings(sortedTagKeys)
+
 	for _, postfix := range sortedTagKeys {
 		context := "dir://./prow/jobs/images"
-		if postfix == "ack-prow-tools" {
+		if postfix == "build-prow-images" || postfix == "upgrade-go-version" {
 			context = "dir://."
 		}
 		args := []string{

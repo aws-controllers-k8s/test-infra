@@ -52,7 +52,7 @@ func TestCleanECRConfigVersionList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			imageTags := cleanECRConfigVersionList(tt.args.versions)
+			imageTags := getHighestEcrImageVersionMap(tt.args.versions)
 			assert.Len(imageTags, tt.wantLenImageTags)
 		})
 	}
@@ -95,7 +95,7 @@ func TestGetECRConfigVersionList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			versions := getECRConfigVersionList(tt.args.imageDetails)
+			versions := getEcrImageVersionList(tt.args.imageDetails)
 			assert.Len(versions, tt.wantLenVersions)
 		})
 	}
@@ -148,8 +148,8 @@ func TestCompareImageVersions(t *testing.T) {
 		{
 			name: "correct versions",
 			args: args{
-				configTagsMap: map[string]string{"tag": "tag-0.0.3"},
-				ecrTagsMap:    map[string]string{"tag": "0.0.1"},
+				configTagsMap: map[string]string{"tag": "tag-0.0.3", "another-tag": "another-tag-0.0.3"},
+				ecrTagsMap:    map[string]string{"tag": "0.0.1", "another-tag": "0.0.3"},
 			},
 			wantLenTagsToBuild: 1,
 			wantErr:            false,
