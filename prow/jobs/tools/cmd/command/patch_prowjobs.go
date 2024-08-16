@@ -14,6 +14,7 @@
 package command
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
@@ -25,6 +26,7 @@ var (
 	OptJobsTemplatesPath string
 	OptJobsOutputPath    string
 	OptProwEcrRepository string
+	OptCreatePR          string
 )
 
 var buildProwCmd = &cobra.Command{
@@ -46,10 +48,17 @@ func init() {
 	buildProwCmd.PersistentFlags().StringVar(
 		&OptProwEcrRepository, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
 	)
+	buildProwCmd.PersistentFlags().StringVar(
+		&OptCreatePR, "create-pr", "true", "option to create PR or not. accepts only true or false",
+	)
 	rootCmd.AddCommand(buildProwCmd)
 }
 
 func buildProwImages(cmd *cobra.Command, args []string) error {
+
+	if OptCreatePR != "true" && OptCreatePR != "false" {
+		return fmt.Errorf("--create-pr invalid: only accepts true of false")
+	}
 
 	log.SetPrefix("build-prow-images")
 	imagesConfig, err := readCurrentImagesConfig(OptImagesConfigPath)
@@ -59,18 +68,17 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	log.Printf("Successfully read versions in %s\n", OptImagesConfigPath)
 
 	log.Printf("Attempting to list images from %s\n", OptProwEcrRepository)
-	imageDetails, err := listProwImageDetails(OptProwEcrRepository)
+	imageDetails, err := listEcrProwImageDetails(OptProwEcrRepository)
 	if err != nil {
 		return err
 	}
 	log.Printf("Successfully listed Prow Image details from %s\n", OptProwEcrRepository)
 
-	versions := getECRConfigVersionList(imageDetails)
+	versions := getEcrImageVersionList(imageDetails)
 	log.Println("Successfully retrieved version list from image details")
 
-	ecrImageTags := cleanECRConfigVersionList(versions)
+	ecrImageTags := getHighestEcrImageVersionMap(versions)
 	log.Println("Successfully cleaned versions")
-	log.Printf("versions:%s\n", versions)
 
 	tagsToBuild, err := compareImageVersions(imagesConfig.Images, ecrImageTags)
 	if err != nil {
@@ -78,10 +86,21 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully compared versions")
 
+	if len(tagsToBuild) == 0 {
+		log.Println("All prow image versions are up to date. exiting...")
+		return nil
+	}
+
+	log.Printf("Tags to build:\n %v\n", tagsToBuild)
 	if err = buildImagesWithKaniko(imagesConfig.ImageRepo, tagsToBuild); err != nil {
 		return err
 	}
 	log.Println("Successfully built all images")
+
+	// exit if we're not creating a PR
+	if OptCreatePR == "false" {
+		return nil
+	}
 
 	err = generator.Generate("jobs", OptJobsConfigPath, OptImagesConfigPath, OptJobsTemplatesPath, OptJobsOutputPath)
 	if err != nil {
