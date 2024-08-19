@@ -4,23 +4,24 @@ FROM golang:${GO_VERSION}-alpine AS builder
 
 RUN apk add --no-cache git
 
+WORKDIR /app
+
 ENV GOPROXY=direct
 COPY . .
 RUN go mod download
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/jobs/tools/cmd
 
-# Start a new stage from scratch
-FROM alpine:latest
+FROM busybox:musl AS busybox
 
-COPY ./prow/jobs/tools/cmd/command/build-prow-images.sh /usr/local/bin
-WORKDIR /go
+FROM gcr.io/kaniko-project/executor:v1.23.2
+# Override the entrypoint
+ENTRYPOINT [ ]
 
-COPY --from=builder /go/ack-build-tools /usr/local/bin/
-COPY --from=gcr.io/kaniko-project/executor:v1.23.2 /kaniko/ /kaniko/
-RUN apk add -y --no-cache \
-    aws-cli \
-    bash \
-    jq
+ENV PATH /usr/local/bin:/kaniko:/busybox:/app
 
-RUN chmod +x /usr/local/bin/build-prow-images.sh
+COPY --from=busybox /bin /busybox
+COPY --from=builder /app/ack-build-tools /busybox
+VOLUME /busybox
+RUN ["/busybox/mkdir", "-p", "/bin"]
+RUN ["/busybox/ln", "-s", "/busybox/sh", "/bin/sh"]
