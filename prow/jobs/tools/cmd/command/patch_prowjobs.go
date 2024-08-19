@@ -16,6 +16,7 @@ package command
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -109,7 +110,9 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
-	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, patchJobCommitBranch, patchJobsSourceFiles, baseBranch, patchJobPRSubject, patchJobPRDescription); err != nil {
+	prDescription := fmt.Sprintf(patchJobPRDescriptionPrefix, tagsToBuild)
+	prCommitBranch := fmt.Sprintf(patchJobCommitBranchPrefix, time.Now().UTC().Nanosecond())
+	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, prCommitBranch, patchJobsSourceFiles, baseBranch, patchJobPRSubject, prDescription); err != nil {
 		return err
 	}
 	log.Println("Successfully commited and raised a PR with newly generated jobs")

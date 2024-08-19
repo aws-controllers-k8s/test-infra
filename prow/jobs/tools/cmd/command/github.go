@@ -85,8 +85,8 @@ func getFileContent(fileArg string) (targetName string, b []byte, err error) {
 		targetName = files[1]
 	}
 
-	b, err = os.ReadFile(targetName)
-	return localFile, b, err
+	b, err = os.ReadFile(localFile)
+	return targetName, b, err
 }
 
 // pushCommit creates the commit in the given reference using the given tree.
