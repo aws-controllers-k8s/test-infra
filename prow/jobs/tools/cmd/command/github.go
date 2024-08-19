@@ -22,6 +22,10 @@ import (
 	"github.com/google/go-github/v63/github"
 )
 
+const (
+	baseBranch = "main"
+)
+
 // getRef returns the commit branch reference object if it exists or creates it
 // from the base branch before returning it.
 func getGitRef(ctx context.Context, client *github.Client, sourceOwner, sourceRepo, commitBranch, baseBranch string) (ref *github.Reference, err error) {

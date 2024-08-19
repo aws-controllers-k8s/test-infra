@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	baseBranch             = "main"
 	updateGoPRSubject      = "Update to GO_VERSION %s"
 	updateGoPRCommitBranch = "golang-update-%s"
 	updateGoPRDescription  = "Update to GO_VERSION from %s to %s "

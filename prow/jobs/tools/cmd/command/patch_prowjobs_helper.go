@@ -29,7 +29,7 @@ import (
 
 const (
 	ECR_TAGS_MAX_CAPACITY = 200
-	pathcJobsSourceFiles  = "jobs.yaml:./prow/jobs/jobs.yaml"
+	patchJobsSourceFiles  = "jobs.yaml:test-infra/prow/jobs/jobs.yaml"
 	patchJobCommitBranch  = "ack-bot/built-and-pushed-images"
 	patchJobPRSubject     = "Patch Prow Jobs Image Version"
 	patchJobPRDescription = "Regenerated jobs.yaml with new prow job versions"

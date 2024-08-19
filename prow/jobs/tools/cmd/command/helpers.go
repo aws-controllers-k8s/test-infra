@@ -100,7 +100,7 @@ func commitAndSendPR(sourceOwner, sourceRepo, commitBranch, sourceFiles, baseBra
 	}
 
 	if sourceOwner == "" || sourceRepo == "" || commitBranch == "" || sourceFiles == "" {
-		return fmt.Errorf("you need to specify a non-empty value for the flags `-source-owner`, `-source-repo`, `-commit-branch`, `-files`, `-author-name` and `-author-email`")
+		return fmt.Errorf("you need to specify a non-empty value for the flags `-source-owner`, and `-source-repo`")
 	}
 
 	client := github.NewClient(nil).WithAuthToken(token)

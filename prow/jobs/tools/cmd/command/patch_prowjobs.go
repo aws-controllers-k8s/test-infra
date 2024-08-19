@@ -17,8 +17,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 )
 
 var (
@@ -108,11 +109,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
-	commitBranch := ""
-	prSubject := ""
-	prDescription := ""
-
-	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, pathcJobsSourceFiles, baseBranch, prSubject, prDescription); err != nil {
+	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, patchJobCommitBranch, patchJobsSourceFiles, baseBranch, patchJobPRSubject, patchJobPRDescription); err != nil {
 		return err
 	}
 	log.Println("Successfully commited and raised a PR with newly generated jobs")
