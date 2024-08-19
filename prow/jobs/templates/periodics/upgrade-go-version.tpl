@@ -6,7 +6,7 @@
     karpenter.sh/do-not-evict: "true"
   extra_refs:
   - org: aws-controllers-k8s
-    repo: community
+    repo: test-infra
     base_ref: main
     workdir: true
   labels:
