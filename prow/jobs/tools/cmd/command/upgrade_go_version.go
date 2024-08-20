@@ -61,13 +61,14 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("%v", err)
 	}
-	log.Printf("Current highest Go version in ECR is %s\n", highestEcrGoVersion)
+	log.Printf("Current highest Go version in %s is %s\n", OptGoEcrRepository, highestEcrGoVersion)
 
 	goBuildVersion, err := readCurrentBuildGoVersion(OptBuildConfigPath)
 	if err != nil {
 		return err
 	}
 	log.Printf("Successfully extracted build versions from %s\n", OptBuildConfigPath)
+	log.Printf("Current version in build config is %s\n", goBuildVersion.GoVersion)
 
 	needUpgrade, err := isGreaterVersion(highestEcrGoVersion, goBuildVersion.GoVersion)
 	if err != nil {
@@ -75,17 +76,18 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	}
 
 	if !needUpgrade {
-		log.Printf("Go version in build_config.yaml is up-to-date")
+		log.Printf("Go version in %s is up-to-date\n", OptBuildConfigPath)
 		return nil
 	}
-
-	log.Printf("Updating Go version to %s", highestEcrGoVersion)
-	log.Printf("Patching build_config.yaml and images_config.yaml")
+	
+	log.Printf("Changing Go build version to %s in %s\n", highestEcrGoVersion, OptBuildConfigPath)
 	goBuildVersion.GoVersion = highestEcrGoVersion
-	if err = patchGoBuildVersion(OptBuildConfigPath, goBuildVersion); err != nil {
+	if err = patchGoBuildVersionFile(goBuildVersion, OptBuildConfigPath); err != nil {
 		return err
 	}
+	log.Println("Successfully updated Go version!")
 
+	log.Printf("Patching prow image versions in %s\n", OptImagesConfigPath)
 	imagesConfig, err := readCurrentImagesConfig(OptImagesConfigPath)
 	if err != nil {
 		return err
@@ -93,19 +95,20 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	if err = increasePatchImageConfig(imagesConfig); err != nil {
 		return nil
 	}
-
-	if err = patchImageConfigVersion(OptImagesConfigPath, imagesConfig); err != nil {
+	if err = patchImageConfigVersionFile(imagesConfig, OptImagesConfigPath); err != nil {
 		return err
 	}
+	log.Println("Successfully patched prow image versions!")
 
 	commitBranch := fmt.Sprintf(updateGoPRCommitBranch, highestEcrGoVersion)
 	prSubject := fmt.Sprintf(updateGoPRSubject, highestEcrGoVersion)
 	prDescription := fmt.Sprintf(updateGoPRDescription, goBuildVersion.GoVersion, highestEcrGoVersion)
 
-	//TODO: need to specify prRepo and issueRepo
+	log.Println("Committing and creating PR with changes")
 	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateGoSourceFiles, baseBranch, prSubject, prDescription); err != nil {
 		return err
 	}
+	log.Println("Successfully created PR")
 
 	return nil
 }

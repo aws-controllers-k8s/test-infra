@@ -35,7 +35,7 @@ const (
 	// 	The local file is separated by its target location by a semi-colon.
 	// 	If the file should be in the same location with the same name, you can just put the file name and omit the repetition.
 	// 	Example: README.md,main.go:prow/jobs/tools/cmd/main.go`
-	updateGoSourceFiles    = "build_config.yaml,images_config.yaml:./prow/jobs/images_config.yaml"
+	updateGoSourceFiles = "build_config.yaml,./prow/jobs/images_config.yaml:prow/jobs/images_config.yaml"
 )
 
 func listGoVersion(repository string) ([]string, error) {
@@ -87,7 +87,7 @@ func increasePatchImageConfig(imagesConfig *ImagesConfig) error {
 	return nil
 }
 
-func patchGoBuildVersion(filepath string, versionConfig *BuildConfig) error {
+func patchGoBuildVersionFile(versionConfig *BuildConfig, filepath string) error {
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("unable to create file %s: %s", filepath, err)

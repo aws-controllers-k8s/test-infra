@@ -66,7 +66,7 @@ func readCurrentImagesConfig(filepath string) (*ImagesConfig, error) {
 	return imagesConfig, nil
 }
 
-func patchImageConfigVersion(filepath string, imagesConfig *ImagesConfig) error {
+func patchImageConfigVersionFile(imagesConfig *ImagesConfig, filepath string) error {
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("unable to create file %s: %s", filepath, err)
