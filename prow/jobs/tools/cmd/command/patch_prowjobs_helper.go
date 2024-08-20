@@ -29,10 +29,10 @@ import (
 
 const (
 	ECR_TAGS_MAX_CAPACITY = 200
-	patchJobsSourceFiles  = "jobs.yaml:./prow/jobs/jobs.yaml"
-	patchJobCommitBranch  = "ack-bot/built-and-pushed-images"
+	patchJobsSourceFiles  = "./prow/jobs/jobs.yaml:test-infra/prow/jobs/jobs.yaml"
+	patchJobCommitBranchPrefix  = "ack-bot/built-and-pushed-images-%d"
 	patchJobPRSubject     = "Patch Prow Jobs Image Version"
-	patchJobPRDescription = "Regenerated jobs.yaml with new prow job versions"
+	patchJobPRDescriptionPrefix = "Regenerated jobs.yaml with new prow job versions for %v\n"
 )
 
 func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
