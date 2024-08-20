@@ -153,16 +153,17 @@ do
   echo "ok"
 
   if [[ ! -f $WORKSPACE_DIR/$OH_REPO/operators/ack-$CONTROLLER_NAME/ci.yaml ]]; then
-    #TODO: Automatically add ci.yaml if missing from the community-operators(-prod)
-    # repos instead of creating a GitHub issue for it
-    echo "olm-bundle-pr.sh][ERROR] ci.yaml file missing from $OH_ORG_REPO"
-    ISSUE_TITLE="Missing ci.yaml file for \`$CONTROLLER_NAME\` in \`$OH_ORG_REPO\`"
-    GITHUB_ISSUE_BODY_TEMPLATE_FILE="$THIS_DIR/gh_issue_missing_oh_ci_template.txt"
-    GITHUB_ISSUE_BODY_FILE_PATH=/tmp/"$SERVICE"_gh_issue_body
-    eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > "$GITHUB_ISSUE_BODY_FILE_PATH"
-    open_gh_issue "$GITHUB_ISSUE_ORG_REPO" "$ISSUE_TITLE" "$GITHUB_ISSUE_BODY_FILE_PATH"
-    # Skip creating PR for this service controller after updating GitHub issue.
-    exit 1
+    echo "olm-bundle-pr.sh][INFO] ci.yaml file missing from $OH_ORG_REPO for ack-$CONTROLLER_NAME, creating ci.yaml file"
+
+    # creating the controllers directory
+    mkdir -p "operators/ack-$CONTROLLER_NAME"
+    cd "$WORKSPACE_DIR/$OH_REPO/operators/ack-$CONTROLLER_NAME"
+
+    # creating the ci.yaml file with proper content
+    echo "# Use \`replaces-mode\` or \`semver-mode\`. Once you switch to \`semver-mode\`, there is no easy way back." >> ci.yaml
+    yq -i '.updateGraph="semver-mode"' ci.yaml
+    yq -i '.reviewers[0]="ack-bot"' ci.yaml
+    echo "" >> ci.yaml
   fi
 
   mkdir -p "operators/ack-$CONTROLLER_NAME/$OLM_BUNDLE_VERSION"
