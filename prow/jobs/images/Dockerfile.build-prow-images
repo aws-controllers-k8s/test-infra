@@ -1,6 +1,6 @@
 ARG GO_VERSION=1.22.5
 
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS builder
 
 RUN apk add --no-cache git
 
@@ -12,16 +12,40 @@ RUN go mod download
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/jobs/tools/cmd
 
-FROM busybox:musl AS busybox
+FROM quay.io/containers/buildah:v1.37.0
 
-FROM gcr.io/kaniko-project/executor:v1.23.2
-# Override the entrypoint
-ENTRYPOINT [ ]
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
 
-ENV PATH /usr/local/bin:/kaniko:/busybox:/app
+ARG GO_VERSION=1.22.5
+ENV GO_VERSION=${GO_VERSION}
 
-COPY --from=busybox /bin /busybox
+ENV GOPATH=/home/prow/go \
+    GO111MODULE=on \
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
+
+RUN dnf -y install \
+		which \
+		git \
+		unzip \
+		openssl \
+		jq \
+		gettext \
+        findutils \
+    && curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
+    && unzip awscliv2.zip \
+    && aws/install \
+    && export AWS_PAGER="" \
+    && curl -L -s https://github.com/mikefarah/yq/releases/download/v4.31.2/yq_linux_amd64 --output /usr/bin/yq \
+    && chmod +x /usr/bin/yq
+
+RUN echo "Installing Go ..." \
+    && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
+    && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
+    && tar xzf "${GO_TARBALL}" -C /usr/local \
+    && rm "${GO_TARBALL}"\
+    && mkdir -p "${GOPATH}/bin"
+
+RUN chmod +x ./prow/jobs/tools/cmd/build-prow-images.sh
+
 COPY --from=builder /app/ack-build-tools /busybox
-VOLUME /busybox
-RUN ["/busybox/mkdir", "-p", "/bin"]
-RUN ["/busybox/ln", "-s", "/busybox/sh", "/bin/sh"]

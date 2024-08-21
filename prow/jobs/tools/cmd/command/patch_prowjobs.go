@@ -94,10 +94,15 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Printf("Tags to build:\n %v\n", tagsToBuild)
-	if err = buildImagesWithKaniko(imagesConfig.ImageRepo, tagsToBuild); err != nil {
+	if err = buildImages(tagsToBuild); err != nil {
 		return err
 	}
 	log.Println("Successfully built all images")
+
+	if err = tagAndPushImages(imagesConfig.ImageRepo, tagsToBuild); err != nil {
+		return err
+	}
+	log.Println("Successfully tagged and pushed images")
 
 	// exit if we're not creating a PR
 	if OptCreatePR == "false" {
