@@ -46,6 +46,7 @@ RUN echo "Installing Go ..." \
     && rm "${GO_TARBALL}"\
     && mkdir -p "${GOPATH}/bin"
 
-RUN chmod +x ./prow/jobs/tools/cmd/build-prow-images.sh
+COPY --from=builder /app/ack-build-tools /usr/local/bin
+COPY --from=builder /app/prow/jobs/tools/cmd/build-prow-images.sh /usr/local/bin
 
-COPY --from=builder /app/ack-build-tools /busybox
+RUN chmod +x /usr/local/bin/build-prow-images.sh
