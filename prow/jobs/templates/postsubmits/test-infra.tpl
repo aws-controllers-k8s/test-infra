@@ -17,9 +17,6 @@
             requests:
               cpu: 2
               memory: "4096Mi"
-          command: ["/busybox/ack-build-tools", "build-prow-images",
-                  "--images-config-path", "./prow/jobs/images_config.yaml",
-                  "--jobs-config-path", "./prow/jobs/jobs_config.yaml",
-                  "--jobs-templates-path", "./prow/jobs/templates/",
-                  "--jobs-output-path", "./prow/jobs/jobs.yaml",
-                  "--prow-ecr-repository", "prow"]
+          command: ["./prow/jobs/tools/cmd/build-prow-images.sh"]
+    branches:
+    - main                

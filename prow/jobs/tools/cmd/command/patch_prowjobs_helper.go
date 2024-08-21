@@ -139,9 +139,9 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 	return tagsToBuild, nil
 }
 
-func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string) error {
+func buildImages(tagsToBuild map[string]string) error {
 	// BuildImage("my-app", "my-app-0.0.9")
-	app := "/kaniko/executor"
+	app := "buildah"
 	imagesDir := "./prow/jobs/images"
 
 	sortedTagKeys := make([]string, 0, len(tagsToBuild))
@@ -151,22 +151,64 @@ func buildImagesWithKaniko(imageRepository string, tagsToBuild map[string]string
 	sort.Strings(sortedTagKeys)
 
 	for _, postfix := range sortedTagKeys {
-		context := "dir://./prow/jobs/images"
+		
+		tag := fmt.Sprintf("prow/%s", postfix)
+		context := "./prow/jobs/images"
 		if postfix == "build-prow-images" || postfix == "upgrade-go-version" {
-			context = "dir://."
+			context = "."
 		}
+
 		args := []string{
-			"--dockerfile",
+			"-f",
 			fmt.Sprintf("%s/Dockerfile.%s", imagesDir, postfix),
-			"--destination",
-			fmt.Sprintf("%s:%s", imageRepository, tagsToBuild[postfix]),
-			"--context",
+			"-t",
+			tag,
+			"--arch",
+			"amd64",
 			context,
 		}
 		cmd := exec.Command(app, args...)
 		stdout, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("unable to build with kaniko for context %s. stdout: %s\n: %v", context, stdout, err)
+			return fmt.Errorf("unable to build images for %s. stdout: %s\n: %v", postfix, stdout, err)
+		}
+	}
+	return nil
+}
+
+func tagAndPushImages(imageRepository string, tagsToBuild map[string]string) error {
+	app := "buildah"
+
+	sortedTagKeys := make([]string, 0, len(tagsToBuild))
+	for key := range tagsToBuild {
+		sortedTagKeys = append(sortedTagKeys, key)
+	}
+	sort.Strings(sortedTagKeys)
+
+	for _, postfix := range sortedTagKeys {
+
+		//tag Image
+		destination := fmt.Sprintf("%s:%s", imageRepository, tagsToBuild[postfix])
+		args := []string{
+			"tag",
+			fmt.Sprintf("prow/%s", postfix),
+			destination,
+		}
+		cmd := exec.Command(app, args...)
+		stdout, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("unable to tag images for %s\n%s\n%v", postfix, stdout, err)
+		}
+
+		//push image
+		args = []string {
+			"push",
+			destination,
+		}
+		cmd = exec.Command(app, args...)
+		stdout, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("unable to push %s to %s \n%s\n%v", postfix, destination, stdout, err)
 		}
 	}
 	return nil
