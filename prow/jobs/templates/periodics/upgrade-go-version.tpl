@@ -27,3 +27,5 @@
         "--build-config-path", "./build_config.yaml", 
         "--images-config-path", "./prow/jobs/images_config.yaml",
         "--golang-ecr-repository", "v2/docker/library/golang"]
+    branches:
+    - main
