@@ -1,6 +1,43 @@
 # Dockerfile for soak testing
-ARG DEPLOY_BASE_TAG
-FROM $DEPLOY_BASE_TAG as base
+FROM quay.io/containers/buildah:v1.33.2
+
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
+
+ARG GO_VERSION=1.22.5
+ENV GO_VERSION=${GO_VERSION}
+
+ENV GOPATH=/home/prow/go \
+    GO111MODULE=on \
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
+
+RUN dnf -y install \
+		which \
+		git \
+		unzip \
+		openssl \
+		jq \
+		gettext \
+        findutils \
+    && curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
+    && unzip awscliv2.zip \
+    && aws/install \
+    && export AWS_PAGER="" \
+    && curl -L -s https://github.com/mikefarah/yq/releases/download/v4.31.2/yq_linux_amd64 --output /usr/bin/yq \
+    && chmod +x /usr/bin/yq
+
+RUN echo "Installing Go ..." \
+    && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
+    && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
+    && tar xzf "${GO_TARBALL}" -C /usr/local \
+    && rm "${GO_TARBALL}"\
+    && mkdir -p "${GOPATH}/bin"
+
+RUN echo "Installing Helm ... " \
+    && export HELM_TARBALL="helm.tar.gz" \
+    && curl -fsSL https://get.helm.sh/helm-v3.11.1-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
+    && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
+    && rm "${HELM_TARBALL}"
 
 RUN dnf -y install jq\
     && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
