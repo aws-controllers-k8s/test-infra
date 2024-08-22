@@ -20,6 +20,8 @@ ENV GOPROXY=${GOPROXY}
 ARG GO_VERSION=1.22.5
 ENV GO_VERSION=${GO_VERSION}
 
+ENV STORAGE_DRIVER=vfs
+
 ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
     PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
