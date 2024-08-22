@@ -1,6 +1,51 @@
 # Dockerfile for integration testing
-ARG TEST_BASE_TAG
-FROM $TEST_BASE_TAG as base
+FROM debian:buster-slim
+
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
+
+ARG GO_VERSION=1.22.5
+ENV GO_VERSION=${GO_VERSION}
+
+ENV GOPATH=/home/prow/go \
+    GO111MODULE=on \
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
+
+RUN echo "Installing packages ..." \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends\
+        build-essential \
+        ca-certificates \
+        make \
+        curl \
+        git \
+        gnupg2 \
+        software-properties-common \
+        lsb-release \
+        wget \
+        jq \
+        uuid-runtime \
+        apt-transport-https \
+        unzip
+
+RUN echo "Installing yq ..." \
+    && export BINARY=yq_linux_amd64 \
+    && export VERSION=v4.25.3 \
+    && wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - |\
+    tar xz \
+    && mv ${BINARY} /usr/bin/yq
+
+RUN echo "Installing Go ..." \
+    && export GO_TARBALL="go${GO_VERSION}.linux-amd64.tar.gz"\
+    && curl -fsSL "https://storage.googleapis.com/golang/${GO_TARBALL}" --output "${GO_TARBALL}" \
+    && tar xzf "${GO_TARBALL}" -C /usr/local \
+    && rm "${GO_TARBALL}"\
+    && mkdir -p "${GOPATH}/bin"
+
+RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
+    && unzip awscliv2.zip \
+    && aws/install \
+    && export AWS_PAGER=""
 
 ARG DOCKER_VERSION=24.0.5
 ENV DOCKER_VERSION=${DOCKER_VERSION}
@@ -37,7 +82,7 @@ RUN echo "Installing Docker ..." \
     && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i 's/cgroupfs_mount$/#cgroupfs_mount\n/' /etc/init.d/docker \
-    && sed -i 's/ulimit -Hn/# ulimit -Hn/g' /etc/init.d/docker \
+    && sed -i 's/ulimit -Hn/# ulimit -Hn/g' /etc/init.d/docker
 
 RUN echo "Ensuring Legacy Iptables ..." \
     && update-alternatives --set iptables  /usr/sbin/iptables-legacy || true \
@@ -47,3 +92,8 @@ RUN echo "Ensuring Legacy Iptables ..." \
 RUN echo "Installing Kind v0.19.0..." \
     && go install "sigs.k8s.io/kind@v0.19.0" \
     && mv $GOPATH/bin/kind /usr/bin/kind
+
+COPY wrapper.sh /usr/bin/wrapper.sh
+
+ENTRYPOINT ["wrapper.sh"]
+VOLUME ["/var/lib/docker"]

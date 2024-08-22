@@ -1,5 +1,5 @@
 # Common Dockerfile for unit and integration test
-FROM debian:buster-slim AS base
+FROM debian:buster-slim
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
