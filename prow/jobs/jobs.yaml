@@ -18445,7 +18445,7 @@ postsubmits:
     spec:
       serviceAccountName: post-submit-service-account
       containers:
-        - image: public.ecr.aws/m5q3e4b2/prow:prow-build-prow-images-0.0.31
+        - image: public.ecr.aws/m5q3e4b2/prow:prow-build-prow-images-0.0.33
           resources:
             limits:
               cpu: 2
