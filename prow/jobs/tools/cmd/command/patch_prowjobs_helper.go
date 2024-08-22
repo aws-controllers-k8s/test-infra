@@ -159,6 +159,7 @@ func buildImages(tagsToBuild map[string]string) error {
 		}
 
 		args := []string{
+			"build",
 			"-f",
 			fmt.Sprintf("%s/Dockerfile.%s", imagesDir, postfix),
 			"-t",
