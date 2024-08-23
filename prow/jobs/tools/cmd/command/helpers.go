@@ -35,10 +35,11 @@ type ImagesConfig struct {
 // where the build versions are stored
 type BuildConfig struct {
 	// so far we only have the go-version
-	GoVersion string `yaml:"go_version"`
+	GoVersion        string `yaml:"go_version"`
+	EksDistroVersion string `yaml:"eks_distro_version"`
 }
 
-func readCurrentBuildGoVersion(filepath string) (*BuildConfig, error) {
+func readBuildConfigFile(filepath string) (*BuildConfig, error) {
 	fileData, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s: %s", OptBuildConfigPath, err)
