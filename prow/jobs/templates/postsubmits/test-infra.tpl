@@ -17,6 +17,6 @@
             requests:
               cpu: 2
               memory: "4096Mi"
-          command: ["build-prow-images.sh"]
+          command: ["./prow/jobs/tools/cmd/build-prow-images.sh"]
     branches:
     - main                

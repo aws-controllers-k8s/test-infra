@@ -49,6 +49,3 @@ RUN echo "Installing Go ..." \
     && mkdir -p "${GOPATH}/bin"
 
 COPY --from=builder /app/ack-build-tools /usr/local/bin
-COPY --from=builder /app/prow/jobs/tools/cmd/build-prow-images.sh /usr/local/bin
-
-RUN chmod +x /usr/local/bin/build-prow-images.sh
