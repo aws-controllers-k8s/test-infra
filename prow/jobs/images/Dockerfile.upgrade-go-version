@@ -14,5 +14,3 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/job
 FROM alpine:latest
 
 COPY --from=builder /go/ack-build-tools /usr/local/bin/
-
-RUN chmod +x /usr/local/bin/ack-build-tools

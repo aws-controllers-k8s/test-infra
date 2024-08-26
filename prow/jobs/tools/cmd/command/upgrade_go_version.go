@@ -43,14 +43,14 @@ func init() {
 	rootCmd.AddCommand(upgradeGoVersionCMD)
 }
 
-// startQuery command compares the GO version in ECR public to the one in build_config
+// runUpgradeGoVersion command compares the GO version in ECR public to the one in build_config
 // If the version in ECR is greater, it increases the patch version of prow images in
 // images_config.yaml, updates build_config.yaml with latest version
 // and pushes a PR with the updates.
 func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("upgrade-go-version: ")
 
-	ecrGoVersions, err := listGoVersion(OptGoEcrRepository)
+	ecrGoVersions, err := listRepositoryTags(OptGoEcrRepository)
 	if err != nil {
 		return fmt.Errorf("unable to get go versions from ecr public: %v", err)
 	}
@@ -63,7 +63,7 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	}
 	log.Printf("Current highest Go version in %s is %s\n", OptGoEcrRepository, highestEcrGoVersion)
 
-	goBuildVersion, err := readCurrentBuildGoVersion(OptBuildConfigPath)
+	goBuildVersion, err := readBuildConfigFile(OptBuildConfigPath)
 	if err != nil {
 		return err
 	}
@@ -79,10 +79,10 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 		log.Printf("Go version in %s is up-to-date\n", OptBuildConfigPath)
 		return nil
 	}
-	
+
 	log.Printf("Changing Go build version to %s in %s\n", highestEcrGoVersion, OptBuildConfigPath)
 	goBuildVersion.GoVersion = highestEcrGoVersion
-	if err = patchGoBuildVersionFile(goBuildVersion, OptBuildConfigPath); err != nil {
+	if err = patchBuildVersionFile(goBuildVersion, OptBuildConfigPath); err != nil {
 		return err
 	}
 	log.Println("Successfully updated Go version!")
@@ -93,7 +93,7 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err = increasePatchImageConfig(imagesConfig); err != nil {
-		return nil
+		return err
 	}
 	if err = patchImageConfigVersionFile(imagesConfig, OptImagesConfigPath); err != nil {
 		return err

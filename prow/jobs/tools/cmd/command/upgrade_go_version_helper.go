@@ -38,7 +38,7 @@ const (
 	updateGoSourceFiles = "build_config.yaml,./prow/jobs/images_config.yaml:prow/jobs/images_config.yaml"
 )
 
-func listGoVersion(repository string) ([]string, error) {
+func listRepositoryTags(repository string) ([]string, error) {
 	client := ecrpublic.New()
 	tags, err := client.ListRepositoryTags(repository)
 	if err != nil {
@@ -87,7 +87,7 @@ func increasePatchImageConfig(imagesConfig *ImagesConfig) error {
 	return nil
 }
 
-func patchGoBuildVersionFile(versionConfig *BuildConfig, filepath string) error {
+func patchBuildVersionFile(versionConfig *BuildConfig, filepath string) error {
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("unable to create file %s: %s", filepath, err)
