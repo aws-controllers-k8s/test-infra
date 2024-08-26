@@ -67,19 +67,6 @@ func runUpgradeEksDistro(cmd *cobra.Command, args []string) error {
 	}
 	log.Printf("Successfully updated eks-distro version in build_config")
 
-	log.Printf("Patching prow image versions in %s\n", OptImagesConfigPath)
-	imagesConfig, err := readCurrentImagesConfig(OptImagesConfigPath)
-	if err != nil {
-		return err
-	}
-	if err = increasePatchImageConfig(imagesConfig); err != nil {
-		return err
-	}
-	if err = patchImageConfigVersionFile(imagesConfig, OptImagesConfigPath); err != nil {
-		return err
-	}
-	log.Println("Successfully patched prow image versions!")
-
 	commitBranch := fmt.Sprintf(updateEksDistroPRCommitBranch, highestEcrEksDistroVersion)
 	prSubject := fmt.Sprintf(updateEksDistroPRSubject, highestEcrEksDistroVersion)
 	prDescription := fmt.Sprintf(updateEksDistroPRDescription, olderVersion, highestEcrEksDistroVersion)
