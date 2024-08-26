@@ -14,7 +14,7 @@ const (
 	// 	The local file is separated by its target location by a semi-colon.
 	// 	If the file should be in the same location with the same name, you can just put the file name and omit the repetition.
 	// 	Example: README.md,main.go:prow/jobs/tools/cmd/main.go`
-	updateEksDistroSourceFiles = "build_config.yaml,./prow/jobs/images_config.yaml:prow/jobs/images_config.yaml"
+	updateEksDistroSourceFiles = "build_config.yaml"
 )
 
 // When comparing EKS-distro versions we are assuming their values
