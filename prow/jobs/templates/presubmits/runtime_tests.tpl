@@ -17,6 +17,46 @@
             cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
+
+  - name: verify-attribution
+    # We probably want to uncomment the following line once we have the attribution
+    # files verified for all the controlelrs
+    # run_if_changed: "go.mod"
+    always_run: true
+    decorate: true
+    optional: false
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    spec:
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "verify-attribution") }}
+        resources:
+          limits:
+            cpu: 1000m
+            memory: "512Mi"
+          requests:
+            cpu: 250m
+            memory: "512Mi"
+        securityContext:
+          runAsUser: 0
+        env:
+        - name: REPO_NAME
+          value: runtime
+        - name: OUTPUT_PATH
+          value: "/tmp/generated_attribution.md"
+        - name: DEBUG
+          value: "true"
+        command:
+        - "wrapper.sh"
+        - "bash"
+        - "-c"
+        - "./cd/scripts/verify-attribution.sh"
+
 {{ range $_, $service := .Config.RuntimePresubmitServices }}
   - name: {{ $service }}-controller-test
     decorate: true

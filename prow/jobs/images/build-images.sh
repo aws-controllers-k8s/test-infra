@@ -29,6 +29,7 @@ GO_VERSION=${GO_VERSION:-"1.22.5"}
 docker_build_args=( "--quiet=$QUIET" "--build-arg=GO_VERSION=$GO_VERSION" )
 
 # docker build -f "$IMAGE_DIR/Dockerfile.deploy" "${docker_build_args[@]}" -t "prow/deploy" "${IMAGE_DIR}"
+# docker build -f "$IMAGE_DIR/Dockerfile.verify-attribution" "${docker_build_args[@]}" -t "prow/verify-attribution" "${IMAGE_DIR}"
 # docker build -f "$IMAGE_DIR/Dockerfile.docs" "${docker_build_args[@]}" -t "prow/docs" "${IMAGE_DIR}"
 # docker build -f "$IMAGE_DIR/Dockerfile.olm-bundle-pr" "${docker_build_args[@]}" -t "prow/olm-bundle-pr" "${IMAGE_DIR}"
 # docker build -f "$IMAGE_DIR/Dockerfile.olm-test" "${docker_build_args[@]}" -t "prow/olm-test" "${IMAGE_DIR}"
