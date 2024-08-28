@@ -133,3 +133,25 @@ func createPR(ctx context.Context, client *github.Client, prSubject, commitBranc
 
 	return nil
 }
+
+func createGithubIssue(owner, repo, title, body string, labels []string) error {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return fmt.Errorf("enviroment variable GITHUB_TOKEN is not provided")
+	}
+
+	client := github.NewClient(nil).WithAuthToken(token)
+	
+	newIssueRequest := &github.IssueRequest{
+		Title: github.String(title),
+		Body: github.String(body),
+		Labels: &labels,
+	}
+
+	_, _, err := client.Issues.Create(context.Background(), owner, repo, newIssueRequest)
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
