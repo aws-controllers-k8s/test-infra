@@ -8,7 +8,7 @@ images:
     docs: prow-docs-0.0.13
     integration-test: prow-integration-0.0.24
     olm-bundle-pr: prow-olm-bundle-pr-0.0.4
-    olm-test: prow-olm-test-0.0.3
+    olm-test: prow-olm-test-0.0.5
     scan-controllers-cve: prow-scan-controllers-cve-0.0.1
     soak-test: prow-soak-0.0.7
     unit-test: prow-unit-0.0.8
