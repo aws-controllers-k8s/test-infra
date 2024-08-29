@@ -139,7 +139,7 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 	return tagsToBuild, nil
 }
 
-func buildImages(tagsToBuild map[string]string) error {
+func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig) error {
 	// BuildImage("my-app", "my-app-0.0.9")
 	app := "buildah"
 	imagesDir := "./prow/jobs/images"
@@ -149,6 +149,8 @@ func buildImages(tagsToBuild map[string]string) error {
 		sortedTagKeys = append(sortedTagKeys, key)
 	}
 	sort.Strings(sortedTagKeys)
+	goVersion := buildArgs.GoVersion
+	eksDistroVersion := fmt.Sprintf("public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-nonroot:%s",buildArgs.EksDistroVersion)
 
 	for _, postfix := range sortedTagKeys {
 		
@@ -171,6 +173,10 @@ func buildImages(tagsToBuild map[string]string) error {
 			tag,
 			"--arch",
 			"amd64",
+			"--build-arg",
+			fmt.Sprintf("GO_VERSION=%s", goVersion),
+			"--build-arg",
+			fmt.Sprintf("BASE_IMAGE=%s", eksDistroVersion),
 			context,
 		}
 		cmd := exec.Command(app, args...)
