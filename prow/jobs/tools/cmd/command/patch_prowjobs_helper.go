@@ -154,7 +154,12 @@ func buildImages(tagsToBuild map[string]string) error {
 		
 		tag := fmt.Sprintf("prow/%s", postfix)
 		context := "./prow/jobs/images"
-		if postfix == "build-prow-images" || postfix == "upgrade-go-version" {
+		// in the future, we would want to 
+		// store the context in the images_config.yaml
+		// and unmarshall it in a struct
+		if postfix == "build-prow-images" || 
+			postfix == "upgrade-go-version" || 
+			postfix == "scan-controllers-cve" {
 			context = "."
 		}
 
