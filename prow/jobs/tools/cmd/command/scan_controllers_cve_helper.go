@@ -103,9 +103,9 @@ func listRepositoryTagsWithRetries(repository string, maxRetries int, timeout ti
 			return nil, fmt.Errorf("timeout to get repository tags after %d retries", retries)
 		}
 		tags, err := listRepositoryTags(repository)
-		time.Sleep(1 * time.Second)
 		if err != nil {
 			if strings.Contains(err.Error(), "429") {
+				time.Sleep(1 * time.Second)
 				retries++
 				continue
 			} else {

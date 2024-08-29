@@ -76,37 +76,87 @@ func TestGetCveSummaries(t *testing.T) {
 
 	type args struct {
 		controller              string
-		results             []Result
+		results                 []Result
 		cveSummaries            map[string]CVESummary
 		detectedVulnerabilities map[string][]string
 	}
 
 	tests := []struct {
-		name                        string
-		args                        args
+		name                              string
+		args                              args
 		wantCveSummariesLength            int
 		wantDetectedVulnerabilitiesLength int
 	}{
 		{
-			name: "correct input",
+			name: "single CVE",
 			args: args{
 				controller: "ec2",
 				results: []Result{{
-						[]Vulnerability{{
-							VulnerabilityId:  "CVE-2024-9805",
-							InstalledVersion: "1.22.2",
-							FixedVersion:     "1.23.0",
-							Severity:         "LOW",
-							Title:            "This is a title",
-						}},
-						"gobinary",
-					},
+					[]Vulnerability{{
+						VulnerabilityId:  "CVE-2024-9805",
+						InstalledVersion: "1.22.2",
+						FixedVersion:     "1.23.0",
+						Severity:         "LOW",
+						Title:            "This is a title",
+					}},
+					"gobinary",
+				},
 				},
 				cveSummaries:            map[string]CVESummary{},
 				detectedVulnerabilities: map[string][]string{},
 			},
-			wantCveSummariesLength: 1,
+			wantCveSummariesLength:            1,
 			wantDetectedVulnerabilitiesLength: 1,
+		},
+		{
+			name: "aggregate CVEs",
+			args: args{
+				controller: "ec2",
+				results: []Result{{
+					[]Vulnerability{{
+						VulnerabilityId:  "CVE-2024-9805",
+						InstalledVersion: "1.22.2",
+						FixedVersion:     "1.23.0",
+						Severity:         "LOW",
+						Title:            "This is a title",
+					}},
+					"gobinary",
+				},
+				},
+				cveSummaries: map[string]CVESummary{
+					"CVE-2024-9805": {"1.22.2", "1.23.0", "LOW", "Some title", "gobinary"},
+				},
+				detectedVulnerabilities: map[string][]string{
+					"CVE-2024-9805": {"lambda", "s3", "sns", "sqs", "rds"},
+				},
+			},
+			wantCveSummariesLength:            1,
+			wantDetectedVulnerabilitiesLength: 1,
+		},
+		{
+			name: "unique CVEs",
+			args: args{
+				controller: "ec2",
+				results: []Result{{
+					[]Vulnerability{{
+						VulnerabilityId:  "CVE-2024-1000",
+						InstalledVersion: "1.22.2",
+						FixedVersion:     "1.23.0",
+						Severity:         "LOW",
+						Title:            "This is a title",
+					}},
+					"gobinary",
+				},
+				},
+				cveSummaries: map[string]CVESummary{
+					"CVE-2024-9805": {"1.22.2", "1.23.0", "LOW", "Some title", "gobinary"},
+				},
+				detectedVulnerabilities: map[string][]string{
+					"CVE-2024-9805": {"lambda"},
+				},
+			},
+			wantCveSummariesLength:            2,
+			wantDetectedVulnerabilitiesLength: 2,
 		},
 	}
 
