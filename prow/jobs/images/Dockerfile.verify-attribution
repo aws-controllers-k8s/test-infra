@@ -2,7 +2,7 @@
 
 ARG GO_VERSION=1.22.5
 
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS builder
 
 RUN apk add --no-cache git
 
