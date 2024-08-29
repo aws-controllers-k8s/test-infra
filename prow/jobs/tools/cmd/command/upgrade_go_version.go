@@ -57,7 +57,7 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Successfully listed go versions from %s\n", OptGoEcrRepository)
 
-	highestEcrGoVersion, err := findHighestGoVersion(ecrGoVersions)
+	highestEcrGoVersion, err := findHighestTagVersion(ecrGoVersions)
 	if err != nil {
 		return fmt.Errorf("%v", err)
 	}

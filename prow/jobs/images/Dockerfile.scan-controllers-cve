@@ -1,0 +1,24 @@
+ARG GO_VERSION=1.22.5
+
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS builder
+
+RUN apk add --no-cache git
+
+ENV GOPROXY=direct
+COPY . .
+RUN go mod download
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/jobs/tools/cmd
+
+# Start a new stage from scratch
+FROM alpine:latest
+
+RUN apk add --no-cache wget tar
+
+ARG TRIVY_VERSION=0.54.1
+
+RUN wget https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz -O - | tar -xz && \
+    chmod +x trivy && \
+    mv trivy /usr/local/bin/
+
+COPY --from=builder /go/ack-build-tools /usr/local/bin/

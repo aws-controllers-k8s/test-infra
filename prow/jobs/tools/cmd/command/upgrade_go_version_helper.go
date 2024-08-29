@@ -42,12 +42,12 @@ func listRepositoryTags(repository string) ([]string, error) {
 	client := ecrpublic.New()
 	tags, err := client.ListRepositoryTags(repository)
 	if err != nil {
-		return nil, fmt.Errorf("cannot list repositories in %s. %s", OptGoEcrRepository, err)
+		return nil, fmt.Errorf("cannot list repositories in %s. %s", repository, err)
 	}
 	return tags, nil
 }
 
-func findHighestGoVersion(tags []string) (string, error) {
+func findHighestTagVersion(tags []string) (string, error) {
 	versions := make([]semver.Version, 0, len(tags))
 	regex := regexp.MustCompile(`[a-z]`)
 
