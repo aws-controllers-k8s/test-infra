@@ -201,5 +201,7 @@
         - name: DEBUG
           value: "true"
         command:
+        - "bin/bash"
+        - "-c"
         - "./cd/scripts/verify-attribution.sh"
 {{ end }}

@@ -53,6 +53,8 @@
         - name: DEBUG
           value: "true"
         command:
+        - "bin/bash"
+        - "-c"
         - "./cd/scripts/verify-attribution.sh"
 
   - name: s3-olm-test
