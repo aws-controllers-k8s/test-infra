@@ -16,6 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attribution-gen ./cmd
 FROM alpine:latest  
 
 COPY --from=builder /app/attribution-gen /usr/local/bin/
+COPY wrapper.sh /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/attribution-gen
 
