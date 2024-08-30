@@ -53,9 +53,6 @@
         - name: DEBUG
           value: "true"
         command:
-        - "wrapper.sh"
-        - "bash"
-        - "-c"
         - "./cd/scripts/verify-attribution.sh"
 
 {{ range $_, $service := .Config.RuntimePresubmitServices }}
