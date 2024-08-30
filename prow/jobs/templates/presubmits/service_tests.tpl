@@ -172,7 +172,7 @@
     # run_if_changed: "go.mod"
     always_run: true
     decorate: true
-    optional: false
+    optional: true
     annotations:
       karpenter.sh/do-not-evict: "true"
     extra_refs:
@@ -181,6 +181,7 @@
       base_ref: main
       workdir: true
     spec:
+      serviceAccountName: pre-submit-service-account
       containers:
       - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "verify-attribution") }}
         resources:
