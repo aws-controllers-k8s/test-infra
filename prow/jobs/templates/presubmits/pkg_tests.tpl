@@ -45,7 +45,7 @@
         securityContext:
           runAsUser: 0
         env:
-        - name: REPO_NAME
+        - name: REPOSITORY_NAME
           value: pkg
         - name: OUTPUT_PATH
           value: "/tmp/generated_attribution.md"
