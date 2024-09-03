@@ -1,6 +1,6 @@
 - name: scan-controllers-cve
   decorate: true
-  interval: 12h
+  interval: 336h
   annotations:
     description: Scans ack supported AWS service controllers for CVE's. If they exist, creates a github issue in commmunity repository
     karpenter.sh/do-not-evict: "true"
