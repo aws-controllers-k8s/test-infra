@@ -25,14 +25,6 @@ GITHUB_ORG_NAME = "aws-controllers-k8s"
 GITHUB_ISSUE_REPO = "community"
 SERVICE_CONTROLLER_LABEL = "kind/new-service"
 
-# A cache of Github Issues for new service controllers
-_sc_issues = None
-# The Github Project for tracking service controllers
-_sc_proj = None
-# The project cards associated with the Planned column in the service
-# controller Github Project
-_sc_proj_planned_cards = None
-
 # When we first started the ACK project, all of the service controller
 # repositories were named with the pattern "<package-name>-controller".
 # However, as we've added more services, we've started to use a different
@@ -216,36 +208,6 @@ def get_runtime_and_aws_sdk_version(writer, repo, image_version):
         pass
     return runtime_version, aws_sdk_version
 
-def get_controller_request_issue(writer, gh, service):
-    """Returns the Github Issue for the service, or None if no such issue
-    exists.
-    """
-    global _sc_issues
-    ack_org = gh.get_organization(GITHUB_ORG_NAME)
-    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
-    writer.debug(f"[controller.get_github_issue] finding Github Issue for {service.package_name} ...")
-    if _sc_issues is None:
-        sc_label = community_repo.get_label(name=SERVICE_CONTROLLER_LABEL)
-        _sc_issues = community_repo.get_issues(labels=[sc_label])
-
-    for issue in _sc_issues:
-        # The GH issues with SERVICE_CONTROLLER_LABEL label all have the same title
-        # pattern: "<Service Name> service controller"
-        issue_title = issue.title.lower().replace("service controller", "")
-        issue_title = issue_title.strip()
-        if issue_title == service.package_name.lower():
-            return issue
-        if service.full_name is not None:
-            full_name = service.full_name.lower()
-            if issue_title == full_name:
-                return issue
-        if service.abbrev_name is not None:
-            abbrev_name = service.abbrev_name.lower()
-            if issue_title == abbrev_name:
-                return issue
-    return None
-
-
 def fetch_project_data(writer):
     """Fetches project data using GraphQL API..."""
     writer.debug("[controller.fetch_project_data] fetching project data using GraphQL...")
@@ -306,29 +268,44 @@ def fetch_project_data(writer):
         writer.error(f"Failed to fetch project data: {response.status_code}")
         return []
 
-
-
 def find_issue_for_service(project_data, service):
     """Finds the issue for the given service in the project data"""
     for item in project_data:
         if item['type'] == 'ISSUE' and item['content']:
             issue_title = item['content']['title'].lower()
-            if (issue_title == service.package_name.lower() or
-                (service.full_name and issue_title == service.full_name.lower()) or
-                (service.abbrev_name and issue_title == service.abbrev_name.lower())):
-                
-                status = 'Unknown'
-                for field_value in item['fieldValues']['nodes']:
-                    if field_value and 'field' in field_value and field_value['field']['name'] == 'Status':
-                        status = field_value['name']
-                        break
-                
-                return {
-                    'id': item['id'],
-                    'title': item['content']['title'],
-                    'body': item['content']['body'],
-                    'number': item['content']['number'],
-                    'url': item['content']['url'],
-                    'status': status
-                }
+            
+            # Remove "service controller" from the title and strip whitespace
+            issue_title = issue_title.replace("service controller", "").strip()
+            
+            # Check against package name, full name, and abbreviated name
+            if issue_title == service.package_name.lower():
+                return process_issue(item)
+            
+            if service.full_name is not None:
+                full_name = service.full_name.lower()
+                if issue_title == full_name:
+                    return process_issue(item)
+            
+            if service.abbrev_name is not None:
+                abbrev_name = service.abbrev_name.lower()
+                if issue_title == abbrev_name:
+                    return process_issue(item)
+    
     return None
+
+def process_issue(item):
+    """Returns a dictionary with the relevant information from the GH issue"""
+    status = 'Unknown'
+    for field_value in item['fieldValues']['nodes']:
+        if field_value and 'field' in field_value and field_value['field']['name'] == 'Status':
+            status = field_value['name']
+            break
+    
+    return {
+        'id': item['id'],
+        'title': item['content']['title'],
+        'body': item['content']['body'],
+        'number': item['content']['number'],
+        'url': item['content']['url'],
+        'status': status
+    }
