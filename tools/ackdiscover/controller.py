@@ -15,6 +15,7 @@ import dataclasses
 import os
 import sys
 import time
+import requests
 
 import github
 
@@ -32,6 +33,32 @@ _sc_proj = None
 # controller Github Project
 _sc_proj_planned_cards = None
 
+# When we first started the ACK project, all of the service controller
+# repositories were named with the pattern "<package-name>-controller".
+# However, as we've added more services, we've started to use a different
+# and learned that some services have different names in the AWS SDKs
+# than they do in their model files... This map is used to map the
+# package name to the repository name.
+#
+# NOTE(a-hilaly): This is a temporary solution until we have a better way
+# to handle this. I originally want to use some sort of metadata in the
+# Github issues in the style of /model-name /controller-name but that
+# would be risky as users can change the metadata, and unwilingly (or
+# willingly) break the system.
+exceptional_service_names = {
+    "eventbridgepipes": {
+        "controller_name": "pipes",
+    },
+    "docdb": {
+        "controller_name": "documentdb",
+    },
+    "elasticloadbalancingv2": {
+        "controller_name": "elbv2",
+    },
+    "acm-pca": {
+        "controller_name": "acmpca",
+    },
+}
 
 @dataclasses.dataclass
 class Release:
@@ -54,13 +81,14 @@ class Controller:
     gh_issue_url: str = None
 
 
-def collect_all(writer, gh, ep_client, services):
+def collect_all(writer, gh, services):
     """Returns a map, keyed by service package name, of ControllerInfo objects
     describing the ACK controllers.
     """
     writer.debug("[controller.collect_all] collecting ACK controller information ... ")
     ack_org = gh.get_organization(GITHUB_ORG_NAME)
     result= {}
+    project_data = fetch_project_data(writer)
     # Assume the ECR Public reader role
     ep_client = ecrpublic.get_client(writer)
 
@@ -83,16 +111,21 @@ def collect_all(writer, gh, ep_client, services):
         # We check if there has been a GH issue created for the AWS service and
         # if that GH issue has been placed in the Service Controller Github
         # Project's "Planned" ProjectColumn.
-        gh_issue = get_controller_request_issue(writer, gh, service)
+        if service.package_name in exceptional_service_names:
+            writer.debug(f"[controller.collect_all] replacing service package name {service.package_name} with {exceptional_service_names[service.package_name]['controller_name']}")
+            service.package_name = exceptional_service_names[service.package_name]["controller_name"]
+            service_package_name = service.package_name
+
+        gh_issue = find_issue_for_service(project_data, service)
         gh_issue_url = None
-        if gh_issue is not None:
-            gh_issue_url = gh_issue.html_url
+        if gh_issue:
+            gh_issue_url = gh_issue['url']
             project_stage = project_stages.PROPOSED
-            if is_planned(writer, gh, gh_issue):
+            if gh_issue['status'] == 'Planned':
                 project_stage = project_stages.PLANNED
 
         try:
-            repo = ack_org.get_repo(service_package_name+"-controller")
+            repo = ack_org.get_repo(service_package_name + "-controller")
         except github.UnknownObjectException:
             controller = Controller(
                 service=service,
@@ -183,7 +216,6 @@ def get_runtime_and_aws_sdk_version(writer, repo, image_version):
         pass
     return runtime_version, aws_sdk_version
 
-
 def get_controller_request_issue(writer, gh, service):
     """Returns the Github Issue for the service, or None if no such issue
     exists.
@@ -214,38 +246,89 @@ def get_controller_request_issue(writer, gh, service):
     return None
 
 
-def get_service_controller_project(writer, gh):
-    """Returns the GH project for tracking service controllers.
-    """
-    global _sc_proj
-    ack_org = gh.get_organization(GITHUB_ORG_NAME)
-    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
-    writer.debug(f"[controller.get_service_controller_project] finding service controller Github Project ...")
-    if _sc_proj is None:
-        projs = community_repo.get_projects()
-        for p in projs:
-            if p.name == "Service Controller Release Roadmap":
-                _sc_proj = p
-                break
-    return _sc_proj
+def fetch_project_data(writer):
+    """Fetches project data using GraphQL API..."""
+    writer.debug("[controller.fetch_project_data] fetching project data using GraphQL...")
+    url = 'https://api.github.com/graphql'
+    token = os.getenv('GITHUB_TOKEN')
+    
+    query = '''
+    query {
+      organization(login: "aws-controllers-k8s") {
+        projectV2(number: 10) {
+          id
+          title
+          number
+          items(first: 100) {
+            nodes {
+              id
+              type
+              content {
+                ... on Issue {
+                  title
+                  body
+                  number
+                  url
+                  repository {
+                    name
+                  }
+                }
+              }
+              fieldValues(first: 100) {
+                nodes {
+                  ... on ProjectV2ItemFieldSingleSelectValue {
+                    name
+                    field {
+                      ... on ProjectV2FieldCommon {
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    '''
+
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json',
+    }
+
+    response = requests.post(url, json={'query': query}, headers=headers)
+    
+    if response.status_code == 200:
+        return response.json()['data']['organization']['projectV2']['items']['nodes']
+    else:
+        writer.error(f"Failed to fetch project data: {response.status_code}")
+        return []
 
 
-def is_planned(writer, gh, gh_issue):
-    """Returns whether the supplied GH issue for a service controller appears
-    in the Planned board on our Service Controller Github Project.
-    """
-    global _sc_proj_planned_cards
-    ack_org = gh.get_organization(GITHUB_ORG_NAME)
-    community_repo = ack_org.get_repo(GITHUB_ISSUE_REPO)
-    writer.debug(f"[controller.is_planned] looking up project card matching Github Issue {gh_issue.id} ...")
-    if _sc_proj_planned_cards is None:
-        sc_proj = get_service_controller_project(writer, gh)
-        for pc in sc_proj.get_columns():
-            if pc.name == "Planned":
-                _sc_proj_planned_cards = pc.get_cards()
-                break
-    for pc in _sc_proj_planned_cards:
-        if pc.content_url == gh_issue.url:
-            return True
 
-    return False
+def find_issue_for_service(project_data, service):
+    """Finds the issue for the given service in the project data"""
+    for item in project_data:
+        if item['type'] == 'ISSUE' and item['content']:
+            issue_title = item['content']['title'].lower()
+            if (issue_title == service.package_name.lower() or
+                (service.full_name and issue_title == service.full_name.lower()) or
+                (service.abbrev_name and issue_title == service.abbrev_name.lower())):
+                
+                status = 'Unknown'
+                for field_value in item['fieldValues']['nodes']:
+                    if field_value and 'field' in field_value and field_value['field']['name'] == 'Status':
+                        status = field_value['name']
+                        break
+                
+                return {
+                    'id': item['id'],
+                    'title': item['content']['title'],
+                    'body': item['content']['body'],
+                    'number': item['content']['number'],
+                    'url': item['content']['url'],
+                    'status': status
+                }
+    return None

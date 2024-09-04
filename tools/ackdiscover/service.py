@@ -14,6 +14,7 @@
 import dataclasses
 import os
 import ijson
+import json
 
 @dataclasses.dataclass
 class Service:
@@ -22,7 +23,6 @@ class Service:
     full_name: str = None
     abbrev_name: str = None
     package_name: str = None
-
 
 def collect_all(writer, repo):
     """Returns a map, keyed by AWS *service package* name, of ServiceInfo
