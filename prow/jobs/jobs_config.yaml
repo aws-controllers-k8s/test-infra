@@ -43,6 +43,7 @@ aws_services:
 - organizations
 - pipes
 - prometheusservice
+- ram
 - rds
 - recyclebin
 - route53
