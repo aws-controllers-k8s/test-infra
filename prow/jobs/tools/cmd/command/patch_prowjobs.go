@@ -93,8 +93,14 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	buildConfigData, err := readBuildConfigFile(OptBuildConfigPath)
+	if err != nil {
+		return err
+	}
+
 	log.Printf("Tags to build:\n %v\n", tagsToBuild)
-	if err = buildImages(tagsToBuild); err != nil {
+	log.Printf("Building images with GO_VERSION %s and EKS_DISTRO_VERSION %s\n", buildConfigData.GoVersion, buildConfigData.EksDistroVersion)
+	if err = buildImages(tagsToBuild, buildConfigData); err != nil {
 		return err
 	}
 	log.Println("Successfully built all images")
