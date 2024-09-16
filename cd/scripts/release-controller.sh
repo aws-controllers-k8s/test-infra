@@ -113,9 +113,9 @@ if [[ $QUIET = "false" ]]; then
     echo " git commit: $SERVICE_CONTROLLER_GIT_COMMIT"
 fi
 
-pushd "$CODE_GEN_DIR" 1>/dev/null
-  # Get the golang version from the code-generator
-  GOLANG_VERSION=${GOLANG_VERSION:-"$(go list -f \{\{.GoVersion\}\} -m)"}
+pushd "$TEST_INFRA_DIR" 1>/dev/null
+  # Get the golang version from build_config.yaml
+  GOLANG_VERSION=$(cat build_config.yaml | yq .go_version)
 popd 1>/dev/null
 
 # Build amd64 controller image
