@@ -144,6 +144,50 @@ class Subnets(Bootstrappable):
     def get_availability_zone_names(self):
         zones = self.ec2_client.describe_availability_zones()
         return list(map(lambda x: x['ZoneName'], zones['AvailabilityZones']))
+    
+@dataclass
+class SecurityGroup(Bootstrappable):
+    # Inputs
+    name: str
+    description: str
+    vpc_id: str
+
+    # Outputs
+    group_id: str = field(init=False)
+    arn: str = field(init=False)
+
+    def __post_init__(self):
+        self.name = resources.random_suffix_name("sg-", 24)
+        self.description = resources.random_suffix_name("description-", 34)
+    
+    @property
+    def ec2_client(self):
+        return boto3.client("ec2", region_name=self.region)
+
+    @property
+    def ec2_resource(self):
+        return boto3.resource("ec2", region_name=self.region)
+
+    def bootstrap(self):
+        """Creates security group with an auto-generated name and description.
+        """
+        vpc = self.ec2_resource.VPC(self.vpc_id)
+        group = vpc.create_security_group(
+            Description=self.description,
+            GroupName=self.name,
+        )
+        self.group_id = group["GroupId"]
+        self.arn = "arn:aws:ec2:{region}:{accId}:security-group/{sgId}".format(region=self.region, accId=self.account_id, sgId=self.group_id)
+
+    def cleanup(self):
+        """Deletes the subnets.
+        """
+        # You must delete the securityGroup before you can delete any of its dependencies
+        self.ec2_client.delete_security_group(
+            GroudId=self.group_id,
+            GroupName=self.name,
+        )
+        super().cleanup()
 
 @dataclass
 class VPC(Bootstrappable):
@@ -159,6 +203,7 @@ class VPC(Bootstrappable):
     # Subresources
     public_subnets: Subnets = field(init=False, default=None)
     private_subnets: Subnets = field(init=False, default=None)
+    security_group: SecurityGroup = field(init=False, default=None)
 
     # Outputs
     name: Union[str, None] = field(default=None, init=False)
@@ -199,6 +244,7 @@ class VPC(Bootstrappable):
             self.private_subnets = Subnets(self.vpc_id, self.private_subnet_cidr_blocks, is_public=False, num_subnets=self.num_private_subnet)
         if self.num_public_subnet > 0:
             self.public_subnets = Subnets(self.vpc_id, self.public_subnet_cidr_blocks, is_public=True, num_subnets=self.num_public_subnet)
+        self.security_group = SecurityGroup(vpc_id=self.vpc_id)
 
         # Because we require the VPC to be generated before generating other
         # resources, if the subresources fail while bootstrapping, we need to
