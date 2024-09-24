@@ -10,7 +10,7 @@ WORKDIR /app
 
 RUN git clone https://github.com/awslabs/attribution-gen .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attribution-gen ./cmd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attribution-gen ./main.go
 
 # Start a new stage from scratch
 FROM debian:buster-slim
