@@ -24,6 +24,7 @@ RUN echo "Installing packages ..." \
         lsb-release \
         wget \
         jq \
+        kmod \
         uuid-runtime \
         apt-transport-https \
         unzip
@@ -46,9 +47,6 @@ RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscl
     && unzip awscliv2.zip \
     && aws/install \
     && export AWS_PAGER=""
-
-ARG DOCKER_VERSION=24.0.5
-ENV DOCKER_VERSION=${DOCKER_VERSION}
 
 RUN echo "Installing controller-gen v0.14.0..." \
     && go install "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0" \
