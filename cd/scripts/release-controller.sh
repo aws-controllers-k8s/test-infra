@@ -116,6 +116,7 @@ fi
 pushd "$TEST_INFRA_DIR" 1>/dev/null
   # Get the golang version from build_config.yaml
   GOLANG_VERSION=$(cat build_config.yaml | yq .go_version)
+  BASE_IMAGE_VERSION=$(cat build_config.yaml | yq .eks_distro_version) 
 popd 1>/dev/null
 
 # Build amd64 controller image
@@ -128,6 +129,7 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
+  --build-arg eks_distro_version="$BASE_IMAGE_VERSION" \
   --build-arg target_arch="amd64" \
   --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
