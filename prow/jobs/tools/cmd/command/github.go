@@ -26,6 +26,10 @@ const (
 	baseBranch = "main"
 )
 
+var (
+	defaultProwAutoGenLabel = "prow/auto-gen"
+)
+
 // getRef returns the commit branch reference object if it exists or creates it
 // from the base branch before returning it.
 func getGitRef(ctx context.Context, client *github.Client, sourceOwner, sourceRepo, commitBranch, baseBranch string) (ref *github.Reference, err error) {
@@ -126,9 +130,30 @@ func createPR(ctx context.Context, client *github.Client, prSubject, commitBranc
 		MaintainerCanModify: github.Bool(true),
 	}
 
-	_, _, err := client.PullRequests.Create(ctx, sourceOwner, sourceRepo, newPR)
+	createdPR, _, err := client.PullRequests.Create(ctx, sourceOwner, sourceRepo, newPR)
 	if err != nil {
 		return err
+	}
+
+	// Update the PR labels
+
+	// Github API ¯\_(ツ)_/¯
+	prWithLabels := &github.PullRequest{
+		Labels: []*github.Label{
+			&github.Label{
+				Name: &defaultProwAutoGenLabel,
+			},
+		},
+	}
+	_, _, err = client.PullRequests.Edit(
+		ctx,
+		sourceOwner,
+		sourceRepo,
+		int(*createdPR.ID),
+		prWithLabels,
+	)
+	if err != nil {
+		return nil
 	}
 
 	return nil
@@ -141,10 +166,10 @@ func createGithubIssue(owner, repo, title, body string, labels []string) error {
 	}
 
 	client := github.NewClient(nil).WithAuthToken(token)
-	
+
 	newIssueRequest := &github.IssueRequest{
-		Title: github.String(title),
-		Body: github.String(body),
+		Title:  github.String(title),
+		Body:   github.String(body),
 		Labels: &labels,
 	}
 
@@ -152,6 +177,6 @@ func createGithubIssue(owner, repo, title, body string, labels []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }

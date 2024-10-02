@@ -80,6 +80,7 @@ func scanControllersCve(cmd *cobra.Command, args []string) error {
 	title := "ACK Detected Controllers CVEs"
 	labels := []string{
 		"kind/cve",
+		defaultProwAutoGenLabel,
 	}
 	if err = createGithubIssue(OptGithubIssueOwner, OptGithubIssueRepo, title, githubIssueBody, labels); err != nil {
 		return err
