@@ -15,6 +15,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attribution-gen ./main.go
 # Start a new stage from scratch
 FROM debian:buster-slim
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 COPY --from=builder /app/attribution-gen /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/attribution-gen
