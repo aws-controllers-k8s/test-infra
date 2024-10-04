@@ -136,7 +136,7 @@ if ! buildah bud \
   exit 2
 fi
 
-# Build amd64 controller image (default variant is v8 (https://go.dev/wiki/GoArm))
+# Build arm64 controller image (default variant is v8 (https://go.dev/wiki/GoArm))
 # NOTE(a-hilaly): We're using amd64 as the base image for arm64 builds
 if ! buildah bud \
   --quiet="$QUIET" \
@@ -147,6 +147,7 @@ if ! buildah bud \
   --build-arg service_controller_git_commit="$SERVICE_CONTROLLER_GIT_COMMIT" \
   --build-arg build_date="$BUILD_DATE" \
   --build-arg golang_version="$GOLANG_VERSION" \
+  --build-arg eks_distro_version="$BASE_IMAGE_VERSION" \
   --build-arg target_arch="arm64" \
   --arch "amd64" \
   "$DOCKER_BUILD_CONTEXT"; then
