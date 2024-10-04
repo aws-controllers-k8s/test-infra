@@ -28,6 +28,12 @@ build_and_install_controller() {
     local __controller_namespace=$2
     local __img_name=$3    
 
+    pushd "$ROOT_DIR" 1>/dev/null
+        # Get the golang version from build_config.yaml
+        GOLANG_VERSION=$(cat build_config.yaml | yq .go_version)
+        BASE_IMAGE_VERSION=$(cat build_config.yaml | yq .eks_distro_version) 
+    popd 1>/dev/null
+
     info_msg "Building controller image ... "
     _build_controller_image "$__img_name"
 
