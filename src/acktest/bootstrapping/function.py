@@ -10,9 +10,8 @@ class Function(Bootstrappable):
     # Inputs
     name_prefix: str
     code_uri: str
-    description: str = ""
     service: str
-
+    description: str = ""
 
     # Outputs
     arn: str = field(init=False)
@@ -29,7 +28,7 @@ class Function(Bootstrappable):
 
         function = self.lambda_client.create_function(
             FunctionName=self.name,
-            Runtime="python3.9",
+            Runtime="python3.8",
             Role=self.role.arn,
             Handler="index.handler",
             Code={
