@@ -148,16 +148,16 @@ class Subnets(Bootstrappable):
 @dataclass
 class SecurityGroup(Bootstrappable):
     # Inputs
-    name: str
-    description: str
     vpc_id: str
+    name_prefix: str = "test"
+    description: str = ""
 
     # Outputs
     group_id: str = field(init=False)
     arn: str = field(init=False)
 
     def __post_init__(self):
-        self.name = resources.random_suffix_name("sg-", 24)
+        self.name = resources.random_suffix_name(self.name_prefix, 24)
         self.description = resources.random_suffix_name("description-", 34)
     
     @property
@@ -171,7 +171,7 @@ class SecurityGroup(Bootstrappable):
     def bootstrap(self):
         """Creates security group with an auto-generated name and description.
         """
-        vpc = self.ec2_resource.VPC(self.vpc_id)
+        vpc = self.ec2_resource.Vpc(self.vpc_id)
         group = vpc.create_security_group(
             Description=self.description,
             GroupName=self.name,
