@@ -176,7 +176,7 @@ class SecurityGroup(Bootstrappable):
             Description=self.description,
             GroupName=self.name,
         )
-        self.group_id = group["GroupId"]
+        self.group_id = group.id
         self.arn = "arn:aws:ec2:{region}:{accId}:security-group/{sgId}".format(region=self.region, accId=self.account_id, sgId=self.group_id)
 
     def cleanup(self):
