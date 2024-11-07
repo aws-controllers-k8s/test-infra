@@ -44,7 +44,7 @@ class Function(Bootstrappable):
             Role=self.role.arn,
             Handler="index.handler",
             Code={
-                "ImageURI": self.code_uri
+                "ImageUri": self.code_uri
             },
             Description=self.description,
         )
