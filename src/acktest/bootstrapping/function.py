@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
+from .iam import Role
+from .iam import UserPolicies
 
 @dataclass
 class Function(Bootstrappable):
@@ -13,8 +15,18 @@ class Function(Bootstrappable):
     service: str
     description: str = ""
 
+    # Subresources
+    role: Role = field(init=False, default=None)
+
     # Outputs
     arn: str = field(init=False)
+
+    def __post_init__(self):
+        self.role = Role(
+            name_prefix=self.name_prefix,
+            principal_service="lambda.amazonaws.com",
+            managed_policies=['arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'],
+        )
 
     @property
     def lambda_client(self):
