@@ -184,8 +184,7 @@ class SecurityGroup(Bootstrappable):
         """
         # You must delete the securityGroup before you can delete any of its dependencies
         self.ec2_client.delete_security_group(
-            GroudId=self.group_id,
-            GroupName=self.name,
+            GroupId=self.group_id,
         )
         super().cleanup()
 
