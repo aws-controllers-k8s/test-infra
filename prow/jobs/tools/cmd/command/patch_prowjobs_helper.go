@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	ECR_TAGS_MAX_CAPACITY = 200
+	ECR_TAGS_MAX_CAPACITY = 500
 	patchJobsSourceFiles  = "./prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
 	patchJobCommitBranchPrefix  = "ack-bot/built-and-pushed-images-%d"
 	patchJobPRSubject     = "Patch Prow Jobs Image Version"
@@ -60,6 +60,7 @@ func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error)
 			return nil, fmt.Errorf("failure encountered while describing images for %v: %s", *describeImagesInput, err)
 		}
 		imageDetails = append(imageDetails, describeImagesOutput.ImageDetails...)
+		describeImagesInput.NextToken = describeImagesOutput.NextToken
 	}
 
 	return imageDetails, nil
