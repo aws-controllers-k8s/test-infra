@@ -18,6 +18,7 @@ aws_services:
 - cloudwatch
 - cloudwatchevents
 - cloudwatchlogs
+- cognitoidentityprovider
 - documentdb
 - dynamodb
 - ebs
