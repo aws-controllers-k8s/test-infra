@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 
 from . import Bootstrappable
 from .. import resources
+from ..aws import identity
 from .iam import Role
-from .iam import UserPolicies
 
 @dataclass
 class Function(Bootstrappable):
@@ -40,13 +40,12 @@ class Function(Bootstrappable):
 
         function = self.lambda_client.create_function(
             FunctionName=self.name,
-            Runtime="python3.8",
             Role=self.role.arn,
-            Handler="index.handler",
             Code={
                 "ImageUri": self.code_uri
             },
             Description=self.description,
+            PackageType="Image",
         )
 
         self.arn = function["FunctionArn"]
@@ -54,9 +53,9 @@ class Function(Bootstrappable):
         self.lambda_client.add_permission(
             FunctionName=self.name,
             StatementId=f"{self.name}-invoke",
-            SourceArn=f"arn:aws:{self.service}:{self.region}:{resources.get_account_id()}:*",
+            SourceArn=f"arn:aws:{self.service}:{self.region}:{identity.get_account_id()}:*",
             Action="lambda:InvokeFunction",
-            Principal="elasticloadbalancer.amazonaws.com"
+            Principal=f"{self.service}.amazonaws.com"
         )
 
     def cleanup(self):
