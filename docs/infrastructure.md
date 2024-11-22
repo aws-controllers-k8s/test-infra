@@ -8,6 +8,8 @@ In general, the system is managed by a CDK template which is used to initialize 
 
 The EKS cluster that is deployed is the default as provided by CDK, which should use the latest EKS release version and 2 managed nodegroups.
 
+![Test Infrastructure](./images/test-infra-workflow.png)
+
 ## Flux2
 
 The test infrastructure uses Flux2 to manage the deployment of Helm charts and Kustomization manifests into the testing cluster. After the initial installation of Flux2, CDK will also install a master manifest that points back into the `test-infra` repository and will add any charts from the `flux/` directory.
