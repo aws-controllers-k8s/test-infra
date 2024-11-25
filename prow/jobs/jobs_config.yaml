@@ -18,12 +18,14 @@ aws_services:
 - cloudwatch
 - cloudwatchevents
 - cloudwatchlogs
+- codeartifact
 - cognitoidentityprovider
 - documentdb
 - dynamodb
 - ebs
 - ec2
 - ecr
+- ecrpublic
 - ecs
 - efs
 - eks
@@ -50,6 +52,7 @@ aws_services:
 - route53
 - route53resolver
 - s3
+- s3control
 - sagemaker
 - secretsmanager
 - servicecatalog
