@@ -42,6 +42,10 @@
         - name: CARM_TESTS_ENABLED
           value: "true"
         {{ end }}
+        {{ if contains $.Config.AddoptionTestServices $service }}
+        - name: FEATURE_GATES
+          value: "AdoptResources=true"
+        {{ end -}}
         command:
         - "wrapper.sh"
         - "bash"

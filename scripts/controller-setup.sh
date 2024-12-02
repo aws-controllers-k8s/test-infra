@@ -115,7 +115,8 @@ EOF
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
         ACK_ENABLE_DEVELOPMENT_LOGGING="true" \
         ACK_LOG_LEVEL="debug" \
-        AWS_REGION="$region" 1>/dev/null
+        FEATURE_GATES="$FEATURE_GATES" \
+        AWS_REGION="$region" 1>/dev/null 
         # TODO: Support watch namespace configuration
         # ACK_WATCH_NAMESPACE="$ACK_WATCH_NAMESPACE" \
 
