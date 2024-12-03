@@ -106,7 +106,7 @@
         {{ end }}
         {{ if contains $.Config.AddoptionTestServices $service }}
         - name: FEATURE_GATES
-          value: "AdoptResources=true"
+          value: "ResourceAdoption=true"
         {{ end -}}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 

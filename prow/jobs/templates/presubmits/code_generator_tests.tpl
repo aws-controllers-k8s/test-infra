@@ -139,7 +139,7 @@
         {{ end -}}
         {{ if contains $.Config.AddoptionTestServices $service }}
         - name: FEATURE_GATES
-          value: "AdoptResources=true"
+          value: "ResourceAdoption=true"
         {{ end -}}
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
 {{ end }}
