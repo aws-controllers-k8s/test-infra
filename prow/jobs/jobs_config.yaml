@@ -70,6 +70,11 @@ carm_test_services:
 
 addoption_test_services:
 - s3
+- ec2
+- eks
+- apigatewayv2
+- iam
+- prometheusservice
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
