@@ -31,4 +31,40 @@
               memory: "4096Mi"
           command: ["/bin/bash", "-c", "./cd/auto-generate/auto-generate-controllers.sh"]
     branches: #supports tags too.
-    - ^v[0-9]+\.[0-9]+\.[0-9]+$
+    - ^v[0-9]+\.[0-9]+\.[0]$
+
+    - name: auto-generate-controllers-v2
+    decorate: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-github-secrets: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
+      workdir: false
+    {{- range $_, $service := .Config.AWSServicesV2 }}
+    - org: aws-controllers-k8s
+      repo: {{ $service }}-controller
+      base_ref: main
+      workdir: false
+    {{- end }}
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-generate-controllers") }}
+          resources:
+            limits:
+              cpu: 8
+              memory: "4096Mi"
+            requests:
+              cpu: 2
+              memory: "4096Mi"
+          command: ["/bin/bash", "-c", "./cd/auto-generate/auto-generate-controllers.sh"]
+    branches: #supports tags too.
+    - ^v[0-9]+\.[4][0]\.[0-9]+$

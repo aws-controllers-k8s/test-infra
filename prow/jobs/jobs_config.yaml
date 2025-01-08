@@ -63,6 +63,9 @@ aws_services:
 - ssm
 - wafv2
 
+aws_services_v2:
+- eks
+
 # List of service that will execute a set of tests for CARM
 # These service need a CARM_ENABLED environment variable set to true
 carm_test_services:

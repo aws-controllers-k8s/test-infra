@@ -12,10 +12,6 @@
       preset-test-config: "true"
     extra_refs:
     - org: aws-controllers-k8s
-      repo: code-generator
-      base_ref: main
-      workdir: false
-    - org: aws-controllers-k8s
       repo: test-infra
       base_ref: main
       workdir: true
@@ -60,10 +56,6 @@
       preset-kind-volume-mounts: "true"
       preset-test-config: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: code-generator
-      base_ref: main
-      workdir: false
     - org: aws-controllers-k8s
       repo: test-infra
       base_ref: main

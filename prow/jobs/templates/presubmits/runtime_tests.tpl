@@ -71,7 +71,11 @@
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
+    {{- if contains $.Config.AWSServicesV2 $service }}
+      base_ref: aws-sdk-go-v2
+    {{- else }}
       base_ref: main
+    {{- end }}
       workdir: false
     - org: aws-controllers-k8s
       repo: test-infra
@@ -109,5 +113,10 @@
           value: "ResourceAdoption=true"
         {{ end -}}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
-
+    branches:
+    {{- if contains $.Config.AWSServicesV2 $service }}
+    - aws-sdk-go-v2
+    {{- else }}
+    - main
+    {{- end }}
 {{ end }}
