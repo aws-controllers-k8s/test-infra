@@ -107,7 +107,11 @@
     extra_refs:
     - org: aws-controllers-k8s
       repo: runtime
+    {{- if contains $.Config.AWSServicesV2 $service }}
+      base_ref: aws-sdk-go-v2
+    {{- else }}
       base_ref: main
+    {{- end }}
       workdir: false
     - org: aws-controllers-k8s
       repo: test-infra
@@ -142,4 +146,10 @@
           value: "ResourceAdoption=true"
         {{ end -}}
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
+    branches:
+    {{- if contains $.Config.AWSServicesV2 $service }}
+    - aws-sdk-go-v2
+    {{- else }}
+    - main
+    {{- end }}
 {{ end }}
