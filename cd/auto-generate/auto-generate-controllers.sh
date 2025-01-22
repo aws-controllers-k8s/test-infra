@@ -206,6 +206,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     continue
   fi
 
+  echo "auto-generate-controllers.sh][INFO] Update OWNERS_ALIASES file from test-infra"
+  pushd "$TEST_INFRA_DIR" >/dev/null
+    cp OWNERS_ALIASES "$CONTROLLER_DIR"
+    cp OWNERS "$CONTROLLER_DIR"
+  popd >/dev/null
+
   # Since there are no failures, print make build output in prowjob logs
   cat "$MAKE_BUILD_OUTPUT_FILE"
   pushd "$CONTROLLER_DIR" >/dev/null
