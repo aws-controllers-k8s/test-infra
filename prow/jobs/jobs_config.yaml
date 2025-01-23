@@ -75,6 +75,7 @@ addoption_test_services:
 - apigatewayv2
 - iam
 - prometheusservice
+- route53resolver
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
