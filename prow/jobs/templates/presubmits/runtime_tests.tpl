@@ -91,7 +91,7 @@
             memory: "8192Mi"
           requests:
             cpu: 16
-            memory: "8192MMi"
+            memory: "8192Mi"
         securityContext:
           privileged: true
         env:
