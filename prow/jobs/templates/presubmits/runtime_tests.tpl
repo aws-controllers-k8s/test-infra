@@ -87,11 +87,11 @@
       - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
-            cpu: 8
-            memory: "3072Mi"
+            cpu: 16
+            memory: "8192Mi"
           requests:
-            cpu: 8
-            memory: "3072Mi"
+            cpu: 16
+            memory: "8192MMi"
         securityContext:
           privileged: true
         env:
