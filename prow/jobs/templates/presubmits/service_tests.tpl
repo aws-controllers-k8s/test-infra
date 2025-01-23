@@ -27,7 +27,7 @@
           privileged: true
         resources:
           limits:
-            cpu: 16gi
+            cpu: 16
             memory: "8192Mi"
           requests:
             cpu: 16
