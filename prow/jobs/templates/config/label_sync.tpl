@@ -184,6 +184,27 @@ default:
       name: triage/unresolved
       target: both
       addedBy: humans
+    - color: 026C24
+      description: Issues scheduled for 2026
+      name: target/2026
+      addedBy: humans
+    - color: bfdadc
+      description: Issues scheduled for Q1 in 2025
+      name: target/q1-2025
+      addedBy: humans
+    - color: 766380
+      description: Issues scheduled for Q2 in 2025
+      name: target/q2-2025
+      addedBy: humans
+    - color: E4C998
+      description: Issues scheduled for Q3 in 2025
+      name: target/q3-2025
+      addedBy: humans
+    - color: 241969
+      description: Issues scheduled for Q4 in 2025
+      name: target/q4-2025
+      addedBy: humans
+
 
     # Do not merge labels
     - color: e11d21
