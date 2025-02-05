@@ -131,8 +131,6 @@ default:
       description: Issues or PRs as related to controller runtime, common reconciliation logic, etc
       name: area/runtime
       target: both
-      previously:
-        - name: runtime
       addedBy: label
     - color: 0052cc
       description: Issues or PRs related to security topics
@@ -188,10 +186,14 @@ default:
       description: Issues scheduled for 2026
       name: target/2026
       addedBy: humans
+      previously:
+        - name: 2026
     - color: bfdadc
       description: Issues scheduled for Q1 in 2025
       name: target/q1-2025
       addedBy: humans
+      previously:
+        - name: q1-2025
     - color: 766380
       description: Issues scheduled for Q2 in 2025
       name: target/q2-2025
@@ -200,10 +202,14 @@ default:
       description: Issues scheduled for Q3 in 2025
       name: target/q3-2025
       addedBy: humans
+      previously:
+        - name: q3-2025
     - color: 241969
       description: Issues scheduled for Q4 in 2025
       name: target/q4-2025
       addedBy: humans
+      previously:
+        - name: q4-2025
 
 
     # Do not merge labels
