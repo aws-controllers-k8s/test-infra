@@ -38,7 +38,7 @@ assert_metadata_file() {
 
 ensure_url_healthy() {
     __url="$1"
-    if [[ $(curl --silent --head -o /dev/null -I -w "%{http_code}" "$__url") != "200" ]]; then
+    if [[ $(curl --silent -L --head -o /dev/null -I -w "%{http_code}" "$__url") != "200" ]]; then
         debug_msg "$__url didn't respond with HTTP/1.1 200 OK"
         return 1
     fi
