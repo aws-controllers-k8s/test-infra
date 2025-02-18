@@ -18,7 +18,7 @@ spec:
   # Exclude small instance sizes
   - key: karpenter.k8s.aws/instance-size
     operator: In
-    values: [xlarge, 2xlarge, 4xlarge, 8xlarge, 12xlarge, 16xlarge]
+    values: [medium, large, xlarge, xlarge, 2xlarge, 4xlarge, 8xlarge]
   - key: kubernetes.io/arch
     operator: In
     values:
