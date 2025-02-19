@@ -1,16 +1,16 @@
 image_repo: public.ecr.aws/m5q3e4b2/prow
 images:
-    auto-generate-controllers: prow-auto-generate-controllers-0.0.22
-    auto-update-controllers: prow-auto-update-controllers-0.0.13
-    build-prow-images: prow-build-prow-images-0.0.44
-    controller-release-tag: prow-controller-release-tag-0.0.10
-    deploy: prow-deploy-0.0.24
-    docs: prow-docs-0.0.19
-    integration-test: prow-integration-0.0.32
-    olm-bundle-pr: prow-olm-bundle-pr-0.0.14
-    olm-test: prow-olm-test-0.0.13
-    scan-controllers-cve: prow-scan-controllers-cve-0.0.8
-    soak-test: prow-soak-0.0.13
-    unit-test: prow-unit-0.0.15
-    upgrade-go-version: prow-upgrade-go-version-0.0.14
-    verify-attribution: prow-verify-attribution-0.0.12
+    auto-generate-controllers: prow-auto-generate-controllers-0.0.23
+    auto-update-controllers: prow-auto-update-controllers-0.0.14
+    build-prow-images: prow-build-prow-images-0.0.45
+    controller-release-tag: prow-controller-release-tag-0.0.11
+    deploy: prow-deploy-0.0.25
+    docs: prow-docs-0.0.20
+    integration-test: prow-integration-0.0.33
+    olm-bundle-pr: prow-olm-bundle-pr-0.0.15
+    olm-test: prow-olm-test-0.0.14
+    scan-controllers-cve: prow-scan-controllers-cve-0.0.9
+    soak-test: prow-soak-0.0.14
+    unit-test: prow-unit-0.0.16
+    upgrade-go-version: prow-upgrade-go-version-0.0.15
+    verify-attribution: prow-verify-attribution-0.0.13
