@@ -11,10 +11,10 @@
       - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
         resources:
           limits:
-            cpu: 8
+            cpu: 2
             memory: "3072Mi"
           requests:
-            cpu: 8
+            cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
 
@@ -123,11 +123,11 @@
       - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
         resources:
           limits:
-            cpu: 16
-            memory: "8192Mi"
+            cpu: 8
+            memory: "3072Mi"
           requests:
-            cpu: 16
-            memory: "8192Mi"
+            cpu: 8
+            memory: "3072Mi"
         securityContext:
           privileged: true
         env:
