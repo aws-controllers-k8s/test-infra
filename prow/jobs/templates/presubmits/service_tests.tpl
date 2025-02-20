@@ -27,11 +27,11 @@
           privileged: true
         resources:
           limits:
-            cpu: 16
-            memory: "8192Mi"
+            cpu: 8
+            memory: "3072Mi"
           requests:
-            cpu: 16
-            memory: "8192Mi"
+            cpu: 8
+            memory: "3072Mi"
         env:
         - name: SERVICE
           value: {{ $service }}
@@ -136,7 +136,7 @@
             cpu: 8
             memory: "4048Mi"
           requests:
-            cpu: 8
+            cpu: 2
             memory: "4048Mi"
         env:
         - name: SERVICE
