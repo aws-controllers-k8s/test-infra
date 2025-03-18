@@ -34,7 +34,6 @@ type ImageContext struct {
 // Structure for prow job configurations stored in
 // jobs.yaml
 type Config struct {
-	AddoptionTestServices		  []string `yaml:"addoption_test_services"`
 	AWSServices                   []string `yaml:"aws_services"`
 	CarmTestServices              []string `yaml:"carm_test_services"`
 	SoakTestOnReleaseServiceNames []string `yaml:"soak_test_on_release_service_names"`
