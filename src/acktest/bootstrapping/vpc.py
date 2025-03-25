@@ -10,6 +10,33 @@ from .. import resources
 VPC_CIDR_BLOCK = "10.0.0.0/16"
 
 @dataclass
+class TransitGateway(Bootstrappable):
+
+    # Outputs
+    transit_gateway_id: str = field(init=False)
+
+    @property
+    def ec2_client(self):
+        return boto3.client("ec2", region_name=self.region)
+
+    @property
+    def ec2_resource(self):
+        return boto3.resource("ec2", region_name=self.region)
+
+    def bootstrap(self):
+        """Creates a transit gateway.
+        """
+        transit_gateway = self.ec2_client.create_transit_gateway(Description=self.name)
+        self.transit_gateway_id = transit_gateway['TransitGateway']['TransitGatewayId']
+    
+    def cleanup(self):
+        """Deletes a transit gateway.
+        """
+        super().cleanup()
+        
+        self.ec2_client.delete_transit_gateway(TransitGatewayAttachmentId=self.transit_gateway_id)
+
+@dataclass
 class InternetGateway(Bootstrappable):
     # Inputs
     vpc_id: str
