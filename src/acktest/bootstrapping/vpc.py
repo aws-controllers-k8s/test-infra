@@ -26,7 +26,7 @@ class TransitGateway(Bootstrappable):
     def bootstrap(self):
         """Creates a transit gateway.
         """
-        transit_gateway = self.ec2_client.create_transit_gateway(Description=self.name)
+        transit_gateway = self.ec2_client.create_transit_gateway()
         self.transit_gateway_id = transit_gateway['TransitGateway']['TransitGatewayId']
     
     def cleanup(self):
