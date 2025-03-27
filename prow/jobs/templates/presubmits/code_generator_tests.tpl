@@ -124,10 +124,10 @@
         resources:
           limits:
             cpu: 8
-            memory: "3072Mi"
+            memory: "4096Mi"
           requests:
             cpu: 8
-            memory: "3072Mi"
+            memory: "4096Mi"
         securityContext:
           privileged: true
         env:

@@ -25,10 +25,10 @@
           resources:
             limits:
               cpu: 8
-              memory: "4096Mi"
+              memory: "8192Mi"
             requests:
-              cpu: 2
-              memory: "4096Mi"
+              cpu: 8
+              memory: "8192Mi"
           command: ["/bin/bash", "-c", "./cd/auto-generate/auto-generate-controllers.sh"]
     branches: #supports tags too.
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
