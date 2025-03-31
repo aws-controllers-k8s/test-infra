@@ -34,7 +34,7 @@ class TransitGateway(Bootstrappable):
         """
         super().cleanup()
         
-        self.ec2_client.delete_transit_gateway(TransitGatewayAttachmentId=self.transit_gateway_id)
+        self.ec2_client.delete_transit_gateway(TransitGatewayId=self.transit_gateway_id)
 
 @dataclass
 class InternetGateway(Bootstrappable):
