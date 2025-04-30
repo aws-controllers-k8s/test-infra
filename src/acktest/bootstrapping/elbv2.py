@@ -27,6 +27,9 @@ class NetworkLoadBalancer(Bootstrappable):
   ip_address_type: str = "ipv4"
   type: str = "network"
   scheme: str = "internet-facing"
+  num_public_subnet: int = 2
+  num_private_subnet: int = 0
+  apply_security_group: bool = False
 
   # Subresources
   test_vpc: VPC = field(init=False, default=None)
@@ -35,7 +38,11 @@ class NetworkLoadBalancer(Bootstrappable):
   arn: str = field(init=False)
 
   def __post_init__(self):
-    self.test_vpc = VPC(name_prefix="test_vpc", num_public_subnet=2, num_private_subnet=0)
+    self.test_vpc = VPC(
+      name_prefix="test_vpc", 
+      num_public_subnet=self.num_public_subnets,
+      num_private_subnet=self.num_private_subnets
+    )
 
   @property
   def elbv2_client(self):
@@ -52,13 +59,15 @@ class NetworkLoadBalancer(Bootstrappable):
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
     
-
+    subnets = self.test_vpc.public_subnets.subnet_ids + self.test_vpc.private_subnets.subnet_ids
+    security_groups = [self.test_vpc.security_group.group_id] if self.apply_security_group else []
     network_load_balancer = self.elbv2_client.create_load_balancer(
       Name=self.name,
       Scheme=self.scheme,
       Type=self.type,
       IpAddressType=self.ip_address_type,
-      Subnets=self.test_vpc.public_subnets.subnet_ids
+      Subnets=subnets,
+      SecurityGroups=security_groups
     )
 
     self.arn = network_load_balancer.get("LoadBalancers")[0].get("LoadBalancerArn")
