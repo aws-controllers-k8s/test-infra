@@ -40,8 +40,8 @@ class NetworkLoadBalancer(Bootstrappable):
   def __post_init__(self):
     self.test_vpc = VPC(
       name_prefix="test_vpc", 
-      num_public_subnet=self.num_public_subnets,
-      num_private_subnet=self.num_private_subnets
+      num_public_subnet=self.num_public_subnet,
+      num_private_subnet=self.num_private_subnet
     )
 
   @property
