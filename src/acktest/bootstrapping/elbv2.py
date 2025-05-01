@@ -58,8 +58,12 @@ class NetworkLoadBalancer(Bootstrappable):
     super().bootstrap()
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
-    
-    subnets = self.test_vpc.public_subnets.subnet_ids + self.test_vpc.private_subnets.subnet_ids
+    subnets = []
+    if self.test_vpc.public_subnets:
+      subnets += self.test_vpc.public_subnets.subnet_ids
+    if self.test_vpc.private_subnets:
+      subnets += self.test_vpc.private_subnets.subnet_ids
+      
     security_groups = [self.test_vpc.security_group.group_id] if self.apply_security_group else []
     network_load_balancer = self.elbv2_client.create_load_balancer(
       Name=self.name,
