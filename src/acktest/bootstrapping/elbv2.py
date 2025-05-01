@@ -82,12 +82,12 @@ class NetworkLoadBalancer(Bootstrappable):
   def cleanup(self):
     """Deletes a Network Load Balancer.
     """
+    if self.arn:
+      self.elbv2_client.delete_load_balancer(
+        LoadBalancerArn=self.arn
+      )
 
-    self.elbv2_client.delete_load_balancer(
-      LoadBalancerArn=self.arn
-    )
-
-    waiter = self.elbv2_client.get_waiter('load_balancers_deleted')
-    waiter.wait(LoadBalancerArns=[self.arn])
+      waiter = self.elbv2_client.get_waiter('load_balancers_deleted')
+      waiter.wait(LoadBalancerArns=[self.arn])
 
     super().cleanup()
