@@ -82,7 +82,7 @@ class NetworkLoadBalancer(Bootstrappable):
   def cleanup(self):
     """Deletes a Network Load Balancer.
     """
-    if self.arn:
+    if hasattr(self, "arn") and self.arn:
       self.elbv2_client.delete_load_balancer(
         LoadBalancerArn=self.arn
       )
