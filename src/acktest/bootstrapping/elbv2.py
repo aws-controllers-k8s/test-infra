@@ -59,9 +59,9 @@ class NetworkLoadBalancer(Bootstrappable):
 
     self.name = resources.random_suffix_name(self.name_prefix, 32)
     subnets = []
-    if self.test_vpc.public_subnets:
+    if self.scheme == "internet-facing" and self.test_vpc.public_subnets:
       subnets += self.test_vpc.public_subnets.subnet_ids
-    if self.test_vpc.private_subnets:
+    elif self.scheme == "internal" and self.test_vpc.private_subnets:
       subnets += self.test_vpc.private_subnets.subnet_ids
       
     security_groups = [self.test_vpc.security_group.group_id] if self.apply_security_group else []
