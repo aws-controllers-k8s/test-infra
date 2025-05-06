@@ -33,6 +33,7 @@ aws_services:
 - elbv2
 - emrcontainers
 - eventbridge
+- globalaccelerator
 - iam
 - kafka
 - kinesis
