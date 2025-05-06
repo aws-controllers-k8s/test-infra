@@ -43,6 +43,7 @@ aws_services:
 - mq
 - networkfirewall
 - opensearchservice
+- opensearchserverless
 - organizations
 - pipes
 - prometheusservice
