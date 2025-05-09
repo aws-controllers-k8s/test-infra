@@ -108,11 +108,11 @@
         - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "olm-bundle-pr") }}
           resources:
             limits:
-              cpu: 1
-              memory: "2048Mi"
+              cpu: 4
+              memory: "3072Mi"
             requests:
-              cpu: 1
-              memory: "2048Mi"
+              cpu: 4
+              memory: "3072Mi"
           command: ["/bin/bash", "-c", "./cd/olm/olm-bundle-pr.sh"]
     branches:
     - ^v[0-9]+\.[0-9]+\.[0-9]+$
