@@ -1,5 +1,5 @@
-# This config is used to generate `jobs.yaml` file using `jobs_factory.py` and
-# the jinja2 templates.
+# This config is used to generate `jobs.yaml` file using `generator.go` and
+# the Go templates.
 
 # Adding a service to the `aws_services` array will enable CI/CD
 
