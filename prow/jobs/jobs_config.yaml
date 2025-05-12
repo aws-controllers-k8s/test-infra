@@ -12,6 +12,7 @@ aws_services:
 - applicationautoscaling
 - athena
 - batch
+- bedrockagent
 - cognitoidentity
 - cloudfront
 - cloudtrail
