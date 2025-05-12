@@ -64,6 +64,7 @@ aws_services:
 - sns
 - sqs
 - ssm
+- transfer
 - wafv2
 
 # List of service that will execute a set of tests for CARM
