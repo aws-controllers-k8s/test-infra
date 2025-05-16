@@ -1,4 +1,4 @@
-FROM docker.io/library/python:3.12-alpine
+FROM docker.io/library/python:3.11-alpine
 
 # Persist build arguments into environment variables
 ARG AWS_SERVICE
