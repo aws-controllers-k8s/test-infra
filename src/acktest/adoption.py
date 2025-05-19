@@ -26,6 +26,9 @@ ADOPTED_RESOURCE_KIND = "AdoptedResource"
 
 ADOPTED_CONDITION_NAME = "ACK.Adopted"
 
+ADOPT_ADOPTION_POLICY = "adopt"
+ADOPT_OR_CREATE_ADOPTION_POLICY = "adopt-or-create"
+
 @dataclass(frozen=True)
 class AdoptedResourceAWSIdentifier:
     """Represents the base AWS identifier spec fields from the adopted resource CRD.
