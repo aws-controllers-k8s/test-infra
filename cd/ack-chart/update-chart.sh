@@ -235,7 +235,7 @@ _commit_chart_changes() {
 
     pushd "$ACK_CHART_DIR" >/dev/null
         echo "Adding git remote ... "
-        git remote add upstream "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" >/dev/null || :
+        git remote add upstream "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$GITHUB_REPO.git" &>/dev/null || :
 
         git fetch --all >/dev/null
         git checkout -b "$COMMIT_TARGET_BRANCH" "upstream/$COMMIT_TARGET_BRANCH" >/dev/null || :

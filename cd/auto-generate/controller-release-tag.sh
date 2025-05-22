@@ -113,7 +113,7 @@ echo "ok"
 
 ## push the tags to controller-repo
 echo -n "controller-release-tag.sh][INFO] Pushing tags to $CONTROLLER_NAME  ... "
-if ! git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" --tags >/dev/null; then
+if ! git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" --tags &>/dev/null; then
   echo ""
   echo "controller-release-tag.sh][ERROR] Failed to push tags for $CONTROLLER_NAME. Exiting"
   exit 1
