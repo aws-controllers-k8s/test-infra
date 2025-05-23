@@ -178,7 +178,7 @@ do
   COMMIT_MSG="ack-$CONTROLLER_NAME artifacts for version $OLM_BUNDLE_VERSION"
   git commit -m "$COMMIT_MSG" --signoff > /dev/null
   git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_ACTOR/$OH_REPO.git" \
-   "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" >/dev/null
+   "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" &>/dev/null
   # fetch all remotes to bring changes locally
   git fetch --all >/dev/null
   # set local branch to track origin(PR source)
