@@ -273,5 +273,8 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     # cluster.
     echo "auto-generate-controllers.sh][INFO] Sleeping for 1 seconds before generating next service controller."
     sleep 1
+
+    # TODO testing gh fix for only run for one service controller. REMOVE WHEN DONE.
+    break
   popd >/dev/null
 done
