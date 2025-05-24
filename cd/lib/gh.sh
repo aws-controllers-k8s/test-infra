@@ -93,7 +93,7 @@ open_pull_request() {
 
   if [[ -z $__pr_number ]]; then
     echo -n "gh.sh][INFO] No Existing PRs found. Creating a new pull request for $__org_repo , from $__source_branch -> $__target_branch branch... "
-    if ! gh pr create -R "$__org_repo" -t "$__commit_msg" -F "$__pr_body_file_path" -B "$__target_branch" $__label_arg --head $(git branch --show-current) >/dev/null ; then
+    if ! gh pr create -R "$__org_repo" -t "$__commit_msg" -F "$__pr_body_file_path" -B "$__target_branch" $__label_arg >/dev/null ; then
       echo ""
       echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
       return 1
