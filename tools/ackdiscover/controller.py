@@ -50,6 +50,9 @@ exceptional_service_names = {
     "acm-pca": {
         "controller_name": "acmpca",
     },
+    "agentsforamazonbedrock": {
+        "controller_name": "bedrockagent"
+    }
 }
 
 @dataclasses.dataclass
