@@ -26,14 +26,14 @@ from ack_generator_agent.tools import (
     read_service_model,
     build_controller_agent,
     update_service_generator_config,
-    error_lookup,
     save_error_solution,
     add_memory,
     search_memories,
     list_all_memories,
     search_codegen_knowledge,
 )
-from ack_generator_agent.utils.constants import ACK_SYSTEM_PROMPT, DEFAULT_REGION, DEFAULT_MODEL_ID, DEFAULT_TEMPERATURE
+from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
+from config.defaults import DEFAULT_REGION, DEFAULT_MODEL_ID, DEFAULT_TEMPERATURE
 
 console = Console()
 
@@ -112,14 +112,13 @@ def run_agent_cli():
             read_service_model,
             build_controller_agent,
             update_service_generator_config,
-            error_lookup,
             save_error_solution,
             add_memory,
             search_memories,
             list_all_memories,
             search_codegen_knowledge,
         ],
-        system_prompt=ACK_SYSTEM_PROMPT
+        system_prompt=ACK_GENERATOR_SYSTEM_PROMPT
     )
     
     console.print("[bold green]ACK Generator Agent initialized. Type 'exit' to quit.[/bold green]\n")

@@ -12,19 +12,13 @@
 
 import os
 import subprocess
-import asyncio
 import datetime
-import json
 from strands import tool
-import git
 from rich.console import Console
 import psutil
-
-# Import settings and utility functions from utils package
-from ack_builder_agent.utils import (
-    settings,
-    DEFAULT_AWS_SDK_GO_VERSION,
-    MAX_LOG_LINES_TO_RETURN,
+from utils.settings import settings
+from config.defaults import DEFAULT_AWS_SDK_GO_VERSION, MAX_LOG_LINES_TO_RETURN
+from utils.repo import (
     ensure_ack_directories,
     ensure_code_generator_cloned,
     ensure_runtime_cloned,

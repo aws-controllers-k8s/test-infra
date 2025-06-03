@@ -8,17 +8,11 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Constants for ACK Codegen tools."""
-
-# AWS SDK Go version
-DEFAULT_AWS_SDK_GO_VERSION = "v1.32.6"
-
-# Maximum number of log lines to return
-MAX_LOG_LINES_TO_RETURN = 100
+"""System Prompt for builder agent"""
 
 # ACK system prompt for builder agents
 # TODO(rushmash91): The kill on error has to be implemented instead of being left to the model.
-ACK_SYSTEM_PROMPT = """You are an expert AI assistant building controllers for AWS services using the ACK Code Generator. Execute the following sequence of operations exactly as described to build a controller for the AWS service "<service>", where service is the name of the AWS service you want to build a controller for:
+ACK_BUILDER_SYSTEM_PROMPT = """You are an expert AI assistant building controllers for AWS services using the ACK Code Generator. Execute the following sequence of operations exactly as described to build a controller for the AWS service "<service>", where service is the name of the AWS service you want to build a controller for:
 
 *Step 1: Build Controller**
 
@@ -143,8 +137,3 @@ agent: <runs verify_build_completion tool> - process is ended
 agent: "Build failed"
 agent: reports build failure to user, along with the error message
 """
-
-# CLI defaults for the agent
-DEFAULT_REGION = "us-west-2"
-DEFAULT_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
-DEFAULT_TEMPERATURE = 0.2

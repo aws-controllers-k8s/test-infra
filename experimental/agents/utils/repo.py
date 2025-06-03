@@ -8,14 +8,14 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Repository utility functions for ACK Codegen tools."""
+"""Repository utility functions for ACK agents."""
 
 import os
 import yaml
 import requests
 from git import Repo
 
-from ack_builder_agent.utils.settings import settings
+from utils.settings import settings
 
 def ensure_ack_directories():
     """Create the ACK directory structure."""
@@ -134,3 +134,21 @@ def ensure_service_repo_cloned(service: str) -> str:
 
     fetch_all_tags(service_path)
     return service_path
+
+
+def get_release_version(service_path: str) -> str:
+    """Get the release version from the Helm chart.
+    
+    Args:
+        service_path: Path to the service controller repository
+        
+    Returns:
+        Version string, defaults to '0.0.1' if not found
+    """
+    chart_path = os.path.join(service_path, "helm", "Chart.yaml")
+    try:
+        with open(chart_path, 'r') as f:
+            chart_data = yaml.safe_load(f)
+            return chart_data.get('version', '0.0.1')
+    except (FileNotFoundError, yaml.YAMLError):
+        return '0.0.1' 
