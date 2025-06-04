@@ -10,37 +10,41 @@
 # and limitations under the License.
 """ACK Codegen tools for Strands agents."""
 
+import datetime
 import os
 import subprocess
-import datetime
-from strands import tool
-from rich.console import Console
+
 import psutil
-from utils.settings import settings
+from rich.console import Console
+from strands import tool
+
 from config.defaults import DEFAULT_AWS_SDK_GO_VERSION, MAX_LOG_LINES_TO_RETURN
 from utils.repo import (
+    check_service_controller_exists,
     ensure_ack_directories,
     ensure_code_generator_cloned,
     ensure_runtime_cloned,
-    check_service_controller_exists,
     ensure_service_repo_cloned,
 )
+from utils.settings import settings
 
 console = Console()
 
 
 def clean_tool_output(s: str) -> str:
     import re
+
     return re.sub(r"(\n\s*){3,}", "\n\n", (s or "").strip())
+
 
 @tool
 def build_controller(service: str, aws_sdk_version: str = DEFAULT_AWS_SDK_GO_VERSION) -> str:
     """Build a controller for a specific AWS service. This starts the build in the background.
-    
+
     Args:
         service: AWS service name (e.g., 's3', 'dynamodb')
         aws_sdk_version: AWS SDK Go version
-        
+
     Returns:
         str: Status message with log file information
     """
@@ -50,40 +54,42 @@ def build_controller(service: str, aws_sdk_version: str = DEFAULT_AWS_SDK_GO_VER
         ensure_code_generator_cloned()
         console.log("Ensuring runtime is cloned...")
         ensure_runtime_cloned()
-        
+
         if not check_service_controller_exists(service):
             return f"Error: Service controller for {service} not found"
-            
+
         console.log(f"Ensuring {service} controller is cloned...")
         service_path = ensure_service_repo_cloned(service)
         console.log(f"Service controller path: {service_path}")
 
         code_gen_path = settings.code_generator_path
         console.log(f"Using code generator at: {code_gen_path}")
-        
+
         env = os.environ.copy()
-        env.update({
-            'AWS_SDK_GO_VERSION': DEFAULT_AWS_SDK_GO_VERSION,
-            'SERVICE': service,
-            'RELEASE_VERSION': 'v0.0.0-non-release-version',
-        })
-        
+        env.update(
+            {
+                "AWS_SDK_GO_VERSION": DEFAULT_AWS_SDK_GO_VERSION,
+                "SERVICE": service,
+                "RELEASE_VERSION": "v0.0.0-non-release-version",
+            }
+        )
+
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         build_logs_dir = settings.build_logs_dir
-        
+
         stdout_log_path = os.path.join(build_logs_dir, f"build_{service}_{timestamp}.stdout.log")
         stderr_log_path = os.path.join(build_logs_dir, f"build_{service}_{timestamp}.stderr.log")
 
         console.log(f"Starting background build for {service}. This may take a few minutes.")
         console.log(f"Stdout will be logged to: {stdout_log_path}")
         console.log(f"Stderr will be logged to: {stderr_log_path}")
-        
+
         build_cmd = f"make build-controller SERVICE=$SERVICE"
 
         # Open log files
-        stdout_log_file = open(stdout_log_path, 'w')
-        stderr_log_file = open(stderr_log_path, 'w')
-        
+        stdout_log_file = open(stdout_log_path, "w")
+        stderr_log_file = open(stderr_log_path, "w")
+
         # Use subprocess.Popen for background execution instead of asyncio
         process = subprocess.Popen(
             build_cmd,
@@ -91,14 +97,17 @@ def build_controller(service: str, aws_sdk_version: str = DEFAULT_AWS_SDK_GO_VER
             env=env,
             stdout=stdout_log_file,
             stderr=stderr_log_file,
-            shell=True
+            shell=True,
         )
 
-        return clean_tool_output(f"Build for {service} started in the background. PID: {process.pid}. Logs: {stdout_log_path}, {stderr_log_path}")
-            
+        return clean_tool_output(
+            f"Build for {service} started in the background. PID: {process.pid}. Logs: {stdout_log_path}, {stderr_log_path}"
+        )
+
     except Exception as e:
         console.log(f"Exception during build setup: {str(e)}")
         return clean_tool_output(f"Error during build setup: {str(e)}")
+
 
 @tool
 def read_build_log(log_file_name: str) -> str:
@@ -106,7 +115,7 @@ def read_build_log(log_file_name: str) -> str:
 
     Args:
         log_file_name: The name of the log file (e.g., 'build_s3_20231027_123456.stdout.log').
-        
+
     Returns:
         str: Log contents or error message
     """
@@ -118,47 +127,50 @@ def read_build_log(log_file_name: str) -> str:
         return f"Error: Log file not found: {target_log_path}"
 
     try:
-        with open(target_log_path, 'r') as f:
+        with open(target_log_path, "r") as f:
             lines = f.readlines()
-        
+
         if not lines:
             return f"Log file is empty: {target_log_path}"
-        
+
         num_lines_to_return = min(len(lines), MAX_LOG_LINES_TO_RETURN)
         start_index = len(lines) - num_lines_to_return
         content_to_return = "".join(lines[start_index:])
-        
+
         header = f"--- Last {num_lines_to_return} lines of {log_file_name} ---\n"
         if len(lines) > MAX_LOG_LINES_TO_RETURN:
             header += f"(Log file has {len(lines)} total lines. Displaying the last {MAX_LOG_LINES_TO_RETURN}.)\n"
-        
+
         return clean_tool_output(header + content_to_return)
     except Exception as e:
         console.log(f"Error reading log file {target_log_path}: {str(e)}")
         return clean_tool_output(f"Error reading log file {target_log_path}: {str(e)}")
 
+
 @tool
 def sleep(seconds: int) -> str:
     """Pauses execution for the specified number of seconds.
-    
+
     Args:
         seconds: Number of seconds to sleep/wait
-        
+
     Returns:
         str: Confirmation message after sleeping
     """
     if seconds <= 0:
         return clean_tool_output("Error: Sleep duration must be a positive number")
-    
+
     if seconds > 600:  # Limit maximum sleep time to 10 minutes
         return clean_tool_output("Error: Maximum sleep duration is 600 seconds (10 minutes)")
-        
+
     console.log(f"Sleeping for {seconds} seconds...")
-    
+
     import time
+
     time.sleep(seconds)
-    
+
     return clean_tool_output(f"Successfully slept for {seconds} seconds")
+
 
 @tool
 def verify_build_completion(pid: int) -> str:

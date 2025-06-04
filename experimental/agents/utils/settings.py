@@ -11,10 +11,13 @@
 """Settings for ACK agents."""
 
 import os
+
 from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     """Configuration settings for the ACK tooling."""
+
     ack_root: str = os.path.expanduser("~/aws-controllers-k8s")
     ack_org_url: str = "https://github.com/aws-controllers-k8s"
 
@@ -31,10 +34,10 @@ class Settings(BaseSettings):
 
     def get_controller_path(self, service: str) -> str:
         """Get the path to a service controller repository.
-        
+
         Args:
             service: AWS service name (e.g., 's3', 'dynamodb')
-            
+
         Returns:
             Path to the local service controller repository
         """
@@ -42,10 +45,10 @@ class Settings(BaseSettings):
 
     def get_aws_service_model_path(self, service: str) -> str:
         """Get the path to an AWS service model file.
-        
+
         Args:
             service: AWS service name (e.g., 's3', 'dynamodb')
-            
+
         Returns:
             Path to the service model JSON file
         """
@@ -54,8 +57,8 @@ class Settings(BaseSettings):
             "codegen",
             "sdk-codegen",
             "aws-models",
-            f"{service.lower()}.json"
+            f"{service.lower()}.json",
         )
 
 
-settings = Settings() 
+settings = Settings()

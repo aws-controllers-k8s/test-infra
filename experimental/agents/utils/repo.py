@@ -11,11 +11,13 @@
 """Repository utility functions for ACK agents."""
 
 import os
-import yaml
+
 import requests
+import yaml
 from git import Repo
 
 from utils.settings import settings
+
 
 def ensure_ack_directories():
     """Create the ACK directory structure."""
@@ -37,9 +39,9 @@ def safe_pull(origin):
     try:
         pull_result = origin.pull(rebase=True)
         # If pull_result is a list of FetchInfo, check summary
-        if pull_result and hasattr(pull_result[0], 'summary'):
+        if pull_result and hasattr(pull_result[0], "summary"):
             summary = pull_result[0].summary.lower()
-            if 'up to date' in summary or 'already up to date' in summary:
+            if "up to date" in summary or "already up to date" in summary:
                 print("Already up to date.")
                 return
     except Exception as e:
@@ -52,7 +54,7 @@ def safe_pull(origin):
 
 def ensure_code_generator_cloned() -> str:
     """Clone or update the ACK code generator repository.
-    
+
     Returns:
         Path to the local code generator repository
     """
@@ -68,7 +70,7 @@ def ensure_code_generator_cloned() -> str:
 
 def ensure_runtime_cloned() -> str:
     """Clone or update the ACK runtime repository.
-    
+
     Returns:
         Path to the local runtime repository
     """
@@ -84,7 +86,7 @@ def ensure_runtime_cloned() -> str:
 
 def ensure_aws_sdk_go_v2_cloned() -> str:
     """Clone or update the aws-sdk-go-v2 repository.
-    
+
     Returns:
         Path to the local aws-sdk-go-v2 repository
     """
@@ -100,10 +102,10 @@ def ensure_aws_sdk_go_v2_cloned() -> str:
 
 def check_service_controller_exists(service: str) -> bool:
     """Check if a service controller exists in the ACK organization.
-    
+
     Args:
         service: Name of the AWS service
-        
+
     Returns:
         True if service controller exists
     """
@@ -114,10 +116,10 @@ def check_service_controller_exists(service: str) -> bool:
 
 def ensure_service_repo_cloned(service: str) -> str:
     """Clone or update a service controller repository.
-    
+
     Args:
         service: Name of the AWS service
-        
+
     Returns:
         Path to the local service controller repository
     """
@@ -127,10 +129,7 @@ def ensure_service_repo_cloned(service: str) -> str:
 
     if not os.path.exists(service_path):
         print(f"Cloning {service} controller repository...")
-        Repo.clone_from(
-            f"{settings.ack_org_url}/{service}-controller",
-            service_path
-        )
+        Repo.clone_from(f"{settings.ack_org_url}/{service}-controller", service_path)
 
     fetch_all_tags(service_path)
     return service_path
@@ -138,17 +137,17 @@ def ensure_service_repo_cloned(service: str) -> str:
 
 def get_release_version(service_path: str) -> str:
     """Get the release version from the Helm chart.
-    
+
     Args:
         service_path: Path to the service controller repository
-        
+
     Returns:
         Version string, defaults to '0.0.1' if not found
     """
     chart_path = os.path.join(service_path, "helm", "Chart.yaml")
     try:
-        with open(chart_path, 'r') as f:
+        with open(chart_path, "r") as f:
             chart_data = yaml.safe_load(f)
-            return chart_data.get('version', '0.0.1')
+            return chart_data.get("version", "0.0.1")
     except (FileNotFoundError, yaml.YAMLError):
-        return '0.0.1' 
+        return "0.0.1"
