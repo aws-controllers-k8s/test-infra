@@ -10,14 +10,25 @@
 # and limitations under the License.
 """AWS Documentation Agent for ACK Generator tools using MCP server."""
 
-import json
 from logging import getLogger
-from typing import Optional
 from mcp import stdio_client, StdioServerParameters
 from strands import Agent
 from strands.tools.mcp import MCPClient
 
-from ack_generator_agent.utils.constants import DOCS_AGENT_SYSTEM_PROMPT
+
+# Docs Agent System Prompt - specialized for AWS documentation research
+DOCS_AGENT_SYSTEM_PROMPT = """You are an AWS documentation assistant specialized in helping with ACK (AWS Controllers for Kubernetes) code generation.
+
+Your primary role is to help users find and understand AWS service documentation, API references, and best practices that are relevant for generating Kubernetes controllers.
+
+When searching or reading documentation:
+1. Focus on API operations, resource configurations, and service-specific details
+2. Pay attention to resource lifecycle, field mappings, and constraints
+3. Identify key information for generator.yaml configuration
+4. Look for tagging support, primary identifiers, and immutable fields
+5. Note any special considerations or dependencies
+
+Always provide clear, actionable information that can be used to configure ACK controllers effectively.""" 
 
 
 class DocsAgent:
@@ -136,7 +147,7 @@ class DocsAgent:
             self.logger.error(f"Failed to get documentation recommendations: {e}")
             return f"Error getting documentation recommendations: {str(e)}"
     
-    def find_service_documentation(self, service: str, resource: str = None) -> str:
+    def find_service_documentation(self, service: str, resource: str) -> str:
         """
         Find specific documentation for an AWS service and optionally a resource.
         

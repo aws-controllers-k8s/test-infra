@@ -1,6 +1,5 @@
 # AWS Controllers for Kubernetes (ACK) Agent
 
-A powerful Strands agent that uses Claude 3.7 Sonnet on AWS Bedrock with tools for working with AWS Controllers for Kubernetes (ACK).
 
 ## Overview
 
@@ -18,6 +17,8 @@ The ACK Agent provides a conversational interface to help you work with AWS Cont
 3. AWS account with access to Amazon Bedrock
 4. Claude 3.7 Sonnet model access enabled in your AWS account
 5. AWS credentials configured in your environment
+6. Opensearch Vector Database for memory agent
+7. Bedrock Knowledgebase (with ACK Codegen)
 
 ## Installation
 
@@ -25,11 +26,7 @@ This project uses `uv` for dependency management. If you don't have `uv` install
 
 ### Setting up the project
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/ack-codegen-agent.git
-cd ack-codegen-agent
-```
+1. OpenSearch Vector Store
 
 ## Usage
 

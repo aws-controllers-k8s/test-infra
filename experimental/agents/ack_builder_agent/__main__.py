@@ -27,7 +27,8 @@ from ack_builder_agent.tools import (
     sleep,
     verify_build_completion,
 )
-from ack_builder_agent.utils.constants import ACK_SYSTEM_PROMPT, DEFAULT_REGION, DEFAULT_MODEL_ID, DEFAULT_TEMPERATURE
+from ack_builder_agent.prompts import ACK_BUILDER_SYSTEM_PROMPT
+from config.defaults import DEFAULT_REGION, DEFAULT_MODEL_ID, DEFAULT_TEMPERATURE
 
 console = Console()
 
@@ -107,7 +108,7 @@ def run_agent_cli():
             sleep,
             verify_build_completion,
         ],
-        system_prompt=ACK_SYSTEM_PROMPT
+        system_prompt=ACK_BUILDER_SYSTEM_PROMPT
     )
     
     console.print("[bold green]ACK Controller Builder Agent initialized. Type 'exit' to quit.[/bold green]\n")
