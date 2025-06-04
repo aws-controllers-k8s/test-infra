@@ -22,4 +22,4 @@ DEFAULT_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
 DEFAULT_TEMPERATURE = 0.2
 
 # Memory Agent User ID
-MEM0_USER_ID = "ack_codegen_agent_user" 
+MEM0_USER_ID = "ack_codegen_agent_user"

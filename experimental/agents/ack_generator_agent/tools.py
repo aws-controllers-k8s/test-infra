@@ -10,27 +10,28 @@
 # and limitations under the License.
 """ACK Generator tools for Strands agents."""
 
-import os
-from strands import tool, Agent
-
 import json
+import os
+
 from rich.console import Console
-from ack_builder_agent.tools import build_controller, read_build_log, sleep, verify_build_completion
+from strands import Agent, tool
+
 from ack_builder_agent.prompts import ACK_BUILDER_SYSTEM_PROMPT
-from utils.settings import settings
+from ack_builder_agent.tools import build_controller, read_build_log, sleep, verify_build_completion
+from utils.docs_agent import DocsAgent
+from utils.knowledge_base import retrieve_from_knowledge_base
+from utils.memory_agent import MemoryAgent
 from utils.repo import (
     ensure_ack_directories,
-    ensure_service_repo_cloned,
     ensure_aws_sdk_go_v2_cloned,
+    ensure_service_repo_cloned,
 )
-
-from utils.memory_agent import MemoryAgent
-from utils.knowledge_base import retrieve_from_knowledge_base
-from utils.docs_agent import DocsAgent
+from utils.settings import settings
 
 console = Console()
 memory_agent = MemoryAgent()
 docs_agent = DocsAgent()
+
 
 @tool
 def read_service_generator_config(service: str) -> str:
@@ -51,11 +52,12 @@ def read_service_generator_config(service: str) -> str:
         if not os.path.exists(generator_config_path):
             return f"Error: generator.yaml not found in {service_path}"
 
-        with open(generator_config_path, 'r') as f:
+        with open(generator_config_path, "r") as f:
             content = f.read()
         return content
     except Exception as e:
         return f"Error reading generator.yaml for {service}: {str(e)}"
+
 
 @tool
 def read_service_model(service: str) -> str:
@@ -71,18 +73,18 @@ def read_service_model(service: str) -> str:
         # Make sure AWS SDK is cloned
         ensure_ack_directories()
         ensure_aws_sdk_go_v2_cloned()
-        
+
         # Get the model file path from settings
         model_path = settings.get_aws_service_model_path(service)
-        
+
         console.log(f"Looking for model at: {model_path}")
-        
+
         if not os.path.exists(model_path):
             return f"Error: Model file not found for service '{service}' at {model_path}"
-            
-        with open(model_path, 'r') as f:
+
+        with open(model_path, "r") as f:
             content = f.read()
-            
+
         # Parse and return the full model content
         try:
             data = json.loads(content)
@@ -90,9 +92,10 @@ def read_service_model(service: str) -> str:
         except Exception as e:
             console.log(f"Error parsing model JSON: {str(e)}")
             return content
-            
+
     except Exception as e:
         return f"Error reading service model for {service}: {str(e)}"
+
 
 @tool
 def build_controller_agent(service: str) -> str:
@@ -108,7 +111,7 @@ def build_controller_agent(service: str) -> str:
     try:
         builder_agent = Agent(
             system_prompt=ACK_BUILDER_SYSTEM_PROMPT,
-            tools=[build_controller, read_build_log, sleep, verify_build_completion]
+            tools=[build_controller, read_build_log, sleep, verify_build_completion],
         )
         response = builder_agent(service)
         return str(response)
@@ -140,23 +143,23 @@ def update_service_generator_config(service: str, new_generator_yaml: str) -> st
             os.remove(generator_config_path)
 
         # Write the new generator.yaml
-        with open(generator_config_path, 'w') as f:
+        with open(generator_config_path, "w") as f:
             f.write(new_generator_yaml)
 
         return f"Successfully updated generator.yaml for {service} at {generator_config_path}"
     except Exception as e:
-        return f"Error updating generator.yaml for {service}: {str(e)}" 
+        return f"Error updating generator.yaml for {service}: {str(e)}"
 
 
 @tool
 def add_memory(content: str, metadata: dict) -> str:
     """
     Manually add a memory to the agent's memory store.
-    
+
     Args:
         content: The content/information to store in memory
         metadata: Optional metadata dictionary to associate with the memory
-        
+
     Returns:
         str: Success or error message
     """
@@ -167,12 +170,12 @@ def add_memory(content: str, metadata: dict) -> str:
 def search_memories(query: str, limit: int = 5, min_score: float = 0.5) -> str:
     """
     Search through stored memories using a query.
-    
+
     Args:
         query: The search query to find relevant memories
         limit: Maximum number of memories to return (default: 5)
         min_score: Minimum relevance score for results (default: 0.5)
-        
+
     Returns:
         str: Found memories or message if none found
     """
@@ -183,7 +186,7 @@ def search_memories(query: str, limit: int = 5, min_score: float = 0.5) -> str:
 def list_all_memories() -> str:
     """
     List all stored memories in the agent's memory.
-    
+
     Returns:
         str: All stored memories with metadata
     """
@@ -198,15 +201,16 @@ def lookup_code_generator_config(service: str, resource: str) -> str:
     """
     return f""
 
+
 @tool
 def save_error_solution(error_message: str, solution: str, metadata: dict) -> str:
     """
     Save an error message and its solution to the agent's memory.
-    
+
     Args:
         error_message: The error message to save
         solution: The solution for this error
-        
+
     Returns:
         str: Success or error message
     """
@@ -217,37 +221,38 @@ def save_error_solution(error_message: str, solution: str, metadata: dict) -> st
 def search_codegen_knowledge(query: str, numberOfResults: int = 5) -> str:
     """
     Search for code generation related information in the knowledge base.
-    
+
     This is a specialized version of retrieve_from_knowledge_base that's optimized
     for searching code generation patterns, configurations, and best practices.
-    
+
     Args:
         query: The search query focused on code generation topics
         numberOfResults: Maximum number of results to return (default: 5)
-        
+
     Returns:
         str: Code generation related information or error message
     """
-    
+
     return retrieve_from_knowledge_base(
         text=query,
         numberOfResults=numberOfResults,
         score=0.6,  # Higher threshold for more relevant results
-        knowledgeBaseId=""
+        knowledgeBaseId="",
     )
+
 
 @tool
 def search_aws_documentation(query: str, max_results: int = 5) -> str:
     """
     Search AWS documentation using the AWS documentation MCP server.
-    
+
     This tool provides access to comprehensive AWS service documentation,
     API references, user guides, and best practices.
-    
+
     Args:
         query: Search query for AWS documentation (e.g., "S3 bucket configuration", "DynamoDB table creation")
         max_results: Maximum number of documentation results to return (default: 5)
-        
+
     Returns:
         str: AWS documentation search results or error message
     """
@@ -258,12 +263,12 @@ def search_aws_documentation(query: str, max_results: int = 5) -> str:
 def read_aws_documentation(url: str, max_length: int = 5000, start_index: int = 0) -> str:
     """
     Read specific AWS documentation page content.
-    
+
     Args:
         url: AWS documentation URL (must be from docs.aws.amazon.com)
         max_length: Maximum number of characters to return (default: 5000)
         start_index: Starting character index for partial reads (default: 0)
-        
+
     Returns:
         str: AWS documentation page content in markdown format or error message
     """
@@ -274,13 +279,13 @@ def read_aws_documentation(url: str, max_length: int = 5000, start_index: int = 
 def get_aws_documentation_recommendations(url: str) -> str:
     """
     Get content recommendations for an AWS documentation page.
-    
+
     This tool provides recommendations for related AWS documentation pages
     including highly rated, new, similar, and commonly viewed next pages.
-    
+
     Args:
         url: AWS documentation URL to get recommendations for
-        
+
     Returns:
         str: List of recommended documentation pages with URLs, titles, and context
     """
@@ -291,14 +296,14 @@ def get_aws_documentation_recommendations(url: str) -> str:
 def find_service_documentation(service: str, resource: str) -> str:
     """
     Find AWS service documentation specifically for ACK controller generation.
-    
+
     This tool searches for AWS service API documentation, user guides, and best practices
     that are relevant for generating Kubernetes controllers.
-    
+
     Args:
         service: AWS service name (e.g., 's3', 'dynamodb', 'rds')
         resource: Optional specific resource name (e.g., 'bucket', 'table', 'cluster')
-        
+
     Returns:
         str: Relevant AWS documentation for the service/resource or error message
     """
