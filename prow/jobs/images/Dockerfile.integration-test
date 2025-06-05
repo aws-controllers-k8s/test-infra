@@ -1,5 +1,5 @@
 # Dockerfile for integration testing
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
