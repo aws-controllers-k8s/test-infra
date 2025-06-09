@@ -71,6 +71,12 @@ def run_agent_cli():
         help="Temperature for model generation",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--prompt", 
+        type=str, 
+        default="", 
+        help="Prompt to use for the agent. If set conversational interaction is skipped and agent directly executes provided prompt."
+    )
 
     args = parser.parse_args()
     configure_logging(args.debug)
@@ -101,6 +107,12 @@ def run_agent_cli():
         ],
         system_prompt=ACK_GENERATOR_SYSTEM_PROMPT,
     )
+
+    if args.prompt:
+        # If a prompt is provided, execute it directly and exit
+        response = agent(args.prompt)
+        console.print(pretty_markdown(response))
+        return
 
     console.print(
         "[bold green]ACK Generator Agent initialized. Type 'exit' to quit.[/bold green]\n"
