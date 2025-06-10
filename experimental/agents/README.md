@@ -1,14 +1,24 @@
-# AWS Controllers for Kubernetes (ACK) Agent
+# AWS Controllers for Kubernetes (ACK) Agents
 
 
 ## Overview
 
-The ACK Agent provides a conversational interface to help you work with AWS Controllers for Kubernetes:
+The ACK Agents provide conversational interfaces to help you work with AWS Controllers for Kubernetes:
 
+### ACK Builder Agent
 - Clone and manage ACK repositories (code-generator, runtime, service controllers)
 - Build service controllers for AWS services
 - Read build logs and check build status
+
+### ACK Generator Agent  
 - Examine service controller configurations and API operations
+- Generate code and configurations for ACK controllers
+- Work with ACK generator.yaml files
+
+### ACK Model Agent (NEW)
+- Analyze AWS API models from the official AWS API models repository
+- Extract comprehensive CRUD operation information for resources
+- Provide detailed analysis for ACK controller implementation
 
 ## Prerequisites
 
@@ -66,6 +76,16 @@ make run-generator
 uv run python -m ack_generator_agent
 ```
 
+Run the model agent:
+
+```bash
+# Using make
+make run-model
+
+# Or directly
+uv run python -m ack_model_agent
+```
+
 You can provide command-line arguments:
 
 ```bash
@@ -104,6 +124,10 @@ The agents provide several tools for working with ACK:
 5. `read_service_generator_config` - Read a service's generator configuration (generator agent)
 6. `read_service_model` - Read the AWS service model (generator agent)
 7. `build_controller_agent` - Delegate the controller build process to the builder agent (generator agent)
+8. `analyze_resource_crud_operations` - Analyze CRUD operations for AWS resources (model agent)
+9. `get_comprehensive_resource_info` - Get comprehensive information about AWS resources (model agent)
+10. `list_service_resources` - List all resources in an AWS service (model agent)
+11. `validate_resource_exists` - Validate if a resource exists in AWS API models (model agent)
 
 ## License
 

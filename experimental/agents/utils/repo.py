@@ -22,7 +22,21 @@ from utils.settings import settings
 def ensure_ack_directories():
     """Create the ACK directory structure."""
     os.makedirs(settings.ack_root, exist_ok=True)
-    os.makedirs(settings.build_logs_dir, exist_ok=True)
+    os.makedirs(settings.build_logs_path, exist_ok=True)
+    os.makedirs(settings.model_logs_dir, exist_ok=True)
+
+
+def ensure_service_resource_directories(service: str, resource: str):
+    """Create the service/resource directory structure for model analysis files.
+    
+    Args:
+        service: AWS service name (e.g., 's3', 'ec2')
+        resource: Resource name (e.g., 'Bucket', 'Instance')
+    """
+    service_dir = os.path.join(settings.model_logs_dir, service)
+    resource_dir = os.path.join(service_dir, resource)
+    os.makedirs(resource_dir, exist_ok=True)
+    return resource_dir
 
 
 def fetch_all_tags(repo_path: str):
