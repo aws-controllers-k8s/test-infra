@@ -17,7 +17,6 @@ import warnings
 from rich.console import Console
 from rich.panel import Panel
 from strands import Agent
-from strands.models import BedrockModel
 
 from ack_model_agent.prompt import ACK_MODEL_AGENT_SYSTEM_PROMPT
 from ack_model_agent.tools import (
@@ -28,7 +27,13 @@ from ack_model_agent.tools import (
     save_resource_characteristics,
     query_knowledge_base,
 )
-from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
+from config.defaults import (
+    DEFAULT_MODEL_ID, 
+    DEFAULT_REGION, 
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_RETRY_ATTEMPTS
+)
+from utils.bedrock import create_enhanced_agent
 from utils.formatting import pretty_markdown
 
 console = Console()
@@ -71,18 +76,8 @@ def run_agent_cli():
     args = parser.parse_args()
     configure_logging(args.debug)
 
-    # Create model provider with throttling mitigation
-    bedrock_model = BedrockModel(
-        model_id=args.model,
-        region_name=args.region,
-        temperature=args.temperature,
-        # Add throttling mitigation settings
-        max_tokens=4000,  # Reduce max tokens to avoid limits
-    )
-
-    # Create the agent with our 4 core ACK model analysis tools
-    agent = Agent(
-        model=bedrock_model,
+    # Create the agent with enhanced reliability settings using utility function
+    agent = create_enhanced_agent(
         tools=[
             save_operations_catalog,
             save_field_catalog,
@@ -92,17 +87,14 @@ def run_agent_cli():
             query_knowledge_base,
         ],
         system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,
+        model_id=args.model,
+        region_name=args.region,
+        temperature=args.temperature,
+        max_tokens=4000,
     )
 
     console.print(
         "[bold green]ACK Model Agent initialized with 4 core tools.[/bold green]\n"
-    )
-    console.print(
-        "[dim]Available capabilities:[/dim]\n"
-        "[dim]• Generate exact CRUD operations for any AWS resource[/dim]\n"
-        "[dim]• Generate complete resource information (Smithy fields, shapes, etc.)[/dim]\n"
-        "[dim]• Generate complete operation details (inputs, outputs, errors)[/dim]\n"
-        "[dim]• Generate tagging support for resources[/dim]\n"
     )
 
     while True:
@@ -126,9 +118,9 @@ def run_agent_cli():
         except Exception as e:
             if "ThrottlingException" in str(e) or "throttl" in str(e).lower():
                 console.print(Panel(
-                    "[red]Rate limit exceeded. Please wait a moment and try again.\n"
-                    "Try using smaller queries or reducing the numberOfResults parameter.[/red]", 
-                    title="Throttling Error", 
+                    "[red]Rate limit exceeded. The agent will automatically retry with backoff.\n"
+                    f"Configured for up to {DEFAULT_MAX_RETRY_ATTEMPTS} retry attempts.[/red]", 
+                    title="Throttling - Auto Retry Enabled", 
                     style="red"
                 ))
             else:

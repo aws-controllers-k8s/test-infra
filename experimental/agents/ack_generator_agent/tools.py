@@ -14,7 +14,7 @@ import json
 import os
 
 from rich.console import Console
-from strands import Agent, tool
+from strands import tool
 
 from ack_builder_agent.prompts import ACK_BUILDER_SYSTEM_PROMPT
 from ack_builder_agent.tools import build_controller, read_build_log, sleep, verify_build_completion
@@ -37,6 +37,7 @@ from utils.repo import (
     ensure_service_resource_directories,
 )
 from utils.settings import settings
+from utils.bedrock import create_enhanced_agent
 
 console = Console()
 memory_agent = MemoryAgent()
@@ -56,19 +57,8 @@ def call_model_agent(service: str, resource: str) -> str:
         str: Model Agent analysis results
     """
     try:
-        from strands.models import BedrockModel
-        from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
-        
-        # Create model provider
-        bedrock_model = BedrockModel(
-            model_id=DEFAULT_MODEL_ID,
-            region_name=DEFAULT_REGION,
-            temperature=DEFAULT_TEMPERATURE,
-        )
-        
-        # Create the Model Agent
-        model_agent = Agent(
-            model=bedrock_model,
+        # Create the Model Agent with enhanced reliability settings
+        model_agent = create_enhanced_agent(
             tools=[
                 save_operations_catalog,
                 save_field_catalog,
@@ -233,9 +223,9 @@ def build_controller_agent(service: str) -> str:
         str: The builder agent's response (build status, logs, etc.)
     """
     try:
-        builder_agent = Agent(
-            system_prompt=ACK_BUILDER_SYSTEM_PROMPT,
+        builder_agent = create_enhanced_agent(
             tools=[build_controller, read_build_log, sleep, verify_build_completion],
+            system_prompt=ACK_BUILDER_SYSTEM_PROMPT,
         )
         response = builder_agent(service)
         return str(response)

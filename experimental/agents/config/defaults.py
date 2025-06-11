@@ -21,6 +21,12 @@ DEFAULT_REGION = "us-west-2"
 DEFAULT_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
 DEFAULT_TEMPERATURE = 0.2
 
+# Boto client configuration defaults for better reliability
+DEFAULT_MAX_RETRY_ATTEMPTS = 20
+DEFAULT_RETRY_MODE = "standard"
+DEFAULT_CONNECT_TIMEOUT = 100
+DEFAULT_READ_TIMEOUT = 600
+
 # Memory Agent User ID
 MEM0_USER_ID = "ack_codegen_agent_user"
 

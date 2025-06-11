@@ -17,7 +17,6 @@ import warnings
 from rich.console import Console
 from rich.panel import Panel
 from strands import Agent
-from strands.models import BedrockModel
 
 from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
 from ack_generator_agent.tools import (
@@ -34,7 +33,13 @@ from ack_generator_agent.tools import (
     search_memories,
     update_service_generator_config,
 )
-from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
+from config.defaults import (
+    DEFAULT_MODEL_ID, 
+    DEFAULT_REGION, 
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_RETRY_ATTEMPTS
+)
+from utils.bedrock import create_enhanced_agent
 from utils.formatting import pretty_markdown
 
 console = Console()
@@ -81,16 +86,8 @@ def run_agent_cli():
     args = parser.parse_args()
     configure_logging(args.debug)
 
-    # Create model provider
-    bedrock_model = BedrockModel(
-        model_id=args.model,
-        region_name=args.region,
-        temperature=args.temperature,
-    )
-
-    # Create the agent with our ACK tools
-    agent = Agent(
-        model=bedrock_model,
+    # Create the agent with enhanced reliability settings using utility function
+    agent = create_enhanced_agent(
         tools=[
             call_model_agent,
             load_all_analysis_data,
@@ -106,6 +103,9 @@ def run_agent_cli():
             search_codegen_knowledge,
         ],
         system_prompt=ACK_GENERATOR_SYSTEM_PROMPT,
+        model_id=args.model,
+        region_name=args.region,
+        temperature=args.temperature,
     )
 
     if args.prompt:
@@ -137,7 +137,15 @@ def run_agent_cli():
             else:
                 console.print(pretty_markdown(response))
         except Exception as e:
-            console.print(Panel(f"[red]Error: {e}[/red]", title="Error", style="red"))
+            if "ThrottlingException" in str(e) or "throttl" in str(e).lower():
+                console.print(Panel(
+                    "[red]Rate limit exceeded. The agent will automatically retry with backoff.\n"
+                    f"Configured for up to {DEFAULT_MAX_RETRY_ATTEMPTS} retry attempts.[/red]", 
+                    title="Throttling - Auto Retry Enabled", 
+                    style="red"
+                ))
+            else:
+                console.print(Panel(f"[red]Error: {e}[/red]", title="Error", style="red"))
 
 
 if __name__ == "__main__":
