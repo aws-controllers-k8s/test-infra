@@ -11,13 +11,10 @@
 """Main entry point for the ACK Model agent CLI."""
 
 import argparse
-import json
 import logging
-import re
 import warnings
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.panel import Panel
 from strands import Agent
 from strands.models import BedrockModel
@@ -29,10 +26,10 @@ from ack_model_agent.tools import (
     save_operation_analysis,
     save_error_catalog,
     save_resource_characteristics,
-    save_raw_analysis_data,
     query_knowledge_base,
 )
 from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
+from utils.formatting import pretty_markdown
 
 console = Console()
 
@@ -52,16 +49,6 @@ def configure_logging(debug=False):
 
     # Suppress deprecation warnings from botocore about datetime.utcnow()
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="botocore")
-
-
-def pretty_markdown(md) -> Markdown:
-    # If it's a dict, pretty-print as JSON
-    if isinstance(md, dict):
-        md = json.dumps(md, indent=2)
-    elif not isinstance(md, str):
-        md = str(md)
-    clean = re.sub(r"(\n\s*){3,}", "\n\n", (md or "").strip())
-    return Markdown(clean)
 
 
 def run_agent_cli():
@@ -102,7 +89,6 @@ def run_agent_cli():
             save_operation_analysis,
             save_error_catalog,
             save_resource_characteristics,
-            save_raw_analysis_data,
             query_knowledge_base,
         ],
         system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,

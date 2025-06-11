@@ -25,7 +25,6 @@ from ack_model_agent.tools import (
     save_operation_analysis,
     save_error_catalog,
     save_resource_characteristics,
-    save_raw_analysis_data,
     query_knowledge_base,
 )
 from utils.docs_agent import DocsAgent
@@ -76,7 +75,6 @@ def call_model_agent(service: str, resource: str) -> str:
                 save_operation_analysis,
                 save_error_catalog,
                 save_resource_characteristics,
-                save_raw_analysis_data,
                 query_knowledge_base,
             ],
             system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,

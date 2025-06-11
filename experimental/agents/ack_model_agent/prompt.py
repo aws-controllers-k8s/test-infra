@@ -219,7 +219,6 @@ resource_characteristics = {
 3. save_operation_analysis(operation_analysis, service, resource) - for each operation
 4. save_error_catalog(error_catalog, service, resource)
 5. save_resource_characteristics(resource_characteristics, service, resource)
-6. save_raw_analysis_data(combined_kb_results, service, resource)
 
 5. Report Analysis Summary
 - Operations discovered and classified
@@ -234,5 +233,4 @@ Response Format:
 3. Extract and classify all resource information
 4. Save structured analysis data
 5. "Resource analysis complete. Extracted [summary of findings]"
-
-Remember: You are an AWS API expert, not a Kubernetes expert. Focus on thorough AWS resource analysis without making assumptions about how the data will be used."""
+"""

@@ -50,22 +50,39 @@ echo "All JSON files are now available in the '$TARGET_DIR' directory"
 read -p "Would you like to upload these files to an S3 bucket? (y/n): " upload_choice
 
 if [[ $upload_choice == "y" || $upload_choice == "Y" ]]; then
-  USERNAME=$(whoami)
-  RANDOM_STRING=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 4 | head -n 1)
-  BUCKET_NAME="api-model-agent-${USERNAME}--${RANDOM_STRING}"
+  # Determine bucket name: environment variable > auto-generated
+  if [[ -n "$S3_BUCKET_NAME" ]]; then
+    BUCKET_NAME="$S3_BUCKET_NAME"
+    echo "Using bucket name from environment variable: $BUCKET_NAME"
+  else
+    USERNAME=$(whoami)
+    RANDOM_STRING=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 4 | head -n 1)
+    BUCKET_NAME="api-model-agent-${USERNAME}--${RANDOM_STRING}"
+    echo "Auto-generating bucket name: $BUCKET_NAME"
+  fi
   
   echo "Creating S3 bucket: $BUCKET_NAME"
-  
+
   # Check if AWS CLI is installed
   if ! command -v aws &> /dev/null; then
     echo "AWS CLI is not installed. Please install it to upload files to S3."
     exit 1
   fi
-  # Upload files
-  aws s3api create-bucket --bucket $BUCKET_NAME --region us-west-2 --create-bucket-configuration LocationConstraint=us-west-2
+  
+  # Create bucket (only if using auto-generated name - assume existing bucket if user provided name)
+  if [[ -z "$S3_BUCKET_NAME" ]]; then
+    echo "Creating new S3 bucket..."
+    aws s3api create-bucket --bucket $BUCKET_NAME --region us-west-2 --create-bucket-configuration LocationConstraint=us-west-2
+  else
+    echo "Using existing bucket (assuming it exists)..."
+  fi
   
   if [ $? -eq 0 ]; then
-    echo "Bucket created successfully. Uploading files..."
+    if [[ -z "$S3_BUCKET_NAME" ]]; then
+      echo "Bucket created successfully. Uploading files..."
+    else
+      echo "Using existing bucket. Uploading files..."
+    fi
     aws s3 sync $TARGET_DIR s3://$BUCKET_NAME/ --region us-west-2
     if [ $? -eq 0 ]; then
       echo "Files uploaded successfully to s3://$BUCKET_NAME/"
@@ -73,7 +90,11 @@ if [[ $upload_choice == "y" || $upload_choice == "Y" ]]; then
       echo "Error uploading files to S3 bucket."
     fi
   else
-    echo "Error creating S3 bucket. Please check your AWS credentials and permissions."
+    if [[ -z "$S3_BUCKET_NAME" ]]; then
+      echo "Error creating S3 bucket. Please check your AWS credentials and permissions."
+    else
+      echo "Error accessing existing S3 bucket. Please check the bucket name and your AWS credentials/permissions."
+    fi
   fi
 else
   echo "Skipping S3 upload."

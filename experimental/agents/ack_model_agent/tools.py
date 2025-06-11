@@ -42,7 +42,16 @@ def query_knowledge_base(query: str) -> str:
 
 @tool
 def save_operations_catalog(operations_catalog: Dict[str, List[str]], service: str, resource: str) -> str:
-    """Save comprehensive catalog of all operations related to the resource."""
+    """Save comprehensive catalog of all operations related to the resource.
+    
+    Args:
+        operations_catalog: Dictionary mapping operation types to lists of operation names
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        resource: Resource name (e.g., 'Bucket', 'Table')
+        
+    Returns:
+        str: Confirmation message with file path where catalog was saved
+    """
     ensure_ack_directories
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "operations_catalog.json")
@@ -52,7 +61,16 @@ def save_operations_catalog(operations_catalog: Dict[str, List[str]], service: s
 
 @tool
 def save_field_catalog(field_catalog: Dict[str, Dict], service: str, resource: str) -> str:
-    """Save comprehensive catalog of all fields with their characteristics."""
+    """Save comprehensive catalog of all fields with their characteristics.
+    
+    Args:
+        field_catalog: Dictionary mapping field names to their characteristics and metadata
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        resource: Resource name (e.g., 'Bucket', 'Table')
+        
+    Returns:
+        str: Confirmation message with file path where catalog was saved
+    """
     ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "field_catalog.json")
@@ -62,7 +80,16 @@ def save_field_catalog(field_catalog: Dict[str, Dict], service: str, resource: s
 
 @tool  
 def save_operation_analysis(operation_analysis: Dict[str, Any], service: str, resource: str) -> str:
-    """Save detailed analysis of individual operations."""
+    """Save detailed analysis of individual operations.
+    
+    Args:
+        operation_analysis: Dictionary containing detailed analysis data for operations
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        resource: Resource name (e.g., 'Bucket', 'Table')
+        
+    Returns:
+        str: Confirmation message with file path where analysis was saved
+    """
     ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "operation_analysis.json")
@@ -72,7 +99,16 @@ def save_operation_analysis(operation_analysis: Dict[str, Any], service: str, re
 
 @tool
 def save_error_catalog(error_catalog: Dict[str, List], service: str, resource: str) -> str:
-    """Save comprehensive error code analysis."""
+    """Save comprehensive error code analysis.
+    
+    Args:
+        error_catalog: Dictionary mapping error types to lists of error codes and descriptions
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        resource: Resource name (e.g., 'Bucket', 'Table')
+        
+    Returns:
+        str: Confirmation message with file path where error catalog was saved
+    """
     ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "error_catalog.json")
@@ -82,20 +118,19 @@ def save_error_catalog(error_catalog: Dict[str, List], service: str, resource: s
 
 @tool
 def save_resource_characteristics(characteristics: Dict[str, Any], service: str, resource: str) -> str:
-    """Save high-level resource behavior characteristics."""
+    """Save high-level resource behavior characteristics.
+    
+    Args:
+        characteristics: Dictionary containing resource behavior and characteristics data
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        resource: Resource name (e.g., 'Bucket', 'Table')
+        
+    Returns:
+        str: Confirmation message with file path where characteristics were saved
+    """
     ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "characteristics.json")
     with open(cache_file, 'w') as f:
         json.dump(characteristics, f, indent=2)
     return f"Resource characteristics saved to {cache_file}"
-
-@tool
-def save_raw_analysis_data(raw_data: str, service: str, resource: str) -> str:
-    """Save raw knowledge base results for reference."""
-    ensure_ack_directories()
-    resource_dir = ensure_service_resource_directories(service, resource)
-    cache_file = os.path.join(resource_dir, "raw_analysis.txt")
-    with open(cache_file, 'w') as f:
-        f.write(raw_data)
-    return f"Raw analysis data saved to {cache_file}"

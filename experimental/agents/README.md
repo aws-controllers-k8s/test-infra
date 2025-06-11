@@ -37,7 +37,11 @@ The ACK Agents provide conversational interfaces to help you work with AWS Contr
 
 #### 1. Data Source Preparation
 ```bash
-# Upload AWS API model JSON files to S3
+# Upload AWS API model JSON files to S3 (auto-generates bucket name)
+./utils/scripts/extract_api_models.sh
+
+# Or use environment variable to specify existing bucket
+export S3_BUCKET_NAME=my-existing-bucket-name
 ./utils/scripts/extract_api_models.sh
 ```
 
