@@ -68,7 +68,7 @@ class Settings(BaseSettings):
         return self.aws_sdk_go_v2_path_override if self.aws_sdk_go_v2_path_override else os.path.join(self.ack_root, "aws-sdk-go-v2")
     
     @property
-    def build_logs_path(self) -> str:
+    def build_logs_dir(self) -> str:
         """Get the path to the build logs directory.
 
         Returns:

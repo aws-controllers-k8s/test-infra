@@ -26,7 +26,10 @@ from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
 from ack_generator_agent.tools import (
     add_memory,
     build_controller_agent,
+    call_model_agent,
+    error_lookup,
     list_all_memories,
+    load_all_analysis_data,
     read_service_generator_config,
     read_service_model,
     save_error_solution,
@@ -95,6 +98,9 @@ def run_agent_cli():
     agent = Agent(
         model=bedrock_model,
         tools=[
+            call_model_agent,
+            load_all_analysis_data,
+            error_lookup,
             read_service_generator_config,
             read_service_model,
             build_controller_agent,

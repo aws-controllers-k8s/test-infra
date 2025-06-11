@@ -22,7 +22,7 @@ from utils.settings import settings
 def ensure_ack_directories():
     """Create the ACK directory structure."""
     os.makedirs(settings.ack_root, exist_ok=True)
-    os.makedirs(settings.build_logs_path, exist_ok=True)
+    os.makedirs(settings.build_logs_dir, exist_ok=True)
     os.makedirs(settings.model_logs_dir, exist_ok=True)
 
 

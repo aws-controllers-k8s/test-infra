@@ -15,7 +15,7 @@ The ACK Agents provide conversational interfaces to help you work with AWS Contr
 - Generate code and configurations for ACK controllers
 - Work with ACK generator.yaml files
 
-### ACK Model Agent (NEW)
+### ACK Model Agent
 - Analyze AWS API models from the official AWS API models repository
 - Extract comprehensive CRUD operation information for resources
 - Provide detailed analysis for ACK controller implementation
@@ -29,6 +29,36 @@ The ACK Agents provide conversational interfaces to help you work with AWS Contr
 5. AWS credentials configured in your environment
 6. Opensearch Vector Database for memory agent
 7. Bedrock Knowledgebase (with ACK Codegen)
+8. Bedrock Knowledgebase (AWS API Models)
+
+## Setup
+
+### API Models KB Configuration
+
+#### 1. Data Source Preparation
+```bash
+# Upload AWS API model JSON files to S3
+./utils/scripts/extract_api_models.sh
+```
+
+#### 2. Knowledge Base Settings
+- **Name**: `api-models-knowledge-base`
+- **Data Source**: S3 bucket with AWS API model JSON files
+- **Parsing Strategy**: Foundation Model-based with Claude 3.5 Sonnet
+- **Chunking Strategy**: Hierarchical
+  - Parent chunks: 4000 tokens
+  - Child chunks: 600 tokens  
+  - Overlap: 120 tokens
+- **Embedding Model**: Amazon Titan Text Embeddings V2 (1024 dimensions)
+- **Vector Store**: OpenSearch Serverless
+
+#### 3. Environment Variables
+```bash
+export MODEL_AGENT_KB_ID=your-knowledge-base-id
+```
+
+Note: Sync knowledgebase data source
+
 
 ## Installation
 
@@ -112,22 +142,6 @@ uv run python -m ack_generator_agent --region us-east-1 --temperature 0.5 --debu
 - `aws_sdk_go_v2_path_override`: Overrides path to the aws-sdk-go-v2 Git repo. If not set `{ack_root}/aws-sdk-go-v2` is used.
 - `build_logs_dir_override`: Overrides path directory where build logs should be saved. If not set `{ack_root}/build_logs` is used.
 
-
-## Available Tools
-
-The agents provide several tools for working with ACK:
-
-1. `get_latest_version` - Get the latest version of an ACK repository
-2. `build_controller` - Build a controller for a specific AWS service (builder agent)
-3. `read_build_log` - Read the logs from a controller build (builder agent)
-4. `sleep` - Pause execution for a specified time (builder agent)
-5. `read_service_generator_config` - Read a service's generator configuration (generator agent)
-6. `read_service_model` - Read the AWS service model (generator agent)
-7. `build_controller_agent` - Delegate the controller build process to the builder agent (generator agent)
-8. `analyze_resource_crud_operations` - Analyze CRUD operations for AWS resources (model agent)
-9. `get_comprehensive_resource_info` - Get comprehensive information about AWS resources (model agent)
-10. `list_service_resources` - List all resources in an AWS service (model agent)
-11. `validate_resource_exists` - Validate if a resource exists in AWS API models (model agent)
 
 ## License
 
