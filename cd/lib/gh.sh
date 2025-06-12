@@ -69,7 +69,7 @@ open_gh_issue() {
 # Environment variables PR_SOURCE_BRANCH and PR_TARGET_BRANCH can be used to set
 # source and target GitHub branches for PR. Default value for both is 'main'
 open_pull_request() {
-  if [[ $# -ne 3 ]]; then
+  if [[ $# -lt 3 ]]; then
     echo "gh.sh][ERROR] open_pull_request requires three arguments, 'ORG_REPO', 'COMMIT_MSG' and 'PR_BODY_FILE_PATH'. But $# arguments were passed"
     return 1
   fi
