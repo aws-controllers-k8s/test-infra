@@ -195,7 +195,7 @@ do
   # label does not exist in those repos. Unsetting the variable will not add this
   # label while creating pull requests.
   unset GITHUB_LABEL
-  if ! open_pull_request "$OH_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE_PATH"; then
+  if ! open_pull_request "$OH_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE_PATH" "$GITHUB_ACTOR"; then
     exit 1
   fi
 done
