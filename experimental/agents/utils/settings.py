@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     aws_sdk_go_v2_url: str = "https://github.com/aws/aws-sdk-go-v2.git"
     aws_sdk_go_v2_path_override: Optional[str] = None
 
-    build_logs_dir_override: str = os.path.join(ack_root, "build_logs")
+    build_logs_dir_override: Optional[str] = None
     model_logs_dir_override: Optional[str] = None
     
     # export MODEL_AGENT_KB_ID="your-kb-id-here"
