@@ -23,3 +23,7 @@ DEFAULT_TEMPERATURE = 0.2
 
 # Memory Agent User ID
 MEM0_USER_ID = "ack_codegen_agent_user"
+
+# Knowledge Base defaults for model agent
+MODEL_AGENT_KB_NUMBER_OF_RESULTS = 5
+MODEL_AGENT_KB_SCORE_THRESHOLD = 0.5

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     aws_sdk_go_v2_path_override: Optional[str] = None
 
     build_logs_dir_override: str = os.path.join(ack_root, "build_logs")
+    model_logs_dir_override: Optional[str] = None
+    
+    # export MODEL_AGENT_KB_ID="your-kb-id-here"
+    model_agent_kb_id: Optional[str] = None
 
     @property
     def code_generator_path(self) -> str:
@@ -64,7 +68,7 @@ class Settings(BaseSettings):
         return self.aws_sdk_go_v2_path_override if self.aws_sdk_go_v2_path_override else os.path.join(self.ack_root, "aws-sdk-go-v2")
     
     @property
-    def build_logs_path(self) -> str:
+    def build_logs_dir(self) -> str:
         """Get the path to the build logs directory.
 
         Returns:
@@ -72,6 +76,16 @@ class Settings(BaseSettings):
         """
 
         return self.build_logs_dir_override if self.build_logs_dir_override else os.path.join(self.ack_root, "build_logs")
+    
+    @property
+    def model_logs_dir(self) -> str:
+        """Get the path to the model logs directory.
+
+        Returns:
+            Path to the model logs directory.
+        """
+
+        return self.model_logs_dir_override if self.model_logs_dir_override else os.path.join(self.ack_root, "model_logs")
     
     def get_controller_path(self, service: str) -> str:
         """Get the path to a service controller repository.

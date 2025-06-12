@@ -18,6 +18,15 @@ from strands import Agent, tool
 
 from ack_builder_agent.prompts import ACK_BUILDER_SYSTEM_PROMPT
 from ack_builder_agent.tools import build_controller, read_build_log, sleep, verify_build_completion
+from ack_model_agent.prompt import ACK_MODEL_AGENT_SYSTEM_PROMPT
+from ack_model_agent.tools import (
+    save_operations_catalog,
+    save_field_catalog,
+    save_operation_analysis,
+    save_error_catalog,
+    save_resource_characteristics,
+    query_knowledge_base,
+)
 from utils.docs_agent import DocsAgent
 from utils.knowledge_base import retrieve_from_knowledge_base
 from utils.memory_agent import MemoryAgent
@@ -25,12 +34,127 @@ from utils.repo import (
     ensure_ack_directories,
     ensure_aws_sdk_go_v2_cloned,
     ensure_service_repo_cloned,
+    ensure_service_resource_directories,
 )
 from utils.settings import settings
 
 console = Console()
 memory_agent = MemoryAgent()
 docs_agent = DocsAgent()
+
+
+@tool
+def call_model_agent(service: str, resource: str) -> str:
+    """
+    Call the Model Agent to perform comprehensive AWS resource analysis.
+    
+    Args:
+        service: AWS service name (e.g., 's3', 'ec2')
+        resource: Resource name (e.g., 'Bucket', 'Instance')
+        
+    Returns:
+        str: Model Agent analysis results
+    """
+    try:
+        from strands.models import BedrockModel
+        from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
+        
+        # Create model provider
+        bedrock_model = BedrockModel(
+            model_id=DEFAULT_MODEL_ID,
+            region_name=DEFAULT_REGION,
+            temperature=DEFAULT_TEMPERATURE,
+        )
+        
+        # Create the Model Agent
+        model_agent = Agent(
+            model=bedrock_model,
+            tools=[
+                save_operations_catalog,
+                save_field_catalog,
+                save_operation_analysis,
+                save_error_catalog,
+                save_resource_characteristics,
+                query_knowledge_base,
+            ],
+            system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,
+        )
+        
+        # Call the model agent to analyze the resource
+        query = f"Analyze AWS {service} {resource} resource"
+        response = model_agent(query)
+        
+        return f"Model Agent analysis completed for {service} {resource}. Response: {str(response)}"
+        
+    except Exception as e:
+        return f"Error calling Model Agent for {service} {resource}: {str(e)}"
+
+
+@tool
+def load_all_analysis_data(service: str, resource: str) -> str:
+    """
+    Load all 6 analysis files created by the Model Agent from the service/resource directory.
+    
+    Args:
+        service: AWS service name (e.g., 's3', 'ec2')
+        resource: Resource name (e.g., 'Bucket', 'Instance')
+        
+    Returns:
+        str: JSON string containing all analysis data with filenames as keys
+    """
+    try:
+        resource_dir = ensure_service_resource_directories(service, resource)
+        analysis_data = {}
+        
+        # Define the 6 expected analysis files
+        analysis_files = [
+            "operations_catalog.json",
+            "field_catalog.json", 
+            "operation_analysis.json",
+            "error_catalog.json",
+            "resource_characteristics.json",
+            "raw_analysis.txt"
+        ]
+        
+        # Load each file
+        for filename in analysis_files:
+            file_path = os.path.join(resource_dir, filename)
+            
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                    
+                # For JSON files, parse and store as dict, for txt files store as string
+                if filename.endswith('.json'):
+                    try:
+                        analysis_data[filename] = json.loads(content)
+                    except json.JSONDecodeError:
+                        analysis_data[filename] = content  # Store as string if JSON parsing fails
+                else:
+                    analysis_data[filename] = content
+            else:
+                analysis_data[filename] = f"File not found: {file_path}"
+        
+        # Return the analysis data as a formatted JSON string
+        return json.dumps(analysis_data, indent=2)
+        
+    except Exception as e:
+        return f"Error loading analysis data for {service} {resource}: {str(e)}"
+
+
+
+@tool
+def error_lookup(error_message: str) -> str:
+    """
+    Look up known solutions for a specific build error.
+    
+    Args:
+        error_message: The error message to look up
+        
+    Returns:
+        str: Known solution if found, or indication that no solution is known
+    """
+    return memory_agent.lookup_error_solution(error_message) or "No known solution found for this error."
 
 
 @tool

@@ -11,13 +11,10 @@
 """Main entry point for the ACK Generator agent CLI."""
 
 import argparse
-import json
 import logging
-import re
 import warnings
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.panel import Panel
 from strands import Agent
 from strands.models import BedrockModel
@@ -26,7 +23,10 @@ from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
 from ack_generator_agent.tools import (
     add_memory,
     build_controller_agent,
+    call_model_agent,
+    error_lookup,
     list_all_memories,
+    load_all_analysis_data,
     read_service_generator_config,
     read_service_model,
     save_error_solution,
@@ -35,6 +35,7 @@ from ack_generator_agent.tools import (
     update_service_generator_config,
 )
 from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
+from utils.formatting import pretty_markdown
 
 console = Console()
 
@@ -54,16 +55,6 @@ def configure_logging(debug=False):
 
     # Suppress deprecation warnings from botocore about datetime.utcnow()
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="botocore")
-
-
-def pretty_markdown(md) -> Markdown:
-    # If it's a dict, pretty-print as JSON
-    if isinstance(md, dict):
-        md = json.dumps(md, indent=2)
-    elif not isinstance(md, str):
-        md = str(md)
-    clean = re.sub(r"(\n\s*){3,}", "\n\n", (md or "").strip())
-    return Markdown(clean)
 
 
 def run_agent_cli():
@@ -95,6 +86,9 @@ def run_agent_cli():
     agent = Agent(
         model=bedrock_model,
         tools=[
+            call_model_agent,
+            load_all_analysis_data,
+            error_lookup,
             read_service_generator_config,
             read_service_model,
             build_controller_agent,
