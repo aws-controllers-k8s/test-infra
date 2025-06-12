@@ -174,44 +174,6 @@ def read_service_generator_config(service: str) -> str:
 
 
 @tool
-def read_service_model(service: str) -> str:
-    """Reads the AWS service model JSON file from the code generator repository.
-
-    Args:
-        service: Name of the AWS service (e.g., 's3', 'dynamodb')
-
-    Returns:
-        str: Content of the service model JSON file or an error message.
-    """
-    try:
-        # Make sure AWS SDK is cloned
-        ensure_ack_directories()
-        ensure_aws_sdk_go_v2_cloned()
-
-        # Get the model file path from settings
-        model_path = settings.get_aws_service_model_path(service)
-
-        console.log(f"Looking for model at: {model_path}")
-
-        if not os.path.exists(model_path):
-            return f"Error: Model file not found for service '{service}' at {model_path}"
-
-        with open(model_path, "r") as f:
-            content = f.read()
-
-        # Parse and return the full model content
-        try:
-            data = json.loads(content)
-            return json.dumps(data, indent=2)
-        except Exception as e:
-            console.log(f"Error parsing model JSON: {str(e)}")
-            return content
-
-    except Exception as e:
-        return f"Error reading service model for {service}: {str(e)}"
-
-
-@tool
 def build_controller_agent(service: str) -> str:
     """
     Delegate the controller build process to the specialized builder agent.
