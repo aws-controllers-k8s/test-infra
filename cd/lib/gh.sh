@@ -59,10 +59,12 @@ open_gh_issue() {
 # create a new pull request.
 # Usage:
 #
-# open_pull_request ORG_REPO COMMIT_MSG PR_BODY_FILE_PATH
+# open_pull_request ORG_REPO COMMIT_MSG PR_BODY_FILE_PATH GITHUB_ACTOR
 #
 # If 'GITHUB_LABEL' environment variable is present, this function will add those
 # label for list and create pr arguments of gh cli.
+#
+# If GITHUB_ACTOR is set --head parameter will use user:branch syntax to specify owner of the source repo.
 #
 # Environment variables PR_SOURCE_BRANCH and PR_TARGET_BRANCH can be used to set
 # source and target GitHub branches for PR. Default value for both is 'main'
@@ -80,6 +82,9 @@ open_pull_request() {
   local __label_arg=""
   if [[ -n $GITHUB_LABEL ]]; then
     __label_arg="-l $GITHUB_LABEL"
+  fi
+  if [[ -n $4 ]]; then
+    __source_branch="$4:$PR_SOURCE_BRANCH"
   fi
 
   echo -n "gh.sh][INFO] Finding existing open pull requests ... "
