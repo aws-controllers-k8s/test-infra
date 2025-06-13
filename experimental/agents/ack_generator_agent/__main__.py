@@ -11,12 +11,9 @@
 """Main entry point for the ACK Generator agent CLI."""
 
 import argparse
-import logging
-import warnings
 
 from rich.console import Console
 from rich.panel import Panel
-from strands import Agent
 
 from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
 from ack_generator_agent.tools import (
@@ -40,25 +37,9 @@ from config.defaults import (
 )
 from utils.bedrock import create_enhanced_agent
 from utils.formatting import pretty_markdown
+from utils.logging import configure_logging
 
 console = Console()
-
-
-def configure_logging(debug=False):
-    """Configure logging for the application.
-
-    Args:
-        debug: Whether to enable debug logging
-    """
-    log_level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(level=log_level, format="%(levelname)s | %(name)s | %(message)s")
-
-    # Always enable Strands debug logs if debug is enabled
-    if debug:
-        logging.getLogger("strands").setLevel(logging.DEBUG)
-
-    # Suppress deprecation warnings from botocore about datetime.utcnow()
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="botocore")
 
 
 def run_agent_cli():
