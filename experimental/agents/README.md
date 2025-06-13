@@ -120,6 +120,16 @@ make run-model
 uv run python -m ack_model_agent
 ```
 
+Run the tag agent:
+
+```bash
+# Using make
+make run-tag
+
+# Or directly
+uv run python -m ack_tag_agent
+```
+
 You can provide command-line arguments:
 
 ```bash

@@ -11,6 +11,9 @@
 """ACK Resource Addition Workflow - Agent Orchestrator."""
 
 import os
+import time
+from ack_tag_agent.prompt import ACK_TAG_AGENT_SYSTEM_PROMPT
+from ack_tag_agent.tools import compile_service_controller, read_service_file, write_service_controller_file
 import yaml
 from typing import Optional, List
 from dataclasses import dataclass
@@ -125,6 +128,24 @@ class ACKResourceWorkflow:
             ],
             system_prompt=ACK_GENERATOR_SYSTEM_PROMPT,
         )
+    
+    def _create_tag_agent(self):
+        """Create a fresh Tag Agent instance."""
+        return create_enhanced_agent(
+        tools=[
+            load_all_analysis_data,
+            read_service_generator_config,
+            update_service_generator_config,
+            save_error_solution,
+            search_codegen_knowledge,
+            write_service_controller_file,
+            read_service_file,
+            compile_service_controller,
+            build_controller_agent
+        ],
+        system_prompt=ACK_TAG_AGENT_SYSTEM_PROMPT
+    )
+       
 
 
 
@@ -154,6 +175,9 @@ class ACKResourceWorkflow:
     async def _run_model_agent(self, service: str, resource: str) -> tuple[bool, str]:
         """Run the Model Agent to analyze the resource."""
         print(f"\n\n\033[94m🔍 Step 1: Running Model Agent for {service} {resource}\033[0m\n")
+
+        if self._check_analysis_files_exist(service, resource):
+            return True, f"Analysis files already exist"
         
         try:
             model_agent = self._create_model_agent()
@@ -255,6 +279,37 @@ Use add_memory to store this information for future reference."""
             print(f"\n\033[91m❌ Failed to save results: {e}\033[0m\n")
             return False
 
+    async def _run_tag_agent(self, service: str, resource: str) -> tuple[bool, str]:
+        """Run the Tag Agent to create custom hooks for resource Tag operations"""
+        print(f"\n\033[93m⚙️  Step 4: Running Tag Agent for {service} {resource}\033[0m\n")
+
+        try:
+            tag_agent = self._create_tag_agent()
+            prompt = f"Add tag support for the {resource} resource of the {service} service."
+            response = tag_agent(prompt)
+
+            response_str = str(response)
+            success = (
+                "success:" in response_str.lower() or
+                "tag support added successfully" in response_str.lower() or
+                "controller built successfully" in response_str.lower() or
+                "successfully added tag support" in response_str.lower()
+            )
+
+            if success:
+                print(f"\n\033[92m✅ Tag Agent completed - tag support added and controller built\033[0m\n")
+                return True, str(response)
+            else:
+                print(f"\n\033[93m⚠️  Tag Agent completed but adding hooks may have had issues\033[0m\n")
+                return False, str(response)
+            
+        except Exception as e:
+            print(f"\n\033[91m❌ Tag Agent failed with error: {e}\033[0m\n")
+            return False, str(e)
+
+
+
+    
     async def run(self, input_data: ResourceAdditionInput) -> ResourceAdditionOutput:
         """Execute the complete workflow by running individual agents."""
         try:
@@ -317,6 +372,17 @@ Use add_memory to store this information for future reference."""
                 f"Successfully generated configuration and built controller for {input_data.resource}. Configuration optimized based on analysis data.",
                 "Success"
             )
+
+            # Step 4: Run Tag Agent
+            tag_success, tag_response = await self._run_tag_agent(input_data.service, input_data.resource)
+
+            if not tag_success:
+                return ResourceAdditionOutput(
+                    success=False,
+                    service=input_data.service,
+                    resource=input_data.resource,
+                    error_message=f"Tag Agent failed: {tag_response}",
+                )
             
             # Final status
             print(f"\n\033[92m🎉 Workflow completed successfully!\033[0m")
