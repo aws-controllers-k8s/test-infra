@@ -164,8 +164,12 @@ do
     yq -i '.updateGraph="semver-mode"' ci.yaml
     yq -i '.reviewers[0]="ack-bot"' ci.yaml
     echo "" >> ci.yaml
+
+    # Return to original working directory
+    cd "$WORKSPACE_DIR/$OH_REPO"
   fi
 
+  echo "olm-bundle-pr.sh][INFO] Creating $PWD/operators/ack-$CONTROLLER_NAME/$OLM_BUNDLE_VERSION"
   mkdir -p "operators/ack-$CONTROLLER_NAME/$OLM_BUNDLE_VERSION"
   cd "$WORKSPACE_DIR/$OH_REPO/operators/ack-$CONTROLLER_NAME/$OLM_BUNDLE_VERSION"
   cp -R "$WORKSPACE_DIR/$CONTROLLER_NAME/olm/bundle/manifests" . >/dev/null
