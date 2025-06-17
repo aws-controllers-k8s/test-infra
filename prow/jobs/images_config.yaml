@@ -1,16 +1,16 @@
 image_repo: public.ecr.aws/m5q3e4b2/prow
 images:
-    auto-generate-controllers: prow-auto-generate-controllers-0.0.26
-    auto-update-controllers: prow-auto-update-controllers-0.0.18
+    auto-generate-controllers: prow-auto-generate-controllers-0.0.28
+    auto-update-controllers: prow-auto-update-controllers-0.0.19
     build-prow-images: prow-build-prow-images-0.0.49
-    controller-release-tag: prow-controller-release-tag-0.0.16
+    controller-release-tag: prow-controller-release-tag-0.0.17
     deploy: prow-deploy-0.0.30
     docs: prow-docs-0.0.24
-    integration-test: prow-integration-0.0.37
-    olm-bundle-pr: prow-olm-bundle-pr-0.0.19
-    olm-test: prow-olm-test-0.0.18
+    integration-test: prow-integration-0.0.38
+    olm-bundle-pr: prow-olm-bundle-pr-0.0.20
+    olm-test: prow-olm-test-0.0.19
     scan-controllers-cve: prow-scan-controllers-cve-0.0.13
     soak-test: prow-soak-0.0.18
-    unit-test: prow-unit-0.0.20
+    unit-test: prow-unit-0.0.21
     upgrade-go-version: prow-upgrade-go-version-0.0.19
-    verify-attribution: prow-verify-attribution-0.0.17
+    verify-attribution: prow-verify-attribution-0.0.18
