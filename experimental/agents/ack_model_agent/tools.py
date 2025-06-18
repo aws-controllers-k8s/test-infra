@@ -31,6 +31,9 @@ def query_knowledge_base(query: str) -> str:
     Returns:
         str: Knowledge base results
     """
+    if not settings.model_agent_kb_id:
+        return "Error: MODEL_AGENT_KB_ID environment variable is not set"
+    
     res = retrieve_from_knowledge_base(
         knowledgeBaseId=settings.model_agent_kb_id,
         text=query, 
@@ -52,7 +55,7 @@ def save_operations_catalog(operations_catalog: Dict[str, List[str]], service: s
     Returns:
         str: Confirmation message with file path where catalog was saved
     """
-    ensure_ack_directories
+    ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "operations_catalog.json")
     with open(cache_file, 'w') as f:

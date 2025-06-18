@@ -15,69 +15,25 @@ import os
 
 from rich.console import Console
 from strands import tool
-
+from utils.bedrock import create_enhanced_agent
 from ack_builder_agent.prompts import ACK_BUILDER_SYSTEM_PROMPT
-from ack_builder_agent.tools import build_controller, read_build_log, sleep, verify_build_completion
-from ack_model_agent.prompt import ACK_MODEL_AGENT_SYSTEM_PROMPT
-from ack_model_agent.tools import (
-    save_operations_catalog,
-    save_field_catalog,
-    save_operation_analysis,
-    save_error_catalog,
-    save_resource_characteristics,
-    query_knowledge_base,
+from ack_builder_agent.tools import (
+    build_controller,
+    read_build_log,
+    sleep,
+    verify_build_completion,
 )
-from utils.docs_agent import DocsAgent
 from utils.knowledge_base import retrieve_from_knowledge_base
 from utils.memory_agent import MemoryAgent
 from utils.repo import (
     ensure_ack_directories,
-    ensure_aws_sdk_go_v2_cloned,
     ensure_service_repo_cloned,
     ensure_service_resource_directories,
 )
-from utils.settings import settings
-from utils.bedrock import create_enhanced_agent
 
 console = Console()
 memory_agent = MemoryAgent()
-docs_agent = DocsAgent()
 
-
-@tool
-def call_model_agent(service: str, resource: str) -> str:
-    """
-    Call the Model Agent to perform comprehensive AWS resource analysis.
-    
-    Args:
-        service: AWS service name (e.g., 's3', 'ec2')
-        resource: Resource name (e.g., 'Bucket', 'Instance')
-        
-    Returns:
-        str: Model Agent analysis results
-    """
-    try:
-        # Create the Model Agent with enhanced reliability settings
-        model_agent = create_enhanced_agent(
-            tools=[
-                save_operations_catalog,
-                save_field_catalog,
-                save_operation_analysis,
-                save_error_catalog,
-                save_resource_characteristics,
-                query_knowledge_base,
-            ],
-            system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,
-        )
-        
-        # Call the model agent to analyze the resource
-        query = f"Analyze AWS {service} {resource} resource"
-        response = model_agent(query)
-        
-        return f"Model Agent analysis completed for {service} {resource}. Response: {str(response)}"
-        
-    except Exception as e:
-        return f"Error calling Model Agent for {service} {resource}: {str(e)}"
 
 
 @tool
@@ -173,28 +129,6 @@ def read_service_generator_config(service: str) -> str:
         return f"Error reading generator.yaml for {service}: {str(e)}"
 
 
-@tool
-def build_controller_agent(service: str) -> str:
-    """
-    Delegate the controller build process to the specialized builder agent.
-
-    Args:
-        service: Name of the AWS service (e.g., 's3', 'dynamodb')
-
-    Returns:
-        str: The builder agent's response (build status, logs, etc.)
-    """
-    try:
-        builder_agent = create_enhanced_agent(
-            tools=[build_controller, read_build_log, sleep, verify_build_completion],
-            system_prompt=ACK_BUILDER_SYSTEM_PROMPT,
-        )
-        response = builder_agent(service)
-        return str(response)
-    except Exception as e:
-        return f"Error in build_controller_agent: {str(e)}"
-
-
 # TODO(rushmash91): This is a temporary tool to update the generator.yaml file.
 # this will need a lot of checks and possibly a generator.yaml validator tool too
 @tool
@@ -269,14 +203,6 @@ def list_all_memories() -> str:
     return memory_agent.list_all_memories()
 
 
-# TODO(rushmash91): This is lookup to look up code-generator configs/ if we have a validator might not be needed
-@tool
-def lookup_code_generator_config(service: str, resource: str) -> str:
-    """
-    Look up the code-generator config for a given service and resource.
-    """
-    return f""
-
 
 @tool
 def save_error_solution(error_message: str, solution: str, metadata: dict) -> str:
@@ -318,69 +244,47 @@ def search_codegen_knowledge(query: str, numberOfResults: int = 5) -> str:
 
 
 @tool
-def search_aws_documentation(query: str, max_results: int = 5) -> str:
+def build_controller_agent(service: str, aws_sdk_version: str = "v1.32.6") -> str:
     """
-    Search AWS documentation using the AWS documentation MCP server.
-
-    This tool provides access to comprehensive AWS service documentation,
-    API references, user guides, and best practices.
-
+    Build a controller for the specified AWS service and monitor the build process.
+    
+    This is a comprehensive tool that:
+    1. Starts the build process in the background
+    2. Monitors build logs and progress
+    3. Reports build status and any errors
+    4. Returns detailed build information
+    
     Args:
-        query: Search query for AWS documentation (e.g., "S3 bucket configuration", "DynamoDB table creation")
-        max_results: Maximum number of documentation results to return (default: 5)
-
+        service: AWS service name (e.g., 's3', 'dynamodb')
+        aws_sdk_version: AWS SDK Go version (default: v1.32.6)
+        
     Returns:
-        str: AWS documentation search results or error message
+        str: Build status, logs, and any error information
     """
-    return docs_agent.search_documentation(query, max_results)
-
-
-@tool
-def read_aws_documentation(url: str, max_length: int = 5000, start_index: int = 0) -> str:
-    """
-    Read specific AWS documentation page content.
-
-    Args:
-        url: AWS documentation URL (must be from docs.aws.amazon.com)
-        max_length: Maximum number of characters to return (default: 5000)
-        start_index: Starting character index for partial reads (default: 0)
-
-    Returns:
-        str: AWS documentation page content in markdown format or error message
-    """
-    return docs_agent.read_documentation_page(url, max_length, start_index)
-
-
-@tool
-def get_aws_documentation_recommendations(url: str) -> str:
-    """
-    Get content recommendations for an AWS documentation page.
-
-    This tool provides recommendations for related AWS documentation pages
-    including highly rated, new, similar, and commonly viewed next pages.
-
-    Args:
-        url: AWS documentation URL to get recommendations for
-
-    Returns:
-        str: List of recommended documentation pages with URLs, titles, and context
-    """
-    return docs_agent.get_documentation_recommendations(url)
-
-
-@tool
-def find_service_documentation(service: str, resource: str) -> str:
-    """
-    Find AWS service documentation specifically for ACK controller generation.
-
-    This tool searches for AWS service API documentation, user guides, and best practices
-    that are relevant for generating Kubernetes controllers.
-
-    Args:
-        service: AWS service name (e.g., 's3', 'dynamodb', 'rds')
-        resource: Optional specific resource name (e.g., 'bucket', 'table', 'cluster')
-
-    Returns:
-        str: Relevant AWS documentation for the service/resource or error message
-    """
-    return docs_agent.find_service_documentation(service, resource)
+    builder_agent = create_enhanced_agent(
+        tools=[
+            build_controller,
+            read_build_log,
+            sleep,
+            verify_build_completion,
+        ],
+        system_prompt=ACK_BUILDER_SYSTEM_PROMPT,
+    )
+    
+    # Use the builder agent to build the controller
+    prompt = f"Build the {service} controller using AWS SDK {aws_sdk_version}. Monitor the build process, check logs, and report build status with detailed information."
+    
+    response = builder_agent(prompt)
+    
+    # Analyze the response to determine success
+    response_str = str(response)
+    
+    if (
+        "build completed successfully" in response_str.lower() or
+        "controller built successfully" in response_str.lower() or
+        ("no errors" in response_str.lower() and "build" in response_str.lower())
+    ):
+        return f"SUCCESS: {response_str}"
+    else:
+        return f"FAILED: {response_str}"
+        
