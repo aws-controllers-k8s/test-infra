@@ -149,6 +149,20 @@ def ensure_service_repo_cloned(service: str) -> str:
     return service_path
 
 
+def get_service_path(service: str) -> str:
+    """Get the path to the service controller repository.
+
+    Args:
+        service: Name of the AWS service
+
+    Returns:
+        Path to the local service controller repository
+    """
+    
+    
+    return settings.get_controller_path(service)
+
+
 def get_release_version(service_path: str) -> str:
     """Get the release version from the Helm chart.
 

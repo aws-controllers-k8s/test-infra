@@ -8,6 +8,9 @@ run-generator:
 run-model:
 	uv run --refresh python -m ack_model_agent
 
+run-tag:
+	uv run --refresh python -m ack_tag_agent
+
 # List available workflows
 list-workflows:
 	uv run --refresh python -m workflows list
