@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	
-	"k8s.io/api/core/v1"
+
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/github"
@@ -79,7 +79,7 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 		workflowArgs = append(workflowArgs, fmt.Sprintf("--%s", key))
 		workflowArgs = append(workflowArgs, value)
 	}
-	
+
 	// Add any additional flags
 	workflowArgs = append(workflowArgs, flags...)
 
@@ -104,11 +104,11 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			Name:      jobName,
 			Namespace: "prow-jobs",
 			Labels: map[string]string{
-				"workflow-type":        workflowName,
-				"triggered-by":         "workflow-agent",
-				"prow.k8s.io/type":     "periodic",
-				"prow.k8s.io/job":      fmt.Sprintf("agent-workflow-%s", workflowName),
-				"prow.k8s.io/refs.org": repo.GetOwner().GetLogin(),
+				"workflow-type":         workflowName,
+				"triggered-by":          "workflow-agent",
+				"prow.k8s.io/type":      "periodic",
+				"prow.k8s.io/job":       fmt.Sprintf("agent-workflow-%s", workflowName),
+				"prow.k8s.io/refs.org":  repo.GetOwner().GetLogin(),
 				"prow.k8s.io/refs.repo": repo.GetName(),
 				"created-by-prow":       "true", // Required label by Prow
 			},
@@ -130,7 +130,7 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			Job:     fmt.Sprintf("agent-workflow-%s", workflowName),
 			// No decoration config for periodic jobs
 			PodSpec: &v1.PodSpec{
-				RestartPolicy: v1.RestartPolicyNever,
+				RestartPolicy:      v1.RestartPolicyNever,
 				ServiceAccountName: "workflow-runner",
 				Containers: []v1.Container{{
 					Name:    "workflow-runner",
