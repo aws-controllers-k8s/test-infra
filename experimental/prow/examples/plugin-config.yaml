@@ -1,0 +1,15 @@
+# IMPORTANT: This plugin must be registered as an external plugin
+# GitHub webhooks should point to Prow Hook
+
+external_plugins:
+  ack-prow-staging/community:
+  - name: workflow-agent
+    endpoint: https://workflow-agent.ack-prow-staging.io/tamer
+    events:
+    - issue_comment
+    - issues
+
+# SETUP INSTRUCTIONS:
+# 1. Add this configuration to your Prow plugins.yaml
+# 2. Configure GitHub webhook to point to Prow Hook service (NOT this plugin directly)
+# 3. Prow Hook will forward /agent commands to this plugin endpoint
