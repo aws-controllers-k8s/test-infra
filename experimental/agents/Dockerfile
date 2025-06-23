@@ -7,12 +7,12 @@ ARG GO_VERSION=1.24.3
 ENV GO_VERSION=${GO_VERSION}
 
 # Create non-root user with home directory
-RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+RUN groupadd -r prow && useradd -r -g prow -m prow
 
 # Set environment variables
-ENV GOPATH=/home/appuser/go \
+ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
-    PATH=/home/appuser/go/bin:/usr/local/go/bin:${PATH} \
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH} \
     PYTHONUNBUFFERED=1
 
 # Set working directory
@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     make \
+    gnupg2 \
+    uuid-runtime \
     curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -41,9 +43,15 @@ RUN echo "Installing Helm ..." \
     && export HELM_URL="https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3" \
     && curl -fsSL ${HELM_URL} | bash
 
+RUN echo "Installing GitHub cli ..." \
+    && curl -fsSL "https://cli.github.com/packages/githubcli-archive-keyring.gpg" | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh
+
 # Create Go directories with proper permissions
 RUN mkdir -p "${GOPATH}/bin" "${GOPATH}/src" "${GOPATH}/pkg" \
-    && chown -R appuser:appuser /home/appuser
+    && chown -R prow:prow /home/prow
 
 # Install uv package manager
 RUN pip install --no-cache-dir uv
@@ -53,10 +61,10 @@ COPY . .
 
 # Install dependencies using uv and set permissions
 RUN uv pip install --system . && \
-    chown -R appuser:appuser /app
+    chown -R prow:prow /app
 
 # Switch to non-root user
-USER appuser
+USER prow
 
 # Default command to run the generator agent
-ENTRYPOINT ["python", "-m", "ack_generator_agent"]
+ENTRYPOINT ["./prow-job.sh"]
