@@ -1,0 +1,54 @@
+# Build stage
+FROM golang:1.24-alpine AS builder
+
+# Install git for direct downloads
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+ENV GOPROXY=direct
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o webhook-server ./cmd/webhook-server
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install ca-certificates for HTTPS requests
+RUN apk --no-cache add ca-certificates
+
+# Create non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup -u 1000
+
+# Create app directory with proper permissions
+WORKDIR /app
+
+# Copy binary from builder stage
+COPY --from=builder /app/webhook-server .
+
+# Copy default config
+COPY config/workflows.yaml /etc/workflows/workflows.yaml
+
+# Create directories for secrets with proper permissions
+RUN mkdir -p /etc/github /etc/webhook && \
+    ls -la /app/webhook-server && \
+    chown -R appuser:appgroup /etc/github /etc/webhook /etc/workflows /app && \
+    chmod 755 /app/webhook-server
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Switch to non-root user
+USER appuser
+
+CMD ["./webhook-server"]
