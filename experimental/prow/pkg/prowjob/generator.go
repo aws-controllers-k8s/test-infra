@@ -7,8 +7,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/prow/pkg/github"
 
-	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/github"
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/k8s"
 )
 
@@ -18,8 +18,8 @@ type Generator interface {
 		workflowName string,
 		args map[string]string,
 		flags []string,
-		issue *github.Issue,
-		repo *github.Repository,
+		issue github.Issue,
+		repo github.Repo,
 		timeout string,
 	) (*k8s.ProwJob, error)
 }
@@ -39,8 +39,8 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 	workflowName string,
 	args map[string]string,
 	flags []string,
-	issue *github.Issue,
-	repo *github.Repository,
+	issue github.Issue,
+	repo github.Repo,
 	timeout string,
 ) (*k8s.ProwJob, error) {
 
@@ -51,10 +51,10 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 
 	envVars := []v1.EnvVar{
 		{Name: "WORKFLOW_NAME", Value: workflowName},
-		{Name: "ISSUE_NUMBER", Value: strconv.Itoa(issue.GetNumber())},
-		{Name: "REPO_OWNER", Value: repo.GetOwner().GetLogin()},
-		{Name: "REPO_NAME", Value: repo.GetName()},
-		{Name: "ISSUE_AUTHOR", Value: issue.GetUser().GetLogin()},
+		{Name: "ISSUE_NUMBER", Value: strconv.Itoa(issue.Number)},
+		{Name: "REPO_OWNER", Value: repo.Owner.Login},
+		{Name: "REPO_NAME", Value: repo.Name},
+		{Name: "ISSUE_AUTHOR", Value: issue.User.Login},
 	}
 
 	// Add workflow-specific environment variables
@@ -108,13 +108,13 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 				"triggered-by":          "workflow-agent",
 				"prow.k8s.io/type":      "periodic",
 				"prow.k8s.io/job":       fmt.Sprintf("agent-workflow-%s", workflowName),
-				"prow.k8s.io/refs.org":  repo.GetOwner().GetLogin(),
-				"prow.k8s.io/refs.repo": repo.GetName(),
+				"prow.k8s.io/refs.org":  repo.Owner.Login,
+				"prow.k8s.io/refs.repo": repo.Name,
 				"created-by-prow":       "true", // Required label by Prow
 			},
 			Annotations: map[string]string{
 				"workflow-agent/workflow-name": workflowName,
-				"workflow-agent/issue-number":  strconv.Itoa(issue.GetNumber()),
+				"workflow-agent/issue-number":  strconv.Itoa(issue.Number),
 				"workflow-agent/command-args":  mapToString(args),
 			},
 		},

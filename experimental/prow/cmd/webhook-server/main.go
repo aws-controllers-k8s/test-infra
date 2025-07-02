@@ -1,21 +1,20 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/prowjob"
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/webhook"
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/prow/pkg/config"
+	"sigs.k8s.io/prow/pkg/config/secret"
 	prowflagutil "sigs.k8s.io/prow/pkg/flagutil"
+	"sigs.k8s.io/prow/pkg/interrupts"
 	"sigs.k8s.io/prow/pkg/logrusutil"
 	"sigs.k8s.io/prow/pkg/pjutil"
 	"sigs.k8s.io/prow/pkg/pluginhelp"
@@ -30,6 +29,7 @@ type options struct {
 	instrumentationOptions prowflagutil.InstrumentationOptions
 	logLevel               string
 
+	allowedTeam        string
 	webhookSecretFile  string
 	workflowConfigPath string
 }
@@ -41,6 +41,10 @@ func (o *options) Validate() error {
 		}
 	}
 
+	if o.allowedTeam == "" {
+		return fmt.Errorf("allowed-team is required")
+	}
+
 	return nil
 }
 
@@ -49,6 +53,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.IntVar(&o.port, "port", 8888, "Port to listen on.")
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
+	fs.StringVar(&o.allowedTeam, "allowed-team", "", "Team that is allowed to trigger workflows.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 	fs.StringVar(&o.workflowConfigPath, "workflow-config-path", "/etc/workflows/workflows.yaml", "Path to the workflow config file.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -59,12 +64,12 @@ func gatherOptions() options {
 	return o
 }
 
-const pluginName = "agent-workflow"
+const pluginName = "workflow-agent"
 
 func main() {
 	logrusutil.ComponentInit()
 
-	logrus.Info("Starting workflow-agent webhook server...")
+	logrus.Info("Starting workflow-agent plugin server...")
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
 		logrus.Fatalf("Invalid options: %v", err)
@@ -77,6 +82,15 @@ func main() {
 	logrus.SetLevel(logLevel)
 	log := logrus.StandardLogger().WithField("plugin", pluginName)
 
+	if err := secret.Add(o.webhookSecretFile); err != nil {
+		logrus.WithError(err).Fatal("Error starting secrets agent.")
+	}
+
+	githubClient, err := o.github.GitHubClient(o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error getting GitHub client.")
+	}
+
 	// Load workflow configuration
 	workflowConfig, err := prowjob.LoadWorkflowConfig(o.workflowConfigPath)
 	if err != nil {
@@ -86,7 +100,13 @@ func main() {
 	logrus.Infof("Loaded %d workflows from %s", len(workflowConfig.GetWorkflowsMap()), o.workflowConfigPath)
 
 	prowJobGenerator := prowjob.NewGenerator(workflowConfig.GetWorkflowsMap())
-	server, err := webhook.NewServer(workflowConfig, prowJobGenerator)
+	server, err := webhook.NewServer(
+		workflowConfig,
+		prowJobGenerator,
+		githubClient,
+		secret.GetTokenGenerator(o.webhookSecretFile),
+		o.allowedTeam,
+	)
 	if err != nil {
 		logrus.Fatalf("Failed to create webhook server: %v", err)
 	}
@@ -96,35 +116,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tamer", server.HandleWebhook)
-
+	externalplugins.ServeExternalPluginHelp(mux, log, HelpProvider)
 	httpServer := &http.Server{
 		Addr:    ":" + strconv.Itoa(o.port),
 		Handler: mux,
 	}
 
-	externalplugins.ServeExternalPluginHelp(mux, log, HelpProvider)
-
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		logrus.Printf("Starting HTTP server on port %s", strconv.Itoa(o.port))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logrus.Fatalf("HTTP server failed: %v", err)
-		}
-	}()
-
-	<-shutdown
-	logrus.Info("Shutting down webhook server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := httpServer.Shutdown(ctx); err != nil {
-		logrus.Errorf("HTTP server shutdown failed: %v", err)
-	} else {
-		logrus.Info("HTTP server stopped gracefully")
-	}
+	defer interrupts.WaitForGracefulShutdown()
+	interrupts.ListenAndServe(httpServer, 5*time.Second)
 }
 
 // HelpProvider construct the pluginhelp.PluginHelp for this plugin.

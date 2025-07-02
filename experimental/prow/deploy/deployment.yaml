@@ -21,19 +21,27 @@ spec:
           type: RuntimeDefault
       containers:
       - name: webhook-server
-        image: 086987147623.dkr.ecr.us-west-2.amazonaws.com/ack-prow-webhook:v1.0.11
+        image: 086987147623.dkr.ecr.us-west-2.amazonaws.com/ack-prow-webhook:v1.0.18
         ports:
         - containerPort: 8080
           name: http
+        command: ["./webhook-server"]
+        args:
+        - --port=8080
+        - --allowed-team=ack-prow-staging-admins
+        - --github-app-id=$(GITHUB_APP_ID)
+        - --github-app-private-key-path=/etc/github/private-key
+        - --github-endpoint=http://ghproxy
+        - --github-endpoint=https://api.github.com
+        - --dry-run=false
         env:
-        - name: PORT
-          value: "8080"
-        - name: WORKFLOWS_CONFIG_PATH
-          value: "/etc/workflows/workflows.yaml"
-        - name: GITHUB_APP_PATH
-          value: "/etc/github"
-        - name: WEBHOOK_SECRET_PATH
-          value: "/etc/webhook/hmac"
+        - name: GITHUB_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: github-app-files
+              key: app-id
+        - name: PROW_JOB_ID
+          value: "prow-jobs"
         - name: PROW_JOB_NAMESPACE
           value: "prow-jobs"
         volumeMounts:
