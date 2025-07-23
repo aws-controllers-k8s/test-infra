@@ -26,6 +26,9 @@ import (
 	prowjobpkg "github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/prowjob"
 )
 
+// DefaultTimeout is the standard timeout for API operations
+const DefaultTimeout = 30 * time.Second
+
 type githubClient interface {
 	CreateComment(org, repo string, number int, comment string) error
 	TeamBySlugHasMember(org string, teamSlug string, memberLogin string) (bool, error)
@@ -79,9 +82,6 @@ func NewServer(
 		allowedTeam:      allowedTeam,
 	}, nil
 }
-
-// DefaultTimeout is the standard timeout for API operations
-const DefaultTimeout = 30 * time.Second
 
 // ContextWithDefaultTimeout returns a new context with the default timeout
 func ContextWithDefaultTimeout() (context.Context, context.CancelFunc) {
