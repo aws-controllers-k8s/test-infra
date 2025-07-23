@@ -1,3 +1,17 @@
+// Copyright 2020 Amazon.com Inc. or its affiliates. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package prowjob
 
 import (
@@ -8,8 +22,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/prow/pkg/github"
 	prowv1 "sigs.k8s.io/prow/pkg/apis/prowjobs/v1"
+	"sigs.k8s.io/prow/pkg/github"
 
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/k8s"
 )
@@ -112,23 +126,23 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			Name:      jobName,
 			Namespace: "prow-jobs",
 			Labels: map[string]string{
-				"workflow-type":         workflowName,
-				"triggered-by":          "workflow-agent",
-				"prow.k8s.io/type":      "periodic",
-				"prow.k8s.io/job":       fmt.Sprintf("agent-workflow-%s", workflowName),
-				"prow.k8s.io/refs.org":  repo.Owner.Login,
-				"prow.k8s.io/refs.repo": repo.Name,
-				"created-by-prow":       "true", // Required label by Prow
+				"workflow-type":          workflowName,
+				"triggered-by":           "workflow-agent",
+				"prow.k8s.io/type":       "periodic",
+				"prow.k8s.io/job":        fmt.Sprintf("agent-workflow-%s", workflowName),
+				"prow.k8s.io/refs.org":   repo.Owner.Login,
+				"prow.k8s.io/refs.repo":  repo.Name,
+				"created-by-prow":        "true", // Required label by Prow
 				"app.kubernetes.io/name": fmt.Sprintf("agent-workflow-%s", workflowName),
 			},
 			Annotations: map[string]string{
 				"workflow-agent/workflow-name": workflowName,
 				"workflow-agent/issue-number":  strconv.Itoa(issue.Number),
 				"workflow-agent/command-args":  mapToString(args),
-				"prow.k8s.io/job": fmt.Sprintf("agent-workflow-%s", workflowName),
-				"prow.k8s.io/refs.org": repo.Owner.Login,
-				"prow.k8s.io/refs.repo": repo.Name,
-				"prow.k8s.io/refs.pull": strconv.Itoa(issue.Number),
+				"prow.k8s.io/job":              fmt.Sprintf("agent-workflow-%s", workflowName),
+				"prow.k8s.io/refs.org":         repo.Owner.Login,
+				"prow.k8s.io/refs.repo":        repo.Name,
+				"prow.k8s.io/refs.pull":        strconv.Itoa(issue.Number),
 			},
 		},
 		Status: k8s.ProwJobStatus{
@@ -143,7 +157,7 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			Job:     fmt.Sprintf("agent-workflow-%s", workflowName),
 			// Add decoration config for S3 logs
 			DecorationConfig: &k8s.DecorationConfig{
-				Timeout:    &prowv1.Duration{Duration: timeoutDuration},
+				Timeout:     &prowv1.Duration{Duration: timeoutDuration},
 				GracePeriod: &prowv1.Duration{Duration: 15 * time.Minute},
 				GCSConfiguration: &k8s.GCSConfiguration{
 					Bucket:       "s3://ack-prow-staging-artifacts",

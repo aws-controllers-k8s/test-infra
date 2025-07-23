@@ -1,3 +1,17 @@
+// Copyright 2020 Amazon.com Inc. or its affiliates. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package prowjob
 
 import (
@@ -47,19 +61,19 @@ func parseResourceQuantity(quantity string) resource.Quantity {
 	if quantity == "" {
 		return resource.MustParse("0")
 	}
-	
+
 	q, err := resource.ParseQuantity(quantity)
 	if err != nil {
 		log.Printf("Warning: Failed to parse resource quantity '%s': %v. Using fallback value.", quantity, err)
-		
+
 		lowerQuantity := strings.ToLower(quantity)
-		if strings.Contains(lowerQuantity, "cpu") || strings.Contains(lowerQuantity, "core") || 
-		   strings.Contains(lowerQuantity, "m") && !strings.Contains(lowerQuantity, "mi") && 
-		   !strings.Contains(lowerQuantity, "gi") && !strings.Contains(lowerQuantity, "ti") {
+		if strings.Contains(lowerQuantity, "cpu") || strings.Contains(lowerQuantity, "core") ||
+			strings.Contains(lowerQuantity, "m") && !strings.Contains(lowerQuantity, "mi") &&
+				!strings.Contains(lowerQuantity, "gi") && !strings.Contains(lowerQuantity, "ti") {
 			return resource.MustParse("100m")
-		} else if strings.Contains(lowerQuantity, "memory") || strings.Contains(lowerQuantity, "mi") || 
-				  strings.Contains(lowerQuantity, "gi") || strings.Contains(lowerQuantity, "ti") ||
-				  strings.Contains(lowerQuantity, "byte") {
+		} else if strings.Contains(lowerQuantity, "memory") || strings.Contains(lowerQuantity, "mi") ||
+			strings.Contains(lowerQuantity, "gi") || strings.Contains(lowerQuantity, "ti") ||
+			strings.Contains(lowerQuantity, "byte") {
 			return resource.MustParse("128Mi")
 		}
 		return resource.MustParse("100m")
