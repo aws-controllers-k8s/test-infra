@@ -1,0 +1,11 @@
+workflows:
+  ack_resource_workflow:
+    description: "ACK resource addition workflow"
+    image: "086987147623.dkr.ecr.us-west-2.amazonaws.com/workflow-agent:v1.0.8"
+    command: ["python", "-m", "workflows", "resource-addition"]
+    required_args: ["service", "resource"]
+    optional_args: []
+    timeout: "30m"
+    resources:
+      cpu: "2"
+      memory: "4Gi"

@@ -175,8 +175,9 @@ class ACKResourceWorkflow:
     async def _run_model_agent(self, service: str, resource: str) -> tuple[bool, str]:
         """Run the Model Agent to analyze the resource."""
         print(f"\n\n\033[94m🔍 Step 1: Running Model Agent for {service} {resource}\033[0m\n")
-
-        if self._check_analysis_files_exist(service, resource):
+        exist, _ = self._check_analysis_files_exist(service, resource)
+        if exist:
+            print(f"Model files are already present.")
             return True, f"Analysis files already exist"
         
         try:
