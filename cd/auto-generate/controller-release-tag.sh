@@ -88,16 +88,19 @@ if [[ $HELM_IMAGE_TAG == $NON_RELEASE_IMAGE_TAG ]]; then
   exit 0
 fi
 
-# Currently only supports auto-tagging for patch releases
+# Currently only supports auto-tagging for patch and minor releases
 if [[ $LATEST_GIT_TAG == $MISSING_GIT_TAG ]]; then
-  # If no git tag exist for controller, use v0.0.1 as next git tag
-  NEXT_GIT_TAG="v0.0.1"
+  # If no git tag exist for controller, use v0.0.1 or v0.1.0 as next git tag
+  NEXT_GIT_PATCH_TAG="v0.0.1"
+  NEXT_GIT_MINOR_TAG="v0.1.0"
 else
-  NEXT_GIT_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+  NEXT_GIT_PATCH_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+  NEXT_GIT_MINOR_TAG=$(echo "$LATEST_GIT_TAG" | awk -F. -v OFS=. '{$2++;$3=0;print}')
 fi
 
-if [[ $HELM_IMAGE_TAG != $NEXT_GIT_TAG ]]; then
-  echo "controller-release-tag.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is not the next patch release for current $LATEST_GIT_TAG release"
+# Validate HELM_IMAGE_TAG is either a patch tag or minor tag
+if [[ $HELM_IMAGE_TAG != $NEXT_GIT_PATCH_TAG && $HELM_IMAGE_TAG != $NEXT_GIT_MINOR_TAG ]]; then
+  echo "controller-release-tag.sh][ERROR] Helm image tag $HELM_IMAGE_TAG is neither the next patch nor the minor release for current $LATEST_GIT_TAG release"
   echo "controller-release-tag.sh][INFO] Not tagging the GitHub repository with $HELM_IMAGE_TAG tag"
   exit 0
 fi
