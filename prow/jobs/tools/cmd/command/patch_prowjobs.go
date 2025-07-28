@@ -23,12 +23,12 @@ import (
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 )
 
+const jobsImageDir = "./prow/jobs/images"
+
 var (
 	OptJobsConfigPath    string
 	OptJobsTemplatesPath string
 	OptJobsOutputPath    string
-	OptProwEcrRepository string
-	OptCreatePR          string
 )
 
 var buildProwCmd = &cobra.Command{
@@ -47,71 +47,35 @@ func init() {
 	buildProwCmd.PersistentFlags().StringVar(
 		&OptJobsOutputPath, "jobs-output-path", "", "path to jobs.yaml where the generated jobs will be stored",
 	)
-	buildProwCmd.PersistentFlags().StringVar(
-		&OptProwEcrRepository, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
-	)
-	buildProwCmd.PersistentFlags().StringVar(
-		&OptCreatePR, "create-pr", "true", "option to create PR or not. accepts only true or false",
-	)
 	rootCmd.AddCommand(buildProwCmd)
 }
 
 func buildProwImages(cmd *cobra.Command, args []string) error {
-
-	if OptCreatePR != "true" && OptCreatePR != "false" {
-		return fmt.Errorf("--create-pr invalid: only accepts true of false")
-	}
-
 	log.SetPrefix("build-prow-images")
-	imagesConfig, err := readCurrentImagesConfig(OptImagesConfigPath)
-	if err != nil {
-		return err
-	}
-	log.Printf("Successfully read versions in %s\n", OptImagesConfigPath)
 
-	log.Printf("Attempting to list images from %s\n", OptProwEcrRepository)
-	imageDetails, err := listEcrProwImageDetails(OptProwEcrRepository)
-	if err != nil {
-		return err
-	}
-	log.Printf("Successfully listed Prow Image details from %s\n", OptProwEcrRepository)
-
-	versions := getEcrImageVersionList(imageDetails)
-	log.Println("Successfully retrieved version list from image details")
-
-	ecrImageTags := getHighestEcrImageVersionMap(versions)
-	log.Println("Successfully cleaned versions")
-
-	tagsToBuild, err := compareImageVersions(imagesConfig.Images, ecrImageTags)
-	if err != nil {
-		return err
-	}
-	log.Println("Successfully compared versions")
-
-	if len(tagsToBuild) == 0 {
-		log.Println("All prow image versions are up to date. exiting...")
-		return nil
-	}
-
-	buildConfigData, err := readBuildConfigFile(OptBuildConfigPath)
+	shouldCreatePR, err := validateBooleanFlag(OptCreatePR, "--create-pr")
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Tags to build:\n %v\n", tagsToBuild)
-	log.Printf("Building images with GO_VERSION %s and EKS_DISTRO_VERSION %s\n", buildConfigData.GoVersion, buildConfigData.EksDistroVersion)
-	if err = buildImages(tagsToBuild, buildConfigData); err != nil {
+	shouldPushImages, err := validateBooleanFlag(OptPushImages, "--push-images")
+	if err != nil {
 		return err
 	}
-	log.Println("Successfully built all images")
 
-	if err = tagAndPushImages(imagesConfig.ImageRepo, tagsToBuild); err != nil {
+	builtTags, err := buildAndPushImages(
+		OptImagesConfigPath,
+		jobsImageDir,
+		OptProwEcrRepository,
+		OptBuildConfigPath,
+		shouldPushImages,
+	)
+	if err != nil {
 		return err
 	}
-	log.Println("Successfully tagged and pushed images")
 
 	// exit if we're not creating a PR
-	if OptCreatePR == "false" {
+	if !shouldCreatePR {
 		return nil
 	}
 
@@ -121,7 +85,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
-	prDescription := fmt.Sprintf(patchJobPRDescriptionPrefix, tagsToBuild)
+	prDescription := fmt.Sprintf(patchJobPRDescriptionPrefix, builtTags)
 	prCommitBranch := fmt.Sprintf(patchJobCommitBranchPrefix, time.Now().UTC().Nanosecond())
 	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, prCommitBranch, patchJobsSourceFiles, baseBranch, patchJobPRSubject, prDescription); err != nil {
 		return err

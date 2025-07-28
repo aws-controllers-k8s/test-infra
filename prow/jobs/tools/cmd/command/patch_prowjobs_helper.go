@@ -16,6 +16,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -28,12 +29,19 @@ import (
 )
 
 const (
-	ECR_TAGS_MAX_CAPACITY = 500
-	patchJobsSourceFiles  = "./prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
+	ECR_TAGS_MAX_CAPACITY       = 500
+	patchJobsSourceFiles        = "./prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
 	patchJobCommitBranchPrefix  = "ack-bot/built-and-pushed-images-%d"
-	patchJobPRSubject     = "Patch Prow Jobs Image Version"
+	patchJobPRSubject           = "Patch Prow Jobs Image Version"
 	patchJobPRDescriptionPrefix = "Regenerated jobs.yaml with new prow job versions for %v\n"
 )
+
+func validateBooleanFlag(flag string, flagName string) (bool, error) {
+	if flag == "true" || flag == "false" {
+		return flag == "true", nil
+	}
+	return false, fmt.Errorf("invalid value for boolean flag %s: %v. Only accepts true or false", flagName, createPR)
+}
 
 func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
 	ctx := context.Background()
@@ -140,10 +148,69 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 	return tagsToBuild, nil
 }
 
-func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig) error {
+func buildAndPushImages(
+	imageConfigPath,
+	imagesDir,
+	ecrRepoName,
+	buildConfigPath string,
+	shouldPushImages bool,
+) (tagsToBuild map[string]string, err error) {
+	imagesConfig, err := readCurrentImagesConfig(imageConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Successfully read versions in %s\n", imageConfigPath)
+
+	log.Printf("Attempting to list images from %s\n", ecrRepoName)
+	imageDetails, err := listEcrProwImageDetails(ecrRepoName)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("Successfully listed Prow Image details from %s\n", ecrRepoName)
+
+	versions := getEcrImageVersionList(imageDetails)
+	log.Println("Successfully retrieved version list from image details")
+
+	ecrImageTags := getHighestEcrImageVersionMap(versions)
+	log.Println("Successfully cleaned versions")
+
+	tagsToBuild, err = compareImageVersions(imagesConfig.Images, ecrImageTags)
+	if err != nil {
+		return
+	}
+	log.Println("Successfully compared versions")
+
+	if len(tagsToBuild) == 0 {
+		log.Println("All prow image versions are up to date. exiting...")
+		return
+	}
+
+	buildConfigData, err := readBuildConfigFile(buildConfigPath)
+	if err != nil {
+		return
+	}
+
+	log.Printf("Tags to build:\n %v\n", tagsToBuild)
+	log.Printf("Building images with GO_VERSION %s and EKS_DISTRO_VERSION %s\n", buildConfigData.GoVersion, buildConfigData.EksDistroVersion)
+	if err = buildImages(tagsToBuild, buildConfigData, imagesDir); err != nil {
+		return
+	}
+	log.Println("Successfully built all images")
+
+	if shouldPushImages {
+		if err = tagAndPushImages(imagesConfig.ImageRepo, tagsToBuild); err != nil {
+			return
+		}
+		log.Println("Successfully tagged and pushed images")
+	}
+
+	return
+}
+
+func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig, imagesDir string) error {
 	// BuildImage("my-app", "my-app-0.0.9")
 	app := "buildah"
-	imagesDir := "./prow/jobs/images"
 
 	sortedTagKeys := make([]string, 0, len(tagsToBuild))
 	for key := range tagsToBuild {
@@ -151,19 +218,23 @@ func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig) error {
 	}
 	sort.Strings(sortedTagKeys)
 	goVersion := buildArgs.GoVersion
-	eksDistroVersion := fmt.Sprintf("public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-nonroot:%s",buildArgs.EksDistroVersion)
+	eksDistroVersion := fmt.Sprintf("public.ecr.aws/eks-distro-build-tooling/eks-distro-minimal-base-nonroot:%s", buildArgs.EksDistroVersion)
 
 	for _, postfix := range sortedTagKeys {
-		
+
 		tag := fmt.Sprintf("prow/%s", postfix)
 		context := "./prow/jobs/images"
-		// in the future, we would want to 
+		// in the future, we would want to
 		// store the context in the images_config.yaml
 		// and unmarshall it in a struct
-		if postfix == "build-prow-images" || 
-			postfix == "upgrade-go-version" || 
+		if postfix == "build-prow-images" ||
+			postfix == "upgrade-go-version" ||
 			postfix == "scan-controllers-cve" {
 			context = "."
+		}
+
+		if postfix == "agent-plugin" {
+			context = "./prow/plugins/agent-plugin"
 		}
 
 		args := []string{
@@ -214,7 +285,7 @@ func tagAndPushImages(imageRepository string, tagsToBuild map[string]string) err
 		}
 
 		//push image
-		args = []string {
+		args = []string{
 			"push",
 			destination,
 		}

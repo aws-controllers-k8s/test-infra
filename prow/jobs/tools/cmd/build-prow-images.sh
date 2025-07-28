@@ -25,9 +25,19 @@ echo "build-prow-images.sh] [SETUP] Assumed PROW_ECR_PUBLISH_ARN"
 
 buildah_login
 
+# Build Prow Jobs
 ack-build-tools build-prow-images \
   --images-config-path ./prow/jobs/images_config.yaml \
   --jobs-config-path ./prow/jobs/jobs_config.yaml \
   --jobs-templates-path ./prow/jobs/templates/ \
   --jobs-output-path ./prow/jobs/jobs.yaml \
+  --prow-ecr-repository prow
+
+# Build Prow Agent Workflows
+
+# Build Prow Plugins
+ack-build-tools build-prow-images \
+  --images-config-path ./prow/plugins/images_config.yaml \
+  --plugins-config-path ./prow/plugins/plugins_config.yaml \
+  --plugins-output-path ./prow/plugins/plugins.yaml \
   --prow-ecr-repository prow
