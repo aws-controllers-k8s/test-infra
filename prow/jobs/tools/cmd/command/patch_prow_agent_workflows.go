@@ -20,35 +20,37 @@ import (
 )
 
 var (
-	OptPluginImagesDir string
+	OptAgentWorkflowsConfigPath    string
+	OptAgentWorkflowsTemplatesPath string
+	OptAgentWorkflowsOutputPath    string
+	OptAgentWorkflowImagesDir      string
 )
 
-var buildProwPluginsCmd = &cobra.Command{
-	Use:   "build-prow-plugin-images",
-	Short: "build-prow-plugin-images - builds prow plugin images in image_config.yaml and pushes them to ack-infra public ecr",
-	RunE:  buildProwPluginImages,
+var buildProwAgentWorkflowsCmd = &cobra.Command{
+	Use:   "build-prow-agent-workflow-images",
+	Short: "build-prow-agent-workflow-images - builds prow agent workflow images in image_config.yaml and pushes them to ack-infra public ecr",
+	RunE:  buildProwAgentWorkflowImages,
 }
 
 func init() {
-	buildProwPluginsCmd.PersistentFlags().StringVar(
+	buildProwAgentWorkflowsCmd.PersistentFlags().StringVar(
 		&OptBuildConfigPath, "build-config-path", "build_config.yaml", "path to build_config.yaml, where all the build versions are stored",
 	)
-	buildProwPluginsCmd.PersistentFlags().StringVar(
-		&OptPluginImagesDir, "images-dir", "./prow/plugins/images", "Path to directory where plugin Dockerfiles are stored.",
+	buildProwAgentWorkflowsCmd.PersistentFlags().StringVar(
+		&OptAgentWorkflowImagesDir, "images-dir", "./prow/agent-workflows/images", "Path to directory where agent-workflow Dockerfiles are stored.",
 	)
-	rootCmd.AddCommand(buildProwPluginsCmd)
+	rootCmd.AddCommand(buildProwAgentWorkflowsCmd)
 }
 
-func buildProwPluginImages(cmd *cobra.Command, args []string) error {
-	log.SetPrefix("build-prow-plugin-images")
+func buildProwAgentWorkflowImages(cmd *cobra.Command, args []string) error {
+	log.SetPrefix("build-prow-agent-workflow-images")
 	shouldPushImages, err := validateBooleanFlag(OptPushImages, "--push-images")
 	if err != nil {
 		return err
 	}
 
-	builtTags, err := buildAndPushImages(
-		OptImagesConfigPath,
-		OptPluginImagesDir,
+	builtTags, err := buildAndPushImages(OptImagesConfigPath,
+		OptAgentWorkflowImagesDir,
 		OptProwEcrRepository,
 		OptBuildConfigPath,
 		shouldPushImages,
@@ -59,7 +61,6 @@ func buildProwPluginImages(cmd *cobra.Command, args []string) error {
 
 	writeBuiltTags(builtTags)
 
-	// TODO Generate plugin deployment manifests from template files
-
+	// TODO Generate Agent Workflow ConfigMaps from template files.
 	return nil
 }

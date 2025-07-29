@@ -29,8 +29,6 @@ var (
 	OptImagesConfigPath  string
 	OptSourceOwner       string
 	OptSourceRepo        string
-	OptCommitMessage     string
-	OptCommitBranch      string
 	OptProwEcrRepository string
 	OptCreatePR          string
 	OptPushImages        string

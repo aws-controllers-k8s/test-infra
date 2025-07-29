@@ -14,21 +14,18 @@
 package command
 
 import (
-	"fmt"
 	"log"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 )
 
-const jobsImageDir = "./prow/jobs/images"
-
 var (
 	OptJobsConfigPath    string
 	OptJobsTemplatesPath string
 	OptJobsOutputPath    string
+	OptJobsImagesDir     string
 )
 
 var buildProwCmd = &cobra.Command{
@@ -47,16 +44,14 @@ func init() {
 	buildProwCmd.PersistentFlags().StringVar(
 		&OptJobsOutputPath, "jobs-output-path", "", "path to jobs.yaml where the generated jobs will be stored",
 	)
+	buildProwCmd.PersistentFlags().StringVar(
+		&OptJobsImagesDir, "images-dir", "./prow/jobs/images", "Path to directory where job Dockerfiles are stored.",
+	)
 	rootCmd.AddCommand(buildProwCmd)
 }
 
 func buildProwImages(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("build-prow-images")
-
-	shouldCreatePR, err := validateBooleanFlag(OptCreatePR, "--create-pr")
-	if err != nil {
-		return err
-	}
 
 	shouldPushImages, err := validateBooleanFlag(OptPushImages, "--push-images")
 	if err != nil {
@@ -65,7 +60,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 
 	builtTags, err := buildAndPushImages(
 		OptImagesConfigPath,
-		jobsImageDir,
+		OptJobsImagesDir,
 		OptProwEcrRepository,
 		OptBuildConfigPath,
 		shouldPushImages,
@@ -74,22 +69,12 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// exit if we're not creating a PR
-	if !shouldCreatePR {
-		return nil
-	}
-
 	err = generator.Generate("jobs", OptJobsConfigPath, OptImagesConfigPath, OptJobsTemplatesPath, OptJobsOutputPath)
 	if err != nil {
 		return err
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
-	prDescription := fmt.Sprintf(patchJobPRDescriptionPrefix, builtTags)
-	prCommitBranch := fmt.Sprintf(patchJobCommitBranchPrefix, time.Now().UTC().Nanosecond())
-	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, prCommitBranch, patchJobsSourceFiles, baseBranch, patchJobPRSubject, prDescription); err != nil {
-		return err
-	}
-	log.Println("Successfully commited and raised a PR with newly generated jobs")
+	writeBuiltTags(builtTags)
 	return err
 }

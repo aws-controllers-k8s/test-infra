@@ -1,7 +1,7 @@
   aws-controllers-k8s/test-infra:
   - name: build-prow-images
     decorate: true
-    run_if_changed: ^(prow/jobs/images_config.yaml)
+    run_if_changed: ^(prow\/.*\/images_config.yaml)
     annotations:
       karpenter.sh/do-not-evict: "true"
     labels:

@@ -237,6 +237,10 @@ func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig, imagesDi
 			context = "./prow/plugins/agent-plugin"
 		}
 
+		if postfix == "add-resource" {
+			context = "./prow/agent-workflows/agents"
+		}
+
 		args := []string{
 			"build",
 			"-f",
