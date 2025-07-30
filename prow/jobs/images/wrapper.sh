@@ -17,6 +17,9 @@ set -o pipefail
 set -o nounset
 
 CARM_TESTS_ENABLED=${CARM_TESTS_ENABLED:-"false"}
+CN_REGION_TESTS_ENABLED=${CN_REGION_TESTS_ENABLED:-"false"}
+SERVICE_TEAM_ROLE_NAME=${AWS_SERVICE}
+AWS_REGION=${AWS_REGION:-"us-west-2"}
 
 >&2 echo "wrapper.sh] [INFO] Wrapping Test Command: \`$*\`"
 printf '%0.s=' {1..80} >&2; echo >&2
@@ -114,10 +117,14 @@ fi
 
 # Setup credentials for controller basic e2e tests
 
+# Add "-cn" to the AWS_SERVICE name to generate the role name for CN region
+if [[ "$CN_REGION_TESTS_ENABLED" == "true" ]]; then
+  SERVICE_TEAM_ROLE_NAME+="-cn"
+fi
 ASSUME_EXIT_VALUE=0
-ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$AWS_SERVICE --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/service_team_role/$SERVICE_TEAM_ROLE_NAME --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
 if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
-  >&2 echo "wrapper.sh] [SETUP] Could not find service team role for $AWS_SERVICE"
+  >&2 echo "wrapper.sh] [SETUP] Could not find service team role for $SERVICE_TEAM_ROLE_NAME"
   exit 1
 fi
 export ASSUMED_ROLE_ARN

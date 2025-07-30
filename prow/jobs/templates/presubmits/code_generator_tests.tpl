@@ -17,7 +17,6 @@
             cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
-
   - name: verify-attribution
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
@@ -56,7 +55,6 @@
         - "/bin/bash"
         - "-c"
         - "./cd/scripts/verify-attribution.sh"
-
   - name: s3-olm-test
     decorate: true
     optional: true
@@ -133,11 +131,63 @@
         env:
         - name: SERVICE
           value: {{ $service }}
-        {{ if contains $.Config.CarmTestServices $service }}
+        {{ if contains $.Config.CarmTestServices $service -}}
         - name: CARM_TESTS_ENABLED
           value: "true"
         {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
-{{ end }}
+  {{- if contains $.Config.CNRegionTestServices $service }}
+  - name: {{ $service }}-controller-test
+    decorate: true
+    optional: false
+    always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-dind-enabled: "true"
+      preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: {{ $service }}-controller
+      base_ref: main
+      workdir: true
+    spec:
+      serviceAccountName: cn-tests
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
+        resources:
+          limits:
+            cpu: 8
+            memory: "4096Mi"
+          requests:
+            cpu: 8
+            memory: "4096Mi"
+        securityContext:
+          privileged: true
+        env:
+        - name: SERVICE
+          value: {{ $service }}
+        {{ if contains $.Config.CarmTestServices $service }}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {{ end -}}
+        - name: CN_REGION_TESTS_ENABLED
+          value: "true"
+        - name: AWS_REGION
+          value: "cn-north-1"
+        - name: FEATURE_GATES
+          value: "ResourceAdoption=true"
+        command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
+  {{ end -}}
+{{ end -}}

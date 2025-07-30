@@ -42,10 +42,62 @@
         {{ if contains $.Config.CarmTestServices $service }}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {{ end }}
+        {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+  {{ if contains $.Config.CNRegionTestServices $service -}}
+  - name: {{ $service }}-cn-kind-e2e
+    decorate: true
+    optional: false
+    always_run: true
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-dind-enabled: "true"
+      preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: code-generator
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    spec:
+      serviceAccountName: cn-tests
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            cpu: 8
+            memory: "3072Mi"
+          requests:
+            cpu: 8
+            memory: "3072Mi"
+        env:
+        - name: SERVICE
+          value: {{ $service }}
+        # If not provided, the default will be picked from the version directive in
+        # the 'go.mod' file of the controller.
+        - name: GOLANG_VERSION
+          value: "1.22.5"
+        {{ if contains $.Config.CarmTestServices $service }}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {{ end -}}
+        - name: CN_REGION_TESTS_ENABLED
+          value: "true"
+        - name: AWS_REGION
+          value: "cn-north-1"
+        - name: FEATURE_GATES
+          value: "ResourceAdoption=true"
+        command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+  {{ end -}}
 
   - name: {{ $service }}-release-test
     decorate: true
@@ -206,4 +258,4 @@
         - "/bin/bash"
         - "-c"
         - "./cd/scripts/verify-attribution.sh"
-{{ end }}
+{{ end -}}

@@ -73,6 +73,10 @@ aws_services:
 carm_test_services:
 - ecr
 
+# List of services that will be excecuted in CN region
+cn_region_test_services:
+- s3
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []

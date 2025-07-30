@@ -11,6 +11,7 @@ SCRIPTS_DIR="$LIB_DIR/.."
 TEST_CONFIG_PATH=${TEST_CONFIG_PATH:-"$SCRIPTS_DIR/../test_config.yaml"}
 
 ASSUMED_ROLE_ARN="${ASSUMED_ROLE_ARN:-""}"
+AWS_REGION="${AWS_REGION:-"us-west-2"}"
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/logging.sh"
@@ -47,7 +48,7 @@ get_cluster_configuration_file_name() { _get_config_field ".cluster.configuratio
 get_cluster_additional_controllers() { _get_config_field ".cluster.configuration.additional_controllers"; }
 get_aws_profile() { _get_config_field ".aws.profile"; }
 get_aws_token_file() { _get_config_field ".aws.token_file"; }
-get_aws_region() { _get_config_field ".aws.region" "us-west-2"; }
+get_aws_region() { _get_config_field ".aws.region" $AWS_REGION; }
 get_assumed_role_arn() {
     [[ ! -z "${ASSUMED_ROLE_ARN}" ]] && echo "${ASSUMED_ROLE_ARN}" || _get_config_field ".aws.assumed_role_arn";
 }

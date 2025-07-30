@@ -17,7 +17,6 @@
             cpu: 2
             memory: "3072Mi"
         command: ["make", "test"]
-
   - name: verify-attribution
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
@@ -56,8 +55,7 @@
         - "/bin/bash"
         - "-c"
         - "./cd/scripts/verify-attribution.sh"
-
-{{ range $_, $service := .Config.RuntimePresubmitServices }}
+{{- range $_, $service := .Config.RuntimePresubmitServices }}
   - name: {{ $service }}-controller-test
     decorate: true
     optional: false
@@ -101,11 +99,67 @@
           value: "true"
         - name: GOLANG_VERSION
           value: "1.22.5"
-        {{ if contains $.Config.CarmTestServices $service }}- name: CARM_TESTS_ENABLED
+        {{ if contains $.Config.CarmTestServices $service -}}
+        - name: CARM_TESTS_ENABLED
           value: "true"
-        {{ end }}
+        {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
-
-{{ end }}
+  {{- if contains $.Config.CNRegionTestServices $service }}
+  - name: {{ $service }}-cn-controller-test
+    decorate: true
+    optional: false
+    run_if_changed: ^(pkg|apis|go.mod|go.sum)
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    labels:
+      preset-dind-enabled: "true"
+      preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: code-generator
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    - org: aws-controllers-k8s
+      repo: {{ $service }}-controller
+      base_ref: main
+      workdir: false
+    spec:
+      serviceAccountName: cn-tests
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
+        resources:
+          limits:
+            cpu: 8
+            memory: "3072Mi"
+          requests:
+            cpu: 8
+            memory: "3072Mi"
+        securityContext:
+          privileged: true
+        env:
+        - name: SERVICE
+          value: {{ $service }}
+        - name: LOCAL_MODULES
+          value: "true"
+        - name: GOLANG_VERSION
+          value: "1.22.5"
+        {{ if contains $.Config.CarmTestServices $service }}
+        - name: CARM_TESTS_ENABLED
+          value: "true"
+        {{ end -}}
+        - name: CN_REGION_TESTS_ENABLED
+          value: "true"
+        - name: AWS_REGION
+          value: "cn-north-1"
+        - name: FEATURE_GATES
+          value: "ResourceAdoption=true"
+        command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+  {{ end -}}
+{{ end -}}
