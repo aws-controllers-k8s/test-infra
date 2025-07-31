@@ -301,3 +301,15 @@ func tagAndPushImages(imageRepository string, tagsToBuild map[string]string) err
 	}
 	return nil
 }
+
+// writeBuiltTags outputs built tags to stdout
+func writeBuiltTags(tagsToBuild map[string]string) {
+	if len(tagsToBuild) == 0 {
+		log.Println("No tags to built")
+		return
+	}
+
+	for key, value := range tagsToBuild {
+		fmt.Printf("%s: %s\n", key, value)
+	}
+}
