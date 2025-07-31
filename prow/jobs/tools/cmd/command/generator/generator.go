@@ -220,10 +220,74 @@ func GenerateAgentWorkflows(imagesConfigPath, templatePath, outputPath string) e
 	}
 
 	file, err := os.Create(outputPath)
+	if file != nil {
+		defer file.Close()
+	}
 	if err != nil {
 		return err
 	}
 
 	_, err = file.WriteString(content.String())
 	return err
+}
+
+func GeneratePlugins(
+	imagesConfigPath,
+	templatePath,
+	outputPath string,
+) ([]string, error) {
+	imageContext, err := loadImages(imagesConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	data := map[string]interface{}{
+		"ImageContext": imageContext,
+	}
+
+	generatedFiles := make([]string, 0)
+	for pluginName := range imageContext.Images {
+
+		templateDir := fmt.Sprintf("%s/%s", templatePath, pluginName)
+		outputDir := fmt.Sprintf("%s/%s", outputPath, pluginName)
+
+		templateFiles, err := os.ReadDir(templateDir)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read directory %s: %v", templateDir, err)
+		}
+		for _, file := range templateFiles {
+			var content strings.Builder
+			addAutoGenHeader(&content)
+
+			fileData, _ := os.ReadFile(fmt.Sprintf("%s/%s", templateDir, file.Name()))
+			tmpl, err := template.New(file.Name()).Funcs(template.FuncMap{"contains": contains}).Parse(string(fileData))
+
+			if err != nil {
+				panic(err)
+			}
+			err = tmpl.Execute(&content, data)
+			if err != nil {
+				panic(err)
+			}
+
+			outputFileName := strings.TrimSuffix(file.Name(), ".tpl") + ".yaml"
+			templateOutputPath := fmt.Sprintf("%s/%s", outputDir, outputFileName)
+			file, err := os.Create(templateOutputPath)
+			if file != nil {
+				defer file.Close()
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = file.WriteString(content.String())
+			if err != nil {
+				return nil, err
+			}
+
+			generatedFiles = append(generatedFiles, templateOutputPath)
+		}
+	}
+
+	return generatedFiles, nil
 }
