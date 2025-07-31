@@ -1,5 +1,7 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+ARG GO_VERSION=1.24.5
+
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS builder
 
 # Install git for direct downloads
 RUN apk add --no-cache git
