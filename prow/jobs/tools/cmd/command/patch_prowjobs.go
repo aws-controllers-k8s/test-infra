@@ -69,6 +69,11 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if len(builtTags) == 0 {
+		log.Printf("All prow image versions are up to date. Skipping re-generation of %s", OptJobsOutputPath)
+		return nil
+	}
+
 	err = generator.Generate("jobs", OptJobsConfigPath, OptImagesConfigPath, OptJobsTemplatesPath, OptJobsOutputPath)
 	if err != nil {
 		return err

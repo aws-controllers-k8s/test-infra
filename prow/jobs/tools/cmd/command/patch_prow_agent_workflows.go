@@ -66,12 +66,17 @@ func buildProwAgentWorkflowImages(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	writeBuiltTags(builtTags)
+	if len(builtTags) == 0 {
+		log.Printf("All prow image versions are up to date. Skipping re-generation of %s", OptAgentWorkflowsOutputPath)
+		return nil
+	}
 
 	err = generator.GenerateAgentWorkflows(
 		OptImagesConfigPath,
 		OptAgentWorkflowsTemplatesPath,
 		OptAgentWorkflowsOutputPath,
 	)
+
+	writeBuiltTags(builtTags)
 	return err
 }

@@ -5,9 +5,9 @@
         required_args: ["service", "resource"]
         optional_args: []
         environment:
-            GITHUB_ORG: ack-prow-staging
-            GITHUB_EMAIL_PREFIX: 219906516
-            MODEL_AGENT_KB_ID: WN5I1BIMGT
+            GITHUB_ORG: aws-controllers-k8s
+            GITHUB_EMAIL_PREFIX: 1234567
+            MODEL_AGENT_KB_ID: INVALID_ID
         environmentFromSecrets:
             GITHUB_TOKEN:
                 name: tamer-github-token
@@ -15,7 +15,7 @@
             GITHUB_ACTOR:
                 name: tamer-github-actor
                 key: actor
-        timeout: "30m"
+        timeout: "45m"
         resources:
             cpu: "2"
             memory: "4Gi"

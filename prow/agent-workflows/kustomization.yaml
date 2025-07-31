@@ -10,4 +10,4 @@ configMapGenerator:
   behavior: create
   # Alias the file to be compatible with each of the deployments
   files:
-  - config.yaml=agent-workflows.yaml
+  - workflows.yaml=agent-workflows.yaml
