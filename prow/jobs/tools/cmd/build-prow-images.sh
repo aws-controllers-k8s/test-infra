@@ -25,9 +25,48 @@ echo "build-prow-images.sh] [SETUP] Assumed PROW_ECR_PUBLISH_ARN"
 
 buildah_login
 
-ack-build-tools build-prow-images \
+# Build Prow Jobs
+BUILT_JOB_TAGS=$(ack-build-tools build-prow-images \
   --images-config-path ./prow/jobs/images_config.yaml \
   --jobs-config-path ./prow/jobs/jobs_config.yaml \
   --jobs-templates-path ./prow/jobs/templates/ \
   --jobs-output-path ./prow/jobs/jobs.yaml \
-  --prow-ecr-repository prow
+  --prow-ecr-repository prow)
+
+if [ $? -ne 0 ]; then
+  echo "Error building prow jobs"
+  exit 1
+fi
+
+# Build Prow Agent Workflows
+BUILT_AGENT_WORKFLOW_TAGS=$(ack-build-tools build-prow-agent-workflow-images \
+  --images-config-path ./prow/agent-workflows/images_config.yaml \
+  --prow-ecr-repository prow)
+
+if [ $? -ne 0 ]; then
+  echo "Error building prow agent workflows"
+  exit 1
+fi
+
+# Build Prow Plugins
+BUILT_PLUGIN_TAGS=$(ack-build-tools build-prow-plugin-images \
+  --images-config-path ./prow/plugins/images_config.yaml \
+  --prow-ecr-repository prow)
+
+if [ $? -ne 0 ]; then
+  echo "Error building prow plugins"
+  exit 1
+fi
+
+
+# If we patched any images publish a PR with the changes.
+if [ -n "$BUILT_JOB_TAGS" ]; then
+  PR_DESCRIPTION+="Built and pushed prow job images:"$'\n'"$BUILT_JOB_TAGS"$'\n'
+  SOURCE_FILES+="prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
+
+  ack-build-tools publish-pr \
+  --subject "Patch Prow Image Versions" \
+  --description "$PR_DESCRIPTION" \
+  --commit-branch "ack-bot/built-and-pushed-images-$(date +%N)" \
+  --source-files $SOURCE_FILES
+fi

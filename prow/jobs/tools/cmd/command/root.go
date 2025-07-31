@@ -26,11 +26,12 @@ const (
 )
 
 var (
-	OptImagesConfigPath        string
-	OptSourceOwner             string
-	OptSourceRepo              string
-	OptCommitMessage           string
-	OptCommitBranch            string
+	OptImagesConfigPath  string
+	OptSourceOwner       string
+	OptSourceRepo        string
+	OptProwEcrRepository string
+	OptCreatePR          string
+	OptPushImages        string
 )
 
 var rootCmd = &cobra.Command{
@@ -49,6 +50,15 @@ func init() {
 	)
 	rootCmd.PersistentFlags().StringVar(
 		&OptSourceRepo, "source-repo", "test-infra", "Name of repo to create the commit in.",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&OptProwEcrRepository, "prow-ecr-repository", "prow", "ECR public repository name for prow images",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&OptCreatePR, "create-pr", "true", "option to create PR or not. accepts only true or false",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&OptPushImages, "push-images", "true", "option to push images to ECR or not. accepts only true or false",
 	)
 }
 

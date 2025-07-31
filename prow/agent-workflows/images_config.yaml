@@ -1,0 +1,3 @@
+image_repo: public.ecr.aws/m5q3e4b2/prow
+images:
+    add-resource: add-resource-0.0.1
