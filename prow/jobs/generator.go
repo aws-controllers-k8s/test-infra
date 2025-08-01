@@ -17,10 +17,42 @@ import "github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/ge
 
 func main() {
 
-	if err := generator.Generate("jobs", "./jobs_config.yaml", "./images_config.yaml", "./templates", "jobs.yaml"); err != nil {
+	err := generator.Generate(
+		"jobs",
+		"./prow/jobs/jobs_config.yaml",
+		"./prow/jobs/images_config.yaml",
+		"./prow/jobs/templates",
+		"./prow/jobs/jobs.yaml",
+	)
+	if err != nil {
 		panic(err)
 	}
-	if err := generator.Generate("labels", "./jobs_config.yaml", "./images_config.yaml", "./templates", "labels.yaml"); err != nil {
+
+	err = generator.Generate(
+		"labels",
+		"./prow/jobs/jobs_config.yaml",
+		"./prow/jobs/images_config.yaml",
+		"./prow/jobs/templates",
+		"./prow/jobs/labels.yaml")
+	if err != nil {
+		panic(err)
+	}
+
+	err = generator.GenerateAgentWorkflows(
+		"./prow/agent-workflows/images_config.yaml",
+		"./prow/agent-workflows/templates",
+		"./prow/agent-workflows/agent-workflows.yaml",
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = generator.GeneratePlugins(
+		"./prow/plugins/images_config.yaml",
+		"./prow/plugins/templates",
+		"./prow/plugins/deployments",
+	)
+	if err != nil {
 		panic(err)
 	}
 }

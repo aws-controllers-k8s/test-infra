@@ -1,7 +1,5 @@
 SHELL := /bin/bash # Use bash syntax
 
-PROW_JOBS_PATH="./prow/jobs"
-
 AWS_SERVICE=$(shell echo $(SERVICE) | tr '[:upper:]' '[:lower:]')
 
 .PHONY: gen-all
@@ -9,11 +7,9 @@ gen-all: prow-gen
 
 # Assumes python3 is installed as default python on the host.
 prow-gen: ## Compiles the Prow jobs
-	@pushd "$(PROW_JOBS_PATH)" 1>/dev/null; \
-	go run generator.go && \
-		echo "Success! Prowjobs available at $(PROW_JOBS_PATH)/jobs.yaml" || \
-		echo "Error while generating Prowjobs"; \
-	popd 1>/dev/null
+	@go run ./prow/jobs/generator.go && \
+		echo "Success! Templates for ProwJobs, Plugins, and Agent Workflows re-generated." || \
+		echo "Error while generating Prow templates";
 
 kind-test: ## Run functional tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-e2e-tests.sh

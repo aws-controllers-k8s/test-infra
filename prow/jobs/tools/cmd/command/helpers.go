@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aquasecurity/go-version/pkg/semver"
 	"github.com/google/go-github/v63/github"
@@ -103,6 +104,9 @@ func commitAndSendPR(sourceOwner, sourceRepo, commitBranch, sourceFiles, baseBra
 	if sourceOwner == "" || sourceRepo == "" || commitBranch == "" || sourceFiles == "" {
 		return fmt.Errorf("you need to specify a non-empty value for the flags `-source-owner`, and `-source-repo`")
 	}
+
+	// Cleanup any trailing comma in source files
+	sourceFiles = strings.TrimSuffix(sourceFiles, ",")
 
 	client := github.NewClient(nil).WithAuthToken(token)
 	ctx := context.Background()

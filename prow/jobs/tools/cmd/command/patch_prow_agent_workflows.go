@@ -16,6 +16,7 @@ package command
 import (
 	"log"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 	"github.com/spf13/cobra"
 )
 
@@ -39,6 +40,12 @@ func init() {
 	buildProwAgentWorkflowsCmd.PersistentFlags().StringVar(
 		&OptAgentWorkflowImagesDir, "images-dir", "./prow/agent-workflows/images", "Path to directory where agent-workflow Dockerfiles are stored.",
 	)
+	buildProwAgentWorkflowsCmd.PersistentFlags().StringVar(
+		&OptAgentWorkflowsTemplatesPath, "agent-workflows-templates-path", "", "Path to directory where agent-workflow templates are stored.",
+	)
+	buildProwAgentWorkflowsCmd.PersistentFlags().StringVar(
+		&OptAgentWorkflowsOutputPath, "agent-workflows-output-path", "", "Path to directory where agent-workflow.yaml will be stored.",
+	)
 	rootCmd.AddCommand(buildProwAgentWorkflowsCmd)
 }
 
@@ -59,8 +66,17 @@ func buildProwAgentWorkflowImages(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	writeBuiltTags(builtTags)
+	if len(builtTags) == 0 {
+		log.Printf("All prow image versions are up to date. Skipping re-generation of %s", OptAgentWorkflowsOutputPath)
+		return nil
+	}
 
-	// TODO Generate Agent Workflow ConfigMaps from template files.
-	return nil
+	err = generator.GenerateAgentWorkflows(
+		OptImagesConfigPath,
+		OptAgentWorkflowsTemplatesPath,
+		OptAgentWorkflowsOutputPath,
+	)
+
+	writeBuiltTags(builtTags)
+	return err
 }
