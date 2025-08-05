@@ -30,7 +30,7 @@ spec:
         - --port=8080
         - --allowed-team=ack-chart-maintainers
         - --github-app-id=$(GITHUB_APP_ID)
-        - --github-app-private-key-path=/etc/github/private-key
+        - --github-app-private-key-path=/etc/github/cert
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
         - --dry-run=false
@@ -38,8 +38,8 @@ spec:
         - name: GITHUB_APP_ID
           valueFrom:
             secretKeyRef:
-              name: github-app-files
-              key: app-id
+              name: github-token
+              key: appid
         - name: PROW_JOB_ID
           value: "prow-jobs"
         - name: PROW_JOB_NAMESPACE
@@ -48,7 +48,7 @@ spec:
         - name: workflows-config
           mountPath: /etc/workflows
           readOnly: true
-        - name: github-app
+        - name: github-token
           mountPath: /etc/github
           readOnly: true
         - name: hmac
@@ -71,9 +71,9 @@ spec:
       - name: workflows-config
         configMap:
           name: agent-workflow-config
-      - name: github-app
+      - name: github-token
         secret:
-          secretName: github-app-files
+          secretName: github-token
       - name: hmac
         secret:
           secretName: hmac-token
