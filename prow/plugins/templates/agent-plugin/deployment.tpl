@@ -1,34 +1,34 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: workflow-agent
+  name: agent-plugin
   namespace: prow
   labels:
-    app: workflow-agent
+    app: agent-plugin
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: workflow-agent
+      app: agent-plugin
   template:
     metadata:
       labels:
-        app: workflow-agent
+        app: agent-plugin
     spec:
-      serviceAccountName: workflow-agent
+      serviceAccountName: agent-plugin
       securityContext:
         seccompProfile:
           type: RuntimeDefault
       containers:
       - name: webhook-server
-        image: 086987147623.dkr.ecr.us-west-2.amazonaws.com/ack-prow-webhook:v1.0.30
+        image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "agent-plugin") }}
         ports:
         - containerPort: 8080
           name: http
         command: ["./webhook-server"]
         args:
         - --port=8080
-        - --allowed-team=ack-prow-staging-admins
+        - --allowed-team=ack-chart-maintainers
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/private-key
         - --github-endpoint=http://ghproxy
@@ -43,7 +43,7 @@ spec:
         - name: PROW_JOB_ID
           value: "prow-jobs"
         - name: PROW_JOB_NAMESPACE
-          value: "prow-jobs"
+          value: "test-pods"
         volumeMounts:
         - name: workflows-config
           mountPath: /etc/workflows
@@ -70,7 +70,7 @@ spec:
       volumes:
       - name: workflows-config
         configMap:
-          name: workflows-config
+          name: agent-workflow-config
       - name: github-app
         secret:
           secretName: github-app-files

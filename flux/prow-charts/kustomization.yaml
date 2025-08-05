@@ -5,3 +5,5 @@ resources:
 - prow-config.yaml
 - prow-data-plane.yaml
 - prow-jobs.yaml
+- prow-agent-workflows.yaml
+- prow-plugins.yaml

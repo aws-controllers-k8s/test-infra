@@ -59,7 +59,5 @@ func buildProwPluginImages(cmd *cobra.Command, args []string) error {
 
 	writeBuiltTags(builtTags)
 
-	// TODO Generate plugin deployment manifests from template files
-
-	return nil
+	return err
 }

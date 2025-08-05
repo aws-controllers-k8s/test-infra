@@ -77,7 +77,7 @@ func getACKServices(configPath string) ([]string, error) {
 		return nil, err
 	}
 
-	var config *generator.Config
+	var config *generator.JobsConfig
 	if err = yaml.Unmarshal(fileData, &config); err != nil {
 		return nil, err
 	}

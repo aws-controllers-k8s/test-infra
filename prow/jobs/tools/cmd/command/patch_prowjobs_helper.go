@@ -182,7 +182,7 @@ func buildAndPushImages(
 	log.Println("Successfully compared versions")
 
 	if len(tagsToBuild) == 0 {
-		log.Println("All prow image versions are up to date. exiting...")
+		log.Println("All prow image versions are up to date. Skipping image building...")
 		return
 	}
 

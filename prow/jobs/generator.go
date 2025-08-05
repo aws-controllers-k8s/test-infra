@@ -15,12 +15,64 @@ package main
 
 import "github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 
+const jobsDir = "./prow/jobs"
+const imagesConfigPath = "/images_config.yaml"
+const templatesDir = "/templates"
+
+const jobsImageConfig = jobsDir + imagesConfigPath
+const jobsConfig = jobsDir + "/jobs_config.yaml"
+const jobsTemplateDir = jobsDir + templatesDir
+const jobsOutput = jobsDir + "/jobs.yaml"
+const labelsOutput = jobsDir + "/labels.yaml"
+
+const agentWorkflowsDir = "./prow/agent-workflows"
+const agentWorkflowsImageConfig = agentWorkflowsDir + imagesConfigPath
+const agentWorkflowsTemplateDir = agentWorkflowsDir + templatesDir
+const agentWorkflowsOutput = agentWorkflowsDir + "/agent-workflows.yaml"
+
+const pluginsDir = "./prow/plugins"
+const pluginsImageConfig = pluginsDir + imagesConfigPath
+const pluginsTemplateDir = pluginsDir + templatesDir
+const pluginsOutputDir = pluginsDir + "/deployments"
+
 func main() {
 
-	if err := generator.Generate("jobs", "./jobs_config.yaml", "./images_config.yaml", "./templates", "jobs.yaml"); err != nil {
+	err := generator.Generate(
+		"jobs",
+		jobsConfig,
+		jobsImageConfig,
+		jobsTemplateDir,
+		jobsOutput,
+	)
+	if err != nil {
 		panic(err)
 	}
-	if err := generator.Generate("labels", "./jobs_config.yaml", "./images_config.yaml", "./templates", "labels.yaml"); err != nil {
+
+	err = generator.Generate(
+		"labels",
+		jobsConfig,
+		jobsImageConfig,
+		jobsTemplateDir,
+		labelsOutput)
+	if err != nil {
+		panic(err)
+	}
+
+	err = generator.GenerateAgentWorkflows(
+		agentWorkflowsImageConfig,
+		agentWorkflowsTemplateDir,
+		agentWorkflowsOutput,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = generator.GeneratePlugins(
+		pluginsImageConfig,
+		pluginsTemplateDir,
+		pluginsOutputDir,
+	)
+	if err != nil {
 		panic(err)
 	}
 }
