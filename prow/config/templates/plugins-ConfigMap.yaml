@@ -49,4 +49,11 @@ data:
         - trigger
         - verify-owners
         - wip
+    external_plugins:
+      {{ .Values.github.organisation }}:
+      - name: agent-plugin
+        endpoint: http://agent-plugin.prow:8080/tamer
+        events:
+        - issue_comment
+        - issues
 
