@@ -44,7 +44,7 @@ spec:
         - name: PROW_JOB_ID
           value: "prow-jobs"
         - name: PROW_JOB_NAMESPACE
-          value: "test-pods"
+          value: "prow"
         volumeMounts:
         - name: workflows-config
           mountPath: /etc/workflows
