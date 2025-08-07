@@ -21,3 +21,8 @@ configMapGenerator:
   behavior: create
   files:
   - labels.yaml
+- name: jobs-config
+  namespace: test-pods
+  behavior: create
+  files:
+  - jobs_config.yaml
