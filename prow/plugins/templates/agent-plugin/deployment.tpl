@@ -29,6 +29,7 @@ spec:
         args:
         - --port=8080
         - --allowed-team=ack-chart-maintainers
+        - --s3-bucket-name="s3://ack-prow-logs"
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         - --github-endpoint=http://ghproxy

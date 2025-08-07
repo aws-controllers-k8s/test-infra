@@ -37,6 +37,8 @@ type Generator interface {
 		issue github.Issue,
 		repo github.Repo,
 		timeout string,
+		namespace string,
+		s3BucketName string,
 	) (*k8s.ProwJob, error)
 }
 
@@ -58,6 +60,8 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 	issue github.Issue,
 	repo github.Repo,
 	timeout string,
+	namespace string,
+	s3Bucket string,
 ) (*k8s.ProwJob, error) {
 
 	workflow, exists := g.workflows[workflowName]
@@ -124,7 +128,7 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: "prow-jobs",
+			Namespace: namespace,
 			Labels: map[string]string{
 				"workflow-type":          workflowName,
 				"triggered-by":           "workflow-agent",
@@ -160,8 +164,12 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 				Timeout:     &prowv1.Duration{Duration: timeoutDuration},
 				GracePeriod: &prowv1.Duration{Duration: 15 * time.Minute},
 				GCSConfiguration: &k8s.GCSConfiguration{
-					Bucket:       "s3://ack-prow-staging-artifacts",
+					Bucket:       s3Bucket,
 					PathStrategy: "explicit",
+				},
+				CensorSecrets: Bool(true),
+				CensoringOptions: &prowv1.CensoringOptions{
+					IncludeDirectories: []string{"/etc/github"},
 				},
 				S3CredentialsSecret: String("s3-credentials"),
 				UtilityImages: &k8s.UtilityImages{

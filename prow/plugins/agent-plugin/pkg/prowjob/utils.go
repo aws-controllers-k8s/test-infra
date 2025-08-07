@@ -30,6 +30,11 @@ func String(v string) *string {
 	return &v
 }
 
+// Bool return a point to the boolean value provided
+func Bool(v bool) *bool {
+	return &v
+}
+
 // generateJobID generates a unique job identifier
 func generateJobID() string {
 	timestamp := time.Now().Unix()
