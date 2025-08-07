@@ -44,6 +44,7 @@ type Server struct {
 	k8sProwClient    k8sclient.Client
 	prowJobNamespace string
 	allowedTeam      string
+	s3BucketName     string
 }
 
 // NewServer creates a new webhook server
@@ -53,6 +54,7 @@ func NewServer(
 	githubClient githubClient,
 	tokenGenerator func() []byte,
 	allowedTeam string,
+	s3BucketName string,
 ) (*Server, error) {
 	prowJobNamespace := os.Getenv("PROW_JOB_NAMESPACE")
 	if prowJobNamespace == "" {
@@ -80,6 +82,7 @@ func NewServer(
 		k8sProwClient:    k8sProwClient,
 		prowJobNamespace: prowJobNamespace,
 		allowedTeam:      allowedTeam,
+		s3BucketName:     s3BucketName,
 	}, nil
 }
 

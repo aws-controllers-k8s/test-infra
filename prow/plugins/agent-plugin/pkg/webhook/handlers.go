@@ -118,7 +118,12 @@ func (s *Server) handleIssueEvent(event *github.IssueEvent) error {
 }
 
 // processAgentCommand handles the common logic for processing /agent commands
-func (s *Server) processAgentCommand(commandText string, repo github.Repo, issue github.Issue, postComment func(string) error) error {
+func (s *Server) processAgentCommand(
+	commandText string,
+	repo github.Repo,
+	issue github.Issue,
+	postComment func(string) error,
+) error {
 	agentCmd, err := cmd.ParseAgentCommand(commandText)
 	if err != nil {
 		return nil
@@ -145,7 +150,16 @@ func (s *Server) processAgentCommand(commandText string, repo github.Repo, issue
 	}
 
 	// Create and submit ProwJob
-	prowJob, err := s.prowJobGenerator.CreateWorkflowProwJob(agentCmd.WorkflowName, agentCmd.Args, agentCmd.Flags, issue, repo, timeout)
+	prowJob, err := s.prowJobGenerator.CreateWorkflowProwJob(
+		agentCmd.WorkflowName,
+		agentCmd.Args,
+		agentCmd.Flags,
+		issue,
+		repo,
+		timeout,
+		s.prowJobNamespace,
+		s.s3BucketName,
+	)
 	if err != nil {
 		return postComment(fmt.Sprintf("Failed to create workflow job: %v", err))
 	}
