@@ -74,7 +74,7 @@ class ACKResourceWorkflow:
         """Load the list of supported AWS services from jobs_config.yaml."""
         try:
             # Go up to test-infra root, then to prow/jobs/jobs_config.yaml
-            config_path = Path(__file__).parent.parent.parent.parent / "prow" / "jobs" / "jobs_config.yaml"
+            config_path = Path(__file__).parent.parent.parent.parent / "jobs" / "jobs_config.yaml"
             
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
