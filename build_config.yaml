@@ -1,2 +1,2 @@
-go_version: 1.24.5
+go_version: 1.24.6
 eks_distro_version: 2025-07-01-1751328074.2
