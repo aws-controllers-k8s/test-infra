@@ -48,13 +48,38 @@ def save_operations_catalog(operations_catalog: Dict[str, List[str]], service: s
     """Save comprehensive catalog of all operations related to the resource.
     
     Args:
-        operations_catalog: Dictionary mapping operation types to lists of operation names
+        operations_catalog: Dictionary with exactly these 5 keys:
+            - create_operations: operation that create the resource
+            - read_operations: operation that read the resource  
+            - update_operations: operation that update the resource
+            - delete_operations: operation that delete the resource
+            - tag_operations: List of operations that manage tags on the resource
         service: AWS service name (e.g., 's3', 'dynamodb')
         resource: Resource name (e.g., 'Bucket', 'Table')
         
     Returns:
         str: Confirmation message with file path where catalog was saved
     """
+    # Validate that operations_catalog has exactly the required 5 keys
+    required_keys = {"create_operations", "read_operations", "update_operations", "delete_operations", "tag_operations"}
+    provided_keys = set(operations_catalog.keys())
+    
+    if provided_keys != required_keys:
+        missing_keys = required_keys - provided_keys
+        extra_keys = provided_keys - required_keys
+        error_msg = f"Operations catalog must have exactly these 5 keys: {required_keys}."
+        if missing_keys:
+            error_msg += f" Missing: {missing_keys}."
+        if extra_keys:
+            error_msg += f" Extra: {extra_keys}."
+        return f"Error: {error_msg}"
+    
+    # Validate that first 4 keys have exactly 1 operation each
+    single_operation_keys = {"create_operations", "read_operations", "update_operations", "delete_operations"}
+    for key in single_operation_keys:
+        if len(operations_catalog[key]) != 1:
+            return f"Error: {key} must have exactly 1 operation, got {len(operations_catalog[key])}: {operations_catalog[key]}"
+    
     ensure_ack_directories()
     resource_dir = ensure_service_resource_directories(service, resource)
     cache_file = os.path.join(resource_dir, "operations_catalog.json")

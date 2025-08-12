@@ -26,7 +26,7 @@ Query 2 - Advanced Resource Characteristics:
 
 A. OPERATION ANALYSIS
 - Identify all available operations for the resource
-- Classify operations by type (create, read, update, delete, list, tag operations)
+- Classify operations by type (create, read, update, delete, tag operations)
 - Extract ALL input/output fields for each operation (not just shape names)
 - Document complete field structures including nested objects
 - Determine required vs optional parameters with constraints
@@ -67,14 +67,12 @@ D. TAGGING AND METADATA
 Create these comprehensive data structures with COMPLETE field analysis:
 
 # Core Operations Inventory
-In case there are multiple operations with the same name, choose the one that is most similar to the other operations. Prefer single resource operations over multiple resource operations unless that leads to a mismatch in the field names.
 operations_catalog = {
-    "create_operations": ["CreateRepository", "PutRepository"],
-    "read_operations": ["GetRepository", "DescribeRepository", "DescribeRepositories"],
-    "update_operations": ["UpdateRepository", "ModifyRepository"],
+    "create_operations": ["CreateRepository"],
+    "read_operations": ["GetRepository"], (prefer "Get" over "Describe")
+    "update_operations": ["UpdateRepository"],
     "delete_operations": ["DeleteRepository"],
-    "tag_operations": ["TagResource", "UntagResource", "GetTagsForResource"],
-    "other_operations": ["GetRepositoryPolicy", "SetRepositoryPolicy"]
+    "tag_operations": ["TagResource", "UntagResource", "GetTagsForResource"]
 }
 
 # Field Catalog with Classifications
@@ -220,12 +218,7 @@ resource_characteristics = {
 4. save_error_catalog(error_catalog, service, resource)
 5. save_resource_characteristics(resource_characteristics, service, resource)
 
-5. Report Analysis Summary
-- Operations discovered and classified
-- Field types and characteristics identified  
-- Error conditions cataloged
-- Resource behavior patterns noted
-- Data completeness assessment
+5. Report Analysis Summary - Small Summary of the the resource files
 
 Response Format:
 1. "Analyzing AWS {service} {resource} resource..."
