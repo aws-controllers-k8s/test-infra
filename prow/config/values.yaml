@@ -31,7 +31,7 @@ crier:
 
 deck:
   scrapeMetrics: false
-  image: gcr.io/k8s-prow/deck:v20221121-dfec9ce18d
+  image: public.ecr.aws/eks-distro-build-tooling/prow-deck:v20230324-76cde35b3d
   service:
     type: 'ClusterIP'
   serviceAccount:
