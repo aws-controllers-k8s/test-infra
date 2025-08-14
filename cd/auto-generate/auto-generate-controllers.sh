@@ -2,6 +2,28 @@
 
 set -eo pipefail
 
+extract_pr_number() {
+    echo "$1" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+'
+}
+
+get_commit_title() {
+    latest_tag=$(git describe --tags --abbrev=0)
+    title=$(git log --format="%s" -n 1 "$latest_tag")
+    echo "$title"
+    return
+}
+
+get_pr_labels() {
+    commit_title=$(get_commit_title)
+    echo "auto-generate-controllers.sh][INFO] extracting PR number from Git commit title: $commit_title" >&2
+    pr_number=$(extract_pr_number "$commit_title")
+    echo "auto-generate-controllers.sh][INFO] extracted PR number: $pr_number" >&2
+    labels=$(gh pr view $PR_NUM --repo "aws-controllers-k8s/code-generator" --json labels --jq '.labels[].name')
+    echo "auto-generate-controllers.sh][INFO] extracted labels: $labels" >&2
+    echo "$labels"
+    return
+}
+
 USAGE="
 Usage:
   $(basename "$0")
@@ -89,6 +111,26 @@ if [[ -z $GO_VERSION_IN_GO_MOD ]]; then
 else
   echo "auto-generate-controllers.sh][INFO] go version in code-generator/go.mod file is $GO_VERSION_IN_GO_MOD"
 fi
+
+# Get Labels for Release PR
+PR_LABELS=$(get_pr_labels)
+
+# Set type of version bump to apply to downstream controller releases.
+CONTROLLER_RELEASE_TYPE=""
+case "$PR_LABELS" in
+    *"version/patch"*"version/minor"*|*"version/minor"*"version/patch"*)
+        echo "auto-generate-controllers.sh][ERROR] Multiple version labels found."
+        exit 1 ;;
+    *"version/patch"*)
+        CONTROLLER_RELEASE_TYPE="patch" ;;
+    *"version/minor"*)
+        CONTROLLER_RELEASE_TYPE="minor" ;;
+    *)
+        echo "auto-generate-controllers.sh][INFO] No labels specifying controller release type found. Defaulting to patch release."
+        CONTROLLER_RELEASE_TYPE="patch" ;;
+esac
+
+echo "auto-generate-controllers.sh][INFO] applying $CONTROLLER_RELEASE_TYPE version bump to downstream controller repos."
 
 DEFAULT_PR_SOURCE_BRANCH="ack-bot/rt-$ACK_RUNTIME_VERSION-codegen-$ACK_CODE_GEN_VERSION"
 PR_SOURCE_BRANCH=${PR_SOURCE_BRANCH:-$DEFAULT_PR_SOURCE_BRANCH}
@@ -178,7 +220,12 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       echo "auto-generate-controllers.sh][INFO] Unable to find latest git tag for $CONTROLLER_NAME"
       unset RELEASE_VERSION
     else
-      export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+      if [[ $CONTROLLER_RELEASE_TYPE == "minor" ]]; then
+        export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$2++;$3=0;print}')
+      else
+        export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
+      fi
+
       echo "auto-generate-controllers.sh][INFO] Using $RELEASE_VERSION as new release version. Previous version: $LATEST_TAG"
     fi
   popd >/dev/null

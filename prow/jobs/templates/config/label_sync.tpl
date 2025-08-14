@@ -571,6 +571,17 @@ repos:
   # TODO(a-hilaly): Maybe these repository needs specific labels to them
   aws-controllers-k8s/runtime:
   aws-controllers-k8s/code-generator:
+    labels:
+        - color: bfffdd
+          description: Indicates downstream controller releases should bump the patch version.
+          name: version/patch
+          target: prs
+          addedBy: human
+        - color: ffddbf
+          description: Indicates downstream controller releases should bump the minor version.
+          name: version/minor
+          target: prs
+          addedBy: human
   aws-controllers-k8s/test-infra:
   aws-controllers-k8s/pkg:
   aws-controllers-k8s/dev-tools:
