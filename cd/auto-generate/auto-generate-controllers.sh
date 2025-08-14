@@ -18,7 +18,7 @@ get_pr_labels() {
     echo "auto-generate-controllers.sh][INFO] extracting PR number from Git commit title: $commit_title" >&2
     pr_number=$(extract_pr_number "$commit_title")
     echo "auto-generate-controllers.sh][INFO] extracted PR number: $pr_number" >&2
-    labels=$(gh pr view $PR_NUM --repo "aws-controllers-k8s/code-generator" --json labels --jq '.labels[].name')
+    labels=$(gh pr view $pr_number --repo "aws-controllers-k8s/code-generator" --json labels --jq '.labels[].name')
     echo "auto-generate-controllers.sh][INFO] extracted labels: $labels" >&2
     echo "$labels"
     return
