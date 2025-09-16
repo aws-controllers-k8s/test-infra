@@ -22,3 +22,6 @@ def get_account_id() -> int:
 
 def get_region(default: str = "us-west-2") -> str:
     return boto3.session.Session().region_name or default
+
+def get_partition() -> str:
+    return boto3.client('sts').get_caller_identity().get('Arn').split(':')[1]
