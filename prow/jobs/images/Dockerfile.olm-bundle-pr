@@ -61,10 +61,10 @@ RUN echo "Installing Kustomize v4.1.2 ..." \
     && tar xzf "${KUSTOMIZE_TARBALL}" -C /usr/bin \
     && rm "${KUSTOMIZE_TARBALL}"
 
-RUN echo "Installing controller-gen v0.16.2 ..." \
+RUN echo "Installing controller-gen v0.19.0 ..." \
     && cd $(mktemp -d /tmp/controller-gen-XXX) \
     && go mod init tmp \
-    && go get -d "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.2" \
+    && go get -d "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0" \
     && go build -o "/usr/local/bin/controller-gen" sigs.k8s.io/controller-tools/cmd/controller-gen
 
 RUN echo "Installing yq ... " \
