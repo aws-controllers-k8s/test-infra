@@ -48,8 +48,8 @@ RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscl
     && aws/install \
     && export AWS_PAGER=""
 
-RUN echo "Installing controller-gen v0.16.2..." \
-    && go install "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.2" \
+RUN echo "Installing controller-gen v0.19.0..." \
+    && go install "sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0" \
     && mv $GOPATH/bin/controller-gen /usr/bin/controller-gen
 
 RUN echo "Installing Kustomize ..." \
