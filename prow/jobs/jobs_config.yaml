@@ -7,7 +7,6 @@
 aws_services:
 - acm
 - acmpca
-- amg
 - apigateway
 - apigatewayv2
 - applicationautoscaling
