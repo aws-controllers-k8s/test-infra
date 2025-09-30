@@ -13,7 +13,6 @@ aws_services:
 - athena
 - batch
 - bedrockagent
-- cognitoidentity
 - cloudfront
 - cloudtrail
 - cloudwatch
@@ -23,7 +22,6 @@ aws_services:
 - cognitoidentityprovider
 - documentdb
 - dynamodb
-- ebs
 - ec2
 - ecr
 - ecrpublic
@@ -34,6 +32,7 @@ aws_services:
 - elbv2
 - emrcontainers
 - eventbridge
+- firehose
 - globalaccelerator
 - glue
 - iam
