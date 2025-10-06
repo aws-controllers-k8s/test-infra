@@ -14,6 +14,7 @@
 package generator
 
 import (
+	"compress/gzip"
 	"fmt"
 	"html/template"
 	"os"
@@ -134,6 +135,13 @@ func generateJobs(templatePath, outputPath string, imageContext *ImageContext, c
 		return err
 	}
 	_, err = file.WriteString(prowjobsContent.String())
+	if err != nil {
+		return err
+	}
+
+	// Generate gzipped version for ConfigMap deployment
+	gzipPath := outputPath + ".gz"
+	err = gzipFile(outputPath, gzipPath)
 	return err
 }
 
@@ -165,6 +173,26 @@ func addAutoGenHeader(content *strings.Builder) {
 	fmt.Fprintf(content, "# Last generated on %v.\n#\n", time.Now().Format(time.DateTime))
 }
 
+// gzipFile compresses a file using gzip
+func gzipFile(sourcePath, destPath string) error {
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to read source file: %v", err)
+	}
+
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %v", err)
+	}
+	defer destFile.Close()
+
+	gzipWriter := gzip.NewWriter(destFile)
+	defer gzipWriter.Close()
+
+	_, err = gzipWriter.Write(data)
+	return err
+}
+
 // Generate will generate labels or jobs, depending on variable "what" is.
 // what: can be either labels or jobs.
 func Generate(what, jobsConfigPath, imagesConfigPath, templatePath, outputPath string) error {
@@ -178,9 +206,10 @@ func Generate(what, jobsConfigPath, imagesConfigPath, templatePath, outputPath s
 		return err
 	}
 
-	if what == "jobs" {
+	switch what {
+	case "jobs":
 		err = generateJobs(templatePath, outputPath, imageContext, config)
-	} else if what == "labels" {
+	case "labels":
 		err = generateLabelSyncConfig(templatePath, outputPath, config)
 	}
 	return err

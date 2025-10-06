@@ -8,9 +8,13 @@ configMapGenerator:
 - name: job-config
   namespace: prow
   behavior: create
-  # Alias the file to be compatible with each of the deployments
+  # Using gzipped binary data to stay under 1MB ConfigMap limit
+  # Kustomize auto-detects binary files (non-UTF8) and uses binaryData field
+  # https://github.com/kubernetes-sigs/kustomize/issues/408
+  # Prow uses ReadFileMaybeGZIP() to auto-decompress gzipped files
+  # https://github.com/kubernetes-sigs/prow/blob/main/pkg/config/config.go#L1958
   files:
-  - config.yaml=jobs.yaml
+  - config.yaml=jobs.yaml.gz
 - name: test-config
   namespace: test-pods
   behavior: create
