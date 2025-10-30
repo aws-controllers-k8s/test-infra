@@ -12,6 +12,10 @@
       base_ref: main
       workdir: false
     - org: aws-controllers-k8s
+      repo: runtime
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
       repo: test-infra
       base_ref: main
       workdir: true
