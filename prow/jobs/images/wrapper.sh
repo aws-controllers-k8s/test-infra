@@ -17,6 +17,7 @@ set -o pipefail
 set -o nounset
 
 CARM_TESTS_ENABLED=${CARM_TESTS_ENABLED:-"false"}
+IRS_TESTS_ENABLED=${IRS_TESTS_ENABLED:-"false"}
 
 >&2 echo "wrapper.sh] [INFO] Wrapping Test Command: \`$*\`"
 printf '%0.s=' {1..80} >&2; echo >&2
@@ -95,13 +96,13 @@ aws ecr-public get-login-password --region us-east-1 | docker login --username A
 # Setup credentials for controller CARM (Cross Account Resource Management) tests
 
 # Assume CARM role if CARM_TESTS are enabled
-if [[ "$CARM_TESTS_ENABLED" = "true" ]]; then
-  echo "wrapper.sh] [SETUP] CARM tests enabled, setting up credentials ..."
+if [[ "$CARM_TESTS_ENABLED" = "true" || "$IRS_TESTS_ENABLED" = "true"]]; then
+  echo "wrapper.sh] [SETUP] CARM/IRS tests enabled, setting up credentials ..."
 
   CARM_ASSUME_EXIT_VALUE=0
   CARM_ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/carm_role --query Parameter.Value --output text 2>/dev/null) || CARM_ASSUME_EXIT_VALUE=$?
   if [ "$CARM_ASSUME_EXIT_VALUE" -ne 0 ]; then
-    >&2 echo "wrapper.sh] [SETUP] Could not find role for CARM tests"
+    >&2 echo "wrapper.sh] [SETUP] Could not find role for CARM/IRS tests"
     exit 1
   fi
   export CARM_ASSUMED_ROLE_ARN

@@ -108,6 +108,10 @@ EOF
 
     local region=$(get_aws_region)
 
+    if [[ "$IRS_TESTS_ENABLED" = "true" ]]; then
+        FEATURE_GATES=$FEATURE_GATES,"IAMRoleSelector=true"
+    fi
+
     kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \

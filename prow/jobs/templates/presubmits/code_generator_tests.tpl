@@ -133,8 +133,11 @@
         env:
         - name: SERVICE
           value: {{ $service }}
-        {{ if contains $.Config.CarmTestServices $service }}
+        {{ if contains $.Config.CarmTestServices $service -}}
         - name: CARM_TESTS_ENABLED
+          value: "true"
+        {{ else if contains $.Config.IRSTestServices $service -}}
+        - name: IRS_TESTS_ENABLED
           value: "true"
         {{ end -}}
         - name: FEATURE_GATES

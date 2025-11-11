@@ -39,10 +39,13 @@
         # the 'go.mod' file of the controller.
         - name: GOLANG_VERSION
           value: "1.22.5"
-        {{ if contains $.Config.CarmTestServices $service }}
+        {{ if contains $.Config.CarmTestServices $service -}}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {{ end }}
+        {{ else if contains $.Config.IRSTestServices $service -}}
+        - name: IRS_TESTS_ENABLED
+          value: "true"
+        {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]

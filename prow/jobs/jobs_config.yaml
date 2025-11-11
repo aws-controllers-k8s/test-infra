@@ -74,6 +74,11 @@ aws_services:
 carm_test_services:
 - ecr
 
+# List of service that will execute a set of tests for IAM Role Selector (IRS)
+# These service need a IAMRoleSelector feature gate to be set to true
+irs_test_services:
+- sqs
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
@@ -108,6 +113,7 @@ runtime_presubmit_services:
 - s3
 - ec2
 - sagemaker
+- sqs
 
 # List of AWS services whose controller gets generated and e2e tested whenever
 # there is a new `acktest` library change.
