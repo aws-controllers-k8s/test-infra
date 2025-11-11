@@ -108,8 +108,10 @@ EOF
 
     local region=$(get_aws_region)
 
+    ENABLE_CARM="true"
     if [[ "$IRS_TESTS_ENABLED" = "true" ]]; then
         FEATURE_GATES=$FEATURE_GATES,"IAMRoleSelector=true"
+        ENABLE_CARM="false"
     fi
 
     kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
@@ -119,7 +121,8 @@ EOF
         ACK_ENABLE_DEVELOPMENT_LOGGING="true" \
         ACK_LOG_LEVEL="debug" \
         FEATURE_GATES="$FEATURE_GATES" \
-        AWS_REGION="$region" 1>/dev/null 
+        AWS_REGION="$region" 1>/dev/null \
+        ENABLE_CARM="$ENABLE_CARM"
         # TODO: Support watch namespace configuration
         # ACK_WATCH_NAMESPACE="$ACK_WATCH_NAMESPACE" \
 
