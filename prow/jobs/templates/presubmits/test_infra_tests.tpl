@@ -38,10 +38,13 @@
           value: {{ $service }}
         - name: LOCAL_ACKTEST_LIBRARY
           value: "true"
-        {{ if contains $.Config.CarmTestServices $service }}
+        {{ if contains $.Config.CarmTestServices $service -}}
         - name: CARM_TESTS_ENABLED
           value: "true"
-        {{ end }}
+        {{ else if contains $.Config.IRSTestServices $service -}}
+        - name: IRS_TESTS_ENABLED
+          value: "true"
+        {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command:

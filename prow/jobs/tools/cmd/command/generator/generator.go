@@ -37,6 +37,7 @@ type ImageContext struct {
 type JobsConfig struct {
 	AWSServices                   []string `yaml:"aws_services"`
 	CarmTestServices              []string `yaml:"carm_test_services"`
+	IRSTestServices              []string `yaml:"irs_test_services"`
 	SoakTestOnReleaseServiceNames []string `yaml:"soak_test_on_release_service_names"`
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`
