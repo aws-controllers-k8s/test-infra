@@ -96,7 +96,7 @@ aws ecr-public get-login-password --region us-east-1 | docker login --username A
 # Setup credentials for controller CARM (Cross Account Resource Management) tests
 
 # Assume CARM role if CARM_TESTS are enabled
-if [[ "$CARM_TESTS_ENABLED" = "true" || "$IRS_TESTS_ENABLED" = "true"]]; then
+if [[ "$CARM_TESTS_ENABLED" = "true" || "$IRS_TESTS_ENABLED" = "true" ]]; then
   echo "wrapper.sh] [SETUP] CARM/IRS tests enabled, setting up credentials ..."
 
   CARM_ASSUME_EXIT_VALUE=0
