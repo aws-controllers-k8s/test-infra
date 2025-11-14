@@ -8,8 +8,8 @@ Usage:
 
 This script automatically tags the service controller repository with proper semver
 to automate the controller release process.
-The script currently only supports automating patch releases.
-(TODO: Consider automating Minor and Major release for controllers as well)
+The script currently only supports automating patch and minor releases.
+(TODO: Consider automating Major release for controllers as well)
 
 The script compares latest git tag on service controller repository with
 'image.tag' inside service controller's 'helm/values.yaml' file.
@@ -48,13 +48,22 @@ CONTROLLER_DIR="$WORKSPACE_DIR/$CONTROLLER_NAME"
 DEFAULT_GITHUB_ORG="aws-controllers-k8s"
 GITHUB_ORG=${GITHUB_ORG:-$DEFAULT_GITHUB_ORG}
 
+DEFAULT_GITHUB_ISSUE_REPO="community"
+GITHUB_ISSUE_REPO=${GITHUB_ISSUE_REPO:-$DEFAULT_GITHUB_ISSUE_REPO}
+GITHUB_ISSUE_ORG_REPO="$GITHUB_ORG/$GITHUB_ISSUE_REPO"
+
+DEFAULT_GITHUB_LABEL="prow/auto-release"
+GITHUB_LABEL=${GITHUB_LABEL:-$DEFAULT_GITHUB_LABEL}
+
 MISSING_GIT_TAG="missing-git-tag"
 MISSING_IMAGE_TAG="missing-image-tag"
 NON_RELEASE_IMAGE_TAG="v0.0.0-non-release-version"
 
 # Check all the dependencies are present in container.
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
+source "$CD_DIR"/lib/gh.sh
 check_is_installed git
+check_is_installed gh
 check_is_installed yq
 
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
@@ -118,7 +127,14 @@ echo "ok"
 echo -n "controller-release-tag.sh][INFO] Pushing tags to $CONTROLLER_NAME  ... "
 if ! git push "https://$GITHUB_TOKEN@github.com/$GITHUB_ORG/$CONTROLLER_NAME.git" --tags &>/dev/null; then
   echo ""
-  echo "controller-release-tag.sh][ERROR] Failed to push tags for $CONTROLLER_NAME. Exiting"
+  echo "controller-release-tag.sh][ERROR] Failed to push tags for $CONTROLLER_NAME. Creating/Updating GitHub issue"
+
+  ISSUE_TITLE="Failed to push git tag \`$HELM_IMAGE_TAG\` for \`$CONTROLLER_NAME\`"
+  GITHUB_ISSUE_BODY_TEMPLATE_FILE="$AUTO_GEN_DIR/gh_issue_release_tag_template.txt"
+  GITHUB_ISSUE_BODY_FILE=/tmp/"$AWS_SERVICE"_gh_issue_release_tag
+  eval "echo \"$(cat "$GITHUB_ISSUE_BODY_TEMPLATE_FILE")\"" > "$GITHUB_ISSUE_BODY_FILE"
+
+  open_gh_issue "$GITHUB_ISSUE_ORG_REPO" "$ISSUE_TITLE" "$GITHUB_ISSUE_BODY_FILE"
   exit 1
 fi
 echo "ok"
