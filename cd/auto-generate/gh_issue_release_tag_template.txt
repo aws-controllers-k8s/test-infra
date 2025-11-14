@@ -1,0 +1,18 @@
+### $ISSUE_TITLE
+
+Failed to push git tag \`$HELM_IMAGE_TAG\` to [\`$CONTROLLER_NAME\`](https://github.com/$GITHUB_ORG/$CONTROLLER_NAME).
+
+#### Details:
+- **Controller**: $CONTROLLER_NAME
+- **Git Tag**: $HELM_IMAGE_TAG
+- **Previous Git Tag**: $LATEST_GIT_TAG
+
+#### Steps for closing this issue:
+1. Verify the git tag \`$HELM_IMAGE_TAG\` doesn't already exist in the remote repository
+2. Check repository permissions for the automation account
+3. Manually push the git tag if needed: \`git push origin $HELM_IMAGE_TAG\`
+4. Verify the GitHub release workflow is triggered
+5. Close this issue once the release is published
+
+For more guidance, [create an issue](https://github.com/aws-controllers-k8s/community/issues)
+or [reach out on Slack](https://github.com/aws-controllers-k8s/community#help--feedback).
