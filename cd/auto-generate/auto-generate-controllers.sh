@@ -82,6 +82,14 @@ source "$CD_DIR"/lib/gh.sh
 check_is_installed git
 check_is_installed gh
 
+# Install attribution-gen for regenerating ATTRIBUTION.md files
+echo "auto-generate-controllers.sh][INFO] Installing attribution-gen ..."
+if ! go install github.com/awslabs/attribution-gen@latest >/dev/null 2>&1; then
+  echo "auto-generate-controllers.sh][ERROR] Failed to install attribution-gen"
+  exit 1
+fi
+check_is_installed attribution-gen
+
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
 if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
     USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${USER_EMAIL}"
@@ -258,6 +266,16 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     cp OWNERS_ALIASES "$CONTROLLER_DIR"
     cp OWNERS "$CONTROLLER_DIR"
   popd >/dev/null
+
+  # Generate/regenerate ATTRIBUTION.md
+  echo -n "auto-generate-controllers.sh][INFO] Generating ATTRIBUTION.md for $CONTROLLER_NAME ... "
+  GOMOD_PATH="$CONTROLLER_DIR/go.mod"
+  ATTRIBUTION_OUTPUT="$CONTROLLER_DIR/ATTRIBUTION.md"
+  if attribution-gen --modfile "$GOMOD_PATH" --output "$ATTRIBUTION_OUTPUT" >/dev/null 2>&1; then
+    echo "ok"
+  else
+    echo "failed (skipping)"
+  fi
 
   # Since there are no failures, print make build output in prowjob logs
   cat "$MAKE_BUILD_OUTPUT_FILE"
