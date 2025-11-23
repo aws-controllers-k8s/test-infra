@@ -15,8 +15,10 @@ package command
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/go-github/v63/github"
@@ -65,7 +67,31 @@ func getGitTree(ctx context.Context, client *github.Client, ref *github.Referenc
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, &github.TreeEntry{Path: github.String(file), Type: github.String("blob"), Content: github.String(string(content)), Mode: github.String("100644")})
+
+		entry := &github.TreeEntry{
+			Path: github.String(file),
+			Type: github.String("blob"),
+			Mode: github.String("100644"),
+		}
+
+		// Binary files must be uploaded as blobs with base64 encoding
+		// to prevent corruption during JSON serialization
+		if isBinaryFile(file) {
+			blob := &github.Blob{
+				Content:  github.String(base64.StdEncoding.EncodeToString(content)),
+				Encoding: github.String("base64"),
+			}
+			createdBlob, _, err := client.Git.CreateBlob(ctx, sourceOwner, sourceRepo, blob)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create blob for %s: %v", file, err)
+			}
+			entry.SHA = createdBlob.SHA
+		} else {
+			// Text files can use inline content
+			entry.Content = github.String(string(content))
+		}
+
+		entries = append(entries, entry)
 	}
 
 	tree, _, err = client.Git.CreateTree(ctx, sourceOwner, sourceRepo, *ref.Object.SHA, entries)
@@ -91,6 +117,19 @@ func getFileContent(fileArg string) (targetName string, b []byte, err error) {
 
 	b, err = os.ReadFile(localFile)
 	return targetName, b, err
+}
+
+// isBinaryFile returns true if the file should be treated as binary
+// based on its extension to prevent JSON serialization corruption.
+func isBinaryFile(filename string) bool {
+	ext := filepath.Ext(filename)
+	binaryExtensions := []string{".gz", ".zip", ".tar", ".tgz", ".bz2", ".xz", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".bin"}
+	for _, binExt := range binaryExtensions {
+		if ext == binExt {
+			return true
+		}
+	}
+	return false
 }
 
 // pushCommit creates the commit in the given reference using the given tree.
