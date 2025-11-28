@@ -1,4 +1,6 @@
-FROM golang:1.25-alpine
+ARG GO_VERSION=1.25.4
+
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine
 
 WORKDIR /scripts
 COPY deploy-docs.sh /scripts/deploy-docs.sh
