@@ -6,7 +6,7 @@ images:
     controller-release-tag: prow-controller-release-tag-0.0.24
     deploy: prow-deploy-0.0.35
     docs: prow-docs-0.0.29
-    deploy-docs: prow-deploy-docs-0.0.3
+    deploy-docs: prow-deploy-docs-0.0.4
     integration-test: prow-integration-0.0.45
     olm-bundle-pr: prow-olm-bundle-pr-0.0.25
     olm-test: prow-olm-test-0.0.24

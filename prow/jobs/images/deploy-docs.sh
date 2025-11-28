@@ -30,9 +30,11 @@ cd website
 npm install
 npm run build
 
-# Set up git remote for Docusaurus deploy (Prow clone doesn't set up 'origin')
-echo "${SCRIPT_NAME}] Setting up git remote..."
+# Set up git for deploy
+echo "${SCRIPT_NAME}] Setting up git..."
 git remote add origin "https://github.com/aws-controllers-k8s/docs.git" 2>/dev/null || true
+git config --global user.name "${GITHUB_ACTOR}"
+git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
 # Deploy to GitHub Pages
 echo "${SCRIPT_NAME}] Deploying to GitHub Pages..."
