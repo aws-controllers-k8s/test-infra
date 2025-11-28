@@ -1,0 +1,13 @@
+FROM golang:1.25-alpine
+
+WORKDIR /scripts
+COPY deploy-docs.sh /scripts/deploy-docs.sh
+
+RUN apk add --no-cache \
+    bash \
+    git \
+    make \
+    npm \
+    && chmod +x /scripts/deploy-docs.sh
+
+ENTRYPOINT ["/scripts/deploy-docs.sh"]
