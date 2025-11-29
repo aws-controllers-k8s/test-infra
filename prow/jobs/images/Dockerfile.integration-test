@@ -87,8 +87,8 @@ RUN echo "Ensuring Legacy Iptables ..." \
     && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true \
     && update-alternatives --set arptables /usr/sbin/arptables-legacy || true
 
-RUN echo "Installing Kind v0.19.0..." \
-    && go install "sigs.k8s.io/kind@v0.19.0" \
+RUN echo "Installing Kind v0.30.0..." \
+    && go install "sigs.k8s.io/kind@v0.30.0" \
     && mv $GOPATH/bin/kind /usr/bin/kind
 
 COPY wrapper.sh /usr/bin/wrapper.sh

@@ -1,6 +1,6 @@
 cluster:
   create: true
-  k8s_version: 1.28.0
+  k8s_version: 1.34.0
 
 aws:
   region: us-west-2
