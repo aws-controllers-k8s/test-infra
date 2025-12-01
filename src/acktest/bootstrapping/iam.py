@@ -92,7 +92,7 @@ class Role(Bootstrappable):
                         {
                             "Effect": "Allow",
                             "Principal": {"Service": self.principal_service},
-                            "Action": "sts:AssumeRole",
+                            "Action": ["sts:AssumeRole", "sts:TagSession"],
                         }
                     ],
                 }
