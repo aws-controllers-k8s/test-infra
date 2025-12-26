@@ -57,6 +57,8 @@ if [[ "${DOCKER_IN_DOCKER_ENABLED}" == "true" ]]; then
   sysctl net.ipv6.conf.all.forwarding=1
   # enable ipv6 iptables
   modprobe -v ip6table_nat
+  # Fix ulimit issue (use soft limit instead of hard limit)
+  sed -i 's|ulimit -Hn|ulimit -n|' /etc/init.d/docker
   # If we have opted in to docker in docker, start the docker daemon,
   service docker start
   # the service can be started but the docker socket not ready, wait for ready
