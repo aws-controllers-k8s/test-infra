@@ -49,7 +49,8 @@ build_pytest_image() {
 
     # If 'AWS_PROFILE' variable is set, use it as source profile for 'ack-test'
     # profile. Use 'default' as fallback
-    local ack_test_source_aws_profile=${get_aws_profile:-"default"}
+    local ack_test_source_aws_profile="$(get_aws_profile || true)"
+    ack_test_source_aws_profile="${ack_test_source_aws_profile:-default}"
     local aws_creds_file_location="$HOME/.aws/credentials"
 
     if [[ -n $PROW_JOB_ID ]]; then
