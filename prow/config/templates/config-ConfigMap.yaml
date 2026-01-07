@@ -58,6 +58,8 @@ data:
     plank:
       job_url_prefix_config:
         "*": https://{{ .Values.prow.domain }}/view/
+      job_queue_capacities:
+        olm-bundle-prs: 4
       report_templates:
         '*': >-
             [Full PR test history](https://{{ .Values.prow.domain }}/pr-history?{{ "org={{.Spec.Refs.Org}}&repo={{.Spec.Refs.Repo}}&pr={{with index .Spec.Refs.Pulls 0}}{{.Number}}{{end}}" }}).
