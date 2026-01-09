@@ -85,7 +85,6 @@
     - main
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
-    job_queue_name: olm-bundle-prs
     annotations:
       karpenter.sh/do-not-evict: "true"
     labels:
