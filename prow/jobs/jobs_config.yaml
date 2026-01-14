@@ -11,6 +11,7 @@ aws_services:
 - apigatewayv2
 - applicationautoscaling
 - athena
+- autoscaling
 - batch
 - bedrock
 - bedrockagent
