@@ -52,6 +52,7 @@ aws_services:
 - organizations
 - pipes
 - prometheusservice
+- quicksight
 - ram
 - rds
 - recyclebin
