@@ -20,8 +20,8 @@
         resources:
           limits:
             cpu: 2
-            memory: "4096Mi"
+            memory: "8Gi"
           requests:
             cpu: 2
-            memory: "4096Mi"
+            memory: "8Gi"
         command: ["/scripts/deploy-docs.sh"]
