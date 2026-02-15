@@ -247,4 +247,38 @@
         - "/bin/bash"
         - "-c"
         - "./cd/scripts/verify-code-gen.sh"
+
+  - name: {{ $service }}-crd-compat-check
+    decorate: true
+    optional: false
+    run_if_changed: "^(config/crd/|helm/crds/)"
+    annotations:
+      karpenter.sh/do-not-evict: "true"
+    extra_refs:
+    - org: aws-controllers-k8s
+      repo: code-generator
+      base_ref: main
+      workdir: false
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "unit-test") }}
+        resources:
+          limits:
+            cpu: 2
+            memory: "4048Mi"
+          requests:
+            cpu: 2
+            memory: "4048Mi"
+        env:
+        - name: SERVICE
+          value: {{ $service }}
+        command:
+        - "/bin/bash"
+        - "-c"
+        - "./cd/scripts/check-crd-compatibility.sh"
 {{ end }}
