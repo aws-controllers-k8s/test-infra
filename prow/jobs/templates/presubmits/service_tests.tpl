@@ -213,7 +213,7 @@
   - name: {{ $service }}-verify-code-gen
     always_run: true
     decorate: true
-    optional: true
+    optional: false
     annotations:
       karpenter.sh/do-not-evict: "true"
     extra_refs:
