@@ -65,11 +65,66 @@ cd "$TARGET_DIR"
 
 info_msg "Checking for differences..."
 
-# Get the diff and filter out ack_generate_info changes (build_date, build_hash, go_version, version)
-# These metadata fields always change during regeneration
-DIFF_OUTPUT=$(git --no-pager diff | grep -v '^\(---\|+++\) .*ack-generate-metadata.yaml' | \
-    grep -vE '^\-  (build_date|build_hash|go_version|version):' | \
-    grep -vE '^\+  (build_date|build_hash|go_version|version):' || true)
+# For each changed file, extract only +/- content lines and filter out known
+# non-deterministic patterns scoped to specific files. If no meaningful
+# changes remain, skip the file.
+#
+# Patterns are applied only to the files that contain them:
+#   ack-generate-metadata.yaml: api_directory_checksum, build_date,
+#                                build_hash, go_version
+#   kustomization.yaml:         newTag
+#   Chart.yaml:                 version, appVersion
+#   values.yaml:                tag
+#   NOTES.txt:                  embedded image tag (controller:X.Y.Z)
+
+# Returns grep flags to filter non-deterministic lines for a given file.
+filter_patterns_for_file() {
+    local file="$1"
+    local basename
+    basename=$(basename "$file")
+    case "$basename" in
+        ack-generate-metadata.yaml)
+            echo '^\s*(api_directory_checksum|build_date|build_hash|go_version):'
+            ;;
+        kustomization.yaml)
+            echo '^\s*newTag:\s*[0-9]+\.[0-9]+\.[0-9]+'
+            ;;
+        Chart.yaml)
+            echo '^\s*(version|appVersion):\s*[0-9]+\.[0-9]+\.[0-9]+'
+            ;;
+        values.yaml)
+            echo '^\s*tag:\s*[0-9]+\.[0-9]+\.[0-9]+'
+            ;;
+        NOTES.txt)
+            echo 'controller:[0-9]+\.[0-9]+\.[0-9]+'
+            ;;
+        *)
+            # No patterns to filter for other files
+            echo ''
+            ;;
+    esac
+}
+
+CHANGED_FILES=$(git diff --name-only || true)
+DIFF_OUTPUT=""
+
+for file in $CHANGED_FILES; do
+    # Extract only +/- content lines (no diff headers like ---/+++/@@ )
+    CONTENT_CHANGES=$(git --no-pager diff -- "$file" | \
+        grep -E '^[+-]' | \
+        grep -v '^[+-][+-][+-] ')
+
+    FILTER=$(filter_patterns_for_file "$file")
+    if [ -n "$FILTER" ]; then
+        CONTENT_CHANGES=$(echo "$CONTENT_CHANGES" | \
+            grep -vE "^[+-].*${FILTER}" || true)
+    fi
+
+    if [ -n "$CONTENT_CHANGES" ]; then
+        DIFF_OUTPUT+=$(git --no-pager diff -- "$file")
+        DIFF_OUTPUT+=$'\n'
+    fi
+done
 
 if [ -z "$DIFF_OUTPUT" ]; then
     info_msg "Success: Generated code matches the committed code for $TARGET_NAME."
