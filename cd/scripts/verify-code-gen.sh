@@ -84,16 +84,16 @@ filter_patterns_for_file() {
     basename=$(basename "$file")
     case "$basename" in
         ack-generate-metadata.yaml)
-            echo '^\s*(api_directory_checksum|build_date|build_hash|go_version):'
+            echo '\s*(api_directory_checksum|build_date|build_hash|go_version):'
             ;;
         kustomization.yaml)
-            echo '^\s*newTag:\s*[0-9]+\.[0-9]+\.[0-9]+'
+            echo '\s*newTag:\s*[0-9]+\.[0-9]+\.[0-9]+'
             ;;
         Chart.yaml)
-            echo '^\s*(version|appVersion):\s*[0-9]+\.[0-9]+\.[0-9]+'
+            echo '\s*(version|appVersion):\s*[0-9]+\.[0-9]+\.[0-9]+'
             ;;
         values.yaml)
-            echo '^\s*tag:\s*[0-9]+\.[0-9]+\.[0-9]+'
+            echo '\s*tag:\s*[0-9]+\.[0-9]+\.[0-9]+'
             ;;
         NOTES.txt)
             echo 'controller:[0-9]+\.[0-9]+\.[0-9]+'
