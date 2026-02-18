@@ -160,7 +160,7 @@ def create_custom_resource(
         custom_resource
     )
 
-def create_custom_resource_and_wait_on_condition(
+def create_custom_resource_and_assert_condition(
     reference: CustomResourceReference, custom_resource: dict, create_wait_after_seconds: int = 10, wait_periods: int = 5, period_length: int = 10, cond_type: str = "ACK.ResourceSynced", cond_status_match: str = "True"):
   
     create_custom_resource(reference, custom_resource)
@@ -172,7 +172,7 @@ def create_custom_resource_and_wait_on_condition(
     assert wait_on_condition(reference, cond_type, cond_status_match, wait_periods=wait_periods, period_length=period_length)
     return reference, cr
   
-def patch_custom_resource_and_wait_on_condition(
+def patch_custom_resource_and_assert_condition(
     reference: CustomResourceReference, custom_resource: dict, patch_wait_after_seconds: int = 10, wait_periods: int = 5, period_length: int = 10, cond_type: str = "ACK.ResourceSynced", cond_status_match: str = "True"):
   
     patch_custom_resource(reference, custom_resource)
