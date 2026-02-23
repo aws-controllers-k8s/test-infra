@@ -12,6 +12,7 @@ aws_services:
 - applicationautoscaling
 - athena
 - autoscaling
+- backup
 - batch
 - bedrock
 - bedrockagent
@@ -24,6 +25,7 @@ aws_services:
 - codeartifact
 - cognitoidentityprovider
 - documentdb
+- dsql
 - dynamodb
 - ec2
 - ecr
