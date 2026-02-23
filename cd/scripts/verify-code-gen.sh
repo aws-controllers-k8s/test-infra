@@ -84,7 +84,7 @@ filter_patterns_for_file() {
     basename=$(basename "$file")
     case "$basename" in
         ack-generate-metadata.yaml)
-            echo '\s*(api_directory_checksum|build_date|build_hash|go_version|version):'
+            echo '\s*(api_directory_checksum|build_date|build_hash|go_version|version(?!.*dirty)):'
             ;;
         kustomization.yaml)
             echo '\s*newTag:\s*[0-9]+\.[0-9]+\.[0-9]+'
