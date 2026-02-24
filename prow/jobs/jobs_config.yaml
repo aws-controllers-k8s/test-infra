@@ -36,6 +36,7 @@ aws_services:
 - elasticache
 - elbv2
 - emrcontainers
+- emrserverless
 - eventbridge
 - firehose
 - globalaccelerator
