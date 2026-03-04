@@ -21,6 +21,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import Bootstrappable
+from .s3 import Bucket
 
 # Wait configuration for subscription activation
 DEFAULT_WAIT_TIMEOUT_SECONDS = 300
@@ -162,13 +163,12 @@ class S3DataSource(Bootstrappable):
     manifest_key: str = "manifest.json"
 
     # Subresources (auto-bootstrapped by parent)
-    bucket: "Bucket" = field(init=False, default=None)
+    bucket: Bucket = field(init=False, default=None)
 
     # Outputs
     bucket_name: str = field(init=False, default="")
 
     def __post_init__(self):
-        from .s3 import Bucket
         self.bucket = Bucket(name_prefix=self.name_prefix)
 
     @property
