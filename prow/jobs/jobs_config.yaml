@@ -49,6 +49,7 @@ aws_services:
 - lambda
 - memorydb
 - mq
+- mwaa
 - networkfirewall
 - opensearchservice
 - opensearchserverless
