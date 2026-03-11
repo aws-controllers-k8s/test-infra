@@ -209,9 +209,10 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
 
     SERVICE_AVAILABLE_API_VERSION=$(yq e '.api_versions[] | select(.status == "available") | .api_version' metadata.yaml)
     SERVICE_CODE_GEN_VERSION=$(yq e '.ack_generate_info.version' apis/$SERVICE_AVAILABLE_API_VERSION/ack-generate-metadata.yaml)
-    # If the current version was generated with the latest ACK code-gen binary version, skip over the controller entirely
-    if [[ "$SERVICE_CODE_GEN_VERSION" == "$ACK_CODE_GEN_VERSION" ]]; then
-      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK code-gen version $ACK_CODE_GEN_VERSION. Skipping ... "
+    # If the current version was generated with the latest ACK code-gen binary version
+    # and the runtime version is also up to date, skip over the controller entirely
+    if [[ "$SERVICE_CODE_GEN_VERSION" == "$ACK_CODE_GEN_VERSION" ]] && [[ "$SERVICE_RUNTIME_VERSION" == "$ACK_RUNTIME_VERSION" ]]; then
+      echo "auto-generate-controllers.sh][INFO] $CONTROLLER_NAME already has the latest ACK code-gen version $ACK_CODE_GEN_VERSION and runtime version $ACK_RUNTIME_VERSION. Skipping ... "
       continue
     else
       echo "auto-generate-controllers.sh][INFO] ACK code-gen version for new controller will be $ACK_CODE_GEN_VERSION. Current version is $SERVICE_CODE_GEN_VERSION"
