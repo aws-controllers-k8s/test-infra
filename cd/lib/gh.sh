@@ -107,7 +107,7 @@ open_pull_request() {
   else
     echo "gh.sh][INFO] PR#$__pr_number already exists for $__org_repo , from $__source_branch -> $__target_branch branch"
     echo -n "gh.sh][INFO] Updating PR body... "
-    if ! gh pr edit "$__pr_number" -R "$__org_repo" -F "$__pr_body_file_path" >/dev/null ; then
+    if ! gh api -X PATCH "repos/$__org_repo/pulls/$__pr_number" -f body="$(cat "$__pr_body_file_path")" >/dev/null ; then
       echo ""
       echo "gh.sh][ERROR] Failed to update pull request"
       return 1
