@@ -31,7 +31,7 @@ following guide to configure your soak testing infrastructure.
 
 ### Before You Begin
 
-Create a new AWS account to house the following resources. A new account ensures
+Create a [new AWS account](../docs/onboarding.md#prerequisites) to house the following resources. A new account ensures
 that any leaked resources do not affect the e2e tests running on your pull
 requests, and that you can give the ACK core team permissions to view this
 account.
