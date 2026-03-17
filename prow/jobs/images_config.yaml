@@ -7,7 +7,7 @@ images:
     deploy: prow-deploy-0.0.39
     deploy-docs: prow-deploy-docs-0.0.8
     docs: prow-docs-0.0.33
-    integration-test: prow-integration-0.0.49
+    integration-test: prow-integration-0.0.50
     olm-bundle-pr: prow-olm-bundle-pr-0.0.29
     olm-test: prow-olm-test-0.0.28
     scan-controllers-cve: prow-scan-controllers-cve-0.0.22
