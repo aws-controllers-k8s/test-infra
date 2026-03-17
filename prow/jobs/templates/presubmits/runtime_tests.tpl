@@ -83,6 +83,9 @@
           requests:
             cpu: 2
             memory: "4048Mi"
+        env:
+        - name: REPOSITORY_NAME
+          value: runtime
         command:
         - "/bin/bash"
         - "-c"
