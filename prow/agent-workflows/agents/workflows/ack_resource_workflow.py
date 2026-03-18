@@ -19,6 +19,7 @@ from typing import Optional, List
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.defaults import DEFAULT_MODEL_ID
 from utils.bedrock import create_enhanced_agent
 from utils.settings import settings
 from ack_model_agent.prompt import ACK_MODEL_AGENT_SYSTEM_PROMPT
@@ -42,6 +43,7 @@ from ack_generator_agent.tools import (
     save_error_solution,
     search_codegen_knowledge,
     search_memories,
+    set_model_id,
     update_service_generator_config,
 )
 
@@ -52,6 +54,7 @@ class ResourceAdditionInput:
     resource: str
     aws_sdk_version: str = "v1.32.6"
     timeout_minutes: int = 30
+    model_id: str = DEFAULT_MODEL_ID
 
 @dataclass  
 class ResourceAdditionOutput:
@@ -97,7 +100,7 @@ class ACKResourceWorkflow:
             available_services = ", ".join(sorted(supported_services))
             return False, f"Service '{service}' is not supported. Available services: {available_services}"
 
-    def _create_model_agent(self):
+    def _create_model_agent(self, model_id: str):
         """Create a fresh Model Agent instance."""
         return create_enhanced_agent(
             tools=[
@@ -109,9 +112,10 @@ class ACKResourceWorkflow:
                 query_knowledge_base,
             ],
             system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,
+            model_id=model_id,
         )
 
-    def _create_generator_agent(self):
+    def _create_generator_agent(self, model_id: str):
         """Create a fresh Generator Agent instance."""
         return create_enhanced_agent(
             tools=[
@@ -127,9 +131,10 @@ class ACKResourceWorkflow:
                 search_codegen_knowledge,
             ],
             system_prompt=ACK_GENERATOR_SYSTEM_PROMPT,
+            model_id=model_id,
         )
     
-    def _create_tag_agent(self):
+    def _create_tag_agent(self, model_id: str):
         """Create a fresh Tag Agent instance."""
         return create_enhanced_agent(
         tools=[
@@ -143,7 +148,8 @@ class ACKResourceWorkflow:
             compile_service_controller,
             build_controller_agent
         ],
-        system_prompt=ACK_TAG_AGENT_SYSTEM_PROMPT
+        system_prompt=ACK_TAG_AGENT_SYSTEM_PROMPT,
+        model_id=model_id,
     )
        
 
@@ -172,7 +178,7 @@ class ACKResourceWorkflow:
         
         return len(missing_files) < 5, missing_files
 
-    async def _run_model_agent(self, service: str, resource: str) -> tuple[bool, str]:
+    async def _run_model_agent(self, service: str, resource: str, model_id: str) -> tuple[bool, str]:
         """Run the Model Agent to analyze the resource."""
         print(f"\n\n\033[94m🔍 Step 1: Running Model Agent for {service} {resource}\033[0m\n")
         exist, _ = self._check_analysis_files_exist(service, resource)
@@ -181,7 +187,7 @@ class ACKResourceWorkflow:
             return True, f"Analysis files already exist"
         
         try:
-            model_agent = self._create_model_agent()
+            model_agent = self._create_model_agent(model_id)
             prompt = f"""Analyze the AWS {service} service {resource} resource following the complete workflow:
 
 1. Execute exactly 2 strategic knowledge base queries
@@ -211,13 +217,12 @@ Resource: {resource}"""
             print(f"\n\033[91m❌ Model Agent failed with error: {e}\033[0m\n")
             return False, str(e)
 
-    async def _run_generator_agent(self, service: str, resource: str, aws_sdk_version: str) -> tuple[bool, str]:
+    async def _run_generator_agent(self, service: str, resource: str, aws_sdk_version: str, model_id: str) -> tuple[bool, str]:
         """Run the Generator Agent to create configuration and build controller."""
         print(f"\n\033[93m⚙️  Step 2: Running Generator Agent for {service} {resource}\033[0m\n")
         
         try:
-            # Create fresh agent instance to avoid token overflow
-            generator_agent = self._create_generator_agent()
+            generator_agent = self._create_generator_agent(model_id)
             
             prompt = f"""Load analysis data for {service} {resource}, read current generator.yaml configuration, generate optimized generator.yaml configuration for the {resource} resource, update the generator.yaml file, and then build the controller using build_controller_agent with AWS SDK {aws_sdk_version}.
 
@@ -255,13 +260,12 @@ Handle any build errors by fixing the configuration and attempting to build agai
 
 
 
-    async def _save_results(self, service: str, resource: str, behavior_learned: str, final_message: str) -> bool:
+    async def _save_results(self, service: str, resource: str, behavior_learned: str, final_message: str, model_id: str) -> bool:
         """Save workflow results to memory."""
         print(f"\n\n\033[97m💾 Step 3: Saving results to memory\033[0m\n")
         
         try:
-            # Create fresh agent instance to avoid token overflow
-            generator_agent = self._create_generator_agent()
+            generator_agent = self._create_generator_agent(model_id)
             
             memory_prompt = f"""Save the following workflow results to memory:
 
@@ -280,12 +284,12 @@ Use add_memory to store this information for future reference."""
             print(f"\n\033[91m❌ Failed to save results: {e}\033[0m\n")
             return False
 
-    async def _run_tag_agent(self, service: str, resource: str) -> tuple[bool, str]:
+    async def _run_tag_agent(self, service: str, resource: str, model_id: str) -> tuple[bool, str]:
         """Run the Tag Agent to create custom hooks for resource Tag operations"""
         print(f"\n\033[93m⚙️  Step 4: Running Tag Agent for {service} {resource}\033[0m\n")
 
         try:
-            tag_agent = self._create_tag_agent()
+            tag_agent = self._create_tag_agent(model_id)
             prompt = f"Add tag support for the {resource} resource of the {service} service."
             response = tag_agent(prompt)
 
@@ -335,7 +339,7 @@ Use add_memory to store this information for future reference."""
                 print(f"\n\033[92m✅ {validation_message}\033[0m")
             
             # Step 1: Run Model Agent
-            model_success, model_response = await self._run_model_agent(input_data.service, input_data.resource)
+            model_success, model_response = await self._run_model_agent(input_data.service, input_data.resource, input_data.model_id)
             if not model_success:
                 return ResourceAdditionOutput(
                     success=False,
@@ -348,7 +352,8 @@ Use add_memory to store this information for future reference."""
             generator_success, generator_response = await self._run_generator_agent(
                 input_data.service, 
                 input_data.resource, 
-                input_data.aws_sdk_version
+                input_data.aws_sdk_version,
+                input_data.model_id,
             )
             
             if not generator_success:
@@ -357,7 +362,8 @@ Use add_memory to store this information for future reference."""
                     input_data.service, 
                     input_data.resource, 
                     f"Failed to generate configuration and build controller for {input_data.resource}. Error: {generator_response}",
-                    "Failed"
+                    "Failed",
+                    input_data.model_id,
                 )
                 return ResourceAdditionOutput(
                     success=False,
@@ -371,11 +377,12 @@ Use add_memory to store this information for future reference."""
                 input_data.service, 
                 input_data.resource, 
                 f"Successfully generated configuration and built controller for {input_data.resource}. Configuration optimized based on analysis data.",
-                "Success"
+                "Success",
+                input_data.model_id,
             )
 
             # Step 4: Run Tag Agent
-            tag_success, tag_response = await self._run_tag_agent(input_data.service, input_data.resource)
+            tag_success, tag_response = await self._run_tag_agent(input_data.service, input_data.resource, input_data.model_id)
 
             if not tag_success:
                 return ResourceAdditionOutput(

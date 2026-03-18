@@ -7,7 +7,7 @@ workflows:
         image: public.ecr.aws/m5q3e4b2/prow:add-resource-0.0.1
         command: ["./prow-job.sh"]
         required_args: ["service", "resource"]
-        optional_args: []
+        optional_args: ["model"]
         environment:
             GITHUB_ORG: aws-controllers-k8s
             GITHUB_EMAIL_PREFIX: "82905295"
