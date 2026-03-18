@@ -43,7 +43,6 @@ from ack_generator_agent.tools import (
     save_error_solution,
     search_codegen_knowledge,
     search_memories,
-    set_model_id,
     update_service_generator_config,
 )
 
@@ -322,6 +321,7 @@ Use add_memory to store this information for future reference."""
             print(f"   Service: {input_data.service}")
             print(f"   Resource: {input_data.resource}")
             print(f"   AWS SDK: {input_data.aws_sdk_version}")
+            print(f"   Model: {input_data.model_id}")
             
             # Step 0: Validate service is supported
             print(f"\n\033[96m🔍 Validating service '{input_data.service}' is supported...\033[0m")
