@@ -51,7 +51,7 @@ class ResourceAdditionInput:
     """Input for the ACK Resource Addition Workflow."""
     service: str
     resource: str
-    aws_sdk_version: str = "v1.32.6"
+    aws_sdk_version: Optional[str] = None
     timeout_minutes: int = 30
     model_id: str = DEFAULT_MODEL_ID
 
@@ -216,14 +216,19 @@ Resource: {resource}"""
             print(f"\n\033[91m❌ Model Agent failed with error: {e}\033[0m\n")
             return False, str(e)
 
-    async def _run_generator_agent(self, service: str, resource: str, aws_sdk_version: str, model_id: str) -> tuple[bool, str]:
+
+    async def _run_generator_agent(self, service: str, resource: str, model_id: str, aws_sdk_version: Optional[str] = None) -> tuple[bool, str]:
         """Run the Generator Agent to create configuration and build controller."""
         print(f"\n\033[93m⚙️  Step 2: Running Generator Agent for {service} {resource}\033[0m\n")
         
         try:
             generator_agent = self._create_generator_agent(model_id)
             
-            prompt = f"""Load analysis data for {service} {resource}, read current generator.yaml configuration, generate optimized generator.yaml configuration for the {resource} resource, update the generator.yaml file, and then build the controller using build_controller_agent with AWS SDK {aws_sdk_version}.
+            sdk_instruction = ""
+            if aws_sdk_version:
+                sdk_instruction = f' with aws_sdk_version="{aws_sdk_version}"'
+            
+            prompt = f"""Load analysis data for {service} {resource}, read current generator.yaml configuration, generate optimized generator.yaml configuration for the {resource} resource, update the generator.yaml file, and then build the controller using build_controller_agent{sdk_instruction}.
 
 Follow the complete process:
 1. Load analysis data
@@ -320,8 +325,9 @@ Use add_memory to store this information for future reference."""
             print(f"\n\033[95m🚀 Starting ACK Resource Addition Workflow\033[0m")
             print(f"   Service: {input_data.service}")
             print(f"   Resource: {input_data.resource}")
-            print(f"   AWS SDK: {input_data.aws_sdk_version}")
             print(f"   Model: {input_data.model_id}")
+            if input_data.aws_sdk_version:
+                print(f"   AWS SDK: {input_data.aws_sdk_version}")
             
             # Step 0: Validate service is supported
             print(f"\n\033[96m🔍 Validating service '{input_data.service}' is supported...\033[0m")
@@ -351,9 +357,9 @@ Use add_memory to store this information for future reference."""
             # Step 2: Run Generator Agent
             generator_success, generator_response = await self._run_generator_agent(
                 input_data.service, 
-                input_data.resource, 
-                input_data.aws_sdk_version,
+                input_data.resource,
                 input_data.model_id,
+                input_data.aws_sdk_version,
             )
             
             if not generator_success:

@@ -12,6 +12,7 @@
 
 import json
 import os
+from typing import Optional
 
 from rich.console import Console
 from strands import tool
@@ -244,7 +245,7 @@ def search_codegen_knowledge(query: str, numberOfResults: int = 5) -> str:
 
 
 @tool
-def build_controller_agent(service: str, aws_sdk_version: str = "v1.32.6") -> str:
+def build_controller_agent(service: str, aws_sdk_version: Optional[str] = None) -> str:
     """
     Build a controller for the specified AWS service and monitor the build process.
     
@@ -256,7 +257,7 @@ def build_controller_agent(service: str, aws_sdk_version: str = "v1.32.6") -> st
     
     Args:
         service: AWS service name (e.g., 's3', 'dynamodb')
-        aws_sdk_version: AWS SDK Go version (default: v1.32.6)
+        aws_sdk_version: AWS SDK Go version (optional, auto-detected if not set)
         
     Returns:
         str: Build status, logs, and any error information
@@ -272,7 +273,10 @@ def build_controller_agent(service: str, aws_sdk_version: str = "v1.32.6") -> st
     )
     
     # Use the builder agent to build the controller
-    prompt = f"Build the {service} controller using AWS SDK {aws_sdk_version}. Monitor the build process, check logs, and report build status with detailed information."
+    if aws_sdk_version:
+        prompt = f"Build the {service} controller using AWS SDK {aws_sdk_version}. Monitor the build process, check logs, and report build status with detailed information."
+    else:
+        prompt = f"Build the {service} controller. Monitor the build process, check logs, and report build status with detailed information."
     
     response = builder_agent(prompt)
     
