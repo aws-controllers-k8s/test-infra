@@ -21,17 +21,19 @@ from workflows.ack_resource_workflow import (
     ResourceAdditionInput,
     ResourceAdditionOutput,
 )
+from config.defaults import DEFAULT_MODEL_ID
 from utils.logging import configure_logging
 
 console = Console()
 
 
-async def run_resource_workflow(service: str, resource: str, aws_sdk_version: str = "v1.32.6") -> ResourceAdditionOutput:
+async def run_resource_workflow(service: str, resource: str, aws_sdk_version: str = "v1.32.6", model: str = DEFAULT_MODEL_ID) -> ResourceAdditionOutput:
     """Run the ACK resource addition workflow."""
     workflow_input = ResourceAdditionInput(
         service=service,
         resource=resource,
-        aws_sdk_version=aws_sdk_version
+        aws_sdk_version=aws_sdk_version,
+        model_id=model,
     )
     
     workflow = create_ack_resource_workflow()
@@ -40,6 +42,7 @@ async def run_resource_workflow(service: str, resource: str, aws_sdk_version: st
     console.print(f"Service: {service}")
     console.print(f"Resource: {resource}")
     console.print(f"AWS SDK Version: {aws_sdk_version}")
+    console.print(f"Model: {model}")
     
     result = await workflow.run(workflow_input)
     
@@ -116,6 +119,7 @@ def main():
     resource_parser.add_argument("--service", required=True, help="AWS service name (e.g. s3, ec2)")
     resource_parser.add_argument("--resource", required=True, help="Resource name (e.g. Bucket, Instance)")
     resource_parser.add_argument("--aws-sdk-version", default="v1.32.6", help="AWS SDK Go version")
+    resource_parser.add_argument("--model", default=DEFAULT_MODEL_ID, help="Bedrock model ID")
     resource_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()
@@ -133,7 +137,8 @@ def main():
         result = asyncio.run(run_resource_workflow(
             service=args.service,
             resource=args.resource,
-            aws_sdk_version=args.aws_sdk_version
+            aws_sdk_version=args.aws_sdk_version,
+            model=args.model,
         ))
         display_workflow_result(result)
     else:

@@ -18,7 +18,7 @@ MAX_LOG_LINES_TO_RETURN = 100
 
 # CLI defaults for the agent
 DEFAULT_REGION = "us-west-2"
-DEFAULT_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+DEFAULT_MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
 DEFAULT_TEMPERATURE = 0.2
 
 # Boto client configuration defaults for better reliability
