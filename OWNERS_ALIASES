@@ -6,6 +6,8 @@ aliases:
     - jlbutler
     - michaelhtm
     - knottnt
+  core-ack-reviewers:
+    - gustavodiaz7722
   # emeritus-core-ack-team:
   #   - rushmash91
   #   - TiberiuGC
