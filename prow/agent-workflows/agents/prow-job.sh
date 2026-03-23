@@ -80,7 +80,7 @@ mkdir -p $REPO_ROOT && cd $REPO_ROOT
 
 # Create a fork of the repository
 echo "$SCRIPT_NAME][INFO] forking and cloning $GITHUB_ORG/$SERVICE_REPO... "
-if ! gh repo fork "$GITHUB_ORG/$SERVICE_REPO" --clone=true --remote=true >/dev/null; then
+if ! gh repo fork "$GITHUB_ORG/$SERVICE_REPO" --clone=true >/dev/null; then
 echo ""
 echo "$SCRIPT_NAME][ERROR] failed to fork and clone $GITHUB_ORG/$SERVICE_REPO. Exiting "
 exit 1
