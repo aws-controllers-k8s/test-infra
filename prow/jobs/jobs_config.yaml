@@ -51,6 +51,7 @@ aws_services:
 - mq
 - mwaa
 - networkfirewall
+- networkmanager
 - opensearchservice
 - opensearchserverless
 - organizations
