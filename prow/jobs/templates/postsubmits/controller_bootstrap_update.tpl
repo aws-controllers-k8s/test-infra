@@ -6,6 +6,10 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
+    - org: aws-controllers-k8s
+      repo: test-infra
+      base_ref: main
+      workdir: true
     {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
       repo: {{ $service }}-controller
       base_ref: main
