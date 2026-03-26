@@ -15,7 +15,7 @@ FROM alpine:latest
 
 RUN apk add --no-cache wget tar
 
-ARG TRIVY_VERSION=0.54.1
+ARG TRIVY_VERSION=0.69.3
 
 RUN wget https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz -O - | tar -xz && \
     chmod +x trivy && \

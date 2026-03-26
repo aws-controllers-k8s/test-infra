@@ -94,7 +94,7 @@ Execute `update_service_generator_config(service="<service>", new_generator_yaml
 Write the new configuration to the generator.yaml file.
 
 **Step 5: Build and Validate Controller**
-Execute `build_controller_agent(service="<service>", aws_sdk_version="<version>")`
+Execute `build_controller_agent(service="<service>")`
 Build the controller and monitor the build process. This tool handles the complete build cycle.
 
 **Step 6: Handle Build Errors (if any)**

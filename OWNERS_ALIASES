@@ -5,7 +5,9 @@ aliases:
     - a-hilaly
     - jlbutler
     - michaelhtm
-    - knottnt
+    - knottnt    
+  core-ack-reviewers:
+    - gustavodiaz7722
     - sapphirew
   # emeritus-core-ack-team:
   #   - rushmash91

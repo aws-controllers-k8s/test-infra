@@ -18,7 +18,7 @@ import psutil
 from rich.console import Console
 from strands import tool
 
-from config.defaults import DEFAULT_AWS_SDK_GO_VERSION, MAX_LOG_LINES_TO_RETURN
+from config.defaults import MAX_LOG_LINES_TO_RETURN
 from utils.repo import (
     check_service_controller_exists,
     ensure_ack_directories,
@@ -38,12 +38,12 @@ def clean_tool_output(s: str) -> str:
 
 
 @tool
-def build_controller(service: str, aws_sdk_version: str = DEFAULT_AWS_SDK_GO_VERSION) -> str:
+def build_controller(service: str, aws_sdk_version: str = None) -> str:
     """Build a controller for a specific AWS service. This starts the build in the background.
 
     Args:
         service: AWS service name (e.g., 's3', 'dynamodb')
-        aws_sdk_version: AWS SDK Go version
+        aws_sdk_version: AWS SDK Go version (optional, auto-detected if not set)
 
     Returns:
         str: Status message with log file information
@@ -68,11 +68,15 @@ def build_controller(service: str, aws_sdk_version: str = DEFAULT_AWS_SDK_GO_VER
         env = os.environ.copy()
         env.update(
             {
-                "AWS_SDK_GO_VERSION": DEFAULT_AWS_SDK_GO_VERSION,
                 "SERVICE": service,
                 "RELEASE_VERSION": "v0.0.0-non-release-version",
             }
         )
+
+        if aws_sdk_version:
+            env["AWS_SDK_GO_VERSION"] = aws_sdk_version
+
+        console.log(f"Buidling with AWS SDK GO {aws_sdk_version}")
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         build_logs_dir = settings.build_logs_dir

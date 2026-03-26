@@ -1,5 +1,7 @@
 cluster:
   create: true
+  # TODO(michaelhtm): Update k8s_version to 1.34.3 once the underlying
+  # infra issues are resolved
   k8s_version: 1.28.0
 
 aws:

@@ -82,11 +82,11 @@
       - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "olm-test") }}
         resources:
           limits:
-            cpu: 2
-            memory: "1024Mi"
+            cpu: 8
+            memory: "8192Mi"
           requests:
-            cpu: 2
-            memory: "1024Mi"
+            cpu: 8
+            memory: "8192Mi"
         env:
         - name: SERVICE
           value: "s3"
@@ -124,10 +124,10 @@
         resources:
           limits:
             cpu: 8
-            memory: "4096Mi"
+            memory: "8192Mi"
           requests:
             cpu: 8
-            memory: "4096Mi"
+            memory: "8192Mi"
         securityContext:
           privileged: true
         env:

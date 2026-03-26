@@ -12,6 +12,7 @@ aws_services:
 - applicationautoscaling
 - athena
 - autoscaling
+- backup
 - batch
 - bedrock
 - bedrockagent
@@ -24,6 +25,7 @@ aws_services:
 - codeartifact
 - cognitoidentityprovider
 - documentdb
+- dsql
 - dynamodb
 - ec2
 - ecr
@@ -34,6 +36,7 @@ aws_services:
 - elasticache
 - elbv2
 - emrcontainers
+- emrserverless
 - eventbridge
 - firehose
 - globalaccelerator
@@ -46,7 +49,9 @@ aws_services:
 - lambda
 - memorydb
 - mq
+- mwaa
 - networkfirewall
+- networkmanager
 - opensearchservice
 - opensearchserverless
 - organizations

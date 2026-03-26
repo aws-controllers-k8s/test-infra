@@ -124,7 +124,7 @@ setup now.
 
 ## 4. Setup Soak Test Infrastructure
 
-Follow the guide [here](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/prow/README.md) to setup soak
+Follow the guide [here](https://github.com/aws-controllers-k8s/test-infra/blob/main/soak/README.md) to setup soak
 test infrastructure
 
 ## Done!

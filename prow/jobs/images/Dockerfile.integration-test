@@ -25,6 +25,7 @@ RUN echo "Installing packages ..." \
         wget \
         jq \
         kmod \
+        procps \
         uuid-runtime \
         apt-transport-https \
         unzip
