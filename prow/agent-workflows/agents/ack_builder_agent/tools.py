@@ -69,7 +69,6 @@ def build_controller(service: str, aws_sdk_version: str = None) -> str:
         env.update(
             {
                 "SERVICE": service,
-                "RELEASE_VERSION": "v0.0.0-non-release-version",
             }
         )
 
