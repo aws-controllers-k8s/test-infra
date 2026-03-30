@@ -314,6 +314,12 @@ default:
       previously:
         - name: enhancement
       addedBy: anyone
+    - color: ff9900
+      description: Categorizes issue or PR as related to EKS Capability for ACK.
+      name: kind/eks-capabilities
+      target: both
+      prowPlugin: label
+      addedBy: anyone
     - color: c7def8
       description: Categorizes issue or PR as related to a new feature.
       name: kind/feature
