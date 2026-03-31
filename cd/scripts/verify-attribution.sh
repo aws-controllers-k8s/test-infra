@@ -76,5 +76,10 @@ if cmp -s "$GOMOD_DIR/ATTRIBUTION.md" "$OUTPUT_PATH"; then
     rm "$OUTPUT_PATH"
     exit 0
 else
-    error "Generated ATTRIBUTION.md differs from the existing file for ${SERVICE:-$REPOSITORY_NAME}."
+    echo "Generated ATTRIBUTION.md differs from the existing file for ${SERVICE:-$REPOSITORY_NAME}."
+    echo ""
+    echo "Diff (existing vs generated):"
+    diff -u "$GOMOD_DIR/ATTRIBUTION.md" "$OUTPUT_PATH" || true
+    echo ""
+    error "Please regenerate ATTRIBUTION.md using: attribution-gen --modfile $GOMOD_PATH --output $GOMOD_DIR/ATTRIBUTION.md"
 fi
