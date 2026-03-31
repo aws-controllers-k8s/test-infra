@@ -18,8 +18,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/generator"
 )
 
 var (

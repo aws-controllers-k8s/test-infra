@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package ghutil
 
 import (
 	"context"
@@ -25,14 +25,55 @@ import (
 )
 
 const (
-	baseBranch = "main"
+	BaseBranch = "main"
 )
 
 var (
-	defaultProwAutoGenLabel = "prow/auto-gen"
+	DefaultProwAutoGenLabel = "prow/auto-gen"
 )
 
-// getRef returns the commit branch reference object if it exists or creates it
+func CommitAndPushPR(sourceOwner, sourceRepo, commitBranch, sourceFiles, baseBranch, prSubject, prDescription string) error {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return fmt.Errorf("enviroment variable GITHUB_TOKEN is not provided")
+	}
+
+	if sourceOwner == "" || sourceRepo == "" || commitBranch == "" || sourceFiles == "" {
+		return fmt.Errorf("you need to specify a non-empty value for the flags `-source-owner`, and `-source-repo`")
+	}
+
+	// Cleanup any trailing comma in source files
+	sourceFiles = strings.TrimSuffix(sourceFiles, ",")
+
+	client := github.NewClient(nil).WithAuthToken(token)
+	ctx := context.Background()
+
+	ref, err := getGitRef(ctx, client, sourceOwner, sourceRepo, commitBranch, baseBranch)
+
+	if err != nil {
+		return fmt.Errorf("unable to get/create the commit reference: %v", err)
+	}
+	if ref == nil {
+		return fmt.Errorf("no error when returned but the reference is nil when getting/creating commit reference")
+	}
+
+	tree, err := getGitTree(ctx, client, ref, sourceFiles, sourceOwner, sourceRepo)
+	if err != nil {
+		return fmt.Errorf("unable to create the tree based on provided files: %v", err)
+	}
+
+	if err = pushCommit(ctx, client, ref, tree, sourceOwner, sourceRepo, prSubject); err != nil {
+		return fmt.Errorf("unable to crate the commit: %v", err)
+	}
+
+	if err := createPR(ctx, client, prSubject, commitBranch, prDescription, sourceOwner, sourceRepo, baseBranch); err != nil {
+		return fmt.Errorf("error while creating the pull request: %v", err)
+	}
+
+	return nil
+}
+
+// getGitRef returns the commit branch reference object if it exists or creates it
 // from the base branch before returning it.
 func getGitRef(ctx context.Context, client *github.Client, sourceOwner, sourceRepo, commitBranch, baseBranch string) (ref *github.Reference, err error) {
 	if ref, _, err = client.Git.GetRef(ctx, sourceOwner, sourceRepo, "refs/heads/"+commitBranch); err == nil {
@@ -54,8 +95,8 @@ func getGitRef(ctx context.Context, client *github.Client, sourceOwner, sourceRe
 	return ref, err
 }
 
-// getTree generates the tree to commit based on the given files and the commit
-// of the ref you got in getRef.
+// getGitTree generates the tree to commit based on the given files and the commit
+// of the ref you got in getGitRef.
 // sourceFiles format: "file1:PATH_TO_FILE1,file2:PATH_TO_FILE2..."
 func getGitTree(ctx context.Context, client *github.Client, ref *github.Reference, sourceFiles, sourceOwner, sourceRepo string) (tree *github.Tree, err error) {
 	// Create a tree with what to commit.
@@ -180,7 +221,7 @@ func createPR(ctx context.Context, client *github.Client, prSubject, commitBranc
 	prWithLabels := &github.PullRequest{
 		Labels: []*github.Label{
 			&github.Label{
-				Name: &defaultProwAutoGenLabel,
+				Name: &DefaultProwAutoGenLabel,
 			},
 		},
 	}
@@ -198,7 +239,7 @@ func createPR(ctx context.Context, client *github.Client, prSubject, commitBranc
 	return nil
 }
 
-func createGithubIssue(owner, repo, title, body string, labels []string) error {
+func CreateGithubIssue(owner, repo, title, body string, labels []string) error {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		return fmt.Errorf("enviroment variable GITHUB_TOKEN is not provided")

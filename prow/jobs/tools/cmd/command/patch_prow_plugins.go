@@ -17,6 +17,8 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/prowimages"
 )
 
 var (
@@ -41,12 +43,12 @@ func init() {
 
 func buildProwPluginImages(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("build-prow-plugin-images")
-	shouldPushImages, err := validateBooleanFlag(OptPushImages, "--push-images")
+	shouldPushImages, err := prowimages.ValidateBooleanFlag(OptPushImages, "--push-images")
 	if err != nil {
 		return err
 	}
 
-	builtTags, err := buildAndPushImages(
+	builtTags, err := prowimages.BuildAndPushImages(
 		OptImagesConfigPath,
 		OptPluginImagesDir,
 		OptProwEcrRepository,
@@ -57,7 +59,7 @@ func buildProwPluginImages(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	writeBuiltTags(builtTags)
+	prowimages.WriteBuiltTags(builtTags)
 
 	return err
 }

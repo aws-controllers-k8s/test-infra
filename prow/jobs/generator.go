@@ -13,7 +13,7 @@
 
 package main
 
-import "github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
+import "github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/generator"
 
 const jobsDir = "./prow/jobs"
 const imagesConfigPath = "/images_config.yaml"

@@ -17,6 +17,8 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ghutil"
 )
 
 var (
@@ -52,12 +54,12 @@ func init() {
 func publishPr(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("publish-pr")
 	log.Printf("Attempting to publish PR for branch %s to %s/%s", OptCommitBranch, OptSourceOwner, OptSourceRepo)
-	err := commitAndSendPR(
+	err := ghutil.CommitAndPushPR(
 		OptSourceOwner,
 		OptSourceRepo,
 		OptCommitBranch,
 		OptSourceFiles,
-		baseBranch,
+		ghutil.BaseBranch,
 		OptPrSubject,
 		OptPrDescription,
 	)

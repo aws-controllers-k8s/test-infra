@@ -276,52 +276,13 @@ func (c *Client) DownloadRepositoryBlob(service string, digest string) ([]byte, 
 	return body, nil
 }
 
-/*
-	// Extract the tarball
-	content, err := gzip.NewReader(resp.Body)
+// ListTags is a convenience function that creates a new client
+// and lists repository tags.
+func ListTags(repository string) ([]string, error) {
+	client := New()
+	tags, err := client.ListRepositoryTags(repository)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot list repositories in %s. %s", repository, err)
 	}
-	defer content.Close()
-
-	// Create a new tar reader
-	tarReader := tar.NewReader(content)
-
-	crds := map[string]*extv1.CustomResourceDefinition{}
-
-	// Iterate through the files in the tarball
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break // End of archive
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if the file is in the ./crd/ directory
-		if strings.HasPrefix(header.Name, service+"-chart/crds/") {
-			if strings.Contains(header.Name, "adopted") || strings.Contains(header.Name, "export") {
-				continue
-			}
-			var buffer bytes.Buffer
-			// Copy the file content to the buffer
-			if _, err := io.Copy(&buffer, tarReader); err != nil {
-				return nil, err
-			}
-
-			// unmarshal the CRD
-			var crd extv1.CustomResourceDefinition
-			if err := yaml.Unmarshal(buffer.Bytes(), &crd); err != nil {
-				return nil, err
-			}
-
-			fileNameTrimmed := strings.TrimPrefix(header.Name, service+"-chart/crds/")
-			crds[fileNameTrimmed] = &crd
-		}
-	}
-
-	// Return the buffer containing the extracted files
-	return crds, nil
+	return tags, nil
 }
-*/
