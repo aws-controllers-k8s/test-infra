@@ -128,7 +128,7 @@ do
   OH_ORG=$(echo "$OH_ORG_REPO" | cut -d"/" -f1)
   OH_REPO=$(echo "$OH_ORG_REPO" | cut -d"/" -f2)
   echo -n "olm-bundle-pr.sh][INFO] forking and cloning $OH_ORG_REPO... "
-  if ! gh repo fork "$OH_ORG_REPO" --clone=true --remote=true >/dev/null; then
+  if ! gh repo fork "$OH_ORG_REPO" --clone=true >/dev/null; then
     echo ""
     echo "olm-bundle-pr.sh][ERROR] failed to fork and clone $OH_ORG_REPO. Exiting "
     exit 1
