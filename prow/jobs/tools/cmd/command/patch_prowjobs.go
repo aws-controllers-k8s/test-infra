@@ -18,7 +18,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/generator"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/prowimages"
 )
 
 var (
@@ -53,12 +54,12 @@ func init() {
 func buildProwImages(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("build-prow-images")
 
-	shouldPushImages, err := validateBooleanFlag(OptPushImages, "--push-images")
+	shouldPushImages, err := prowimages.ValidateBooleanFlag(OptPushImages, "--push-images")
 	if err != nil {
 		return err
 	}
 
-	builtTags, err := buildAndPushImages(
+	builtTags, err := prowimages.BuildAndPushImages(
 		OptImagesConfigPath,
 		OptJobsImagesDir,
 		OptProwEcrRepository,
@@ -80,6 +81,6 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
-	writeBuiltTags(builtTags)
+	prowimages.WriteBuiltTags(builtTags)
 	return err
 }

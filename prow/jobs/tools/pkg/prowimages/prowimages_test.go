@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package prowimages
 
 import (
 	"fmt"
@@ -52,7 +52,7 @@ func TestCleanECRConfigVersionList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			imageTags := getHighestEcrImageVersionMap(tt.args.versions)
+			imageTags := GetHighestEcrImageVersionMap(tt.args.versions)
 			assert.Len(imageTags, tt.wantLenImageTags)
 		})
 	}
@@ -95,7 +95,7 @@ func TestGetECRConfigVersionList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			versions := getEcrImageVersionList(tt.args.imageDetails)
+			versions := GetEcrImageVersionList(tt.args.imageDetails)
 			assert.Len(versions, tt.wantLenVersions)
 		})
 	}
@@ -158,9 +158,9 @@ func TestCompareImageVersions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tagsToBuild, err := compareImageVersions(tt.args.configTagsMap, tt.args.ecrTagsMap)
+			tagsToBuild, err := CompareImageVersions(tt.args.configTagsMap, tt.args.ecrTagsMap)
 			if (err != nil) != tt.wantErr {
-				assert.Fail(fmt.Sprintf("compareImageVersions() error = %v, wantErr %v", err, tt.wantErr))
+				assert.Fail(fmt.Sprintf("CompareImageVersions() error = %v, wantErr %v", err, tt.wantErr))
 			}
 			assert.Len(tagsToBuild, tt.wantLenTagsToBuild)
 		})

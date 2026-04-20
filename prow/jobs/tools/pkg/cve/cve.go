@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package cve
 
 import (
 	"encoding/json"
@@ -23,7 +23,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/config"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ecrpublic"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/generator"
 )
 
 // CHANGE when there's a new service controller
@@ -71,27 +73,27 @@ const (
 	ecrPublicControllerImageFormat = "v2/aws-controllers-k8s/%s-controller"
 )
 
-func getACKServices(configPath string) ([]string, error) {
+func GetACKServices(configPath string) ([]string, error) {
 	fileData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var config *generator.JobsConfig
-	if err = yaml.Unmarshal(fileData, &config); err != nil {
+	var cfg *generator.JobsConfig
+	if err = yaml.Unmarshal(fileData, &cfg); err != nil {
 		return nil, err
 	}
 
-	return config.AWSServices, nil
+	return cfg.AWSServices, nil
 }
 
-// listRepositoryTagsWithRetries calls listRepositoryTags, which in turn queries ecrpublic for the list
+// ListRepositoryTagsWithRetries calls ecrpublic.ListTags, which in turn queries ecrpublic for the list
 // of tags from given repository
 // If ecrpublic denies the request with HTTP status 429: Too Many Requests, it retries for maxRetries
 // or until timeout duration expires
 // For any other errors it returns a nil and an error
-// A successful listRepositoryTagsWithRetries will return the list of tags per repository and err == nil
-func listRepositoryTagsWithRetries(repository string, maxRetries int, timeout time.Duration) ([]string, error) {
+// A successful ListRepositoryTagsWithRetries will return the list of tags per repository and err == nil
+func ListRepositoryTagsWithRetries(repository string, maxRetries int, timeout time.Duration) ([]string, error) {
 	retries := 0
 	start := time.Now()
 
@@ -102,7 +104,7 @@ func listRepositoryTagsWithRetries(repository string, maxRetries int, timeout ti
 		if retries > maxRetries {
 			return nil, fmt.Errorf("timeout to get repository tags after %d retries", retries)
 		}
-		tags, err := listRepositoryTags(repository)
+		tags, err := ecrpublic.ListTags(repository)
 		if err != nil {
 			if strings.Contains(err.Error(), "429") {
 				time.Sleep(1 * time.Second)
@@ -117,18 +119,18 @@ func listRepositoryTagsWithRetries(repository string, maxRetries int, timeout ti
 
 }
 
-func getControllersLatestTags(services []string) (map[string]string, error) {
+func GetControllersLatestTags(services []string) (map[string]string, error) {
 	controllerTagsMap := make(map[string]string)
 
 	for _, service := range services {
-		controllerRepoTags, err := listRepositoryTagsWithRetries(fmt.Sprintf(ecrPublicControllerImageFormat, service), 10, 1*time.Minute)
+		controllerRepoTags, err := ListRepositoryTagsWithRetries(fmt.Sprintf(ecrPublicControllerImageFormat, service), 10, 1*time.Minute)
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
 				continue
 			}
 			return nil, err
 		}
-		latestControllerTag, err := findHighestTagVersion(controllerRepoTags)
+		latestControllerTag, err := config.FindHighestTagVersion(controllerRepoTags)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +141,7 @@ func getControllersLatestTags(services []string) (map[string]string, error) {
 	return controllerTagsMap, nil
 }
 
-func getCveSummaries(controller string, results []Result, cveSummaries map[string]CVESummary, detectedVulnerabilities map[string][]string) {
+func GetCveSummaries(controller string, results []Result, cveSummaries map[string]CVESummary, detectedVulnerabilities map[string][]string) {
 	for _, result := range results {
 		for _, vulnerability := range result.Vulnerabilities {
 
@@ -160,7 +162,7 @@ func getCveSummaries(controller string, results []Result, cveSummaries map[strin
 	}
 }
 
-func scanControllersForCves(controllerTagsMap map[string]string) (map[string][]string, map[string]CVESummary, error) {
+func ScanControllersForCves(controllerTagsMap map[string]string) (map[string][]string, map[string]CVESummary, error) {
 
 	app := "trivy"
 
@@ -187,12 +189,12 @@ func scanControllersForCves(controllerTagsMap map[string]string) (map[string][]s
 		if err = json.Unmarshal(stdout, &trivyOutput); err != nil {
 			return nil, nil, err
 		}
-		getCveSummaries(controller, trivyOutput.Results, cveSummaries, detectedVulnerabilities)
+		GetCveSummaries(controller, trivyOutput.Results, cveSummaries, detectedVulnerabilities)
 	}
 	return detectedVulnerabilities, cveSummaries, nil
 }
 
-func prepareGithubIssueBody(controllersByVulnerabilities map[string][]string, cveSummaries map[string]CVESummary) (string, error) {
+func PrepareGithubIssueBody(controllersByVulnerabilities map[string][]string, cveSummaries map[string]CVESummary) (string, error) {
 
 	title := "| CVE ID | Type | Severity | Installed Version | Fixed Version | Affected Controllers | Title |"
 	tableFormat := "|---|---|---|---|---|---|---|"

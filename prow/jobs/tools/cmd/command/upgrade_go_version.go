@@ -18,6 +18,11 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/config"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ecrpublic"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ghutil"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/goversion"
 )
 
 // TODO: need to add more flags to handle making a pull request
@@ -50,27 +55,27 @@ func init() {
 func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("upgrade-go-version: ")
 
-	ecrGoVersions, err := listRepositoryTags(OptGoEcrRepository)
+	ecrGoVersions, err := ecrpublic.ListTags(OptGoEcrRepository)
 	if err != nil {
 		return fmt.Errorf("unable to get go versions from ecr public: %v", err)
 	}
 
 	log.Printf("Successfully listed go versions from %s\n", OptGoEcrRepository)
 
-	highestEcrGoVersion, err := findHighestTagVersion(ecrGoVersions)
+	highestEcrGoVersion, err := config.FindHighestTagVersion(ecrGoVersions)
 	if err != nil {
 		return fmt.Errorf("%v", err)
 	}
 	log.Printf("Current highest Go version in %s is %s\n", OptGoEcrRepository, highestEcrGoVersion)
 
-	goBuildVersion, err := readBuildConfigFile(OptBuildConfigPath)
+	goBuildVersion, err := config.ReadBuildConfigFile(OptBuildConfigPath)
 	if err != nil {
 		return err
 	}
 	log.Printf("Successfully extracted build versions from %s\n", OptBuildConfigPath)
 	log.Printf("Current version in build config is %s\n", goBuildVersion.GoVersion)
 
-	needUpgrade, err := isGreaterVersion(highestEcrGoVersion, goBuildVersion.GoVersion)
+	needUpgrade, err := config.IsGreaterVersion(highestEcrGoVersion, goBuildVersion.GoVersion)
 	if err != nil {
 		return err
 	}
@@ -82,30 +87,30 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Changing Go build version to %s in %s\n", highestEcrGoVersion, OptBuildConfigPath)
 	goBuildVersion.GoVersion = highestEcrGoVersion
-	if err = patchBuildVersionFile(goBuildVersion, OptBuildConfigPath); err != nil {
+	if err = config.PatchBuildVersionFile(goBuildVersion, OptBuildConfigPath); err != nil {
 		return err
 	}
 	log.Println("Successfully updated Go version!")
 
 	log.Printf("Patching prow image versions in %s\n", OptImagesConfigPath)
-	imagesConfig, err := readCurrentImagesConfig(OptImagesConfigPath)
+	imagesConfig, err := config.ReadCurrentImagesConfig(OptImagesConfigPath)
 	if err != nil {
 		return err
 	}
-	if err = increasePatchImageConfig(imagesConfig); err != nil {
+	if err = goversion.IncreasePatchImageConfig(imagesConfig); err != nil {
 		return err
 	}
-	if err = patchImageConfigVersionFile(imagesConfig, OptImagesConfigPath); err != nil {
+	if err = config.PatchImageConfigVersionFile(imagesConfig, OptImagesConfigPath); err != nil {
 		return err
 	}
 	log.Println("Successfully patched prow image versions!")
 
-	commitBranch := fmt.Sprintf(updateGoPRCommitBranch, highestEcrGoVersion)
-	prSubject := fmt.Sprintf(updateGoPRSubject, highestEcrGoVersion)
-	prDescription := fmt.Sprintf(updateGoPRDescription, goBuildVersion.GoVersion, highestEcrGoVersion)
+	commitBranch := fmt.Sprintf(goversion.UpdatePRCommitBranch, highestEcrGoVersion)
+	prSubject := fmt.Sprintf(goversion.UpdatePRSubject, highestEcrGoVersion)
+	prDescription := fmt.Sprintf(goversion.UpdatePRDescription, goBuildVersion.GoVersion, highestEcrGoVersion)
 
 	log.Println("Committing and creating PR with changes")
-	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateGoSourceFiles, baseBranch, prSubject, prDescription); err != nil {
+	if err = ghutil.CommitAndPushPR(OptSourceOwner, OptSourceRepo, commitBranch, goversion.UpdateSourceFiles, ghutil.BaseBranch, prSubject, prDescription); err != nil {
 		return err
 	}
 	log.Println("Successfully created PR")

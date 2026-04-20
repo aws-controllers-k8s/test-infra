@@ -6,6 +6,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/config"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ecrpublic"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/eksdistro"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ghutil"
 )
 
 var (
@@ -35,25 +40,25 @@ func runUpgradeEksDistro(cmd *cobra.Command, args []string) error {
 
 	log.SetPrefix("upgrade-eks-distro-version: ")
 
-	ecrEksDistroVersion, err := listRepositoryTags(OptEksDistroEcrRepository)
+	ecrEksDistroVersion, err := ecrpublic.ListTags(OptEksDistroEcrRepository)
 	if err != nil {
 		return fmt.Errorf("unable to get eks-distro versions from %s: %v", OptEksDistroEcrRepository, err)
 	}
 	log.Printf("Successfully listed eks-distro versions from %s", OptEksDistroEcrRepository)
 
-	highestEcrEksDistroVersion, err := findHighestEcrEksDistroVersion(ecrEksDistroVersion)
+	highestEcrEksDistroVersion, err := eksdistro.FindHighestEcrVersion(ecrEksDistroVersion)
 	if err != nil {
 		return err
 	}
 	log.Printf("Highest EKS Distro version: %s\n", highestEcrEksDistroVersion)
 
-	buildConfigData, err := readBuildConfigFile(OptBuildConfigPath)
+	buildConfigData, err := config.ReadBuildConfigFile(OptBuildConfigPath)
 	if err != nil {
 		return err
 	}
 	log.Printf("Build Config EKS Distro version: %s\n", buildConfigData.EksDistroVersion)
 
-	needUpgrade := eksDistroVersionIsGreaterThan(highestEcrEksDistroVersion, buildConfigData.EksDistroVersion)
+	needUpgrade := eksdistro.VersionIsGreaterThan(highestEcrEksDistroVersion, buildConfigData.EksDistroVersion)
 	if !needUpgrade {
 		log.Println("eks-distro version is up-to-date")
 		return nil
@@ -62,17 +67,17 @@ func runUpgradeEksDistro(cmd *cobra.Command, args []string) error {
 	log.Printf("Updating eks-distro version to %s\n", highestEcrEksDistroVersion)
 	olderVersion := buildConfigData.EksDistroVersion
 	buildConfigData.EksDistroVersion = highestEcrEksDistroVersion
-	if err = patchBuildVersionFile(buildConfigData, OptBuildConfigPath); err != nil {
+	if err = config.PatchBuildVersionFile(buildConfigData, OptBuildConfigPath); err != nil {
 		return err
 	}
 	log.Printf("Successfully updated eks-distro version in build_config")
 
-	commitBranch := fmt.Sprintf(updateEksDistroPRCommitBranch, highestEcrEksDistroVersion)
-	prSubject := fmt.Sprintf(updateEksDistroPRSubject, highestEcrEksDistroVersion)
-	prDescription := fmt.Sprintf(updateEksDistroPRDescription, olderVersion, highestEcrEksDistroVersion)
+	commitBranch := fmt.Sprintf(eksdistro.UpdatePRCommitBranch, highestEcrEksDistroVersion)
+	prSubject := fmt.Sprintf(eksdistro.UpdatePRSubject, highestEcrEksDistroVersion)
+	prDescription := fmt.Sprintf(eksdistro.UpdatePRDescription, olderVersion, highestEcrEksDistroVersion)
 
 	log.Println("Commiting changes and creating PR")
-	err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateEksDistroSourceFiles, baseBranch, prSubject, prDescription)
+	err = ghutil.CommitAndPushPR(OptSourceOwner, OptSourceRepo, commitBranch, eksdistro.UpdateSourceFiles, ghutil.BaseBranch, prSubject, prDescription)
 	if err != nil && !strings.Contains(err.Error(), "pull request already exists") {
 		return err
 	}

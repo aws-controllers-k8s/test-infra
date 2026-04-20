@@ -11,17 +11,16 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package config
 
 import (
-	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aquasecurity/go-version/pkg/semver"
-	"github.com/google/go-github/v63/github"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,10 +39,10 @@ type BuildConfig struct {
 	EksDistroVersion string `yaml:"eks_distro_version"`
 }
 
-func readBuildConfigFile(filepath string) (*BuildConfig, error) {
+func ReadBuildConfigFile(filepath string) (*BuildConfig, error) {
 	fileData, err := os.ReadFile(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read file %s: %s", OptBuildConfigPath, err)
+		return nil, fmt.Errorf("unable to read file %s: %s", filepath, err)
 	}
 
 	var configGoVersion *BuildConfig
@@ -54,7 +53,7 @@ func readBuildConfigFile(filepath string) (*BuildConfig, error) {
 	return configGoVersion, nil
 }
 
-func readCurrentImagesConfig(filepath string) (*ImagesConfig, error) {
+func ReadCurrentImagesConfig(filepath string) (*ImagesConfig, error) {
 	imagesConfigData, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s: %s", filepath, err)
@@ -68,7 +67,7 @@ func readCurrentImagesConfig(filepath string) (*ImagesConfig, error) {
 	return imagesConfig, nil
 }
 
-func patchImageConfigVersionFile(imagesConfig *ImagesConfig, filepath string) error {
+func PatchImageConfigVersionFile(imagesConfig *ImagesConfig, filepath string) error {
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("unable to create file %s: %s", filepath, err)
@@ -81,8 +80,21 @@ func patchImageConfigVersionFile(imagesConfig *ImagesConfig, filepath string) er
 	return nil
 }
 
-// isGreaterVersion returns true if v1 is greater than v2, else returns false
-func isGreaterVersion(v1, v2 string) (bool, error) {
+func PatchBuildVersionFile(versionConfig *BuildConfig, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("unable to create file %s: %s", filepath, err)
+	}
+	defer file.Close()
+
+	if err = yaml.NewEncoder(file).Encode(&versionConfig); err != nil {
+		return fmt.Errorf("unable to encode %v to %s: %v", versionConfig, filepath, err)
+	}
+	return nil
+}
+
+// IsGreaterVersion returns true if v1 is greater than v2, else returns false
+func IsGreaterVersion(v1, v2 string) (bool, error) {
 
 	semver1, err := semver.Parse(v1)
 	if err != nil {
@@ -95,43 +107,27 @@ func isGreaterVersion(v1, v2 string) (bool, error) {
 	return semver1.GreaterThan(semver2), nil
 }
 
-func commitAndSendPR(sourceOwner, sourceRepo, commitBranch, sourceFiles, baseBranch, prSubject, prDescription string) error {
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		return fmt.Errorf("enviroment variable GITHUB_TOKEN is not provided")
+func FindHighestTagVersion(tags []string) (string, error) {
+	versions := make([]semver.Version, 0, len(tags))
+	regex := regexp.MustCompile(`[a-z]`)
+
+	for _, tag := range tags {
+		temp := strings.Split(tag, ".")
+		if regex.MatchString(tag) || len(temp) != 3 {
+			continue
+		}
+		v, err := semver.Parse(tag)
+		if err != nil {
+			return "", fmt.Errorf("error while parsing version %s: %s", tag, err)
+		}
+		versions = append(versions, v)
 	}
 
-	if sourceOwner == "" || sourceRepo == "" || commitBranch == "" || sourceFiles == "" {
-		return fmt.Errorf("you need to specify a non-empty value for the flags `-source-owner`, and `-source-repo`")
+	sort.Sort(semver.Collection(versions))
+
+	if len(versions) < 1 {
+		return "", fmt.Errorf("unable to retrieve highest GO version from tags %s", tags)
 	}
 
-	// Cleanup any trailing comma in source files
-	sourceFiles = strings.TrimSuffix(sourceFiles, ",")
-
-	client := github.NewClient(nil).WithAuthToken(token)
-	ctx := context.Background()
-
-	ref, err := getGitRef(ctx, client, sourceOwner, sourceRepo, commitBranch, baseBranch)
-
-	if err != nil {
-		return fmt.Errorf("unable to get/create the commit reference: %v", err)
-	}
-	if ref == nil {
-		return fmt.Errorf("no error when returned but the reference is nil when getting/creating commit reference")
-	}
-
-	tree, err := getGitTree(ctx, client, ref, sourceFiles, sourceOwner, sourceRepo)
-	if err != nil {
-		return fmt.Errorf("unable to create the tree based on provided files: %v", err)
-	}
-
-	if err = pushCommit(ctx, client, ref, tree, sourceOwner, sourceRepo, prSubject); err != nil {
-		return fmt.Errorf("unable to crate the commit: %v", err)
-	}
-
-	if err := createPR(ctx, client, prSubject, commitBranch, prDescription, sourceOwner, sourceRepo, baseBranch); err != nil {
-		return fmt.Errorf("error while creating the pull request: %v", err)
-	}
-
-	return nil
+	return versions[len(versions)-1].String(), nil
 }

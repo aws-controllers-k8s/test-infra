@@ -18,6 +18,9 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/cve"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/ghutil"
 )
 
 var scanCveCMD = &cobra.Command{
@@ -47,19 +50,19 @@ func init() {
 func scanControllersCve(cmd *cobra.Command, args []string) error {
 
 	log.Printf("Retreiving AWS services list from %s\n", OptJobsConfigPath)
-	services, err := getACKServices(OptJobsConfigPath)
+	services, err := cve.GetACKServices(OptJobsConfigPath)
 	if err != nil {
 		return err
 	}
 
 	log.Println("Retreiving service controller to latest tag map")
-	controllerTagsMap, err := getControllersLatestTags(services)
+	controllerTagsMap, err := cve.GetControllersLatestTags(services)
 	if err != nil {
 		return err
 	}
 
 	log.Println("Scanning All controllers for CVEs")
-	detectedVulnerabilities, cveSummaries, err := scanControllersForCves(controllerTagsMap)
+	detectedVulnerabilities, cveSummaries, err := cve.ScanControllersForCves(controllerTagsMap)
 	if err != nil {
 		return err
 	}
@@ -71,7 +74,7 @@ func scanControllersCve(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Println("Preparing github Issue listing all CVEs")
-	githubIssueBody, err := prepareGithubIssueBody(detectedVulnerabilities, cveSummaries)
+	githubIssueBody, err := cve.PrepareGithubIssueBody(detectedVulnerabilities, cveSummaries)
 	if err != nil {
 		return fmt.Errorf("error while preparing github issue body: %s", err)
 	}
@@ -80,9 +83,9 @@ func scanControllersCve(cmd *cobra.Command, args []string) error {
 	title := "ACK Detected Controllers CVEs"
 	labels := []string{
 		"kind/cve",
-		defaultProwAutoGenLabel,
+		ghutil.DefaultProwAutoGenLabel,
 	}
-	if err = createGithubIssue(OptGithubIssueOwner, OptGithubIssueRepo, title, githubIssueBody, labels); err != nil {
+	if err = ghutil.CreateGithubIssue(OptGithubIssueOwner, OptGithubIssueRepo, title, githubIssueBody, labels); err != nil {
 		return err
 	}
 

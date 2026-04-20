@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package prowimages
 
 import (
 	"context"
@@ -23,30 +23,32 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic/types"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/pkg/config"
 )
 
 const (
 	ECR_TAGS_MAX_CAPACITY       = 500
-	patchJobsSourceFiles        = "./prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
-	patchJobCommitBranchPrefix  = "ack-bot/built-and-pushed-images-%d"
-	patchJobPRSubject           = "Patch Prow Jobs Image Version"
-	patchJobPRDescriptionPrefix = "Regenerated jobs.yaml with new prow job versions for %v\n"
+	PatchJobsSourceFiles        = "./prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
+	PatchJobCommitBranchPrefix  = "ack-bot/built-and-pushed-images-%d"
+	PatchJobPRSubject           = "Patch Prow Jobs Image Version"
+	PatchJobPRDescriptionPrefix = "Regenerated jobs.yaml with new prow job versions for %v\n"
 )
 
-func validateBooleanFlag(flag string, flagName string) (bool, error) {
+func ValidateBooleanFlag(flag string, flagName string) (bool, error) {
 	if flag == "true" || flag == "false" {
 		return flag == "true", nil
 	}
-	return false, fmt.Errorf("invalid value for boolean flag %s: %v. Only accepts true or false", flagName, createPR)
+	return false, fmt.Errorf("invalid value for boolean flag %s: %v. Only accepts true or false", flagName, flag)
 }
 
-func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
+func ListEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {
 	ctx := context.Background()
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load config, %v", err)
 	}
@@ -74,7 +76,7 @@ func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error)
 	return imageDetails, nil
 }
 
-func getEcrImageVersionList(imageDetails []types.ImageDetail) []string {
+func GetEcrImageVersionList(imageDetails []types.ImageDetail) []string {
 
 	pattern := `-[0-9]`
 	regex := regexp.MustCompile(pattern)
@@ -91,7 +93,7 @@ func getEcrImageVersionList(imageDetails []types.ImageDetail) []string {
 	return versions
 }
 
-func getHighestEcrImageVersionMap(versions []string) map[string]string {
+func GetHighestEcrImageVersionMap(versions []string) map[string]string {
 
 	imageTagsMap := make(map[string]string)
 
@@ -107,7 +109,7 @@ func getHighestEcrImageVersionMap(versions []string) map[string]string {
 		currentTag, ok := imageTagsMap[imageTagKey]
 
 		// put tagInList in imageTagsMap it's not there, or if tagInList is greater than currentTag in map
-		if replace, err := isGreaterVersion(tagInList, currentTag); !ok || err == nil && replace {
+		if replace, err := config.IsGreaterVersion(tagInList, currentTag); !ok || err == nil && replace {
 			imageTagsMap[imageTagKey] = tagInList
 		}
 	}
@@ -115,7 +117,7 @@ func getHighestEcrImageVersionMap(versions []string) map[string]string {
 	return imageTagsMap
 }
 
-func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[string]string, error) {
+func CompareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[string]string, error) {
 
 	tagsToBuild := make(map[string]string)
 
@@ -135,7 +137,7 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 			continue
 		}
 
-		needToUpdate, err := isGreaterVersion(latestTag, ecrTag)
+		needToUpdate, err := config.IsGreaterVersion(latestTag, ecrTag)
 		if err != nil {
 			return nil, fmt.Errorf("unable to compare %s and %s: %v", latestTag, ecrTag, err)
 		}
@@ -148,14 +150,14 @@ func compareImageVersions(configTagsMap, ecrTagsMap map[string]string) (map[stri
 	return tagsToBuild, nil
 }
 
-func buildAndPushImages(
+func BuildAndPushImages(
 	imageConfigPath,
 	imagesDir,
 	ecrRepoName,
 	buildConfigPath string,
 	shouldPushImages bool,
 ) (tagsToBuild map[string]string, err error) {
-	imagesConfig, err := readCurrentImagesConfig(imageConfigPath)
+	imagesConfig, err := config.ReadCurrentImagesConfig(imageConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -163,19 +165,19 @@ func buildAndPushImages(
 	log.Printf("Successfully read versions in %s\n", imageConfigPath)
 
 	log.Printf("Attempting to list images from %s\n", ecrRepoName)
-	imageDetails, err := listEcrProwImageDetails(ecrRepoName)
+	imageDetails, err := ListEcrProwImageDetails(ecrRepoName)
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("Successfully listed Prow Image details from %s\n", ecrRepoName)
 
-	versions := getEcrImageVersionList(imageDetails)
+	versions := GetEcrImageVersionList(imageDetails)
 	log.Println("Successfully retrieved version list from image details")
 
-	ecrImageTags := getHighestEcrImageVersionMap(versions)
+	ecrImageTags := GetHighestEcrImageVersionMap(versions)
 	log.Println("Successfully cleaned versions")
 
-	tagsToBuild, err = compareImageVersions(imagesConfig.Images, ecrImageTags)
+	tagsToBuild, err = CompareImageVersions(imagesConfig.Images, ecrImageTags)
 	if err != nil {
 		return
 	}
@@ -186,7 +188,7 @@ func buildAndPushImages(
 		return
 	}
 
-	buildConfigData, err := readBuildConfigFile(buildConfigPath)
+	buildConfigData, err := config.ReadBuildConfigFile(buildConfigPath)
 	if err != nil {
 		return
 	}
@@ -208,7 +210,7 @@ func buildAndPushImages(
 	return
 }
 
-func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig, imagesDir string) error {
+func buildImages(tagsToBuild map[string]string, buildArgs *config.BuildConfig, imagesDir string) error {
 	// BuildImage("my-app", "my-app-0.0.9")
 	app := "buildah"
 
@@ -302,8 +304,8 @@ func tagAndPushImages(imageRepository string, tagsToBuild map[string]string) err
 	return nil
 }
 
-// writeBuiltTags outputs built tags to stdout
-func writeBuiltTags(tagsToBuild map[string]string) {
+// WriteBuiltTags outputs built tags to stdout
+func WriteBuiltTags(tagsToBuild map[string]string) {
 	if len(tagsToBuild) == 0 {
 		log.Println("No tags to built")
 		return

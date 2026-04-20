@@ -20,23 +20,9 @@ import (
 	"time"
 )
 
-// const (
-// 	// defaultTokenExpirationThreshold is the default threshold to
-// 	// consider a token as expired. This is used to refresh the token
-// 	// before it expires.
-// 	//
-// 	// Maybe this too high/low? Maybe it should be configurable?
-// 	defaultTokenExpirationThreshold = 5 * time.Minute
-// )
-
 // jwtToken is a helper struct to unmarshal the JWT token.
 type jwtToken struct {
 	Expiration int64 `json:"expiration"`
-
-	// Unused fields omitted for brevity
-	// _ string `json:"payload"`
-	// _ string `json:"dataKey"`
-	// _ string `json:"version"`
 }
 
 // getTokenExpirationTime returns the expiration time of the JWT token.
