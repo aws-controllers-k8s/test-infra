@@ -75,8 +75,13 @@ class ACKResourceWorkflow:
     def _load_supported_services(self) -> List[str]:
         """Load the list of supported AWS services from jobs_config.yaml."""
         try:
-            # Go up to test-infra root, then to prow/jobs/jobs_config.yaml
-            config_path = Path(__file__).parent.parent.parent.parent / "jobs" / "jobs_config.yaml"
+            # Use JOBS_CONFIG_PATH env var if set (e.g. in ProwJob), otherwise
+            # fall back to the relative path from the source tree.
+            env_path = os.environ.get("JOBS_CONFIG_PATH")
+            if env_path:
+                config_path = Path(env_path)
+            else:
+                config_path = Path(__file__).parent.parent.parent.parent / "jobs" / "jobs_config.yaml"
             
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
