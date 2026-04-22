@@ -7,11 +7,11 @@ images:
     deploy: prow-deploy-0.0.40
     deploy-docs: prow-deploy-docs-0.0.9
     docs: prow-docs-0.0.34
-    integration-test: prow-integration-0.0.45
+    integration-test: prow-integration-0.0.51
     olm-bundle-pr: prow-olm-bundle-pr-0.0.30
     olm-test: prow-olm-test-0.0.29
     scan-controllers-cve: prow-scan-controllers-cve-0.0.23
     soak-test: prow-soak-0.0.28
     unit-test: prow-unit-0.0.32
-    upgrade-go-version: prow-upgrade-go-version-0.0.29
+    upgrade-go-version: prow-upgrade-go-version-0.0.30
     verify-attribution: prow-verify-attribution-0.0.28

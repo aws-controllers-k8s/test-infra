@@ -75,10 +75,6 @@ func findHighestTagVersion(tags []string) (string, error) {
 func increasePatchImageConfig(imagesConfig *ImagesConfig) error {
 
 	for image, tag := range imagesConfig.Images {
-		// TODO: remove this skip once integration test image is stable
-		if image == "integration-test" {
-			continue
-		}
 		temp := strings.Split(tag, "-")
 		version, err := semver.Parse(temp[len(temp)-1])
 		if err != nil {
