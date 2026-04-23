@@ -69,13 +69,58 @@ info_msg "Checking for differences..."
 # non-deterministic patterns scoped to specific files. If no meaningful
 # changes remain, skip the file.
 #
+# ack-generate-metadata.yaml gets special handling: the version field is
+# validated (semver prefix must match, 'dirty' suffix is rejected) before
+# the git-describe suffix is filtered out as noise.
+#
 # Patterns are applied only to the files that contain them:
 #   ack-generate-metadata.yaml: api_directory_checksum, build_date,
-#                                build_hash, go_version
+#                                build_hash, go_version, version
 #   kustomization.yaml:         newTag
 #   Chart.yaml:                 version, appVersion
 #   values.yaml:                tag
 #   NOTES.txt:                  embedded image tag (controller:X.Y.Z)
+
+# Validates the version field in ack-generate-metadata.yaml.
+# Fails if either version contains 'dirty' or the semver prefixes differ.
+validate_metadata_version() {
+    local file="$1"
+    local committed regenerated
+    committed=$(git show HEAD:"$file" 2>/dev/null | grep -E '^\s*version:' | awk '{print $2}') || true
+    regenerated=$(grep -E '^\s*version:' "$file" | awk '{print $2}') || true
+
+    if [ -z "$committed" ]; then
+        error_msg "Could not read committed version from $file"
+        exit 1
+    fi
+    if [ -z "$regenerated" ]; then
+        error_msg "Could not read regenerated version from $file"
+        exit 1
+    fi
+
+    if echo "$committed" | grep -q 'dirty'; then
+        error_msg "Committed $file has a dirty version: $committed. Ensure local code-generator changes are either merged or stashed"
+        exit 1
+    fi
+
+    local committed_semver regenerated_semver
+    committed_semver=$(echo "$committed" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+') || true
+    regenerated_semver=$(echo "$regenerated" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+') || true
+
+    if [ -z "$committed_semver" ]; then
+        error_msg "Could not extract semver from committed version: $committed"
+        exit 1
+    fi
+    if [ -z "$regenerated_semver" ]; then
+        error_msg "Could not extract semver from regenerated version: $regenerated"
+        exit 1
+    fi
+
+    if [ "$committed_semver" != "$regenerated_semver" ]; then
+        error_msg "Semver mismatch in $file: committed=$committed_semver, regenerated=$regenerated_semver"
+        exit 1
+    fi
+}
 
 # Returns grep flags to filter non-deterministic lines for a given file.
 filter_patterns_for_file() {
@@ -84,7 +129,7 @@ filter_patterns_for_file() {
     basename=$(basename "$file")
     case "$basename" in
         ack-generate-metadata.yaml)
-            echo '\s*(api_directory_checksum|build_date|build_hash|go_version|version(?!.*dirty)):'
+            echo '\s*(api_directory_checksum|build_date|build_hash|go_version|version):'
             ;;
         kustomization.yaml)
             echo '\s*newTag:\s*[0-9]+\.[0-9]+\.[0-9]+'
@@ -113,6 +158,10 @@ for file in $CHANGED_FILES; do
     CONTENT_CHANGES=$(git --no-pager diff -- "$file" | \
         grep -E '^[+-]' | \
         grep -v '^[+-][+-][+-] ')
+
+    if [ "$(basename "$file")" = "ack-generate-metadata.yaml" ]; then
+        validate_metadata_version "$file"
+    fi
 
     FILTER=$(filter_patterns_for_file "$file")
     if [ -n "$FILTER" ]; then
