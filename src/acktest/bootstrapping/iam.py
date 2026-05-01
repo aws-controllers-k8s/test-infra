@@ -63,6 +63,7 @@ class Role(Bootstrappable):
     principal_service: str
     description: str = ""
     managed_policies: List[str] = field(default_factory=lambda: [])
+    additional_service_principals: List[str] = field(default_factory=lambda: [])
 
     # Subresources
     user_policies: UserPolicies = field(default=None)
@@ -78,6 +79,18 @@ class Role(Bootstrappable):
     def iam_client(self):
         return boto3.client("iam", region_name=self.region)
 
+    def _trust_policy_services(self):
+        """Returns the list of service principals for the trust policy.
+
+        When `additional_service_principals` is empty the IAM `Service` value
+        is emitted as a single string (preserving the wire format used by
+        single-principal roles); when it is non-empty the combined list is
+        emitted so IAM accepts it as a multi-principal trust.
+        """
+        if not self.additional_service_principals:
+            return self.principal_service
+        return [self.principal_service, *self.additional_service_principals]
+
     def bootstrap(self):
         """Creates an IAM role with an auto-generated name.
         """
@@ -91,7 +104,7 @@ class Role(Bootstrappable):
                     "Statement": [
                         {
                             "Effect": "Allow",
-                            "Principal": {"Service": self.principal_service},
+                            "Principal": {"Service": self._trust_policy_services()},
                             "Action": ["sts:AssumeRole", "sts:TagSession"],
                         }
                     ],

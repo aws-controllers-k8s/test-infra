@@ -2,6 +2,7 @@ import boto3
 import logging
 
 from dataclasses import dataclass, field
+from typing import List
 
 from . import Bootstrappable
 from .. import resources
@@ -13,6 +14,9 @@ class Bucket(Bootstrappable):
     enable_versioning: bool = False
     policy: str = ""
     policy_vars: dict = field(default_factory=dict)
+    # Optional list of object keys to pre-create as zero-byte objects
+    # after the bucket is created.
+    empty_objects: List[str] = field(default_factory=list)
 
     # Outputs
     name: str = field(init=False)
@@ -61,9 +65,37 @@ class Bucket(Bootstrappable):
                 Policy=self.policy,
             )
 
+        for key in self.empty_objects:
+            self.s3_client.put_object(Bucket=self.name, Key=key, Body=b"")
+            logging.info(f"Created empty object s3://{self.name}/{key}")
+
     def cleanup(self):
-        """Deletes an S3 bucket.
+        """Deletes an S3 bucket and its contents.
+
+        When versioning is enabled, `bucket.objects.all().delete()` only
+        removes the current versions; non-current versions and delete
+        markers are left behind and `DeleteBucket` then fails with
+        `BucketNotEmpty`. Purge every version and delete marker before
+        deleting the bucket so cleanup works for both versioned and
+        non-versioned buckets.
         """
         bucket = self.s3_resource.Bucket(self.name)
-        bucket.objects.all().delete()
+        if self.enable_versioning:
+            paginator = self.s3_client.get_paginator("list_object_versions")
+            for page in paginator.paginate(Bucket=self.name):
+                to_delete = []
+                for v in page.get("Versions", []) or []:
+                    to_delete.append({"Key": v["Key"], "VersionId": v["VersionId"]})
+                for m in page.get("DeleteMarkers", []) or []:
+                    to_delete.append({"Key": m["Key"], "VersionId": m["VersionId"]})
+                # `delete_objects` accepts up to 1000 keys per call; a single
+                # page is already capped at that, so one call per page is
+                # sufficient.
+                if to_delete:
+                    self.s3_client.delete_objects(
+                        Bucket=self.name,
+                        Delete={"Objects": to_delete, "Quiet": True},
+                    )
+        else:
+            bucket.objects.all().delete()
         bucket.delete()

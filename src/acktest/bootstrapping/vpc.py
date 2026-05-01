@@ -1,5 +1,6 @@
 from typing import List, Union
 import boto3
+import logging
 
 from dataclasses import dataclass, field
 
@@ -28,12 +29,12 @@ class TransitGateway(Bootstrappable):
         """
         transit_gateway = self.ec2_client.create_transit_gateway()
         self.transit_gateway_id = transit_gateway['TransitGateway']['TransitGatewayId']
-    
+
     def cleanup(self):
         """Deletes a transit gateway.
         """
         super().cleanup()
-        
+
         self.ec2_client.delete_transit_gateway(TransitGatewayId=self.transit_gateway_id)
 
 @dataclass
@@ -111,7 +112,7 @@ class RouteTable(Bootstrappable):
         """Deletes a route table.
         """
         super().cleanup()
-        
+
         self.ec2_client.delete_route_table(RouteTableId=self.route_table_id)
 
 @dataclass
@@ -171,13 +172,18 @@ class Subnets(Bootstrappable):
     def get_availability_zone_names(self):
         zones = self.ec2_client.describe_availability_zones()
         return list(map(lambda x: x['ZoneName'], zones['AvailabilityZones']))
-    
+
 @dataclass
 class SecurityGroup(Bootstrappable):
     # Inputs
     vpc_id: str
     name_prefix: str = "test"
     description: str = ""
+    # When True, a self-referencing inbound rule (source = this SG) is added
+    # after the group is created.
+    self_referencing_ingress: bool = False
+    # IP protocol used when `self_referencing_ingress` is True.
+    self_referencing_ingress_protocol: str = "-1"
 
     # Outputs
     group_id: str = field(init=False)
@@ -186,7 +192,7 @@ class SecurityGroup(Bootstrappable):
     def __post_init__(self):
         self.name = resources.random_suffix_name(self.name_prefix, 24)
         self.description = resources.random_suffix_name("description-", 34)
-    
+
     @property
     def ec2_client(self):
         return boto3.client("ec2", region_name=self.region)
@@ -205,6 +211,32 @@ class SecurityGroup(Bootstrappable):
         )
         self.group_id = group.id
         self.arn = "arn:aws:ec2:{region}:{accId}:security-group/{sgId}".format(region=self.region, accId=self.account_id, sgId=self.group_id)
+
+        if self.self_referencing_ingress:
+            self._authorize_self_referencing_ingress()
+
+    def _authorize_self_referencing_ingress(self):
+        """Authorizes ingress from this security group to itself.
+
+        Tolerates `InvalidPermission.Duplicate` so the call is idempotent if
+        the rule is already present (e.g. the SG is being reused across
+        bootstrap attempts).
+        """
+        try:
+            self.ec2_client.authorize_security_group_ingress(
+                GroupId=self.group_id,
+                IpPermissions=[{
+                    "IpProtocol": self.self_referencing_ingress_protocol,
+                    "UserIdGroupPairs": [{"GroupId": self.group_id}],
+                }],
+            )
+        except self.ec2_client.exceptions.ClientError as e:
+            if "InvalidPermission.Duplicate" not in str(e):
+                raise
+            logging.info(
+                f"Self-referencing ingress already present on "
+                f"{self.group_id}; continuing"
+            )
 
     def cleanup(self):
         """Deletes the subnets.
@@ -225,6 +257,9 @@ class VPC(Bootstrappable):
     vpc_cidr_block: str = field(default=VPC_CIDR_BLOCK)
     public_subnet_cidr_blocks: Union[List[str], None] = field(default=None)
     private_subnet_cidr_blocks: Union[List[str], None] = field(default=None)
+    # Propagated to the auto-created `security_group`. When True, the VPC's
+    # default security group is created with a self-referencing inbound rule.
+    security_group_self_referencing_ingress: bool = False
 
     # Subresources
     public_subnets: Subnets = field(init=False, default=None)
@@ -267,10 +302,13 @@ class VPC(Bootstrappable):
             self.ec2_client.create_tags(Resources=[self.vpc_id], Tags=[{'Key': 'Name', 'Value': self.name}])
 
         if self.num_private_subnet > 0:
-            self.private_subnets = Subnets(self.vpc_id, self.private_subnet_cidr_blocks, is_public=False, num_subnets=self.num_private_subnet)
+            self.private_subnets = Subnets(self.vpc_id, self.private_subnet_cidr_blocks, is_public=False, map_public_ip=False, num_subnets=self.num_private_subnet)
         if self.num_public_subnet > 0:
             self.public_subnets = Subnets(self.vpc_id, self.public_subnet_cidr_blocks, is_public=True, num_subnets=self.num_public_subnet)
-        self.security_group = SecurityGroup(vpc_id=self.vpc_id)
+        self.security_group = SecurityGroup(
+            vpc_id=self.vpc_id,
+            self_referencing_ingress=self.security_group_self_referencing_ingress,
+        )
 
         # Because we require the VPC to be generated before generating other
         # resources, if the subresources fail while bootstrapping, we need to
