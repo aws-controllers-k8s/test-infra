@@ -16,6 +16,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: hook
+  {{- with .Values.hook.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   selector:
     app: hook

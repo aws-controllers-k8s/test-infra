@@ -1,5 +1,5 @@
 ---
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: prow-crds
@@ -11,9 +11,8 @@ spec:
     name: test-infra
   path: ./flux/prow-crds
   prune: true
-  validation: client
 ---
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: prow-charts
@@ -26,6 +25,5 @@ spec:
   path: ./flux/prow-charts
   prune: true
   targetNamespace: flux-system
-  validation: client
   dependsOn:
   - name: prow-crds

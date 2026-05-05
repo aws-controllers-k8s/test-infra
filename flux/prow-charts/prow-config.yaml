@@ -1,4 +1,4 @@
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: prow-config
@@ -27,8 +27,8 @@ spec:
         kubernetes.io/ingress.class: "alb"
     prow:
       domain: "prow.ack.aws.dev"
-      presubmitsBucketName: "ack-prow-logs"
-      tideStatusReconcilerBucketName: "ack-prow-logs"
+      presubmitsBucketName: "ack-prow-logs-453735116143"
+      tideStatusReconcilerBucketName: "ack-prow-logs-453735116143"
     crier:
       serviceAccount:
         name: "prow-deployment-service-account"
@@ -37,6 +37,10 @@ spec:
         name: "prow-deployment-service-account"
     hook:
       scrapeMetrics: true
+      service:
+        type: "LoadBalancer"
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
       serviceAccount:
         name: "prow-deployment-service-account"
     horologium:
