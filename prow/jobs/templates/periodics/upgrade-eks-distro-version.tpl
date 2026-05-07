@@ -3,7 +3,6 @@
   interval: 168h
   annotations:
     description: Querys eks-distro version in ECR and compare it with version in build_config.yaml. Creates a PR with updated eks-distro version and bumped prow image versions if outdated
-    karpenter.sh/do-not-evict: "true"
   extra_refs:
   - org: aws-controllers-k8s
     repo: test-infra

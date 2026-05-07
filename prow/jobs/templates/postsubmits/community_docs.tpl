@@ -1,8 +1,6 @@
   aws-controllers-k8s/community:
   - name: community-docs-release
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:

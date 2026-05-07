@@ -1,8 +1,6 @@
   aws-controllers-k8s/ack-chart:
   - name: ack-chart-release
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra

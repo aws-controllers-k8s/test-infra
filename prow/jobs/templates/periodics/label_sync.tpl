@@ -3,7 +3,6 @@
   interval: 6h
   annotations:
     description: Runs label_sync to synchronize GitHub repo labels with the label config defined in label_sync/labels.yaml.
-    karpenter.sh/do-not-evict: "true"
   labels:
     app: label-sync
     preset-github-secrets: "true"

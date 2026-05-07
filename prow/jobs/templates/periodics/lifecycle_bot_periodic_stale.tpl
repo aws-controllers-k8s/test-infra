@@ -3,7 +3,6 @@
   decorate: true
   annotations:
     description: Adds lifecycle/stale to issues after 90d of inactivity
-    karpenter.sh/do-not-evict: "true"
   labels:
     preset-github-secrets: "true"
   agent: kubernetes

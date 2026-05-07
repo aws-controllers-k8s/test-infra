@@ -1,8 +1,6 @@
 - name: periodic-deploy-docs
   decorate: true
   interval: 12h
-  annotations:
-    karpenter.sh/do-not-evict: "true"
   labels:
     preset-github-secrets: "true"
   extra_refs:

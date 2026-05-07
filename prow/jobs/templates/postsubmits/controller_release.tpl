@@ -2,8 +2,6 @@
   aws-controllers-k8s/{{ $service }}-controller:
   - name: {{ $service }}-post-submit
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -35,8 +33,6 @@
   {{ if contains $.Config.SoakTestOnReleaseServiceNames $service }}
   - name: {{ $service }}-soak-on-release
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -60,8 +56,6 @@
   {{ end }}
   - name: {{ $service }}-controller-release-tag
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
@@ -86,8 +80,6 @@
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
     job_queue_name: olm-bundle-prs
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
@@ -120,8 +112,6 @@
   
   - name: update-ack-chart
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:

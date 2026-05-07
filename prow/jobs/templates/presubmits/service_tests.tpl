@@ -4,8 +4,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -54,8 +52,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -95,8 +91,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-test-config: "true"
     extra_refs:
@@ -126,8 +120,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -148,8 +140,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -178,8 +168,6 @@
     always_run: true
     decorate: true
     optional: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -214,8 +202,6 @@
     always_run: true
     decorate: true
     optional: false
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -252,8 +238,6 @@
     decorate: true
     optional: false
     run_if_changed: "^(config/crd/|helm/crds/)"
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator

@@ -3,8 +3,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -25,8 +23,6 @@
     always_run: true
     decorate: true
     optional: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: test-infra
@@ -61,8 +57,6 @@
     decorate: true
     optional: true
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: runtime
@@ -98,8 +92,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
