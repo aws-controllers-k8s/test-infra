@@ -4,9 +4,9 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: runtime

@@ -65,3 +65,21 @@ variable "flux_path" {
   default     = "./flux"
 }
 
+
+variable "test_infra_org" {
+  description = "GitHub org for test-infra repo (used in Prow job extra_refs)"
+  type        = string
+  default     = "aws-controllers-k8s"
+}
+
+variable "test_infra_repo" {
+  description = "GitHub repo name for test-infra (used in Prow job extra_refs)"
+  type        = string
+  default     = "test-infra"
+}
+
+variable "test_infra_branch" {
+  description = "Git branch for test-infra repo (used in Prow job extra_refs)"
+  type        = string
+  default     = "main"
+}

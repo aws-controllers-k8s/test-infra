@@ -4,9 +4,9 @@
   annotations:
     description: Scans ack supported AWS service controllers for CVE's. If they exist, creates a github issue in commmunity repository
   extra_refs:
-  - org: aws-controllers-k8s
-    repo: test-infra
-    base_ref: main
+  - org: ${TEST_INFRA_ORG}
+    repo: ${TEST_INFRA_REPO}
+    base_ref: ${TEST_INFRA_BRANCH}
     workdir: true
   labels:
     preset-github-secrets: "true"

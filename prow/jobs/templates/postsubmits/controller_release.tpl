@@ -3,9 +3,9 @@
   - name: {{ $service }}-post-submit
     decorate: true
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator
@@ -34,9 +34,9 @@
   - name: {{ $service }}-soak-on-release
     decorate: true
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: post-submit-service-account
@@ -59,9 +59,9 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: post-submit-service-account
@@ -83,9 +83,9 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator
@@ -115,9 +115,9 @@
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator

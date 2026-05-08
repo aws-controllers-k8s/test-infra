@@ -24,9 +24,9 @@
     decorate: true
     optional: true
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: pre-submit-service-account
@@ -62,9 +62,9 @@
       repo: runtime
       base_ref: main
       workdir: false
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: false
     - org: aws-controllers-k8s
       repo: s3-controller
@@ -101,9 +101,9 @@
       repo: runtime
       base_ref: main
       workdir: false
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: {{ $service }}-controller

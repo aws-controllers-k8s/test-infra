@@ -108,6 +108,9 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     GIT_REPOSITORY_URL      = var.git_repository_url
     GIT_REPOSITORY_BRANCH   = var.git_repository_branch
     PROW_LOGS_BUCKET        = "ack-prow-logs-${local.account_id}"
+    TEST_INFRA_ORG          = var.test_infra_org
+    TEST_INFRA_REPO         = var.test_infra_repo
+    TEST_INFRA_BRANCH       = var.test_infra_branch
   }
 
   depends_on = [kubernetes_namespace_v1.flux_system]
