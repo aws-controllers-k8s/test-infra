@@ -39,12 +39,19 @@ daws() {
     aws_cli_img="amazon/aws-cli:$AWS_CLI_VERSION"
 
     # Pass static credentials if available (e.g., from wrapper.sh role assumption)
+    # When static creds exist, skip web identity and AWS config mount to avoid
+    # conflicts with pod identity configuration in nested containers
     aws_cli_static_creds_env=""
+    aws_config_mount="-v ~/.aws:/root/.aws:z"
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
         aws_cli_static_creds_env="--env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN"
+        # Clear web identity env to prevent Docker from using pod identity
+        aws_cli_web_identity_env=""
+        # Don't mount ~/.aws which may contain pod identity config
+        aws_config_mount=""
     fi
 
-    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) $(echo $aws_cli_static_creds_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
+    docker run --rm $(echo $aws_config_mount) $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) $(echo $aws_cli_static_creds_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
 }
 
 # ensure_aws_credentials() calls the STS::GetCallerIdentity API call and
