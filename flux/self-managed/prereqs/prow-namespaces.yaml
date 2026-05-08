@@ -1,0 +1,35 @@
+# Prow namespaces and service accounts
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prow
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-pods
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prow-deployment-service-account
+  namespace: prow
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pre-submit-service-account
+  namespace: test-pods
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: post-submit-service-account
+  namespace: test-pods
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: periodic-service-account
+  namespace: test-pods

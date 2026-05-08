@@ -1,0 +1,46 @@
+# Prow Pod Identity Associations - links IAM roles to service accounts.
+# Deployed after roles are ready (separate kustomization stage).
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-deployment-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  namespace: prow
+  serviceAccount: prow-deployment-service-account
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-deployment-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-postsubmit-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  namespace: test-pods
+  serviceAccount: post-submit-service-account
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-postsubmit-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-presubmit-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  namespace: test-pods
+  serviceAccount: pre-submit-service-account
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-presubmit-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-periodic-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  namespace: test-pods
+  serviceAccount: periodic-service-account
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-periodic-role

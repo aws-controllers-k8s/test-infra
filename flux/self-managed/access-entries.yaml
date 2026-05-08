@@ -1,0 +1,55 @@
+# EKS Access Entries managed by ACK.
+# These define who can access the cluster and with what permissions.
+---
+# Dedicated cluster admin role (assumable by account root for break-glass)
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: cluster-admin-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterName: ${CLUSTER_NAME}
+  principalARN: "${CLUSTER_ADMIN_ROLE_ARN}"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# Admin role - cluster admin access
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: admin-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+    services.k8s.aws/adoption-policy: adopt
+    services.k8s.aws/adoption-fields: '{"clusterName": "${CLUSTER_NAME}", "principalARN": "${ADMIN_ROLE_ARN}"}'
+spec:
+  clusterName: ${CLUSTER_NAME}
+  principalARN: "${ADMIN_ROLE_ARN}"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# ReadOnly role - view-only access
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: readonly-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterName: ${CLUSTER_NAME}
+  principalARN: "${READONLY_ROLE_ARN}"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy
+    accessScope:
+      type: cluster

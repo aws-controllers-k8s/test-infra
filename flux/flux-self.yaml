@@ -1,16 +1,19 @@
+---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: prow-agent-workflows
+  name: flux-self
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 1m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./prow/agent-workflows
-  prune: true
+  path: ./flux/flux-self
+  prune: false  # Never prune Flux's own resources
   postBuild:
     substituteFrom:
+    - kind: ConfigMap
+      name: flux-version
     - kind: ConfigMap
       name: self-managed-vars
