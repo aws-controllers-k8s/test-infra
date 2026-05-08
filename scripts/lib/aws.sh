@@ -38,7 +38,13 @@ daws() {
         echo "--env AWS_WEB_IDENTITY_TOKEN_FILE=/root/aws_token --env AWS_ROLE_ARN -v $identity_file:/root/aws_token:ro" )"
     aws_cli_img="amazon/aws-cli:$AWS_CLI_VERSION"
 
-    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
+    # Pass static credentials if available (e.g., from wrapper.sh role assumption)
+    aws_cli_static_creds_env=""
+    if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
+        aws_cli_static_creds_env="--env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN"
+    fi
+
+    docker run --rm -v ~/.aws:/root/.aws:z $(echo $aws_cli_profile_env) $(echo $aws_cli_web_identity_env) $(echo $aws_cli_static_creds_env) --env AWS_DEFAULT_REGION=$default_region -v $(pwd):/aws "$aws_cli_img" "$@"
 }
 
 # ensure_aws_credentials() calls the STS::GetCallerIdentity API call and
