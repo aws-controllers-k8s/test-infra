@@ -331,7 +331,6 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
     open_pull_request "$GITHUB_CONTROLLER_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE"
     echo "auto-generate-controllers.sh][INFO] Done :) "
     # Sleep for 1 second before generating next service controller. 
-    # Our prow cluster will scale up/down based on the load (karpenter)
     # History:
     # PRs created from this script trigger the presubmit prowjobs.
     # To control the number of presubmit prowjobs that will run in parallel,

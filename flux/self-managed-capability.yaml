@@ -1,0 +1,23 @@
+# Stage 2: Adopt capability and update roleARN to the new role.
+# Must complete before any other ACK resources are reconciled,
+# so the capability uses the fully-permissioned role.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: self-managed-capability
+  namespace: flux-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/self-managed/capability
+  prune: false
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: self-managed-prereqs

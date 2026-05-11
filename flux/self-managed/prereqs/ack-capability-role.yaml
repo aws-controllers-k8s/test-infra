@@ -1,0 +1,127 @@
+# ACK Capability IAM Role - created fresh by ACK (not adopted).
+# The bootstrap role (Terraform) has enough permissions to create this role.
+# Once created, the capability is updated to use this role, which has
+# full permissions from the start — no chicken-and-egg problem.
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: ack-capability-role
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: ${CLUSTER_NAME}-ack-capability-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "capabilities.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    EKSSelfManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:*"],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["iam:PassRole"],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "iam:PassedToService": "eks.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+    IAMManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["iam:*"],
+            "Resource": "*"
+          }
+        ]
+      }
+    ECRManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:*"],
+            "Resource": "*"
+          }
+        ]
+      }
+    SecretsManagerReadOnly: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "secretsmanager:ListSecrets",
+              "secretsmanager:DescribeSecret",
+              "secretsmanager:GetSecretValue"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    NetworkManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ec2:CreateSecurityGroup",
+              "ec2:DeleteSecurityGroup",
+              "ec2:DescribeSecurityGroups",
+              "ec2:AuthorizeSecurityGroupIngress",
+              "ec2:RevokeSecurityGroupIngress",
+              "ec2:AuthorizeSecurityGroupEgress",
+              "ec2:RevokeSecurityGroupEgress",
+              "ec2:CreateTags",
+              "ec2:DeleteTags",
+              "ec2:DescribeVpcs"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    S3ProwLogs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:*"],
+            "Resource": [
+              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
+            "Resource": "*"
+          }
+        ]
+      }

@@ -1,0 +1,32 @@
+# The cluster manages itself via this manifest.
+# Changes here are reconciled by the ACK EKS controller (EKS Capability).
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt
+    services.k8s.aws/adoption-fields: '{"name": "${CLUSTER_NAME}"}'
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: ${CLUSTER_NAME}
+  version: "1.35"
+  resourcesVPCConfig:
+    endpointPublicAccess: true
+    endpointPrivateAccess: true
+  accessConfig:
+    authenticationMode: API
+  computeConfig:
+    enabled: true
+    nodePools:
+    - general-purpose
+  logging:
+    clusterLogging:
+    - enabled: true
+      types:
+      - api
+      - audit
+      - authenticator
+      - controllerManager
+      - scheduler

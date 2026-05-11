@@ -2,12 +2,10 @@
   aws-controllers-k8s/{{ $service }}-controller:
   - name: {{ $service }}-post-submit
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator
@@ -35,12 +33,10 @@
   {{ if contains $.Config.SoakTestOnReleaseServiceNames $service }}
   - name: {{ $service }}-soak-on-release
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: post-submit-service-account
@@ -60,14 +56,12 @@
   {{ end }}
   - name: {{ $service }}-controller-release-tag
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: post-submit-service-account
@@ -86,14 +80,12 @@
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
     job_queue_name: olm-bundle-prs
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator
@@ -120,14 +112,12 @@
   
   - name: update-ack-chart
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     - org: aws-controllers-k8s
       repo: code-generator

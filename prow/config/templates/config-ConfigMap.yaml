@@ -73,10 +73,16 @@ data:
           censoring_options:
             include_directories:
               - "/etc/github"
+          pod_annotations:
+            eks.amazonaws.com/do-not-disrupt: "true"
+          env:
+            - name: AWS_REGION
+              value: "{{ .Values.region }}"
+            - name: AWS_DEFAULT_REGION
+              value: "{{ .Values.region }}"
           gcs_configuration:
             bucket: s3://{{ .Values.prow.presubmitsBucketName }}
             path_strategy: explicit
-          s3_credentials_secret: s3-credentials
           utility_images:
             clonerefs:  {{ .Values.utility_images.clonerefs }}
             entrypoint: {{ .Values.utility_images.entrypoint }}

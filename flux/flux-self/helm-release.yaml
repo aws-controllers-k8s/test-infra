@@ -1,0 +1,43 @@
+# Flux self-manages its own upgrades from the vendored chart in this repo.
+#
+# To upgrade Flux:
+#   1. Edit flux/flux-version.yaml with the new version
+#   2. Run ./scripts/pull-flux-chart.sh
+#   3. Update spec.chart.spec.chart below to the new filename
+#   4. Commit and push
+#   5. Flux reconciles and upgrades itself from the vendored chart
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: flux2
+  namespace: flux-system
+spec:
+  interval: 1m
+  targetNamespace: flux-system
+  chart:
+    spec:
+      chart: ./charts/flux2-${FLUX_VERSION}
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+      reconcileStrategy: Revision
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    cli:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/flux-cli
+    helmController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/helm-controller
+    imageAutomationController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/image-automation-controller
+    imageReflectionController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/image-reflector-controller
+    kustomizeController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/kustomize-controller
+    notificationController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/notification-controller
+    sourceController:
+      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/source-controller

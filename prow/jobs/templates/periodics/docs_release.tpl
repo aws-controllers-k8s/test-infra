@@ -1,8 +1,6 @@
 - name: docs-release
   decorate: true
   interval: 24h
-  annotations:
-    karpenter.sh/do-not-evict: "true"
   labels:
     preset-github-secrets: "true"
   extra_refs:

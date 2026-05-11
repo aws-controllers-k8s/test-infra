@@ -2,8 +2,6 @@
   - name: build-prow-images
     decorate: true
     run_if_changed: ^(prow\/.*\/images_config.yaml)
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     spec:

@@ -1,0 +1,22 @@
+# Stage: Pod Identity Associations
+# Depends on self-managed-cluster (where IAM roles are created).
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: self-managed-pod-identities
+  namespace: flux-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/self-managed/pod-identities
+  prune: false
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: self-managed-cluster

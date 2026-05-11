@@ -92,7 +92,13 @@ if git rev-parse --is-inside-work-tree >/dev/null; then
 fi
 
 >&2 echo "wrapper.sh] [SETUP] Logging into ECR public ..."
-aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+for i in 1 2 3 4 5; do
+  if aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws 2>/dev/null; then
+    break
+  fi
+  >&2 echo "wrapper.sh] [SETUP] ECR login attempt $i failed, retrying in ${i}s ..."
+  sleep $i
+done
 >&2 echo "wrapper.sh] [SETUP] Logged in"
 
 # Setup credentials for controller CARM (Cross Account Resource Management) tests
@@ -128,6 +134,12 @@ export ASSUMED_ROLE_ARN
 
 ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name $PROW_JOB_ID --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
 eval $ASSUME_COMMAND
+# Unset Pod Identity env vars so nested Docker containers use the static
+# credentials (AWS_ACCESS_KEY_ID/SECRET/TOKEN) instead of trying to use pod identity
+unset AWS_CONTAINER_CREDENTIALS_FULL_URI 2>/dev/null || true
+unset AWS_CONTAINER_AUTHORIZATION_TOKEN 2>/dev/null || true
+unset AWS_WEB_IDENTITY_TOKEN_FILE 2>/dev/null || true
+unset AWS_ROLE_ARN 2>/dev/null || true
 >&2 echo "wrapper.sh] [SETUP] Assumed ASSUMED_ROLE_ARN"
 
 # actually run the user supplied command

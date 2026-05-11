@@ -3,7 +3,6 @@
   decorate: true
   annotations:
     description: Closes rotten issues after 30d of inactivity
-    karpenter.sh/do-not-evict: "true"
   labels:
     preset-github-secrets: "true"
   agent: kubernetes

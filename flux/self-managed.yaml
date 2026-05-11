@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: self-managed-cluster
+  namespace: flux-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/self-managed
+  prune: false  # Never prune self-management resources - safety measure
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: self-managed-capability

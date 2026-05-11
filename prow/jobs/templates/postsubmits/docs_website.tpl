@@ -1,8 +1,6 @@
   aws-controllers-k8s/docs:
   - name: deploy-docs
     decorate: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:

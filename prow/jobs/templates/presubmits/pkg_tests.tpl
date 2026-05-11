@@ -3,8 +3,6 @@
     decorate: true
     optional: false
     always_run: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -25,12 +23,10 @@
     always_run: true
     decorate: true
     optional: true
-    annotations:
-      karpenter.sh/do-not-evict: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
     spec:
       serviceAccountName: pre-submit-service-account

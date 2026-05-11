@@ -84,6 +84,9 @@ spec:
         - name: plugins
           mountPath: /etc/plugins
           readOnly: true
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz
@@ -113,3 +116,9 @@ spec:
       - name: job-config
         configMap:
           name: job-config
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets
