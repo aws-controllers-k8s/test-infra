@@ -54,17 +54,20 @@ build_pytest_image() {
     local aws_creds_file_location="$HOME/.aws/credentials"
 
     if [[ -n $PROW_JOB_ID ]]; then
-        # If this is prowjob, create new aws credentials file and setup two profiles
-        # 1. 'prow-irsa' profile which gets aws credentials using web-identity-token
-        # 2. 'ack-test' profile which uses 'prow-irsa' as source profile and assumes
-        # assumed_role_arn for aws credentials
-        # NOTE: credentials in both these profiles rotate automatically
+        # Prow job: wrapper.sh has already assumed the service role and exported
+        # static credentials. Write them directly into a credentials file for
+        # the test container.
+        if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
+            echo "ERROR: No static credentials available. wrapper.sh should have assumed the role before reaching this point."
+            exit 1
+        fi
 
-        # copy web-identity-token file for use inside test container
-        cp "$identity_file" "$SCRIPTS_DIR"/web-identity-token >/dev/null
-
-        # generate new aws-credentials file for test container
-        eval "echo \"$(cat "$SCRIPTS_DIR/creds-templates/prow-test-aws-creds-template.txt")\"" > "$TMP_TEST_AWS_CREDS_FILE_LOCATION"
+        cat > "$TMP_TEST_AWS_CREDS_FILE_LOCATION" <<EOF
+[$TEST_AWS_PROFILE_NAME]
+aws_access_key_id=$AWS_ACCESS_KEY_ID
+aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
+aws_session_token=$AWS_SESSION_TOKEN
+EOF
     else
         # for local testing, copy existing aws-credentials file and add 'ack-test' alongside
         # other profiles

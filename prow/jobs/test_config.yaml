@@ -6,7 +6,9 @@ cluster:
 
 aws:
   region: us-west-2
-  token_file: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
+  # NOTE: token_file is not set because this cluster uses EKS Pod Identity
+  # (container credentials endpoint) rather than IRSA (web identity token file).
+  # The wrapper.sh script assumes the service role and passes static credentials.
 
 debug:
   enabled: true
