@@ -5,7 +5,7 @@
 ################################################################################
 
 resource "aws_iam_role" "ack_capability" {
-  name = "${var.cluster_name}-ack-managed-role"
+  name = "${local.cluster_name}-ack-managed-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -30,15 +30,15 @@ resource "aws_iam_role_policy" "ack_capability_initial" {
       {
         Effect   = "Allow"
         Action   = ["iam:*"]
-        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${var.cluster_name}-ack-capability-role"
+        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.cluster_name}-ack-capability-role"
       },
       {
         Effect   = "Allow"
         Action   = ["eks:*"]
         Resource = [
-          "arn:${local.partition}:eks:${var.region}:${local.account_id}:capability/${var.cluster_name}/*",
-          "arn:${local.partition}:eks:${var.region}:${local.account_id}:access-entry/${var.cluster_name}/*",
-          "arn:${local.partition}:eks:${var.region}:${local.account_id}:cluster/${var.cluster_name}"
+          "arn:${local.partition}:eks:${var.region}:${local.account_id}:capability/${local.cluster_name}/*",
+          "arn:${local.partition}:eks:${var.region}:${local.account_id}:access-entry/${local.cluster_name}/*",
+          "arn:${local.partition}:eks:${var.region}:${local.account_id}:cluster/${local.cluster_name}"
         ]
       }
     ]
@@ -57,7 +57,7 @@ resource "aws_iam_role_policy" "ack_capability_initial" {
 ################################################################################
 
 resource "awscc_eks_capability" "ack" {
-  cluster_name              = module.eks.cluster_name
+  cluster_name              = aws_eks_cluster.this.name
   capability_name           = "ack-eks"
   type                      = "ACK"
   role_arn                  = aws_iam_role.ack_capability.arn
@@ -67,5 +67,5 @@ resource "awscc_eks_capability" "ack" {
     ignore_changes = all
   }
 
-  depends_on = [module.eks]
+  depends_on = [aws_eks_cluster.this]
 }

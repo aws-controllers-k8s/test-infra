@@ -26,7 +26,7 @@ spec:
             buildah login -u AWS --password-stdin public.ecr.aws
 
           # Checkout source
-          git clone --branch ${GIT_REPOSITORY_BRANCH} ${GIT_REPOSITORY_URL} /workspace
+          git clone --branch ${TEST_INFRA_BRANCH} https://github.com/${TEST_INFRA_ORG}/${TEST_INFRA_REPO} /workspace
           cd /workspace
 
           # Resolve image repo in config
@@ -59,10 +59,12 @@ spec:
           value: "${PROW_IMAGES_REPO_URI}"
         - name: PROW_IMAGES_REPO_NAME
           value: "${PROW_IMAGES_REPO_NAME}"
-        - name: GIT_REPOSITORY_URL
-          value: "${GIT_REPOSITORY_URL}"
-        - name: GIT_REPOSITORY_BRANCH
-          value: "${GIT_REPOSITORY_BRANCH}"
+        - name: TEST_INFRA_ORG
+          value: "${TEST_INFRA_ORG}"
+        - name: TEST_INFRA_REPO
+          value: "${TEST_INFRA_REPO}"
+        - name: TEST_INFRA_BRANCH
+          value: "${TEST_INFRA_BRANCH}"
         resources:
           requests:
             cpu: "2"

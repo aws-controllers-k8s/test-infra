@@ -7,7 +7,7 @@ resource "kubernetes_namespace_v1" "flux_system" {
     name = "flux-system"
   }
 
-  depends_on = [module.eks, null_resource.flux_suspend, awscc_eks_capability.ack]
+  depends_on = [aws_eks_cluster.this, null_resource.flux_suspend, awscc_eks_capability.ack]
 }
 
 resource "helm_release" "flux" {
@@ -19,7 +19,7 @@ resource "helm_release" "flux" {
     cli = { enabled = false }
   })]
 
-  depends_on = [module.eks, null_resource.flux_suspend, awscc_eks_capability.ack, kubernetes_config_map_v1.self_managed_vars, kubernetes_config_map_v1.flux_version]
+  depends_on = [aws_eks_cluster.this, null_resource.flux_suspend, awscc_eks_capability.ack, kubernetes_config_map_v1.self_managed_vars, kubernetes_config_map_v1.flux_version]
 }
 
 # Bootstrap the Flux sync loop. After first sync, Flux manages its own
@@ -34,8 +34,8 @@ resource "kubectl_manifest" "flux_git_source" {
     }
     spec = {
       interval = "1m"
-      url      = var.git_repository_url
-      ref      = { branch = var.git_repository_branch }
+      url      = local.git_repository_url
+      ref      = { branch = var.test_infra_branch }
     }
   })
 
@@ -56,7 +56,7 @@ resource "kubectl_manifest" "flux_kustomization" {
     }
     spec = {
       interval = "5m"
-      path     = var.flux_path
+      path     = local.flux_path
       prune    = true
       sourceRef = {
         kind = "GitRepository"
@@ -81,7 +81,7 @@ resource "kubernetes_namespace_v1" "ack_system" {
     name = "ack-system"
   }
 
-  depends_on = [module.eks, null_resource.flux_suspend, awscc_eks_capability.ack]
+  depends_on = [aws_eks_cluster.this, null_resource.flux_suspend, awscc_eks_capability.ack]
 }
 
 resource "kubernetes_config_map_v1" "self_managed_vars" {
@@ -91,26 +91,29 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
   }
 
   data = {
-    CLUSTER_NAME            = var.cluster_name
-    CLUSTER_SG_ID           = module.eks.cluster_security_group_id
+    CLUSTER_NAME            = local.cluster_name
+    CLUSTER_SG_ID           = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
     CLUSTER_ADMIN_ROLE_ARN  = aws_iam_role.cluster_admin.arn
     ADMIN_ROLE_ARN          = "arn:${local.partition}:iam::${local.account_id}:role/Admin"
     READONLY_ROLE_ARN       = "arn:${local.partition}:iam::${local.account_id}:role/ReadOnly"
     GHCR_PTC_SECRET_ARN     = data.aws_secretsmanager_secret.ghcr_ptc.arn
-    ACK_CAPABILITY_ROLE_ARN = "arn:${local.partition}:iam::${local.account_id}:role/${var.cluster_name}-ack-capability-role"
+    ACK_CAPABILITY_ROLE_ARN = "arn:${local.partition}:iam::${local.account_id}:role/${local.cluster_name}-ack-capability-role"
     ACCOUNT_ID              = local.account_id
-    VPC_ID                  = local.vpc_id
+    VPC_ID                  = module.vpc.vpc_id
     WEBHOOK_SG_ID           = aws_security_group.prow_webhook_nlb.id
     REGION                  = var.region
     PROW_IMAGES_REPO_NAME   = local.prow_images_repo
     PROW_IMAGES_REPO_URI    = aws_ecrpublic_repository.prow_images.repository_uri
     PROW_IMAGE_REPO         = aws_ecrpublic_repository.prow_images.repository_uri
-    GIT_REPOSITORY_URL      = var.git_repository_url
-    GIT_REPOSITORY_BRANCH   = var.git_repository_branch
     PROW_LOGS_BUCKET        = "ack-prow-logs-${local.account_id}"
     TEST_INFRA_ORG          = var.test_infra_org
     TEST_INFRA_REPO         = var.test_infra_repo
     TEST_INFRA_BRANCH       = var.test_infra_branch
+  }
+
+  # Flux adds kustomize.toolkit.fluxcd.io labels after sync
+  lifecycle {
+    ignore_changes = [metadata[0].labels]
   }
 
   depends_on = [kubernetes_namespace_v1.flux_system]
@@ -124,6 +127,11 @@ resource "kubernetes_config_map_v1" "flux_version" {
 
   data = {
     FLUX_VERSION = var.flux_version
+  }
+
+  # Flux adds kustomize.toolkit.fluxcd.io labels after sync
+  lifecycle {
+    ignore_changes = [metadata[0].labels]
   }
 
   depends_on = [kubernetes_namespace_v1.flux_system]

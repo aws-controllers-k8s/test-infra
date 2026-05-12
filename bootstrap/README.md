@@ -51,12 +51,22 @@ aws secretsmanager create-secret \
   --secret-string '{"username":"<GITHUB_USER>","accessToken":"<GITHUB_PAT>"}'
 ```
 
-### 3. Bootstrap the cluster
+### 3. Generate your environment
+
+```bash
+cd test-infra/bootstrap
+./gen-env
+```
+
+This prompts for each variable (region, flux version, GitHub org/repo/branch)
+and writes a `.tfvars` file to `bootstrap/environment/dev.tfvars`.
+
+### 4. Bootstrap the cluster
 
 ```bash
 cd test-infra/bootstrap
 terraform init
-terraform apply
+terraform apply -var-file=environment/dev.tfvars
 ```
 
 This will:
@@ -159,6 +169,10 @@ Safe to re-run anytime. Only needed when:
 - Adding new values to the `self-managed-vars` ConfigMap
 - Changing VPC/networking or security groups
 
+```bash
+terraform apply -var-file=environment/dev.tfvars
+```
+
 ## Tearing Down
 
 The stack includes a `null_resource.flux_suspend` that automatically strips
@@ -167,7 +181,7 @@ clean one-shot destroy:
 
 ```bash
 cd test-infra/bootstrap
-terraform destroy
+terraform destroy -var-file=environment/dev.tfvars
 ```
 
 ### If destroy gets stuck

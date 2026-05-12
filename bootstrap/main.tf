@@ -1,5 +1,11 @@
 provider "aws" {
   region = var.region
+
+  # ACK adds eks:* tags to resources it manages. Ignore them so Terraform
+  # doesn't fight with ACK on every apply.
+  ignore_tags {
+    key_prefixes = ["eks:"]
+  }
 }
 
 provider "aws" {
@@ -18,9 +24,11 @@ data "aws_secretsmanager_secret" "ghcr_ptc" {
 }
 
 locals {
-  account_id          = data.aws_caller_identity.current.account_id
-  partition           = data.aws_partition.current.partition
-  vpc_id              = var.vpc_id != "" ? var.vpc_id : module.vpc[0].vpc_id
-  subnet_ids          = length(var.subnet_ids) > 0 ? var.subnet_ids : module.vpc[0].private_subnets
-  prow_images_repo    = "ack-prow-images"
+  account_id         = var.account_id
+  partition          = data.aws_partition.current.partition
+  prow_images_repo   = "ack-prow-images"
+  cluster_name       = "ack-test-infra"
+  cluster_version    = "1.35"
+  flux_path          = "./flux"
+  git_repository_url = "https://github.com/${var.test_infra_org}/${var.test_infra_repo}"
 }
