@@ -95,16 +95,21 @@ kubectl get pods -n prow
 
 ### 5. Configure GitHub webhook
 
-After Prow is deployed, get the webhook URL:
+After Prow is deployed, retrieve the webhook endpoint:
 
 ```bash
-kubectl get svc hook -n prow -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Get the hook service hostname
+HOOK_HOST=$(kubectl get svc hook -n prow -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Webhook URL: http://${HOOK_HOST}:8888/hook"
 ```
 
 Configure your GitHub App/org webhook to:
-- URL: `http://<hostname>:8888/hook`
-- Content type: `application/json`
-- Secret: same as `ack/prow/hmac-token`
+- **URL:** `http://<hostname>:8888/hook`
+- **Content type:** `application/json`
+- **Secret:** same value used in `ack/prow/hmac-token` secret
+
+> **Note:** The webhook endpoint changes each time the cluster is recreated.
+> After a fresh bootstrap, update the GitHub webhook URL with the new hostname.
 
 ## Architecture
 

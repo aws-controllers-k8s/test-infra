@@ -4,17 +4,14 @@ kind: Kustomization
 generatorOptions:
   disableNameSuffixHash: true
 
+resources:
+- job-config-job.yaml
+
 configMapGenerator:
-- name: job-config
-  namespace: prow
-  behavior: create
-  # Using gzipped binary data to stay under 1MB ConfigMap limit
-  # Kustomize auto-detects binary files (non-UTF8) and uses binaryData field
-  # https://github.com/kubernetes-sigs/kustomize/issues/408
-  # Prow uses ReadFileMaybeGZIP() to auto-decompress gzipped files
-  # https://github.com/kubernetes-sigs/prow/blob/main/pkg/config/config.go#L1958
-  files:
-  - config.yaml=jobs.yaml.gz
+# NOTE: job-config ConfigMap is created by the job-config-job (Job resource)
+# because it requires variable substitution inside gzipped binary data.
+# Flux postBuild substitution cannot operate on binaryData fields, so a Job
+# performs envsubst on jobs.yaml, gzips the result, and creates the ConfigMap.
 - name: test-config
   namespace: test-pods
   behavior: create

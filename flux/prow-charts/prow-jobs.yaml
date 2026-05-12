@@ -10,6 +10,7 @@ spec:
     name: test-infra
   path: ./prow/jobs
   prune: true
+  force: true  # Required to recreate the job-config-substitutor Job on each reconciliation
   postBuild:
     substituteFrom:
     - kind: ConfigMap
