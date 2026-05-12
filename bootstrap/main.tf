@@ -17,7 +17,6 @@ provider "awscc" {
   region = var.region
 }
 
-data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 data "aws_secretsmanager_secret" "ghcr_ptc" {
   name = "ecr-pullthroughcache/ghcr-fluxcd"

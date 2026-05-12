@@ -124,13 +124,28 @@ resource "aws_eks_cluster" "this" {
   }
 
   access_config {
-    authentication_mode = "API"
+    authentication_mode                         = "API"
+    bootstrap_cluster_creator_admin_permissions = true
   }
+
+  bootstrap_self_managed_addons = false
 
   compute_config {
     enabled       = true
     node_pools    = ["general-purpose"]
     node_role_arn = aws_iam_role.node.arn
+  }
+
+  kubernetes_network_config {
+    elastic_load_balancing {
+      enabled = true
+    }
+  }
+
+  storage_config {
+    block_storage {
+      enabled = true
+    }
   }
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
@@ -143,36 +158,6 @@ resource "aws_eks_cluster" "this" {
 
   # ACK manages the cluster configuration after bootstrap.
   # Terraform only creates it; all day-2 changes go through ACK.
-  lifecycle {
-    ignore_changes = all
-  }
-}
-
-################################################################################
-# Cluster Creator Access Entry
-################################################################################
-
-resource "aws_eks_access_entry" "cluster_creator" {
-  cluster_name  = aws_eks_cluster.this.name
-  principal_arn = data.aws_caller_identity.current.arn
-  type          = "STANDARD"
-
-  lifecycle {
-    ignore_changes = all
-  }
-}
-
-resource "aws_eks_access_policy_association" "cluster_creator_admin" {
-  cluster_name  = aws_eks_cluster.this.name
-  principal_arn = data.aws_caller_identity.current.arn
-  policy_arn    = "arn:${local.partition}:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope {
-    type = "cluster"
-  }
-
-  depends_on = [aws_eks_access_entry.cluster_creator]
-
   lifecycle {
     ignore_changes = all
   }

@@ -7,4 +7,5 @@ resources:
 - self-managed-capability.yaml
 - self-managed.yaml
 - self-managed-pod-identities.yaml
+- prow-secrets.yaml
 - prow.yaml
