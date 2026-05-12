@@ -8,10 +8,11 @@ resources:
 - job-config-job.yaml
 
 configMapGenerator:
-# NOTE: job-config ConfigMap is created by the job-config-job (Job resource)
+# NOTE: job-config ConfigMap is created by the job-config-substitutor Job
 # because it requires variable substitution inside gzipped binary data.
 # Flux postBuild substitution cannot operate on binaryData fields, so a Job
 # performs envsubst on jobs.yaml, gzips the result, and creates the ConfigMap.
+# The prow-jobs Flux Kustomization uses prune: false to avoid deleting it.
 - name: test-config
   namespace: test-pods
   behavior: create
