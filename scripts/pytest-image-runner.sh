@@ -62,6 +62,7 @@ build_pytest_image() {
             exit 1
         fi
 
+        mkdir -p "$(dirname "$TMP_TEST_AWS_CREDS_FILE_LOCATION")"
         cat > "$TMP_TEST_AWS_CREDS_FILE_LOCATION" <<EOF
 [$TEST_AWS_PROFILE_NAME]
 aws_access_key_id=$AWS_ACCESS_KEY_ID
