@@ -11,7 +11,7 @@
 # Terminating because finalizer-processing controllers are already gone.
 resource "null_resource" "flux_suspend" {
   triggers = {
-    cluster_name = module.eks.cluster_name
+    cluster_name = aws_eks_cluster.this.name
     region       = var.region
   }
 
@@ -60,7 +60,7 @@ resource "null_resource" "flux_suspend" {
 # during destroy via deletion-policy: retain on the Role CR).
 resource "null_resource" "cleanup_ack_capability_role" {
   triggers = {
-    role_name = "${var.cluster_name}-ack-capability-role"
+    role_name = "${local.cluster_name}-ack-capability-role"
     region    = var.region
   }
 

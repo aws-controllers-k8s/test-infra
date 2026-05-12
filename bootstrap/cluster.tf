@@ -2,18 +2,21 @@
 # VPC
 ################################################################################
 
-module "vpc" {
-  count = var.vpc_id == "" ? 1 : 0
+locals {
+  vpc_cidr           = "10.0.0.0/16"
+  availability_zones = ["us-west-2a", "us-west-2b"]
+}
 
+module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = "${var.cluster_name}-vpc"
-  cidr = var.vpc_cidr
+  name = "${local.cluster_name}-vpc"
+  cidr = local.vpc_cidr
 
-  azs             = var.availability_zones
-  private_subnets = [for i, az in var.availability_zones : cidrsubnet(var.vpc_cidr, 4, i)]
-  public_subnets  = [for i, az in var.availability_zones : cidrsubnet(var.vpc_cidr, 4, i + 4)]
+  azs             = local.availability_zones
+  private_subnets = [for i, az in local.availability_zones : cidrsubnet(local.vpc_cidr, 4, i)]
+  public_subnets  = [for i, az in local.availability_zones : cidrsubnet(local.vpc_cidr, 4, i + 4)]
 
   enable_nat_gateway   = true
   single_nat_gateway   = true
@@ -30,38 +33,67 @@ module "vpc" {
 }
 
 ################################################################################
-# EKS Cluster
+# EKS Cluster IAM Role
 ################################################################################
 
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+resource "aws_iam_role" "cluster" {
+  name = "${local.cluster_name}-cluster-role"
 
-  cluster_name    = var.cluster_name
-  cluster_version = var.cluster_version
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "eks.amazonaws.com" }
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
 
-  vpc_id     = local.vpc_id
-  subnet_ids = local.subnet_ids
+resource "aws_iam_role_policy_attachment" "cluster_policies" {
+  for_each = toset([
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSClusterPolicy",
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSComputePolicy",
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSBlockStoragePolicy",
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSLoadBalancingPolicy",
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSNetworkingPolicy",
+  ])
 
-  cluster_compute_config = {
-    enabled    = true
-    node_pools = ["general-purpose"]
-  }
-
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
-
-  authentication_mode                      = "API"
-  enable_cluster_creator_admin_permissions = true
+  role       = aws_iam_role.cluster.name
+  policy_arn = each.value
 }
 
 ################################################################################
-# Node Pool Role - ECR Pull-Through Cache permissions
+# EKS Auto Mode Node Role
+# Created upfront with ECR pull-through cache permissions so nodes can
+# import images from ghcr.io on first pull.
 ################################################################################
 
-resource "aws_iam_role_policy" "node_pool_ecr_ptc" {
+resource "aws_iam_role" "node" {
+  name = "${local.cluster_name}-node-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "node_policies" {
+  for_each = toset([
+    "arn:${local.partition}:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy",
+    "arn:${local.partition}:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly",
+  ])
+
+  role       = aws_iam_role.node.name
+  policy_arn = each.value
+}
+
+resource "aws_iam_role_policy" "node_ecr_ptc" {
   name = "ECRPullThroughCache"
-  role = module.eks.node_iam_role_name
+  role = aws_iam_role.node.name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -77,13 +109,68 @@ resource "aws_iam_role_policy" "node_pool_ecr_ptc" {
 }
 
 ################################################################################
+# EKS Cluster
+################################################################################
+
+resource "aws_eks_cluster" "this" {
+  name     = local.cluster_name
+  version  = local.cluster_version
+  role_arn = aws_iam_role.cluster.arn
+
+  vpc_config {
+    subnet_ids              = module.vpc.private_subnets
+    endpoint_public_access  = true
+    endpoint_private_access = true
+  }
+
+  access_config {
+    authentication_mode                         = "API"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
+  bootstrap_self_managed_addons = false
+
+  compute_config {
+    enabled       = true
+    node_pools    = ["general-purpose"]
+    node_role_arn = aws_iam_role.node.arn
+  }
+
+  kubernetes_network_config {
+    elastic_load_balancing {
+      enabled = true
+    }
+  }
+
+  storage_config {
+    block_storage {
+      enabled = true
+    }
+  }
+
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.cluster_policies,
+    aws_iam_role_policy_attachment.node_policies,
+    aws_iam_role_policy.node_ecr_ptc,
+  ]
+
+  # ACK manages the cluster configuration after bootstrap.
+  # Terraform only creates it; all day-2 changes go through ACK.
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+################################################################################
 # Cluster Security Group - Webhook ingress rule
 ################################################################################
 
 resource "aws_security_group" "prow_webhook_nlb" {
   name        = "prow-webhook-nlb-sg"
   description = "Security group for Prow webhook NLB (GitHub IPs only)"
-  vpc_id      = local.vpc_id
+  vpc_id      = module.vpc.vpc_id
 
   egress {
     from_port   = 0
@@ -105,13 +192,13 @@ resource "aws_security_group" "prow_webhook_nlb" {
     from_port   = 8888
     to_port     = 8888
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.vpc_cidr]
     description = "NLB health checks"
   }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "webhook_to_cluster" {
-  security_group_id            = module.eks.cluster_primary_security_group_id
+  security_group_id            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
   referenced_security_group_id = aws_security_group.prow_webhook_nlb.id
   from_port                    = 8888
   to_port                      = 8888
@@ -145,7 +232,7 @@ resource "aws_iam_role_policy" "cluster_admin_describe" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["eks:DescribeCluster"]
-      Resource = module.eks.cluster_arn
+      Resource = aws_eks_cluster.this.arn
     }]
   })
 }
@@ -155,37 +242,37 @@ resource "aws_iam_role_policy" "cluster_admin_describe" {
 ################################################################################
 
 provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  host                   = aws_eks_cluster.this.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
   }
 }
 
 provider "helm" {
   kubernetes = {
-    host                   = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    host                   = aws_eks_cluster.this.endpoint
+    cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
 
     exec = {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+      args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
     }
   }
 }
 
 provider "kubectl" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  host                   = aws_eks_cluster.this.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
   load_config_file       = false
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
   }
 }

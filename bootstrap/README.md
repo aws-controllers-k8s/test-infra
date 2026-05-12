@@ -51,12 +51,22 @@ aws secretsmanager create-secret \
   --secret-string '{"username":"<GITHUB_USER>","accessToken":"<GITHUB_PAT>"}'
 ```
 
-### 3. Bootstrap the cluster
+### 3. Generate your environment
+
+```bash
+cd test-infra/bootstrap
+./gen-env
+```
+
+This prompts for each variable (region, flux version, GitHub org/repo/branch)
+and writes a `.tfvars` file to `bootstrap/environment/dev.tfvars`.
+
+### 4. Bootstrap the cluster
 
 ```bash
 cd test-infra/bootstrap
 terraform init
-terraform apply
+terraform apply -var-file=environment/dev.tfvars
 ```
 
 This will:
@@ -85,16 +95,21 @@ kubectl get pods -n prow
 
 ### 5. Configure GitHub webhook
 
-After Prow is deployed, get the webhook URL:
+After Prow is deployed, retrieve the webhook endpoint:
 
 ```bash
-kubectl get svc hook -n prow -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Get the hook service hostname
+HOOK_HOST=$(kubectl get svc hook -n prow -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Webhook URL: http://${HOOK_HOST}:8888/hook"
 ```
 
 Configure your GitHub App/org webhook to:
-- URL: `http://<hostname>:8888/hook`
-- Content type: `application/json`
-- Secret: same as `ack/prow/hmac-token`
+- **URL:** `http://<hostname>:8888/hook`
+- **Content type:** `application/json`
+- **Secret:** same value used in `ack/prow/hmac-token` secret
+
+> **Note:** The webhook endpoint changes each time the cluster is recreated.
+> After a fresh bootstrap, update the GitHub webhook URL with the new hostname.
 
 ## Architecture
 
@@ -159,6 +174,10 @@ Safe to re-run anytime. Only needed when:
 - Adding new values to the `self-managed-vars` ConfigMap
 - Changing VPC/networking or security groups
 
+```bash
+terraform apply -var-file=environment/dev.tfvars
+```
+
 ## Tearing Down
 
 The stack includes a `null_resource.flux_suspend` that automatically strips
@@ -167,7 +186,7 @@ clean one-shot destroy:
 
 ```bash
 cd test-infra/bootstrap
-terraform destroy
+terraform destroy -var-file=environment/dev.tfvars
 ```
 
 ### If destroy gets stuck

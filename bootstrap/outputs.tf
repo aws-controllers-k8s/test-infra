@@ -1,16 +1,16 @@
 output "cluster_name" {
   description = "EKS cluster name"
-  value       = module.eks.cluster_name
+  value       = aws_eks_cluster.this.name
 }
 
 output "cluster_endpoint" {
   description = "EKS cluster API endpoint"
-  value       = module.eks.cluster_endpoint
+  value       = aws_eks_cluster.this.endpoint
 }
 
 output "cluster_arn" {
   description = "EKS cluster ARN"
-  value       = module.eks.cluster_arn
+  value       = aws_eks_cluster.this.arn
 }
 
 output "ack_capability_role_arn" {
@@ -25,7 +25,7 @@ output "cluster_admin_role_arn" {
 
 output "vpc_id" {
   description = "VPC ID"
-  value       = local.vpc_id
+  value       = module.vpc.vpc_id
 }
 
 output "flux_version" {
@@ -35,5 +35,5 @@ output "flux_version" {
 
 output "kubeconfig_command" {
   description = "Command to configure kubectl"
-  value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
+  value       = "aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region}"
 }

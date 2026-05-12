@@ -8,6 +8,7 @@
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     - org: aws-controllers-k8s
       repo: runtime
       base_ref: main
