@@ -28,6 +28,7 @@
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -66,6 +67,7 @@
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
       workdir: false
+      path_alias: github.com/aws-controllers-k8s/test-infra
     - org: aws-controllers-k8s
       repo: s3-controller
       base_ref: main
@@ -105,6 +107,7 @@
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     - org: aws-controllers-k8s
       repo: {{ $service }}-controller
       base_ref: main

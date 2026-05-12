@@ -8,6 +8,7 @@
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
       repo: {{ $service }}-controller
       base_ref: main
