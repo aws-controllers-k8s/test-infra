@@ -26,13 +26,19 @@ spec:
         alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
         kubernetes.io/ingress.class: "alb"
     prow:
-      domain: "prow.ack.aws.dev"
+      domain: "${PROW_DOMAIN}"
       presubmitsBucketName: "${PROW_LOGS_BUCKET}"
       tideStatusReconcilerBucketName: "${PROW_LOGS_BUCKET}"
     crier:
       serviceAccount:
         name: "prow-deployment-service-account"
     deck:
+      service:
+        type: "LoadBalancer"
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+          external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
       serviceAccount:
         name: "prow-deployment-service-account"
     hook:

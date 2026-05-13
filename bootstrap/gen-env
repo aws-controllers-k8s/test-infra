@@ -39,6 +39,7 @@ vars+=("$(prompt "flux_version" "Flux chart version" "2.18.3")")
 vars+=("$(prompt "test_infra_org" "GitHub org for test-infra repo" "aws-controllers-k8s")")
 vars+=("$(prompt "test_infra_repo" "GitHub repo name for test-infra" "test-infra")")
 vars+=("$(prompt "test_infra_branch" "Git branch for Flux and Prow jobs" "main")")
+vars+=("$(prompt "prow_domain" "Domain for Prow Deck UI" "prow-staging.ack.aws.dev")")
 
 # Write tfvars file
 OUTPUT_FILE="${ENV_DIR}/dev.tfvars"

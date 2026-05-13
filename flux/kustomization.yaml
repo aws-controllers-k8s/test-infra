@@ -9,3 +9,4 @@ resources:
 - self-managed-pod-identities.yaml
 - prow-secrets.yaml
 - prow.yaml
+- prometheus.yaml

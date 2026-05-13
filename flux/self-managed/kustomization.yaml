@@ -8,3 +8,5 @@ resources:
 - ecr-pull-through-cache.yaml
 - prow-logs-bucket.yaml
 - prow-iam-roles.yaml
+- prow-dns.yaml
+- external-dns-role.yaml

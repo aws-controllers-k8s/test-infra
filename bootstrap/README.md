@@ -111,6 +111,22 @@ Configure your GitHub App/org webhook to:
 > **Note:** The webhook endpoint changes each time the cluster is recreated.
 > After a fresh bootstrap, update the GitHub webhook URL with the new hostname.
 
+## Accessing Grafana
+
+```bash
+# Get the Grafana endpoint
+kubectl get svc -n prometheus prometheus-prometheus-grafana \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+## Accessing Deck UI
+
+```bash
+# Get the Deck endpoint
+kubectl get svc -n prow deck \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
 ## Architecture
 
 ### What Terraform owns (bootstrap only)
