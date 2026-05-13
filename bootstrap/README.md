@@ -70,12 +70,17 @@ terraform apply -var-file=environment/dev.tfvars
 ```
 
 This will:
-- Create a VPC and EKS Auto Mode cluster
+- Create a VPC and EKS Auto Mode cluster (with the built-in `general-purpose` NodePool enabled to bootstrap Flux)
 - Install Flux from the vendored chart
 - Create the ACK EKS capability
 - Build and push the `prow-build-prow-images` builder image to public ECR
 - Create a public ECR repository for all Prow images
 - Deploy ConfigMaps that bridge Terraform outputs to Flux
+
+Once Flux is running, it reconciles the ACK `Cluster` resource, which disables
+the built-in `general-purpose` NodePool and the custom `prow-compute` NodePool
+(c6a.8xlarge) takes over. This handoff happens automatically within a few
+minutes of the cluster becoming ready.
 
 ### 4. Verify deployment
 
