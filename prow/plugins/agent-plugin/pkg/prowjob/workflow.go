@@ -29,21 +29,25 @@ type WorkflowConfig struct {
 
 // Workflow represents a single workflow configuration
 type Workflow struct {
-	Description            string                   `yaml:"description" json:"description"`
-	Image                  string                   `yaml:"image" json:"image,omitempty"`
-	Command                []string                 `yaml:"command" json:"command"`
-	RequiredArgs           []string                 `yaml:"required_args" json:"required_args"`
-	OptionalArgs           []string                 `yaml:"optional_args" json:"optional_args"`
-	Timeout                string                   `yaml:"timeout" json:"timeout"`
-	TimeoutDur             time.Duration            `yaml:"-" json:"-"`
-	Environment            map[string]string        `yaml:"environment,omitempty" json:"environment,omitempty"`
-	EnvironmentFromSecrets map[string]*SecretKeyRef `yaml:"environmentFromSecrets,omitempty" json:"environmentFromSecrets,omitempty"`
-	Resources              *ResourceLimits          `yaml:"resources,omitempty" json:"resources,omitempty"`
+	Description   string              `yaml:"description" json:"description"`
+	Image         string              `yaml:"image" json:"image,omitempty"`
+	Command       []string            `yaml:"command" json:"command"`
+	RequiredArgs  []string            `yaml:"required_args" json:"required_args"`
+	OptionalArgs  []string            `yaml:"optional_args" json:"optional_args"`
+	Timeout       string              `yaml:"timeout" json:"timeout"`
+	TimeoutDur    time.Duration       `yaml:"-" json:"-"`
+	Environment   map[string]string   `yaml:"environment,omitempty" json:"environment,omitempty"`
+	SecretVolumes []*SecretVolumeSpec `yaml:"secretVolumes,omitempty" json:"secretVolumes,omitempty"`
+	Resources     *ResourceLimits     `yaml:"resources,omitempty" json:"resources,omitempty"`
 }
 
-type SecretKeyRef struct {
-	Name string `yaml:"name" json:"name"`
-	Key  string `yaml:"key" json:"key"`
+// SecretVolumeSpec defines a Kubernetes Secret to mount as a volume.
+// The secret is mounted at /etc/secrets/<secretName>/<key> and an environment
+// variable with the given envVar name is set to that path.
+type SecretVolumeSpec struct {
+	SecretName string `yaml:"secretName" json:"secretName"`
+	Key        string `yaml:"key" json:"key"`
+	EnvVar     string `yaml:"envVar" json:"envVar"`
 }
 
 // ResourceLimits defines resource constraints for workflows

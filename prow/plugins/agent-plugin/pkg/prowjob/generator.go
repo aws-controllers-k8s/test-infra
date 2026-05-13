@@ -85,18 +85,40 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 		})
 	}
 
-	for key, secretRef := range workflow.EnvironmentFromSecrets {
-		envVars = append(envVars, v1.EnvVar{
-			Name: key,
-			ValueFrom: &v1.EnvVarSource{
-				SecretKeyRef: &v1.SecretKeySelector{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: secretRef.Name,
+	// Build volume mounts and env vars for secrets fetched via CSI SecretProviderClass.
+	// Secrets are mounted at /etc/secrets/<alias> via the Secrets Store CSI driver.
+	var secretVolumeMounts []v1.VolumeMount
+	var secretVolumes []v1.Volume
+	if len(workflow.SecretVolumes) > 0 {
+		mountPath := "/etc/secrets"
+		volumeName := "secrets-store"
+
+		secretVolumeMounts = append(secretVolumeMounts, v1.VolumeMount{
+			Name:      volumeName,
+			MountPath: mountPath,
+			ReadOnly:  true,
+		})
+
+		secretVolumes = append(secretVolumes, v1.Volume{
+			Name: volumeName,
+			VolumeSource: v1.VolumeSource{
+				CSI: &v1.CSIVolumeSource{
+					Driver:   "secrets-store.csi.k8s.io",
+					ReadOnly: Bool(true),
+					VolumeAttributes: map[string]string{
+						"secretProviderClass": "prow-secrets",
 					},
-					Key: secretRef.Key,
 				},
 			},
 		})
+
+		// Set env vars pointing to the file paths where secrets are mounted
+		for _, sv := range workflow.SecretVolumes {
+			envVars = append(envVars, v1.EnvVar{
+				Name:  sv.EnvVar,
+				Value: fmt.Sprintf("%s/%s", mountPath, sv.Key),
+			})
+		}
 	}
 
 	// Add arguments as command-line flags
@@ -192,15 +214,15 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 						Requests: v1.ResourceList{},
 						Limits:   v1.ResourceList{},
 					},
-					VolumeMounts: []v1.VolumeMount{
+					VolumeMounts: append([]v1.VolumeMount{
 						{
 							Name:      "jobs-config",
 							MountPath: "/prow/jobs",
 							ReadOnly:  true,
 						},
-					},
+					}, secretVolumeMounts...),
 				}},
-				Volumes: []v1.Volume{
+				Volumes: append([]v1.Volume{
 					{
 						Name: "jobs-config",
 						VolumeSource: v1.VolumeSource{
@@ -211,7 +233,7 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 							},
 						},
 					},
-				},
+				}, secretVolumes...),
 			},
 		},
 	}
