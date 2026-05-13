@@ -24,6 +24,7 @@ aws_services:
 - cloudwatchlogs
 - codeartifact
 - cognitoidentityprovider
+- dms
 - documentdb
 - dsql
 - dynamodb
