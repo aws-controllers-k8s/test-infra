@@ -45,6 +45,11 @@ aws secretsmanager create-secret \
   --name "ack/prow/github-pat-token" \
   --secret-string "<PAT_TOKEN>"
 
+# API Model Knowledge Base ID (used by the add-resource workflow agent)
+aws secretsmanager create-secret \
+  --name "ack/prow/api-model-kb" \
+  --secret-string "<KNOWLEDGE_BASE_ID>"
+
 # ECR pull-through cache credentials for ghcr.io/fluxcd
 aws secretsmanager create-secret \
   --name "ecr-pullthroughcache/ghcr-fluxcd" \
