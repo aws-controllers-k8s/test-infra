@@ -165,20 +165,20 @@ data:
       - labels:
           preset-github-secrets: "true"
         env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
-                key: token
+          - name: GITHUB_TOKEN_PATH
+            value: /etc/github/token
           - name: GITHUB_ACTOR
             value: {{ .Values.github.bot.username | required "github.bot.username is required" | quote }}
           - name: GITHUB_EMAIL_ID
             value: {{ .Values.github.bot.emailID | required "github.bot.emailID is required" | quote }}
         volumes:
-          - name: github-token
-            secret:
-              secretName: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
+          - name: secrets-store
+            csi:
+              driver: secrets-store.csi.k8s.io
+              readOnly: true
+              volumeAttributes:
+                secretProviderClass: prow-secrets
         volumeMounts:
-          - name: github-token
+          - name: secrets-store
             mountPath: /etc/github
             readOnly: true

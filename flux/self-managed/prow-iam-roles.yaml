@@ -124,6 +124,17 @@ spec:
           }
         ]
       }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
 ---
 # Presubmit Role - used by presubmit jobs (tests, E2E)
 apiVersion: iam.services.k8s.aws/v1alpha1
@@ -248,6 +259,17 @@ spec:
               "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
               "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
             ]
+          }
+        ]
+      }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
           }
         ]
       }

@@ -2,6 +2,12 @@
 
 set -eo pipefail
 
+# Read token from file if GITHUB_TOKEN_PATH is set (CSI volume mount)
+if [ -n "${GITHUB_TOKEN_PATH:-}" ] && [ -f "${GITHUB_TOKEN_PATH}" ]; then
+    GITHUB_TOKEN=$(cat "${GITHUB_TOKEN_PATH}")
+    export GITHUB_TOKEN
+fi
+
 if [ -z "${GITHUB_TOKEN}" ]; then
     >&2 echo "build-docs.sh] GITHUB_TOKEN not specified. Required for pushing to GH pages."
     exit 1
