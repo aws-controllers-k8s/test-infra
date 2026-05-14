@@ -1,6 +1,9 @@
   aws-controllers-k8s/ack-chart:
   - name: ack-chart-release
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}

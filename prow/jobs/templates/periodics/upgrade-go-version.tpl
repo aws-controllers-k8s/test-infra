@@ -3,6 +3,8 @@
   interval: 168h
   annotations:
     description: Querys go version in ECR and compare it with versuib in repository. Raises a PR with updated GO_VERSION and bumped prow image versions
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   extra_refs:
   - org: ${TEST_INFRA_ORG}
     repo: ${TEST_INFRA_REPO}

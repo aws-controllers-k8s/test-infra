@@ -3,6 +3,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:

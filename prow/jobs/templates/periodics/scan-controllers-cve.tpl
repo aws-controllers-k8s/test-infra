@@ -3,6 +3,8 @@
   interval: 720h
   annotations:
     description: Scans ack supported AWS service controllers for CVE's. If they exist, creates a github issue in commmunity repository
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   extra_refs:
   - org: ${TEST_INFRA_ORG}
     repo: ${TEST_INFRA_REPO}

@@ -5,6 +5,9 @@
     optional: false
     # only if src/acktest/ code changed
     run_if_changed: ^(src/acktest/.*|requirements.txt)
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"

@@ -1,6 +1,9 @@
   aws-controllers-k8s/code-generator:
   - name: auto-generate-controllers
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:

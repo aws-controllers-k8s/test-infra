@@ -3,6 +3,8 @@
   decorate: true
   annotations:
     description: Adds lifecycle/stale to issues after 90d of inactivity
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   labels:
     preset-github-secrets: "true"
   agent: kubernetes

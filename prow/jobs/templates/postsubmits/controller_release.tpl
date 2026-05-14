@@ -2,6 +2,9 @@
   aws-controllers-k8s/{{ $service }}-controller:
   - name: {{ $service }}-post-submit
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -34,6 +37,9 @@
   {{ if contains $.Config.SoakTestOnReleaseServiceNames $service }}
   - name: {{ $service }}-soak-on-release
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -58,6 +64,9 @@
   {{ end }}
   - name: {{ $service }}-controller-release-tag
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
@@ -83,6 +92,9 @@
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
     job_queue_name: olm-bundle-prs
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
@@ -116,6 +128,9 @@
   
   - name: update-ack-chart
     decorate: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:

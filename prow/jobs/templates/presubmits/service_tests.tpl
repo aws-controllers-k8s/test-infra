@@ -4,6 +4,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -53,6 +56,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
@@ -93,6 +99,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-test-config: "true"
     extra_refs:
@@ -123,6 +132,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -143,6 +155,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -172,6 +187,9 @@
     always_run: true
     decorate: true
     optional: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -207,6 +225,9 @@
     always_run: true
     decorate: true
     optional: false
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator
@@ -244,6 +265,9 @@
     decorate: true
     optional: false
     run_if_changed: "^(config/crd/|helm/crds/)"
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: code-generator

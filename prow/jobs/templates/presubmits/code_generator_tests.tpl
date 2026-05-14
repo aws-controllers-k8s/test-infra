@@ -3,6 +3,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:
@@ -23,6 +26,9 @@
     always_run: true
     decorate: true
     optional: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -58,6 +64,9 @@
     decorate: true
     optional: true
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
     - org: aws-controllers-k8s
       repo: runtime
@@ -94,6 +103,9 @@
     decorate: true
     optional: false
     always_run: true
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-dind-enabled: "true"
       preset-kind-volume-mounts: "true"
