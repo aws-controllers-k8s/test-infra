@@ -10,3 +10,4 @@ resources:
 - prow-iam-roles.yaml
 - prow-dns.yaml
 - external-dns-role.yaml
+- supernova-role.yaml
