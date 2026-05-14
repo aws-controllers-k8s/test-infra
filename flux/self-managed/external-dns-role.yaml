@@ -1,0 +1,47 @@
+# IAM Role for external-dns - allows managing Route53 records
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: external-dns-role
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: external-dns-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    Route53Records: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "route53:ChangeResourceRecordSets"
+            ],
+            "Resource": "arn:aws:route53:::hostedzone/*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "route53:ListHostedZones",
+              "route53:ListResourceRecordSets",
+              "route53:ListTagsForResource"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }

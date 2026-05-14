@@ -2,6 +2,12 @@
 
 set -eo pipefail
 
+# Read token from file if GITHUB_TOKEN_PATH is set (CSI volume mount)
+if [ -n "${GITHUB_TOKEN_PATH:-}" ] && [ -f "${GITHUB_TOKEN_PATH}" ]; then
+    GITHUB_TOKEN=$(cat "${GITHUB_TOKEN_PATH}")
+    export GITHUB_TOKEN
+fi
+
 extract_pr_number() {
     echo "$1" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+'
 }

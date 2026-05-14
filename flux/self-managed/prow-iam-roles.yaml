@@ -124,6 +124,17 @@ spec:
           }
         ]
       }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
 ---
 # Presubmit Role - used by presubmit jobs (tests, E2E)
 apiVersion: iam.services.k8s.aws/v1alpha1
@@ -237,6 +248,72 @@ spec:
       ]
     }
   inlinePolicies:
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
+---
+# Workflow Runner Role - used by agent workflow job pods in test-pods
+# to mount the SecretProviderClass via the Secrets Store CSI driver.
+# Grants access to secrets needed by workflow jobs.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-workflow-runner-role
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: prow-workflow-runner-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": [
+              "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/github-pat-token-*",
+              "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/api-model-kb-*"
+            ]
+          }
+        ]
+      }
     S3Logs: |
       {
         "Version": "2012-10-17",

@@ -44,3 +44,14 @@ spec:
   namespace: test-pods
   serviceAccount: periodic-service-account
   roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-periodic-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-workflow-runner-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  namespace: test-pods
+  serviceAccount: workflow-runner
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-workflow-runner-role

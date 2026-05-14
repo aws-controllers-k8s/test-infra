@@ -16,3 +16,15 @@ spec:
         }
       }
     }
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: external-dns-addon
+  namespace: ack-system
+spec:
+  clusterName: ${CLUSTER_NAME}
+  name: external-dns
+  podIdentityAssociations:
+  - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/external-dns-role
+    serviceAccount: external-dns

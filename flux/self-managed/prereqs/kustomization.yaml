@@ -5,3 +5,4 @@ resources:
 - ack-capability-role.yaml
 - storage-class.yaml
 - prow-namespaces.yaml
+- nodepool.yaml

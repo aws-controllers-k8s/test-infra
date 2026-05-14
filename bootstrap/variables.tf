@@ -17,6 +17,12 @@ variable "flux_version" {
   default     = "2.18.3"
 }
 
+variable "prow_domain" {
+  description = "Domain for Prow Deck UI (e.g., prow.ack.aws.dev for prod, prow-staging.ack.aws.dev for dev)"
+  type        = string
+  default     = "prow.ack.aws.dev"
+}
+
 variable "test_infra_org" {
   description = "GitHub org for test-infra repo (used in Prow job extra_refs)"
   type        = string

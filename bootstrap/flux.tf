@@ -106,6 +106,7 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     PROW_IMAGES_REPO_URI    = aws_ecrpublic_repository.prow_images.repository_uri
     PROW_IMAGE_REPO         = aws_ecrpublic_repository.prow_images.repository_uri
     PROW_LOGS_BUCKET        = "ack-prow-logs-${local.account_id}"
+    PROW_DOMAIN             = var.prow_domain
     TEST_INFRA_ORG          = var.test_infra_org
     TEST_INFRA_REPO         = var.test_infra_repo
     TEST_INFRA_BRANCH       = var.test_infra_branch

@@ -19,8 +19,9 @@ spec:
     authenticationMode: API
   computeConfig:
     enabled: true
-    nodePools:
-    - general-purpose
+    # Built-in node pools disabled. Custom `prow-compute` NodePool (c6a.8xlarge)
+    # is defined in flux/self-managed/prereqs/nodepool.yaml.
+    nodePools: []
   logging:
     clusterLogging:
     - enabled: true

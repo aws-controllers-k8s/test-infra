@@ -9,13 +9,13 @@
             GITHUB_EMAIL_PREFIX: "82905295"
             GITHUB_ACTOR: ack-bot
             JOBS_CONFIG_PATH: "/prow/jobs/jobs_config.yaml"
-        environmentFromSecrets:
-            GITHUB_TOKEN:
-                name: prowjob-github-pat-token
-                key: token
-            MODEL_AGENT_KB_ID:
-                name: api-model-kb
-                key: id
+        secretVolumes:
+            - secretName: prowjob-github-pat-token
+              key: github-pat-token
+              envVar: GITHUB_TOKEN
+            - secretName: api-model-kb
+              key: api-model-kb
+              envVar: MODEL_AGENT_KB_ID
         timeout: "45m"
         resources:
             cpu: "2"
