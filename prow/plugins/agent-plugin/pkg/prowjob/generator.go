@@ -193,7 +193,6 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 				CensoringOptions: &prowv1.CensoringOptions{
 					IncludeDirectories: []string{"/etc/github"},
 				},
-				S3CredentialsSecret: String("s3-credentials"),
 				UtilityImages: &k8s.UtilityImages{
 					CloneRefs:  "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
 					InitUpload: "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
