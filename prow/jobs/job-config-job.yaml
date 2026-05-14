@@ -77,7 +77,7 @@ spec:
         - name: workspace
           mountPath: /workspace
       - name: substitute-and-gzip
-        image: alpine:3.20
+        image: public.ecr.aws/docker/library/alpine:3.21
         command:
         - /bin/sh
         - -ec
@@ -121,7 +121,7 @@ spec:
           mountPath: /output
       containers:
       - name: apply-configmap
-        image: bitnami/kubectl:latest
+        image: public.ecr.aws/bitnami/kubectl:latest
         command:
         - /bin/bash
         - -ec

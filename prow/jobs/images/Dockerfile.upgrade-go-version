@@ -11,6 +11,6 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/jobs/tools/cmd
 
 # Start a new stage from scratch
-FROM alpine:latest
+FROM public.ecr.aws/docker/library/alpine:3.21
 
 COPY --from=builder /go/ack-build-tools /usr/local/bin/

@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS base
+FROM public.ecr.aws/docker/library/debian:trixie-slim AS base
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}

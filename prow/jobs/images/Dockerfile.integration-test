@@ -1,5 +1,5 @@
 # Dockerfile for integration testing
-FROM debian:bookworm-slim
+FROM public.ecr.aws/docker/library/debian:trixie-slim
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
