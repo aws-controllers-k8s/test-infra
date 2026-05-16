@@ -60,6 +60,8 @@ resource "aws_iam_role_policy_attachment" "cluster_policies" {
 
   role       = aws_iam_role.cluster.name
   policy_arn = each.value
+
+  depends_on = [aws_iam_role.cluster]
 }
 
 ################################################################################
@@ -89,6 +91,8 @@ resource "aws_iam_role_policy_attachment" "node_policies" {
 
   role       = aws_iam_role.node.name
   policy_arn = each.value
+
+  depends_on = [aws_iam_role.node]
 }
 
 resource "aws_iam_role_policy" "node_ecr_ptc" {
@@ -106,6 +110,8 @@ resource "aws_iam_role_policy" "node_ecr_ptc" {
       Resource = "arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/fluxcd/*"
     }]
   })
+
+  depends_on = [aws_iam_role.node]
 }
 
 ################################################################################
@@ -195,6 +201,8 @@ resource "aws_security_group" "prow_webhook_nlb" {
     cidr_blocks = [local.vpc_cidr]
     description = "NLB health checks"
   }
+
+  depends_on = [module.vpc]
 }
 
 resource "aws_vpc_security_group_ingress_rule" "webhook_to_cluster" {
@@ -204,6 +212,8 @@ resource "aws_vpc_security_group_ingress_rule" "webhook_to_cluster" {
   to_port                      = 8888
   ip_protocol                  = "tcp"
   description                  = "Webhook NLB to Prow hook pods"
+
+  depends_on = [aws_eks_cluster.this, aws_security_group.prow_webhook_nlb]
 }
 
 ################################################################################
@@ -235,6 +245,8 @@ resource "aws_iam_role_policy" "cluster_admin_describe" {
       Resource = aws_eks_cluster.this.arn
     }]
   })
+
+  depends_on = [aws_iam_role.cluster_admin, aws_eks_cluster.this]
 }
 
 ################################################################################
@@ -275,4 +287,24 @@ provider "kubectl" {
     command     = "aws"
     args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
   }
+}
+
+################################################################################
+# NodePool Swap - delete general-purpose once prow-compute is ready
+################################################################################
+
+resource "null_resource" "swap_nodepool" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+    script       = "${path.module}/scripts/swap-nodepool.sh"
+  }
+
+  provisioner "local-exec" {
+    command = "${self.triggers.script} ${self.triggers.cluster_name} ${self.triggers.region}"
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations
+  ]
 }

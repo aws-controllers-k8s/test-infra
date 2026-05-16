@@ -34,6 +34,11 @@ resource "aws_iam_role_policy" "ack_capability_initial" {
       },
       {
         Effect   = "Allow"
+        Action   = ["iam:*"]
+        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.cluster_name}-ack-managed-role"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["eks:*"]
         Resource = [
           "arn:${local.partition}:eks:${var.region}:${local.account_id}:capability/${local.cluster_name}/*",
@@ -69,3 +74,5 @@ resource "awscc_eks_capability" "ack" {
 
   depends_on = [aws_eks_cluster.this]
 }
+
+

@@ -15,7 +15,37 @@ Flux manages its own upgrades and ACK manages the cluster.
 
 ## First-Time Bootstrap
 
-### 1. Vendor the Flux chart
+### 1. Create the Terraform state backend
+
+The S3 backend must exist before running `terraform init`:
+
+```bash
+# Create the state bucket
+aws s3api create-bucket \
+  --bucket ack-test-infra-terraform-state \
+  --region us-west-2 \
+  --create-bucket-configuration LocationConstraint=us-west-2
+
+# Enable versioning (allows state recovery)
+aws s3api put-bucket-versioning \
+  --bucket ack-test-infra-terraform-state \
+  --versioning-configuration Status=Enabled
+
+# Enable server-side encryption by default
+aws s3api put-bucket-encryption \
+  --bucket ack-test-infra-terraform-state \
+  --server-side-encryption-configuration '{
+    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}, "BucketKeyEnabled": true}]
+  }'
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket ack-test-infra-terraform-state \
+  --public-access-block-configuration \
+    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+### 2. Vendor the Flux chart
 
 ```bash
 cd test-infra
@@ -25,7 +55,7 @@ git commit -m "chore(flux): vendor flux2 chart"
 git push
 ```
 
-### 2. Create required AWS Secrets Manager secrets
+### 3. Create required AWS Secrets Manager secrets
 
 Prow requires the following secrets to exist before deployment:
 
@@ -56,7 +86,7 @@ aws secretsmanager create-secret \
   --secret-string '{"username":"<GITHUB_USER>","accessToken":"<GITHUB_PAT>"}'
 ```
 
-### 3. Generate your environment
+### 4. Generate your environment
 
 ```bash
 cd test-infra/bootstrap
@@ -66,7 +96,7 @@ cd test-infra/bootstrap
 This prompts for each variable (region, flux version, GitHub org/repo/branch)
 and writes a `.tfvars` file to `bootstrap/environment/dev.tfvars`.
 
-### 4. Bootstrap the cluster
+### 5. Bootstrap the cluster
 
 ```bash
 cd test-infra/bootstrap
@@ -87,7 +117,7 @@ the built-in `general-purpose` NodePool and the custom `prow-compute` NodePool
 (c6a.8xlarge) takes over. This handoff happens automatically within a few
 minutes of the cluster becoming ready.
 
-### 4. Verify deployment
+### 6. Verify deployment
 
 ```bash
 # Configure kubectl
@@ -103,7 +133,7 @@ kubectl get role.iam,capability.eks,cluster.eks,accessentry.eks -n ack-system
 kubectl get pods -n prow
 ```
 
-### 5. Configure GitHub webhook
+### 7. Configure GitHub webhook
 
 After Prow is deployed, retrieve the webhook endpoint:
 
@@ -157,24 +187,28 @@ kubectl get svc -n prow deck \
 
 | What | Where |
 |------|-------|
-| Flux upgrades | `flux/flux-self/helm-release.yaml` |
-| Cluster config (logging, version) | `flux/self-managed/cluster.yaml` |
-| Access entries | `flux/self-managed/access-entries.yaml` |
-| EKS addons | `flux/self-managed/addons.yaml` |
-| ACK capability role (full perms) | `flux/self-managed/prereqs/ack-capability-role.yaml` |
-| Prow IAM roles + Pod Identities | `flux/self-managed/prow-iam-roles.yaml` |
-| Prow image builds | `flux/prow-build-images/build-job.yaml` |
-| Prow deployment | `flux/prow-charts/` |
-| S3 bucket, ECR pull-through cache | `flux/self-managed/` |
+| Flux upgrades | `flux/flux/helm-release.yaml` |
+| Cluster config (logging, version) | `flux/ack/cluster/cluster.yaml` |
+| Access entries | `flux/ack/cluster/access-entries.yaml` |
+| EKS addons | `flux/ack/cluster/addons/addons.yaml` |
+| ACK capability role | `flux/ack/capability/role/ack-capability-role.yaml` |
+| Prow IAM roles + Pod Identities | `flux/ack/cluster/pod-identities/` |
+| Prow image builds | `flux/prow/build-images/build-job.yaml` |
+| Prow deployment | `flux/prow/charts/` |
+| S3 bucket, DNS, Supernova role | `flux/ack/prow/` |
+| ECR pull-through cache | `flux/ack/flux/ecr-pull-through-cache.yaml` |
 
 ### Dependency chain
 
 ```
 Terraform bootstrap
     ↓
-flux-self → self-managed-prereqs → self-managed-capability → self-managed-cluster → self-managed-pod-identities
-                                                                    ↓
-                                                              prow-crds → prow-build-images → prow-charts
+ack-capability-role ─→ ack-capability ─→ ack-cluster ─┬─→ ack-addons (+ ack-addons-roles)
+ack-addons-roles (no deps)                             ├─→ ack-pod-identities
+                                                       ├─→ ack-prow
+                                                       └─→ ack-flux
+                                                              ↓
+                                              prow-crds ─→ prow-build-images ─→ prow-charts ─→ prometheus
 ```
 
 ## Upgrading Flux
@@ -234,4 +268,34 @@ terraform state rm kubernetes_config_map_v1.flux_version
 
 # Destroy everything else
 terraform destroy
+```
+
+## Cleaning Up the State Backend
+
+After destroying all infrastructure, you can remove the Terraform state backend.
+This is irreversible — only do this if you're fully decommissioning the environment.
+
+```bash
+# 1. Empty the state bucket (including all versions)
+aws s3api list-object-versions \
+  --bucket ack-test-infra-terraform-state \
+  --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+  --output json | \
+  aws s3api delete-objects \
+    --bucket ack-test-infra-terraform-state \
+    --delete file:///dev/stdin
+
+# 2. Remove any delete markers
+aws s3api list-object-versions \
+  --bucket ack-test-infra-terraform-state \
+  --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+  --output json | \
+  aws s3api delete-objects \
+    --bucket ack-test-infra-terraform-state \
+    --delete file:///dev/stdin
+
+# 3. Delete the bucket
+aws s3api delete-bucket \
+  --bucket ack-test-infra-terraform-state \
+  --region us-west-2
 ```
