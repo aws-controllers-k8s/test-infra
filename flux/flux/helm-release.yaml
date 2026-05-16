@@ -28,16 +28,16 @@ spec:
     crds: CreateReplace
   values:
     cli:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/flux-cli
+      image: ${FLUX_IMAGE_REGISTRY}/flux-cli
     helmController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/helm-controller
+      image: ${FLUX_IMAGE_REGISTRY}/helm-controller
     imageAutomationController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/image-automation-controller
+      image: ${FLUX_IMAGE_REGISTRY}/image-automation-controller
     imageReflectionController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/image-reflector-controller
+      image: ${FLUX_IMAGE_REGISTRY}/image-reflector-controller
     kustomizeController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/kustomize-controller
+      image: ${FLUX_IMAGE_REGISTRY}/kustomize-controller
     notificationController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/notification-controller
+      image: ${FLUX_IMAGE_REGISTRY}/notification-controller
     sourceController:
-      image: ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/fluxcd/fluxcd/source-controller
+      image: ${FLUX_IMAGE_REGISTRY}/source-controller

@@ -1,5 +1,6 @@
 # Prow Pod Identity Associations - links IAM roles to service accounts.
-# Deployed after roles are ready (separate kustomization stage).
+# Uses hardcoded roleARN references. Roles are created first via the
+# ack-pod-identity-roles Kustomization before this is applied.
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation

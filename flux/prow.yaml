@@ -10,14 +10,14 @@ metadata:
   name: prow-crds
   namespace: flux-system
 spec:
-  interval: 1h
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow-crds
+  path: ./flux/prow/crds
   prune: true
   dependsOn:
-  - name: self-managed-cluster
+  - name: ack-pod-identities
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -25,11 +25,11 @@ metadata:
   name: prow-build-images
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow-build-images
+  path: ./flux/prow/build-images
   prune: false
   force: true
   postBuild:
@@ -38,7 +38,7 @@ spec:
       name: self-managed-vars
   dependsOn:
   - name: prow-crds
-  - name: self-managed-cluster
+  - name: ack-pod-identities
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -46,11 +46,11 @@ metadata:
   name: prow-charts
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow-charts
+  path: ./flux/prow/charts
   prune: true
   targetNamespace: flux-system
   postBuild:

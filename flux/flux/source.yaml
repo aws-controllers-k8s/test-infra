@@ -9,9 +9,9 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/gustavodiaz7722/ack-test-infra
+  url: https://github.com/${TEST_INFRA_ORG}/${TEST_INFRA_REPO}
   ref:
-    branch: flux-v2-api-upgrade
+    branch: ${TEST_INFRA_BRANCH}
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -19,7 +19,7 @@ metadata:
   name: test-infra
   namespace: flux-system
 spec:
-  interval: 1m
+  interval: 60m
   path: ./flux
   prune: true
   sourceRef:

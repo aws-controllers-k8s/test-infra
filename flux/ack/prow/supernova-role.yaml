@@ -5,8 +5,6 @@ kind: Role
 metadata:
   name: supernova-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: Nova-DO-NOT-DELETE
   assumeRolePolicyDocument: |

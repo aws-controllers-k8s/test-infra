@@ -6,8 +6,6 @@ kind: Role
 metadata:
   name: prow-deployment-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: prow-deployment-role
   assumeRolePolicyDocument: |
@@ -56,8 +54,6 @@ kind: Role
 metadata:
   name: prow-postsubmit-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: prow-postsubmit-role
   assumeRolePolicyDocument: |
@@ -142,8 +138,6 @@ kind: Role
 metadata:
   name: prow-presubmit-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: prow-presubmit-role
   assumeRolePolicyDocument: |
@@ -230,8 +224,6 @@ kind: Role
 metadata:
   name: prow-periodic-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: prow-periodic-role
   assumeRolePolicyDocument: |
@@ -282,8 +274,6 @@ kind: Role
 metadata:
   name: prow-workflow-runner-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: prow-workflow-runner-role
   assumeRolePolicyDocument: |

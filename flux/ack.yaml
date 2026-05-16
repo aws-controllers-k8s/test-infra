@@ -1,0 +1,245 @@
+# ACK self-managed cluster — full dependency chain:
+#
+#   ack-capability-role (no deps) ─→ ack-capability ─→ ack-cluster ─┬─→ ack-addons (+ ack-addons-roles)
+#   ack-addons-roles (depends on capability) ──────────────────────┘ └─→ ack-pod-identities (+ ack-pod-identity-roles)
+#   ack-pod-identity-roles (depends on capability) ────────────────────→ ack-prow
+#                                                                        ack-flux
+#
+# Roles are created first in separate Kustomizations, then resources that
+# reference them (via hardcoded ARN) are applied after roles are ready.
+#
+# Each kustomization uses wait: true so Flux performs health checks on ALL
+# reconciled resources before downstream dependents proceed.
+# interval: 60m for drift detection (git pushes trigger immediate reconciliation).
+# retryInterval: 2m for faster recovery from transient AWS failures.
+
+# --- Roles (no dependencies, start immediately) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-capability-role
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/capability/role
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  wait: true
+  timeout: 3m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-addons-roles
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/cluster/addons/roles
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  wait: true
+  timeout: 3m
+
+# --- Capability (depends on role) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-capability
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/capability
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability-role
+  wait: true
+  timeout: 3m
+
+# --- Cluster (depends on capability) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-cluster
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/cluster
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  wait: true
+  timeout: 3m
+
+# --- Addons (depends on cluster + addon roles) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-addons
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/cluster/addons
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-cluster
+  - name: ack-addons-roles
+  wait: true
+  timeout: 3m
+
+# --- Pod Identity Roles (depends on capability; start before associations) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-pod-identity-roles
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/cluster/pod-identities/roles
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  wait: true
+  timeout: 3m
+
+# --- Pod Identities (depends on cluster + roles) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-pod-identities
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/cluster/pod-identities
+  prune: true
+  deletionPolicy: WaitForTermination
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-cluster
+  - name: ack-pod-identity-roles
+  wait: true
+  timeout: 3m
+
+# --- Prow ACK Resources (depends on capability) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-prow
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/prow
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  wait: true
+  timeout: 3m
+
+# --- Flux ECR Pull-Through Cache (depends on capability) ---
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-flux
+  namespace: flux-system
+spec:
+  interval: 60m
+  retryInterval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/flux
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  wait: true
+  timeout: 3m

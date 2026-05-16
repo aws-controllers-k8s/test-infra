@@ -7,7 +7,7 @@ metadata:
   name: prometheus
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -26,7 +26,7 @@ metadata:
   name: prometheus-dashboards
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra

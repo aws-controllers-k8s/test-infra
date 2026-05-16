@@ -5,8 +5,6 @@ kind: Role
 metadata:
   name: external-dns-role
   namespace: ack-system
-  annotations:
-    services.k8s.aws/deletion-policy: retain
 spec:
   name: external-dns-role
   assumeRolePolicyDocument: |
