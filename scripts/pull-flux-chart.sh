@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CHARTS_DIR="$REPO_ROOT/charts"
-VERSION_FILE="$REPO_ROOT/flux/flux-self/version-configmap.yaml"
+VERSION_FILE="$REPO_ROOT/flux/flux/version-configmap.yaml"
 UPSTREAM_REPO="https://fluxcd-community.github.io/helm-charts"
 
 if ! command -v helm >/dev/null 2>&1; then
@@ -73,5 +73,5 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  git add charts/flux2-${version}/ flux/flux-self/version-configmap.yaml"
+echo "  git add charts/flux2-${version}/ flux/flux/version-configmap.yaml"
 echo "  git commit -m \"chore(flux): vendor flux2 chart ${version}\""

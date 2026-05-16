@@ -20,7 +20,7 @@ charts/
 # Edit flux/flux-version.yaml, then:
 ./scripts/pull-flux-chart.sh
 
-# Also update the chart path in flux/flux-self/helm-release.yaml:
+# Also update the chart path in flux/flux/helm-release.yaml:
 #   spec.chart.spec.chart: ./charts/flux2-<new-version>
 
 git add charts/ flux/
