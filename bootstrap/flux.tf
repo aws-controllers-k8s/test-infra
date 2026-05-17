@@ -34,7 +34,7 @@ resource "null_resource" "bootstrap_flux" {
   }
 
   depends_on = [
-    aws_eks_cluster.this, awscc_eks_capability.ack, kubernetes_namespace_v1.ack_system
+    aws_eks_cluster.this, awscc_eks_capability.ack, null_resource.ack_system_namespace
   ]
 }
 

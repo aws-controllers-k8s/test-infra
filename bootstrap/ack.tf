@@ -2,9 +2,14 @@
 # ACK Namespace & Resource Cleanup
 ################################################################################
 
-resource "kubernetes_namespace_v1" "ack_system" {
-  metadata {
-    name = "ack-system"
+resource "null_resource" "ack_system_namespace" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region} 2>/dev/null && kubectl create namespace ack-system --dry-run=client -o yaml | kubectl apply -f -"
   }
 
   depends_on = [aws_eks_cluster.this, awscc_eks_capability.ack, aws_iam_role_policy.ack_capability_initial]
@@ -57,7 +62,7 @@ resource "null_resource" "cleanup_ack_capability_role" {
     on_failure = continue
   }
 
-    depends_on = [kubernetes_namespace_v1.ack_system]
+    depends_on = [null_resource.ack_system_namespace]
 
 }
 
@@ -88,7 +93,7 @@ resource "null_resource" "cleanup_prow_logs_bucket" {
     on_failure = continue
   }
 
-  depends_on = [kubernetes_namespace_v1.ack_system]
+  depends_on = [null_resource.ack_system_namespace]
 }
 
 # Deletes all non-required record sets and then the Route53 hosted zone
@@ -138,5 +143,5 @@ print(json.dumps(batch))
     on_failure = continue
   }
 
-  depends_on = [kubernetes_namespace_v1.ack_system]
+  depends_on = [null_resource.ack_system_namespace]
 }
