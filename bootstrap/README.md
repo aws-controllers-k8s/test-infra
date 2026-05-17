@@ -17,33 +17,15 @@ Flux manages its own upgrades and ACK manages the cluster.
 
 ### 1. Create the Terraform state backend
 
-The S3 backend must exist before running `terraform init`:
-
 ```bash
-# Create the state bucket
-aws s3api create-bucket \
-  --bucket ack-test-infra-terraform-state \
-  --region us-west-2 \
-  --create-bucket-configuration LocationConstraint=us-west-2
-
-# Enable versioning (allows state recovery)
-aws s3api put-bucket-versioning \
-  --bucket ack-test-infra-terraform-state \
-  --versioning-configuration Status=Enabled
-
-# Enable server-side encryption by default
-aws s3api put-bucket-encryption \
-  --bucket ack-test-infra-terraform-state \
-  --server-side-encryption-configuration '{
-    "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}, "BucketKeyEnabled": true}]
-  }'
-
-# Block all public access
-aws s3api put-public-access-block \
-  --bucket ack-test-infra-terraform-state \
-  --public-access-block-configuration \
-    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+cd test-infra/bootstrap
+./scripts/bootstrap-backend.sh
 ```
+
+This finds or creates an S3 bucket with prefix `ack-test-infra-terraform-state`
+(appending a random suffix for global uniqueness) and writes `backend.tf` with
+the bucket name. The script is idempotent — on subsequent runs it reuses the
+existing bucket.
 
 ### 2. Vendor the Flux chart
 
@@ -276,26 +258,6 @@ After destroying all infrastructure, you can remove the Terraform state backend.
 This is irreversible — only do this if you're fully decommissioning the environment.
 
 ```bash
-# 1. Empty the state bucket (including all versions)
-aws s3api list-object-versions \
-  --bucket ack-test-infra-terraform-state \
-  --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
-  --output json | \
-  aws s3api delete-objects \
-    --bucket ack-test-infra-terraform-state \
-    --delete file:///dev/stdin
-
-# 2. Remove any delete markers
-aws s3api list-object-versions \
-  --bucket ack-test-infra-terraform-state \
-  --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
-  --output json | \
-  aws s3api delete-objects \
-    --bucket ack-test-infra-terraform-state \
-    --delete file:///dev/stdin
-
-# 3. Delete the bucket
-aws s3api delete-bucket \
-  --bucket ack-test-infra-terraform-state \
-  --region us-west-2
+cd test-infra/bootstrap
+./scripts/cleanup-backend.sh
 ```
