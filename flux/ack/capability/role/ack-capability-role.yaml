@@ -11,7 +11,7 @@ metadata:
   annotations:
     services.k8s.aws/deletion-policy: retain
 spec:
-  name: ${CLUSTER_NAME}-ack-capability-role
+  name: ${STACK_NAME}-ack-capability-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -114,8 +114,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:*"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           },
           {

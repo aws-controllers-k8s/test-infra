@@ -6,11 +6,11 @@ metadata:
   namespace: ack-system
   annotations:
     services.k8s.aws/adoption-policy: adopt-or-create
-    services.k8s.aws/adoption-fields: '{"name": "ack-eks", "clusterName": "${CLUSTER_NAME}"}'
+    services.k8s.aws/adoption-fields: '{"name": "ack-eks", "clusterName": "${STACK_NAME}-cluster"}'
     services.k8s.aws/deletion-policy: retain
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   name: ack-eks
   type: ACK
   deletePropagationPolicy: RETAIN
-  roleARN: "${ACK_CAPABILITY_ROLE_ARN}"
+  roleARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-ack-capability-role"

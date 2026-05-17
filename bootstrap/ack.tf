@@ -30,7 +30,7 @@ resource "null_resource" "cleanup_ack_resources" {
 # during destroy via deletion-policy: retain on the Role CR).
 resource "null_resource" "cleanup_ack_capability_role" {
   triggers = {
-    role_name = "${local.cluster_name}-ack-capability-role"
+    role_name = "${local.stack_name}-ack-capability-role"
     region    = var.region
   }
 
@@ -64,7 +64,7 @@ resource "null_resource" "cleanup_ack_capability_role" {
 # Empties and deletes the Prow logs S3 bucket (retained by ACK).
 resource "null_resource" "cleanup_prow_logs_bucket" {
   triggers = {
-    bucket_name = "ack-prow-logs-${local.account_id}"
+    bucket_name = "${local.stack_name}-prow-logs"
     region      = var.region
   }
 

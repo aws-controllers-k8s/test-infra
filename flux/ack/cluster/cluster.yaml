@@ -3,14 +3,14 @@
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: Cluster
 metadata:
-  name: ${CLUSTER_NAME}
+  name: ${STACK_NAME}-cluster
   namespace: ack-system
   annotations:
     services.k8s.aws/adoption-policy: adopt-or-create
-    services.k8s.aws/adoption-fields: '{"name": "${CLUSTER_NAME}"}'
+    services.k8s.aws/adoption-fields: '{"name": "${STACK_NAME}-cluster"}'
     services.k8s.aws/deletion-policy: retain
 spec:
-  name: ${CLUSTER_NAME}
+  name: ${STACK_NAME}-cluster
   version: "1.35"
   resourcesVPCConfig:
     endpointPublicAccess: true

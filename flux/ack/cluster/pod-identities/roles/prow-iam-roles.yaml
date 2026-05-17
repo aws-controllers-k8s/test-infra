@@ -7,7 +7,7 @@ metadata:
   name: prow-deployment-role
   namespace: ack-system
 spec:
-  name: prow-deployment-role
+  name: ${STACK_NAME}-prow-deployment-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -30,8 +30,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           }
         ]
@@ -55,7 +55,7 @@ metadata:
   name: prow-postsubmit-role
   namespace: ack-system
 spec:
-  name: prow-postsubmit-role
+  name: ${STACK_NAME}-prow-postsubmit-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -78,8 +78,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           }
         ]
@@ -139,7 +139,7 @@ metadata:
   name: prow-presubmit-role
   namespace: ack-system
 spec:
-  name: prow-presubmit-role
+  name: ${STACK_NAME}-prow-presubmit-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -162,8 +162,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           }
         ]
@@ -225,7 +225,7 @@ metadata:
   name: prow-periodic-role
   namespace: ack-system
 spec:
-  name: prow-periodic-role
+  name: ${STACK_NAME}-prow-periodic-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -248,8 +248,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           }
         ]
@@ -275,7 +275,7 @@ metadata:
   name: prow-workflow-runner-role
   namespace: ack-system
 spec:
-  name: prow-workflow-runner-role
+  name: ${STACK_NAME}-prow-workflow-runner-role
   assumeRolePolicyDocument: |
     {
       "Version": "2012-10-17",
@@ -312,8 +312,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}",
-              "arn:aws:s3:::ack-prow-logs-${ACCOUNT_ID}/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
             ]
           }
         ]

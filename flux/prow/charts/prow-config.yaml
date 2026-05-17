@@ -27,8 +27,8 @@ spec:
         kubernetes.io/ingress.class: "alb"
     prow:
       domain: "${PROW_DOMAIN}"
-      presubmitsBucketName: "${PROW_LOGS_BUCKET}"
-      tideStatusReconcilerBucketName: "${PROW_LOGS_BUCKET}"
+      presubmitsBucketName: "${STACK_NAME}-prow-logs"
+      tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs"
     crier:
       serviceAccount:
         name: "prow-deployment-service-account"

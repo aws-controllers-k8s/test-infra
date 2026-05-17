@@ -10,8 +10,8 @@ metadata:
   annotations:
     services.k8s.aws/deletion-policy: retain
 spec:
-  clusterName: ${CLUSTER_NAME}
-  principalARN: "${CLUSTER_ADMIN_ROLE_ARN}"
+  clusterName: ${STACK_NAME}-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-cluster-admin-access-role"
   type: STANDARD
   accessPolicies:
   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
@@ -27,10 +27,10 @@ metadata:
   annotations:
     services.k8s.aws/deletion-policy: retain
     services.k8s.aws/adoption-policy: adopt
-    services.k8s.aws/adoption-fields: '{"clusterName": "${CLUSTER_NAME}", "principalARN": "${ADMIN_ROLE_ARN}"}'
+    services.k8s.aws/adoption-fields: '{"clusterName": "${STACK_NAME}-cluster", "principalARN": "arn:aws:iam::${ACCOUNT_ID}:role/Admin"}'
 spec:
-  clusterName: ${CLUSTER_NAME}
-  principalARN: "${ADMIN_ROLE_ARN}"
+  clusterName: ${STACK_NAME}-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/Admin"
   type: STANDARD
   accessPolicies:
   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
@@ -46,8 +46,8 @@ metadata:
   annotations:
     services.k8s.aws/deletion-policy: retain
 spec:
-  clusterName: ${CLUSTER_NAME}
-  principalARN: "${READONLY_ROLE_ARN}"
+  clusterName: ${STACK_NAME}-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/ReadOnly"
   type: STANDARD
   accessPolicies:
   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy

@@ -41,24 +41,24 @@ spec:
             --jobs-config-path ./prow/jobs/jobs_config.yaml \
             --jobs-templates-path ./prow/jobs/templates/ \
             --jobs-output-path /dev/null \
-            --prow-ecr-repository ${PROW_IMAGES_REPO_NAME}
+            --prow-ecr-repository ${STACK_NAME}-prow-images
 
           # Build and push plugin images
           ack-build-tools build-prow-plugin-images \
             --images-config-path /tmp/plugins_images_config.yaml \
-            --prow-ecr-repository ${PROW_IMAGES_REPO_NAME}
+            --prow-ecr-repository ${STACK_NAME}-prow-images
 
           # Build and push agent workflow images
           ack-build-tools build-prow-agent-workflow-images \
             --images-config-path /tmp/agent_workflows_images_config.yaml \
-            --prow-ecr-repository ${PROW_IMAGES_REPO_NAME} \
+            --prow-ecr-repository ${STACK_NAME}-prow-images \
             --agent-workflows-templates-path ./prow/agent-workflows/templates \
             --agent-workflows-output-path /dev/null
         env:
         - name: PROW_IMAGES_REPO_URI
           value: "${PROW_IMAGES_REPO_URI}"
         - name: PROW_IMAGES_REPO_NAME
-          value: "${PROW_IMAGES_REPO_NAME}"
+          value: "${STACK_NAME}-prow-images"
         - name: TEST_INFRA_ORG
           value: "${TEST_INFRA_ORG}"
         - name: TEST_INFRA_REPO

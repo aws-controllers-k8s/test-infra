@@ -6,7 +6,7 @@ metadata:
   name: secrets-store-csi
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   name: aws-secrets-store-csi-driver-provider
   configurationValues: |-
     {
@@ -23,7 +23,7 @@ metadata:
   name: external-dns-addon
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   name: external-dns
   podIdentityAssociations:
   - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/external-dns-role

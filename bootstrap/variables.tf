@@ -40,3 +40,9 @@ variable "test_infra_branch" {
   type        = string
   default     = "main"
 }
+
+variable "stage" {
+  description = "Deployment stage (e.g., prod, staging, dev)"
+  type        = string
+  default     = "prod"
+}

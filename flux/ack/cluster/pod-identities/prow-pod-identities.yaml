@@ -8,10 +8,10 @@ metadata:
   name: prow-deployment-pod-identity
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   namespace: prow
   serviceAccount: prow-deployment-service-account
-  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-deployment-role
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-deployment-role
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -19,10 +19,10 @@ metadata:
   name: prow-postsubmit-pod-identity
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
   serviceAccount: post-submit-service-account
-  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-postsubmit-role
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-postsubmit-role
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -30,10 +30,10 @@ metadata:
   name: prow-presubmit-pod-identity
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
   serviceAccount: pre-submit-service-account
-  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-presubmit-role
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-presubmit-role
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -41,10 +41,10 @@ metadata:
   name: prow-periodic-pod-identity
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
   serviceAccount: periodic-service-account
-  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-periodic-role
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-periodic-role
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -52,7 +52,7 @@ metadata:
   name: prow-workflow-runner-pod-identity
   namespace: ack-system
 spec:
-  clusterName: ${CLUSTER_NAME}
+  clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
   serviceAccount: workflow-runner
-  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/prow-workflow-runner-role
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-workflow-runner-role

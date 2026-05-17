@@ -5,7 +5,7 @@
 ################################################################################
 
 resource "aws_iam_role" "ack_capability" {
-  name = "${local.cluster_name}-ack-managed-role"
+  name = "${local.stack_name}-ack-managed-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -30,12 +30,12 @@ resource "aws_iam_role_policy" "ack_capability_initial" {
       {
         Effect   = "Allow"
         Action   = ["iam:*"]
-        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.cluster_name}-ack-capability-role"
+        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.stack_name}-ack-capability-role"
       },
       {
         Effect   = "Allow"
         Action   = ["iam:*"]
-        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.cluster_name}-ack-managed-role"
+        Resource = "arn:${local.partition}:iam::${local.account_id}:role/${local.stack_name}-ack-managed-role"
       },
       {
         Effect   = "Allow"

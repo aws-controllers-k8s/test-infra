@@ -11,7 +11,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = "${local.cluster_name}-vpc"
+  name = "${local.stack_name}-vpc"
   cidr = local.vpc_cidr
 
   azs             = local.availability_zones
@@ -37,7 +37,7 @@ module "vpc" {
 ################################################################################
 
 resource "aws_iam_role" "cluster" {
-  name = "${local.cluster_name}-cluster-role"
+  name = "${local.stack_name}-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -71,7 +71,7 @@ resource "aws_iam_role_policy_attachment" "cluster_policies" {
 ################################################################################
 
 resource "aws_iam_role" "node" {
-  name = "${local.cluster_name}-node-role"
+  name = "${local.stack_name}-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -96,7 +96,7 @@ resource "aws_iam_role_policy_attachment" "node_policies" {
 }
 
 resource "aws_iam_role_policy" "node_ecr_ptc" {
-  name = "ECRPullThroughCache"
+  name = "${local.stack_name}-ECRPullThroughCache"
   role = aws_iam_role.node.name
 
   policy = jsonencode({
@@ -174,7 +174,7 @@ resource "aws_eks_cluster" "this" {
 ################################################################################
 
 resource "aws_security_group" "prow_webhook_nlb" {
-  name        = "prow-webhook-nlb-sg"
+  name        = "${local.stack_name}-prow-webhook-nlb-sg"
   description = "Security group for Prow webhook NLB (GitHub IPs only)"
   vpc_id      = module.vpc.vpc_id
 
@@ -221,7 +221,7 @@ resource "aws_vpc_security_group_ingress_rule" "webhook_to_cluster" {
 ################################################################################
 
 resource "aws_iam_role" "cluster_admin" {
-  name = "ack-cluster-admin-access-role"
+  name = "${local.stack_name}-cluster-admin-access-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -247,46 +247,6 @@ resource "aws_iam_role_policy" "cluster_admin_describe" {
   })
 
   depends_on = [aws_iam_role.cluster_admin, aws_eks_cluster.this]
-}
-
-################################################################################
-# Providers (Kubernetes + Helm + kubectl)
-################################################################################
-
-provider "kubernetes" {
-  host                   = aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
-  }
-}
-
-provider "helm" {
-  kubernetes = {
-    host                   = aws_eks_cluster.this.endpoint
-    cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
-
-    exec = {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
-    }
-  }
-}
-
-provider "kubectl" {
-  host                   = aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.this.certificate_authority[0].data)
-  load_config_file       = false
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.this.name, "--region", var.region]
-  }
 }
 
 ################################################################################
