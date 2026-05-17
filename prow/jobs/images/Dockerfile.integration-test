@@ -20,14 +20,12 @@ RUN echo "Installing packages ..." \
         curl \
         git \
         gnupg2 \
-        software-properties-common \
         lsb-release \
         wget \
         jq \
         kmod \
         procps \
         uuid-runtime \
-        apt-transport-https \
         unzip
 
 RUN echo "Installing yq ..." \

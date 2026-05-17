@@ -9,12 +9,10 @@ RUN echo "Installing packages ..." \
         curl \
         git \
         gnupg2 \
-        software-properties-common \
         lsb-release \
         wget \
         jq \
         uuid-runtime \
-        apt-transport-https \
         unzip \
         gawk
 
