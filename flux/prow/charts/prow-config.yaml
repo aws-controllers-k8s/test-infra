@@ -24,7 +24,9 @@ spec:
         alb.ingress.kubernetes.io/success-codes: "200-302"
         alb.ingress.kubernetes.io/target-type: "ip"
         alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
+        alb.ingress.kubernetes.io/security-groups: "${WEBHOOK_SG_ID}"
         kubernetes.io/ingress.class: "alb"
+        external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
     prow:
       domain: "${PROW_DOMAIN}"
       presubmitsBucketName: "${STACK_NAME}-prow-logs"
@@ -33,21 +35,10 @@ spec:
       serviceAccount:
         name: "prow-deployment-service-account"
     deck:
-      service:
-        type: "LoadBalancer"
-        annotations:
-          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-          external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
       serviceAccount:
         name: "prow-deployment-service-account"
     hook:
       scrapeMetrics: true
-      service:
-        type: "LoadBalancer"
-        annotations:
-          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-          service.beta.kubernetes.io/aws-load-balancer-security-groups: "${WEBHOOK_SG_ID}"
       serviceAccount:
         name: "prow-deployment-service-account"
     horologium:

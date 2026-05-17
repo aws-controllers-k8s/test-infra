@@ -34,24 +34,12 @@ spec:
         limits:
           memory: 512Mi
     grafana:
-      grafana.ini:
-        auth.anonymous:
-          enabled: true
-          org_role: Viewer
       resources:
         requests:
           cpu: 250m
           memory: 512Mi
         limits:
           memory: 1Gi
-      # Expose Grafana via internet-facing NLB.
-      # For prod with ALB Ingress Controller, switch to ingress-based
-      # exposure at a dedicated subdomain instead.
-      service:
-        type: LoadBalancer
-        annotations:
-          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
     prometheusOperator:
       tls:
         enabled: true
