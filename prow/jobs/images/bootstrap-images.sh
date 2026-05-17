@@ -21,15 +21,13 @@ TEST_INFRA_ROOT="$(cd "$DIR/../../.." && pwd)"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
 AWS_REGION="${AWS_REGION:-us-west-2}"
 PROW_IMAGE_REPO_URI="${PROW_IMAGE_REPO_URI:?PROW_IMAGE_REPO_URI is required}"
-VERSION="${VERSION:-$(cd "$TEST_INFRA_ROOT" && git describe --tags --always --dirty 2>/dev/null || echo "latest")}"
 GO_VERSION="${GO_VERSION:-"1.22.5"}"
 
 BUILDER_IMAGE="prow/build-prow-images"
-BUILDER_TAG="${PROW_IMAGE_REPO_URI}:prow-build-prow-images-${VERSION}"
+BUILDER_TAG="${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
 
 echo "=== Prow Images Bootstrap ==="
 echo "Repository: ${PROW_IMAGE_REPO_URI}"
-echo "Version:    ${VERSION}"
 echo ""
 
 # --- Step 1: Login to public ECR ---
@@ -49,9 +47,6 @@ docker build --platform="linux/amd64" \
 echo "Pushing builder image..."
 docker tag "${BUILDER_IMAGE}" "${BUILDER_TAG}"
 docker push "${BUILDER_TAG}"
-# Also push as latest for the in-cluster build job
-docker tag "${BUILDER_IMAGE}" "${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
-docker push "${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
 echo "  ✓ Pushed: ${BUILDER_TAG}"
 
 echo ""
