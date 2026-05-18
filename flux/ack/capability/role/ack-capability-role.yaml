@@ -114,8 +114,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:*"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           },
           {

@@ -32,7 +32,7 @@ spec:
         args:
         - --port=8080
         - --allowed-team=ack-agent-users
-        - --s3-bucket-name=s3://ack-prow-logs
+        - --s3-bucket-name=s3://${STACK_NAME}-prow-logs-${ACCOUNT_ID}
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         - --github-endpoint=http://ghproxy

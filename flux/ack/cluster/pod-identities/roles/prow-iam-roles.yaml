@@ -30,8 +30,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           }
         ]
@@ -78,8 +78,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           }
         ]
@@ -162,8 +162,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           }
         ]
@@ -248,8 +248,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           }
         ]
@@ -312,8 +312,8 @@ spec:
             "Effect": "Allow",
             "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
             "Resource": [
-              "arn:aws:s3:::${STACK_NAME}-prow-logs",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs/*"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
           }
         ]

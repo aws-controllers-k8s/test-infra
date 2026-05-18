@@ -29,8 +29,8 @@ spec:
         external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
     prow:
       domain: "${PROW_DOMAIN}"
-      presubmitsBucketName: "${STACK_NAME}-prow-logs"
-      tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs"
+      presubmitsBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
+      tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
     crier:
       serviceAccount:
         name: "prow-deployment-service-account"

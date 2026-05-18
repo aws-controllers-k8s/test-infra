@@ -69,7 +69,7 @@ resource "null_resource" "cleanup_ack_capability_role" {
 # Empties and deletes the Prow logs S3 bucket (retained by ACK).
 resource "null_resource" "cleanup_prow_logs_bucket" {
   triggers = {
-    bucket_name = "${local.stack_name}-prow-logs"
+    bucket_name = "${local.stack_name}-prow-logs-${local.account_id}"
     region      = var.region
   }
 

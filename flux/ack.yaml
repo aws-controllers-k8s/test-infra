@@ -21,8 +21,7 @@ metadata:
   name: ack-capability-role
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -35,7 +34,6 @@ spec:
     - kind: ConfigMap
       name: self-managed-vars
   wait: true
-  timeout: 3m
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -43,8 +41,7 @@ metadata:
   name: ack-addons-roles
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -59,7 +56,6 @@ spec:
   dependsOn:
   - name: ack-capability
   wait: true
-  timeout: 3m
 
 # --- Capability (depends on role) ---
 ---
@@ -69,8 +65,7 @@ metadata:
   name: ack-capability
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -85,7 +80,6 @@ spec:
   dependsOn:
   - name: ack-capability-role
   wait: true
-  timeout: 3m
 
 # --- Cluster (depends on capability) ---
 ---
@@ -95,8 +89,7 @@ metadata:
   name: ack-cluster
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -111,7 +104,6 @@ spec:
   dependsOn:
   - name: ack-capability
   wait: true
-  timeout: 3m
 
 # --- Addons (depends on cluster + addon roles) ---
 ---
@@ -121,8 +113,7 @@ metadata:
   name: ack-addons
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -138,7 +129,6 @@ spec:
   - name: ack-cluster
   - name: ack-addons-roles
   wait: true
-  timeout: 3m
 
 # --- Pod Identity Roles (depends on capability; start before associations) ---
 ---
@@ -148,8 +138,7 @@ metadata:
   name: ack-pod-identity-roles
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -164,7 +153,6 @@ spec:
   dependsOn:
   - name: ack-capability
   wait: true
-  timeout: 3m
 
 # --- Pod Identities (depends on cluster + roles) ---
 ---
@@ -174,8 +162,7 @@ metadata:
   name: ack-pod-identities
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -190,7 +177,6 @@ spec:
   - name: ack-cluster
   - name: ack-pod-identity-roles
   wait: true
-  timeout: 3m
 
 # --- Prow ACK Resources (depends on capability) ---
 ---
@@ -200,8 +186,7 @@ metadata:
   name: ack-prow
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -216,7 +201,6 @@ spec:
   dependsOn:
   - name: ack-capability
   wait: true
-  timeout: 3m
 
 # --- Flux ECR Pull-Through Cache (depends on capability) ---
 ---
@@ -226,8 +210,7 @@ metadata:
   name: ack-flux
   namespace: flux-system
 spec:
-  interval: 20m
-  retryInterval: 2m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
@@ -242,4 +225,3 @@ spec:
   dependsOn:
   - name: ack-capability
   wait: true
-  timeout: 3m

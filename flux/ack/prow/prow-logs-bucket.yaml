@@ -8,7 +8,7 @@ metadata:
   annotations:
     services.k8s.aws/deletion-policy: retain
 spec:
-  name: ${STACK_NAME}-prow-logs
+  name: ${STACK_NAME}-prow-logs-${ACCOUNT_ID}
   encryption:
     rules:
     - applyServerSideEncryptionByDefault:
