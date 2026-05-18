@@ -10,7 +10,7 @@
 #
 # Each kustomization uses wait: true so Flux performs health checks on ALL
 # reconciled resources before downstream dependents proceed.
-# interval: 60m for drift detection (git pushes trigger immediate reconciliation).
+# interval: 20m for drift detection (git pushes trigger immediate reconciliation).
 # retryInterval: 2m for faster recovery from transient AWS failures.
 
 # --- Roles (no dependencies, start immediately) ---
@@ -21,7 +21,7 @@ metadata:
   name: ack-capability-role
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -43,7 +43,7 @@ metadata:
   name: ack-addons-roles
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -69,7 +69,7 @@ metadata:
   name: ack-capability
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -95,7 +95,7 @@ metadata:
   name: ack-cluster
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -121,7 +121,7 @@ metadata:
   name: ack-addons
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -148,7 +148,7 @@ metadata:
   name: ack-pod-identity-roles
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -174,7 +174,7 @@ metadata:
   name: ack-pod-identities
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -200,7 +200,7 @@ metadata:
   name: ack-prow
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository
@@ -226,7 +226,7 @@ metadata:
   name: ack-flux
   namespace: flux-system
 spec:
-  interval: 60m
+  interval: 20m
   retryInterval: 2m
   sourceRef:
     kind: GitRepository

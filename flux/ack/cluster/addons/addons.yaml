@@ -26,5 +26,5 @@ spec:
   clusterName: ${STACK_NAME}-cluster
   name: external-dns
   podIdentityAssociations:
-  - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/external-dns-role
+  - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-external-dns-role
     serviceAccount: external-dns
