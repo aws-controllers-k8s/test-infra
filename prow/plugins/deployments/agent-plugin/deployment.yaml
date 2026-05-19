@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: webhook-server
-        image: ${PROW_IMAGE_REPO}:agent-plugin-0.0.3
+        image: ${PROW_IMAGES_REPO_URI}:agent-plugin-0.0.3
         ports:
         - containerPort: 8080
           name: http

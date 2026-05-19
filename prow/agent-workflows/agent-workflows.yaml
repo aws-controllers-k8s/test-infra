@@ -4,7 +4,7 @@
 workflows:
     add-resource:
         description: "ACK resource addition workflow"
-        image: ${PROW_IMAGE_REPO}:add-resource-0.0.5
+        image: ${PROW_IMAGES_REPO_URI}:add-resource-0.0.5
         command: ["./prow-job.sh"]
         required_args: ["service", "resource"]
         optional_args: ["model", "aws-sdk-version"]

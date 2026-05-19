@@ -21,6 +21,8 @@ spec:
         - /bin/bash
         - -c
         - |
+          set -euo pipefail
+
           # Login to public ECR
           aws ecr-public get-login-password --region us-east-1 | \
             buildah login -u AWS --password-stdin public.ecr.aws
@@ -30,7 +32,6 @@ spec:
           cd /workspace
 
           # Resolve image repo in config
-          export PROW_IMAGE_REPO="${PROW_IMAGES_REPO_URI}"
           envsubst < ./prow/jobs/images_config.yaml > /tmp/images_config.yaml
           envsubst < ./prow/plugins/images_config.yaml > /tmp/plugins_images_config.yaml
           envsubst < ./prow/agent-workflows/images_config.yaml > /tmp/agent_workflows_images_config.yaml

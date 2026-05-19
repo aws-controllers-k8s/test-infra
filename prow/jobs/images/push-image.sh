@@ -4,7 +4,7 @@ set -eo pipefail
 
 VERSION=${VERSION:-$(git describe --tags --always --dirty || echo "unknown")}
 
-DEFAULT_DOCKER_REPOSITORY="${PROW_IMAGE_REPO:-}"
+DEFAULT_DOCKER_REPOSITORY="${PROW_IMAGES_REPO_URI:-}"
 DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
 
 QUIET=${QUIET:-"false"}
