@@ -107,7 +107,10 @@ resource "aws_iam_role_policy" "node_ecr_ptc" {
         "ecr:CreateRepository",
         "ecr:BatchImportUpstreamImage"
       ]
-      Resource = "arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/fluxcd/*"
+      Resource = [
+        "arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/fluxcd/*",
+        "arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/kubernetes/*"
+      ]
     }]
   })
 
@@ -167,53 +170,6 @@ resource "aws_eks_cluster" "this" {
   lifecycle {
     ignore_changes = all
   }
-}
-
-################################################################################
-# Cluster Security Group - Webhook ingress rule
-################################################################################
-
-resource "aws_security_group" "prow_webhook_nlb" {
-  name        = "${local.stack_name}-prow-webhook-nlb-sg"
-  description = "Security group for Prow webhook NLB (GitHub IPs only)"
-  vpc_id      = module.vpc.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound"
-  }
-
-  ingress {
-    from_port   = 8888
-    to_port     = 8888
-    protocol    = "tcp"
-    cidr_blocks = ["192.30.252.0/22", "185.199.108.0/22", "140.82.112.0/20"]
-    description = "GitHub webhook"
-  }
-
-  ingress {
-    from_port   = 8888
-    to_port     = 8888
-    protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
-    description = "NLB health checks"
-  }
-
-  depends_on = [module.vpc]
-}
-
-resource "aws_vpc_security_group_ingress_rule" "webhook_to_cluster" {
-  security_group_id            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-  referenced_security_group_id = aws_security_group.prow_webhook_nlb.id
-  from_port                    = 8888
-  to_port                      = 8888
-  ip_protocol                  = "tcp"
-  description                  = "Webhook NLB to Prow hook pods"
-
-  depends_on = [aws_eks_cluster.this, aws_security_group.prow_webhook_nlb]
 }
 
 ################################################################################

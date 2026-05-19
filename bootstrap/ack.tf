@@ -28,7 +28,7 @@ resource "null_resource" "cleanup_ack_resources" {
     command = "${self.triggers.script} ${self.triggers.cluster_name} ${self.triggers.region}"
   }
 
-  depends_on = [null_resource.cleanup_ack_capability_role, null_resource.cleanup_prow_logs_bucket, null_resource.cleanup_prow_hosted_zone]
+  depends_on = [aws_eks_cluster.this, module.vpc, null_resource.cleanup_ack_capability_role, null_resource.cleanup_prow_logs_bucket, null_resource.cleanup_prow_hosted_zone]
 }
 
 # Cleans up the ACK capability role (created by ACK in-cluster, retained

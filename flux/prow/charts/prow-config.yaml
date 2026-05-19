@@ -24,8 +24,6 @@ spec:
         alb.ingress.kubernetes.io/success-codes: "200-302"
         alb.ingress.kubernetes.io/target-type: "ip"
         alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
-        alb.ingress.kubernetes.io/security-groups: "${WEBHOOK_SG_ID}"
-        kubernetes.io/ingress.class: "alb"
         external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
     prow:
       domain: "${PROW_DOMAIN}"

@@ -21,7 +21,6 @@ resource "null_resource" "bootstrap_flux" {
       REGION              = var.region
       CLUSTER_SG_ID       = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
       VPC_ID              = module.vpc.vpc_id
-      WEBHOOK_SG_ID       = aws_security_group.prow_webhook_nlb.id
       GHCR_PTC_SECRET_ARN = data.aws_secretsmanager_secret.ghcr_ptc.arn
       PROW_DOMAIN         = var.prow_domain
       PROW_IMAGES_REPO_URI = aws_ecrpublic_repository.prow_images.repository_uri
