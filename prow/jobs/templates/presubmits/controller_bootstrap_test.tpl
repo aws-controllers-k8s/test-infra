@@ -1,10 +1,11 @@
-  aws-controllers-k8s/controller-bootstrap:
+  ${TEST_INFRA_ORG}/controller-bootstrap:
   - name: unit-test
     decorate: true
     optional: false
     always_run: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     spec:
       serviceAccountName: pre-submit-service-account
       containers:

@@ -3,12 +3,14 @@
   interval: 720h
   annotations:
     description: Scans ack supported AWS service controllers for CVE's. If they exist, creates a github issue in commmunity repository
-    karpenter.sh/do-not-evict: "true"
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   extra_refs:
-  - org: aws-controllers-k8s
-    repo: test-infra
-    base_ref: main
+  - org: ${TEST_INFRA_ORG}
+    repo: ${TEST_INFRA_REPO}
+    base_ref: ${TEST_INFRA_BRANCH}
     workdir: true
+    path_alias: github.com/aws-controllers-k8s/test-infra
   labels:
     preset-github-secrets: "true"
   agent: kubernetes
@@ -23,5 +25,5 @@
           requests:
             cpu: 1
             memory: "500Mi"
-        command: ["ack-build-tools", "scan-controllers-cve", 
-            "--jobs-config-path", "./prow/jobs/jobs_config.yaml" ]
+        command: ["ack-build-tools", "scan-controllers-cve",
+            "--jobs-config-path", "./prow/jobs/jobs_config.yaml"]

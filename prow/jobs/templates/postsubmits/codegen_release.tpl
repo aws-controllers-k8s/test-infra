@@ -1,20 +1,22 @@
-  aws-controllers-k8s/code-generator:
+  ${TEST_INFRA_ORG}/code-generator:
   - name: auto-generate-controllers
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
       repo: runtime
       base_ref: main
       workdir: false
-    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+    {{range $_, $service := .Config.AWSServices}}- org: ${TEST_INFRA_ORG}
       repo: {{ $service }}-controller
       base_ref: main
       workdir: false

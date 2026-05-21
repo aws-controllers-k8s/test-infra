@@ -1,18 +1,21 @@
   {{ range $_, $service := .Config.AWSServices  }}
-  aws-controllers-k8s/{{ $service }}-controller:
+  ${TEST_INFRA_ORG}/{{ $service }}-controller:
   - name: {{ $service }}-post-submit
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
       repo: code-generator
       base_ref: main
       workdir: false
+      path_alias: github.com/aws-controllers-k8s/code-generator
     spec:
       serviceAccountName: post-submit-service-account
       containers:
@@ -36,12 +39,14 @@
   - name: {{ $service }}-soak-on-release
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     spec:
       serviceAccountName: post-submit-service-account
       containers:
@@ -61,14 +66,16 @@
   - name: {{ $service }}-controller-release-tag
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
     spec:
       serviceAccountName: post-submit-service-account
       containers:
@@ -87,22 +94,26 @@
     decorate: true
     job_queue_name: olm-bundle-prs
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
       repo: code-generator
       base_ref: main
       workdir: false
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/code-generator
+    - org: ${TEST_INFRA_ORG}
       repo: runtime
       base_ref: main
       workdir: false
+      path_alias: github.com/aws-controllers-k8s/runtime
     spec:
       serviceAccountName: post-submit-service-account
       containers:
@@ -121,23 +132,27 @@
   - name: update-ack-chart
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
       repo: code-generator
       base_ref: main
       workdir: false
-    - org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/code-generator
+    - org: ${TEST_INFRA_ORG}
       repo: ack-chart
       base_ref: main
       workdir: false
-    {{ range $_, $otherService := $.Config.AWSServices}}{{ if ne $otherService $service }}- org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/ack-chart
+    {{ range $_, $otherService := $.Config.AWSServices}}{{ if ne $otherService $service }}- org: ${TEST_INFRA_ORG}
       repo: {{ $otherService }}-controller
       base_ref: main
       workdir: false

@@ -3,12 +3,14 @@
   interval: 168h
   annotations:
     description: Querys eks-distro version in ECR and compare it with version in build_config.yaml. Creates a PR with updated eks-distro version and bumped prow image versions if outdated
-    karpenter.sh/do-not-evict: "true"
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   extra_refs:
-  - org: aws-controllers-k8s
-    repo: test-infra
-    base_ref: main
+  - org: ${TEST_INFRA_ORG}
+    repo: ${TEST_INFRA_REPO}
+    base_ref: ${TEST_INFRA_BRANCH}
     workdir: true
+    path_alias: github.com/aws-controllers-k8s/test-infra
   labels:
     preset-github-secrets: "true"
   agent: kubernetes
@@ -23,5 +25,5 @@
           requests:
             cpu: 1
             memory: "500Mi"
-        command: ["ack-build-tools", "upgrade-eks-distro-version", 
+        command: ["ack-build-tools", "upgrade-eks-distro-version",
             "--images-config-path", "./prow/jobs/images_config.yaml"]
