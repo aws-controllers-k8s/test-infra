@@ -1,5 +1,5 @@
 # Dockerfile for integration testing
-FROM debian:bookworm-slim
+FROM public.ecr.aws/docker/library/debian:trixie-slim
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
@@ -20,14 +20,12 @@ RUN echo "Installing packages ..." \
         curl \
         git \
         gnupg2 \
-        software-properties-common \
         lsb-release \
         wget \
         jq \
         kmod \
         procps \
         uuid-runtime \
-        apt-transport-https \
         unzip
 
 RUN echo "Installing yq ..." \
@@ -60,10 +58,8 @@ RUN echo "Installing Kustomize ..." \
     && rm "${KUSTOMIZE_TARBALL}"
 
 RUN echo "Installing Kubectl ... " \
-    && echo "deb [signed-by=/usr/share/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list \
-    && curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-apt-keyring.gpg \
-    && apt-get update \
-    && apt-get install -y kubectl
+    && curl -fsSL "https://dl.k8s.io/release/v1.30.8/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
+    && chmod +x /usr/local/bin/kubectl
 
 RUN echo "Installing Helm ... " \
     && export HELM_TARBALL="helm.tar.gz" \
