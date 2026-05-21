@@ -69,6 +69,9 @@ spec:
         - name: job-config
           mountPath: /etc/job-config
           readOnly: true
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
       volumes:
       - name: github-token
         secret:
@@ -79,3 +82,9 @@ spec:
       - name: job-config
         configMap:
           name: job-config
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets
