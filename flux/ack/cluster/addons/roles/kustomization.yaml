@@ -3,4 +3,3 @@ kind: Kustomization
 
 resources:
 - external-dns-role.yaml
-- ebs-csi-role.yaml

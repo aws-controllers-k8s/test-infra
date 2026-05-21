@@ -28,15 +28,3 @@ spec:
   podIdentityAssociations:
   - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-external-dns-role
     serviceAccount: external-dns
----
-apiVersion: eks.services.k8s.aws/v1alpha1
-kind: Addon
-metadata:
-  name: ebs-csi-addon
-  namespace: ack-system
-spec:
-  clusterName: ${STACK_NAME}-cluster
-  name: aws-ebs-csi-driver
-  podIdentityAssociations:
-  - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-ebs-csi-role
-    serviceAccount: ebs-csi-controller-sa
