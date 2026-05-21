@@ -5,77 +5,77 @@
 
 # List of AWS services supported in ACK testing infrastructure.
 aws_services:
-- acm
-- acmpca
+# - acm
+# - acmpca
 - apigateway
-- apigatewayv2
-- applicationautoscaling
-- athena
+# - apigatewayv2
+# - applicationautoscaling
+# - athena
 - autoscaling
-- backup
-- batch
-- bedrock
-- bedrockagent
-- bedrockagentcorecontrol
-- cloudfront
-- cloudtrail
-- cloudwatch
-- cloudwatchevents
-- cloudwatchlogs
-- codeartifact
-- cognitoidentityprovider
-- documentdb
-- dsql
-- dynamodb
+# - backup
+# - batch
+# - bedrock
+# - bedrockagent
+# - bedrockagentcorecontrol
+# - cloudfront
+# - cloudtrail
+# - cloudwatch
+# - cloudwatchevents
+# - cloudwatchlogs
+# - codeartifact
+# - cognitoidentityprovider
+# - documentdb
+# - dsql
+# - dynamodb
 - ec2
-- ecr
+# - ecr
 - ecrpublic
 - ecs
-- efs
-- eks
+# - efs
+# - eks
 - elasticache
-- elbv2
-- emrcontainers
-- emrserverless
-- eventbridge
-- firehose
-- globalaccelerator
-- glue
-- iam
-- kafka
-- kinesis
-- kms
-- keyspaces
-- lambda
-- memorydb
-- mq
-- mwaa
-- networkfirewall
-- networkmanager
-- opensearchservice
-- opensearchserverless
-- organizations
-- pipes
-- prometheusservice
-- quicksight
-- ram
-- rds
-- recyclebin
-- route53
-- route53resolver
-- s3
-- s3control
-- s3files
-- sagemaker
-- secretsmanager
-- servicecatalog
-- ses
-- sfn
-- sns
-- sqs
-- ssm
-- transfer
-- wafv2
+# - elbv2
+# - emrcontainers
+# - emrserverless
+# - eventbridge
+# - firehose
+# - globalaccelerator
+# - glue
+# - iam
+# - kafka
+# - kinesis
+# - kms
+# - keyspaces
+# - lambda
+# - memorydb
+# - mq
+# - mwaa
+# - networkfirewall
+# - networkmanager
+# - opensearchservice
+# - opensearchserverless
+# - organizations
+# - pipes
+# - prometheusservice
+# - quicksight
+# - ram
+# - rds
+# - recyclebin
+# - route53
+# - route53resolver
+# - s3
+# - s3control
+# - s3files
+# - sagemaker
+# - secretsmanager
+# - servicecatalog
+# - ses
+# - sfn
+# - sns
+# - sqs
+# - ssm
+# - transfer
+# - wafv2
 
 # List of service that will execute a set of tests for CARM
 # These service need a CARM_ENABLED environment variable set to true
