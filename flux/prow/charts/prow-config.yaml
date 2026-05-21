@@ -1,4 +1,4 @@
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: prow-config
@@ -8,7 +8,7 @@ spec:
   targetNamespace: prow
   values:
     github:
-      organisation: "aws-controllers-k8s"
+      organisation: "${TEST_INFRA_ORG}"
       bot:
         username: "ack-bot"
         emailID: "82905295"
@@ -24,11 +24,11 @@ spec:
         alb.ingress.kubernetes.io/success-codes: "200-302"
         alb.ingress.kubernetes.io/target-type: "ip"
         alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
-        kubernetes.io/ingress.class: "alb"
+        external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
     prow:
-      domain: "prow.ack.aws.dev"
-      presubmitsBucketName: "ack-prow-logs"
-      tideStatusReconcilerBucketName: "ack-prow-logs"
+      domain: "${PROW_DOMAIN}"
+      presubmitsBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
+      tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
     crier:
       serviceAccount:
         name: "prow-deployment-service-account"

@@ -1,0 +1,320 @@
+# Prow IAM Roles - managed by ACK
+---
+# Deployment Role - used by Prow core components (deck, hook, etc.)
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-deployment-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-deployment-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
+---
+# Postsubmit Role - used by postsubmit jobs (image builds, releases)
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-postsubmit-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-postsubmit-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }
+    ECRPublicPublish: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ecr-public:Describe*",
+              "ecr-public:Get*",
+              "ecr-public:CreateRepository",
+              "ecr-public:PutRepositoryCatalogData",
+              "ecr-public:UploadLayerPart",
+              "ecr-public:CompleteLayerUpload",
+              "ecr-public:InitiateLayerUpload",
+              "ecr-public:PutImage",
+              "ecr-public:ListTagsForResource",
+              "ecr-public:PutRegistryCatalogData",
+              "ecr-public:BatchCheckLayerAvailability"
+            ],
+            "Resource": [
+              "arn:aws:ecr-public::${ACCOUNT_ID}:registry/*",
+              "arn:aws:ecr-public::${ACCOUNT_ID}:repository/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["ecr-public:GetAuthorizationToken"],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["sts:GetServiceBearerToken"],
+            "Resource": "*"
+          }
+        ]
+      }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
+---
+# Presubmit Role - used by presubmit jobs (tests, E2E)
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-presubmit-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-presubmit-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }
+    AssumeTestRoles: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["sts:AssumeRole", "sts:TagSession"],
+            "Resource": "arn:*:iam::*:role/*-ack-test-role-DO-NOT-DELETE"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["iam:GetPolicy"],
+            "Resource": "*"
+          }
+        ]
+      }
+    SSMTestRoles: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ssm:GetParameter"],
+            "Resource": "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/ack/prow/service_team_role/*"
+          }
+        ]
+      }
+    ECRPublicRead: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ecr-public:GetAuthorizationToken",
+              "sts:GetServiceBearerToken",
+              "ecr-public:BatchCheckLayerAvailability",
+              "ecr-public:GetRepositoryPolicy",
+              "ecr-public:DescribeRepositories",
+              "ecr-public:DescribeRegistries",
+              "ecr-public:DescribeImages",
+              "ecr-public:DescribeImageTags",
+              "ecr-public:GetRepositoryCatalogData",
+              "ecr-public:GetRegistryCatalogData"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+---
+# Periodic Role - used by periodic jobs (label sync, lifecycle bots)
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-periodic-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-periodic-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/*"
+          }
+        ]
+      }
+---
+# Workflow Runner Role - used by agent workflow job pods in test-pods
+# to mount the SecretProviderClass via the Secrets Store CSI driver.
+# Grants access to secrets needed by workflow jobs.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-workflow-runner-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-workflow-runner-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": [
+              "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/github-pat-token-*",
+              "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/api-model-kb-*"
+            ]
+          }
+        ]
+      }
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          }
+        ]
+      }

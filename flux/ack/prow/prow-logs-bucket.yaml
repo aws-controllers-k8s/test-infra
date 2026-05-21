@@ -1,0 +1,23 @@
+# S3 Bucket for Prow job logs
+---
+apiVersion: s3.services.k8s.aws/v1alpha1
+kind: Bucket
+metadata:
+  name: prow-logs
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: ${STACK_NAME}-prow-logs-${ACCOUNT_ID}
+  encryption:
+    rules:
+    - applyServerSideEncryptionByDefault:
+        sseAlgorithm: AES256
+  publicAccessBlock:
+    blockPublicACLs: true
+    blockPublicPolicy: true
+    ignorePublicACLs: true
+    restrictPublicBuckets: true
+  ownershipControls:
+    rules:
+    - objectOwnership: BucketOwnerEnforced

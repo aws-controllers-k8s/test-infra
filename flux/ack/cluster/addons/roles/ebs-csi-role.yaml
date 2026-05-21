@@ -1,0 +1,24 @@
+# IAM Role for EBS CSI Driver - allows managing EBS volumes
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: ebs-csi-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-ebs-csi-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  policies:
+  - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy

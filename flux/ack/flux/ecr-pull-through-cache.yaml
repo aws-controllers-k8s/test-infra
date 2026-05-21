@@ -1,0 +1,14 @@
+# ECR Pull-Through Cache for Flux images from ghcr.io.
+# The credential ARN is resolved dynamically by Terraform and injected
+# via the self-managed-vars ConfigMap.
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: PullThroughCacheRule
+metadata:
+  name: ghcr-fluxcd
+  namespace: ack-system
+spec:
+  ecrRepositoryPrefix: fluxcd
+  upstreamRegistryURL: ghcr.io
+  upstreamRegistry: github-container-registry
+  credentialARN: "${GHCR_PTC_SECRET_ARN}"

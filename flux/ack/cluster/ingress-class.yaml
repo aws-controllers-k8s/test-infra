@@ -1,0 +1,10 @@
+# ALB IngressClass for EKS Auto Mode.
+# EKS Auto Mode with elastic_load_balancing enabled provides the controller
+# but requires the IngressClass to be created explicitly.
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: alb
+spec:
+  controller: eks.amazonaws.com/alb
