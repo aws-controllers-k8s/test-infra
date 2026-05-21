@@ -1,4 +1,4 @@
-image_repo: public.ecr.aws/m5q3e4b2/prow
+image_repo: ${PROW_IMAGES_REPO_URI}
 images:
     auto-generate-controllers: prow-auto-generate-controllers-0.0.38
     auto-update-controllers: prow-auto-update-controllers-0.0.29
