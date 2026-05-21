@@ -176,8 +176,11 @@ data:
             value: {{ .Values.github.bot.emailID | required "github.bot.emailID is required" | quote }}
         volumes:
           - name: github-token
-            secret:
-              secretName: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
+            csi:
+              driver: secrets-store.csi.k8s.io
+              readOnly: true
+              volumeAttributes:
+                secretProviderClass: prow-secrets
         volumeMounts:
           - name: github-token
             mountPath: /etc/github

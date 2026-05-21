@@ -2,7 +2,7 @@
 
 region = "us-west-2"
 account_id = "822779886699"
-flux_version = "2.18.3"
+flux_version = "2.18.2"
 test_infra_org = "ack-prow-staging"
 test_infra_repo = "ack-test-infra"
 test_infra_branch = "flux-v2-api-upgrade"
