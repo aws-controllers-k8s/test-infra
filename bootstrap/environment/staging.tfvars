@@ -1,0 +1,7 @@
+region = "us-west-2"
+account_id = "086987147623"
+test_infra_org = "ack-prow-staging"
+test_infra_repo = "ack-test-infra"
+test_infra_branch = "flux-v2-api-upgrade"
+prow_domain = "prow-staging.ack.aws.dev"
+stage = "staging"
