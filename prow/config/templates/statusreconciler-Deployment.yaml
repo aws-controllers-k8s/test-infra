@@ -53,7 +53,6 @@ spec:
         - --job-config-path=/etc/job-config
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
-        - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --status-path=s3://{{ .Values.prow.tideStatusReconcilerBucketName }}/status-reconciler-status
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
@@ -70,8 +69,6 @@ spec:
         - name: plugins
           mountPath: /etc/plugins
           readOnly: true
-        - name: s3-credentials
-          mountPath: /etc/s3-credentials
           readOnly: true
       volumes:
       - name: github-token
@@ -86,6 +83,3 @@ spec:
       - name: plugins
         configMap:
           name: plugins
-      - name: s3-credentials
-        secret:
-          secretName: s3-credentials

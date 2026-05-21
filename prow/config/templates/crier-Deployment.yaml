@@ -55,7 +55,6 @@ spec:
         - --blob-storage-workers=10
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
-        - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
         - --github-workers=10
@@ -72,8 +71,6 @@ spec:
         - name: github-token
           mountPath: /etc/github
           readOnly: true
-        - name: s3-credentials
-          mountPath: /etc/s3-credentials
           readOnly: true
       volumes:
       - name: config
@@ -85,6 +82,3 @@ spec:
       - name: github-token
         secret:
           secretName: github-token
-      - name: s3-credentials
-        secret:
-          secretName: s3-credentials
