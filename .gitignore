@@ -135,4 +135,20 @@ dmypy.json
 /test_config.yaml
 
 # End of https://www.gitignore.io/api/python
-/scripts/web-identity-token
+/scripts/web-identity-
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*terraform*
