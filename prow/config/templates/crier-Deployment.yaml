@@ -71,6 +71,8 @@ spec:
         - name: github-token
           mountPath: /etc/github
           readOnly: true
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
           readOnly: true
       volumes:
       - name: config
@@ -82,3 +84,9 @@ spec:
       - name: github-token
         secret:
           secretName: github-token
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets

@@ -69,6 +69,8 @@ spec:
         - name: plugins
           mountPath: /etc/plugins
           readOnly: true
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
           readOnly: true
       volumes:
       - name: github-token
@@ -83,3 +85,9 @@ spec:
       - name: plugins
         configMap:
           name: plugins
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets
