@@ -28,18 +28,22 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
   }
 
   data = {
-    STACK_NAME           = local.stack_name
-    ACCOUNT_ID           = local.account_id
-    REGION               = var.region
-    CLUSTER_SG_ID        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-    VPC_ID               = module.vpc.vpc_id
-    GHCR_PTC_SECRET_ARN  = data.aws_secretsmanager_secret.ghcr_ptc.arn
-    PROW_DOMAIN          = var.prow_domain
-    PROW_IMAGES_REPO_URI = aws_ecrpublic_repository.prow_images.repository_uri
-    TEST_INFRA_ORG       = var.test_infra_org
-    TEST_INFRA_REPO      = var.test_infra_repo
-    TEST_INFRA_BRANCH    = var.test_infra_branch
-    FLUX_IMAGE_REGISTRY  = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
+    STACK_NAME               = local.stack_name
+    ACCOUNT_ID               = local.account_id
+    REGION                   = var.region
+    CLUSTER_SG_ID            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+    VPC_ID                   = module.vpc.vpc_id
+    GHCR_PTC_SECRET_ARN      = data.aws_secretsmanager_secret.ghcr_ptc.arn
+    PROW_DOMAIN              = var.prow_domain
+    PROW_IMAGES_REPO_URI     = local.prow_images_repo_uri
+    TEST_INFRA_ORG           = var.test_infra_org
+    TEST_INFRA_REPO          = var.test_infra_repo
+    TEST_INFRA_BRANCH        = var.test_infra_branch
+    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
+    CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
+    CONTROLLER_ECR_ALIAS         = local.controller_ecr_alias
+    PUBLISH_ACCOUNT_ID           = var.stage == "prod" ? "628432846661" : local.account_id
+    STAGE                        = var.stage
   }
 
   depends_on = [null_resource.flux_system_namespace]

@@ -7,6 +7,10 @@ spec:
   interval: 5m
   targetNamespace: prow
   values:
+    controllerEcrRegistry: "${CONTROLLER_ECR_REGISTRY}"
+    ecrPublicAccountId: "${PUBLISH_ACCOUNT_ID}"
+    ecrPublicReaderRoleArn: "arn:aws:iam::${PUBLISH_ACCOUNT_ID}:role/ArtifactReader"
+    stage: "${STAGE}"
     github:
       organisation: "${TEST_INFRA_ORG}"
       bot:

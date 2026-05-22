@@ -73,6 +73,8 @@ spec:
           value: "${TEST_INFRA_REPO}"
         - name: TEST_INFRA_BRANCH
           value: "${TEST_INFRA_BRANCH}"
+        - name: CONTROLLER_ECR_REGISTRY
+          value: "${CONTROLLER_ECR_REGISTRY}"
         volumeMounts:
         - name: workspace
           mountPath: /workspace
@@ -87,7 +89,7 @@ spec:
           echo "Substituting variables in jobs.yaml..."
           # Substitute only the 4 variables needed for Prow job configuration.
           # The $$ prefix is escaped by Flux postBuild (becomes $ after substitution).
-          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI' \
+          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI $$CONTROLLER_ECR_REGISTRY' \
             < /workspace/prow/jobs/jobs.yaml \
             > /output/jobs-substituted.yaml
 
@@ -114,6 +116,8 @@ spec:
           value: "${TEST_INFRA_BRANCH}"
         - name: PROW_IMAGES_REPO_URI
           value: "${PROW_IMAGES_REPO_URI}"
+        - name: CONTROLLER_ECR_REGISTRY
+          value: "${CONTROLLER_ECR_REGISTRY}"
         volumeMounts:
         - name: workspace
           mountPath: /workspace
@@ -148,6 +152,8 @@ spec:
           value: "${TEST_INFRA_REPO}"
         - name: TEST_INFRA_BRANCH
           value: "${TEST_INFRA_BRANCH}"
+        - name: CONTROLLER_ECR_REGISTRY
+          value: "${CONTROLLER_ECR_REGISTRY}"
         volumeMounts:
         - name: output
           mountPath: /output

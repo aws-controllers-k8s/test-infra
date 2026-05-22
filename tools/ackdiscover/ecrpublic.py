@@ -12,13 +12,14 @@
 # permissions and limitations under the License.
 
 import dataclasses
+import os
 import uuid
 
 import boto3
 
-BASE_ECR_URL = "public.ecr.aws/aws-controllers-k8s"
-ECR_PUBLIC_AWS_ACCOUNT_ID = "628432846661"
-ECR_PUBLIC_READER_ROLE_ARN = f"arn:aws:iam::{ECR_PUBLIC_AWS_ACCOUNT_ID}:role/ArtifactReader"
+BASE_ECR_URL = os.environ.get("CONTROLLER_ECR_REGISTRY")
+ECR_PUBLIC_AWS_ACCOUNT_ID = os.environ.get("ECR_PUBLIC_AWS_ACCOUNT_ID")
+ECR_PUBLIC_READER_ROLE_ARN = os.environ.get("ECR_PUBLIC_READER_ROLE_ARN")
 
 
 @dataclasses.dataclass
@@ -80,15 +81,18 @@ def get_repository(writer, ep_client, repo_url):
     writer.debug("[get_public_repository] ", repo_url)
     parts = repo_url.split("/")
     registry_id = ECR_PUBLIC_AWS_ACCOUNT_ID
-    repo_name = parts[2]
+    # repo_url format: public.ecr.aws/<alias>/<repo_name>
+    repo_name = parts[-1]
     try:
-        repos = ep_client.describe_repositories(
-            registryId=registry_id,
-            repositoryNames=[repo_name],
-        )
+        kwargs = {
+            'repositoryNames': [repo_name],
+        }
+        if registry_id:
+            kwargs['registryId'] = registry_id
+        repos = ep_client.describe_repositories(**kwargs)
         repo_data = repos["repositories"][0]
         return Repository(
-            registry_id=registry_id,
+            registry_id=repo_data.get("registryId", registry_id),
             name=repo_name,
             uri=repo_data["repositoryUri"],
             created_on=repo_data["createdAt"],

@@ -27,6 +27,13 @@ pushd $DOCS_PATH 1> /dev/null
 echo "build-docs.sh] 📝 Installing requirements file... "
 pip install -r requirements.txt
 
+# Install acktools from the local test-infra checkout (overrides pinned version in requirements.txt)
+TEST_INFRA_PATH="${GITHUB_SRC_GOPATH}${TEST_INFRA_ORG}/${TEST_INFRA_REPO:-ack-test-infra}"
+if [ -d "${TEST_INFRA_PATH}/tools" ]; then
+    echo "build-docs.sh] 📦 Installing acktools from local test-infra..."
+    pip install --no-deps --force-reinstall "${TEST_INFRA_PATH}/tools"
+fi
+
 echo -n "build-docs.sh] 📄 Generating services page... "
 python3 ./scripts/gen_services.py ${GEN_SERVICES_FLAGS}
 echo "Done!"

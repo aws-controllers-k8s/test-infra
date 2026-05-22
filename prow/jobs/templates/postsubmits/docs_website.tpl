@@ -6,6 +6,7 @@
     karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
+      preset-controller-registry: "true"
     extra_refs:
     {{range $_, $service := .Config.AWSServices}}- org: ${TEST_INFRA_ORG}
       repo: {{ $service }}-controller

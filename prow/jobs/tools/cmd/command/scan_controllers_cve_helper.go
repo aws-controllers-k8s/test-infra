@@ -16,6 +16,7 @@ package command
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -67,9 +68,16 @@ type CVESummary struct {
 }
 
 const (
-	scanControllerImageFormat      = "public.ecr.aws/aws-controllers-k8s/%s-controller:%s"
 	ecrPublicControllerImageFormat = "v2/aws-controllers-k8s/%s-controller"
 )
+
+func getScanControllerImageFormat() string {
+	registry := os.Getenv("CONTROLLER_ECR_REGISTRY")
+	if registry == "" {
+		log.Fatal("CONTROLLER_ECR_REGISTRY environment variable is not set")
+	}
+	return registry + "/%s-controller:%s"
+}
 
 func getACKServices(configPath string) ([]string, error) {
 	fileData, err := os.ReadFile(configPath)
@@ -174,7 +182,7 @@ func scanControllersForCves(controllerTagsMap map[string]string) (map[string][]s
 			"--format",
 			"json",
 			"-q",
-			fmt.Sprintf(scanControllerImageFormat, controller, tag),
+			fmt.Sprintf(getScanControllerImageFormat(), controller, tag),
 		}
 		cmd := exec.Command(app, args...)
 		stdout, err := cmd.CombinedOutput()

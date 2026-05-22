@@ -6,7 +6,11 @@
     karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
+      preset-controller-registry: "true"
     extra_refs:
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
     - org: ${TEST_INFRA_ORG}
       repo: runtime
       base_ref: main

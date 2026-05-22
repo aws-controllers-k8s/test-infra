@@ -120,6 +120,28 @@ spec:
           }
         ]
       }
+    SSMAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ssm:GetParameter"],
+            "Resource": "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/*"
+          }
+        ]
+      }
+    AssumeECRPublishRole: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["sts:AssumeRole"],
+            "Resource": "arn:aws:iam::${PUBLISH_ACCOUNT_ID}:role/*"
+          }
+        ]
+      }
     SecretsAccess: |
       {
         "Version": "2012-10-17",

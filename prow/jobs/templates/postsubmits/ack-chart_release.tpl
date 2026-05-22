@@ -4,6 +4,8 @@
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
+    labels:
+      preset-controller-registry: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}

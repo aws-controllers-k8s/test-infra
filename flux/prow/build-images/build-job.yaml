@@ -23,6 +23,12 @@ spec:
         - |
           set -euo pipefail
 
+          # Skip image builds in production — images are managed externally
+          if [[ "${STAGE}" == "prod" ]]; then
+            echo "prow-build-images] STAGE=prod, skipping image build."
+            exit 0
+          fi
+
           # Login to public ECR
           aws ecr-public get-login-password --region us-east-1 | \
             buildah login -u AWS --password-stdin public.ecr.aws
@@ -56,6 +62,8 @@ spec:
             --agent-workflows-templates-path ./prow/agent-workflows/templates \
             --agent-workflows-output-path /dev/null
         env:
+        - name: STAGE
+          value: "${STAGE}"
         - name: PROW_IMAGES_REPO_URI
           value: "${PROW_IMAGES_REPO_URI}"
         - name: PROW_IMAGES_REPO_NAME

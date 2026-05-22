@@ -1,6 +1,11 @@
 prowJobNamespace: "prow" # Namespace in which to post the created ProwJobs
 podNamespace: "test-pods" # Namespace in which to run test pods
 
+controllerEcrRegistry: ""
+ecrPublicAccountId: ""
+ecrPublicReaderRoleArn: ""
+stage: ""
+
 github:
   organisation: ''
   bot:

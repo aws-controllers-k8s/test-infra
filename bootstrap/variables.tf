@@ -46,3 +46,9 @@ variable "stage" {
   type        = string
   default     = "prod"
 }
+
+variable "controllers" {
+  description = "List of ACK controller names to provision ECR public repositories for (non-prod only). Each controller gets a {name}-controller and {name}-chart repo."
+  type        = list(string)
+  default     = ["ecrpublic"]
+}

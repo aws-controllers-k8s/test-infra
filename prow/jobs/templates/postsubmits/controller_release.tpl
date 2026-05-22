@@ -2,9 +2,12 @@
   ${TEST_INFRA_ORG}/{{ $service }}-controller:
   - name: {{ $service }}-post-submit
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
+    labels:
+      preset-controller-registry: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -38,9 +41,12 @@
   {{ if contains $.Config.SoakTestOnReleaseServiceNames $service }}
   - name: {{ $service }}-soak-on-release
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
+    labels:
+      preset-controller-registry: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
@@ -65,6 +71,7 @@
   {{ end }}
   - name: {{ $service }}-controller-release-tag
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
@@ -92,6 +99,7 @@
     - main
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     job_queue_name: olm-bundle-prs
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
@@ -131,11 +139,13 @@
   
   - name: update-ack-chart
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
+      preset-controller-registry: "true"
     extra_refs:
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}

@@ -28,4 +28,6 @@
         command: ["ack-build-tools", "upgrade-go-version",
         "--build-config-path", "./build_config.yaml",
         "--images-config-path", "./prow/jobs/images_config.yaml",
-        "--golang-ecr-repository", "v2/docker/library/golang"]
+        "--golang-ecr-repository", "v2/docker/library/golang",
+        "--source-owner", "${TEST_INFRA_ORG}",
+        "--source-repo", "${TEST_INFRA_REPO}"]

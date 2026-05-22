@@ -32,12 +32,16 @@ npm run build
 
 # Set up git for deploy
 echo "${SCRIPT_NAME}] Setting up git..."
-git remote add origin "https://github.com/${TEST_INFRA_ORG}/docs.git" 2>/dev/null || true
+# Override origin to point to the correct org (clonerefs may set a different URL)
+git remote set-url origin "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${TEST_INFRA_ORG}/docs.git" 2>/dev/null || \
+  git remote add origin "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${TEST_INFRA_ORG}/docs.git"
 git config --global user.name "${GITHUB_ACTOR}"
 git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
 
 # Deploy to GitHub Pages
-echo "${SCRIPT_NAME}] Deploying to GitHub Pages..."
-GIT_USER="${GITHUB_ACTOR}" GIT_PASS="${GITHUB_TOKEN}" npm run deploy
+# ORGANIZATION_NAME, PROJECT_NAME, DEPLOYMENT_BRANCH override docusaurus.config.js
+echo "${SCRIPT_NAME}] Deploying to GitHub Pages (org: ${TEST_INFRA_ORG})..."
+ORGANIZATION_NAME="${TEST_INFRA_ORG}" PROJECT_NAME="docs" DEPLOYMENT_BRANCH="gh-pages" \
+  GIT_USER="${GITHUB_ACTOR}" GIT_PASS="${GITHUB_TOKEN}" npm run deploy
 
 echo "${SCRIPT_NAME}] Done!"
