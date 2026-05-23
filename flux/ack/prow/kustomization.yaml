@@ -5,3 +5,4 @@ resources:
 - prow-logs-bucket.yaml
 - prow-dns.yaml
 - supernova-role.yaml
+- ecr-repositories.yaml

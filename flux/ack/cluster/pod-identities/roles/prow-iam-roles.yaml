@@ -137,7 +137,7 @@ spec:
         "Statement": [
           {
             "Effect": "Allow",
-            "Action": ["sts:AssumeRole"],
+            "Action": ["sts:AssumeRole", "sts:TagSession"],
             "Resource": "arn:aws:iam::${PUBLISH_ACCOUNT_ID}:role/*"
           }
         ]
@@ -337,6 +337,45 @@ spec:
               "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
               "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
             ]
+          }
+        ]
+      }
+---
+# Mirror Role - used by the prow-mirror Job to copy images into ECR
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-mirror-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-prow-mirror-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    ECRProwMirror: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:*"],
+            "Resource": "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/prow/*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:GetAuthorizationToken"],
+            "Resource": "*"
           }
         ]
       }

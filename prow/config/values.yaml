@@ -27,16 +27,19 @@ ingress:
   create: false
   annotations: {}
 
+# Prow component images — overridden by Flux HelmRelease via
+# ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow and ${PROW_VERSION} substitution.
+# Defaults here use the upstream registry for local dev/testing.
 crier:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-crier:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/crier
   serviceAccount:
     create: false
     name: ''
 
 deck:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-deck:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/deck
   service:
     type: 'ClusterIP'
     annotations: {}
@@ -46,12 +49,12 @@ deck:
 
 ghproxy:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-ghproxy:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/ghproxy
   volumeSize: 100
 
 hook:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-hook:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/hook
   service:
     type: 'ClusterIP'
   serviceAccount:
@@ -60,34 +63,34 @@ hook:
 
 horologium:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-horologium:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/horologium
   serviceAccount:
     create: false
     name: ''
 
 prowControllerManager:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-controller-manager:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/prow-controller-manager
   serviceAccount:
     create: false
     name: ''
 
 sinker:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-sinker:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/sinker
   serviceAccount:
     create: false
     name: ''
 
 statusreconciler:
-  image: public.ecr.aws/eks-distro-build-tooling/prow-statusreconciler:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/statusreconciler
   serviceAccount:
     create: false
     name: ''
 
 tide:
   scrapeMetrics: false
-  image: public.ecr.aws/eks-distro-build-tooling/prow-tide:v20260316-26fa34da6
+  image: us-docker.pkg.dev/k8s-infra-prow/images/tide
   serviceAccount:
     create: false
     name: ''
@@ -105,7 +108,7 @@ githubWebhookToken:
   hmac: ''
 
 utility_images:
-  clonerefs: public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6
-  entrypoint: public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6
-  initupload: public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6
-  sidecar: public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6
+  clonerefs: us-docker.pkg.dev/k8s-infra-prow/images/clonerefs
+  entrypoint: us-docker.pkg.dev/k8s-infra-prow/images/entrypoint
+  initupload: us-docker.pkg.dev/k8s-infra-prow/images/initupload
+  sidecar: us-docker.pkg.dev/k8s-infra-prow/images/sidecar

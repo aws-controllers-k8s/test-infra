@@ -1,0 +1,116 @@
+# Mirrors official Prow images into a private ECR repository.
+# ECR does not support pull-through cache for Google Artifact Registry,
+# so we use crane to copy images on each Flux reconciliation.
+#
+# Images come from two upstream registries:
+#   - us-docker.pkg.dev/k8s-infra-prow/images (Prow core)
+#   - gcr.io/k8s-staging-test-infra (label_sync, commenter)
+#
+# This Job runs before prow-charts deploys, ensuring images are available
+# in ECR before Prow pods attempt to pull them.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prow-mirror-images
+  namespace: test-pods
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: prow-mirror-service-account
+      restartPolicy: Never
+      initContainers:
+      - name: ecr-login
+        image: amazon/aws-cli:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          aws ecr get-login-password --region $${AWS_REGION} > /ecr-auth/password
+        env:
+        - name: AWS_REGION
+          value: "${REGION}"
+        volumeMounts:
+        - name: ecr-auth
+          mountPath: /ecr-auth
+      containers:
+      - name: mirror
+        image: gcr.io/go-containerregistry/crane:debug
+        command:
+        - /busybox/sh
+        - -c
+        - |
+          set -eu
+
+          PROW_SRC="us-docker.pkg.dev/k8s-infra-prow/images"
+          TOOLS_SRC="gcr.io/k8s-staging-test-infra"
+          DST="$${ECR_REGISTRY}/prow"
+          TAG="$${PROW_VERSION}"
+          TOOLS_TAG="$${TOOLS_VERSION}"
+
+          # Authenticate to ECR using password from init container
+          crane auth login "$${ECR_REGISTRY}" --username AWS --password-stdin < /ecr-auth/password
+
+          # Prow core images (from us-docker.pkg.dev/k8s-infra-prow/images)
+          PROW_IMAGES="crier deck ghproxy hook horologium prow-controller-manager sinker status-reconciler tide"
+          # Pod utility images
+          PROW_IMAGES="$$PROW_IMAGES clonerefs entrypoint initupload sidecar"
+
+          # test-infra tool images (from gcr.io/k8s-staging-test-infra)
+          TOOL_IMAGES="label_sync commenter"
+
+          FAILED=0
+          TOTAL=0
+
+          # Mirror Prow core images
+          for img in $$PROW_IMAGES; do
+            TOTAL=$$((TOTAL + 1))
+            echo "→ $${img}:$${TAG}"
+            if crane copy "$${PROW_SRC}/$${img}:$${TAG}" "$${DST}/$${img}:$${TAG}" 2>&1; then
+              echo "  ✓ done"
+            else
+              echo "  ✗ FAILED"
+              FAILED=$$((FAILED + 1))
+            fi
+          done
+
+          # Mirror test-infra tool images
+          for img in $$TOOL_IMAGES; do
+            TOTAL=$$((TOTAL + 1))
+            echo "→ $${img}:$${TOOLS_TAG} (from k8s-staging-test-infra)"
+            if crane copy "$${TOOLS_SRC}/$${img}:$${TOOLS_TAG}" "$${DST}/$${img}:$${TOOLS_TAG}" 2>&1; then
+              echo "  ✓ done"
+            else
+              echo "  ✗ FAILED"
+              FAILED=$$((FAILED + 1))
+            fi
+          done
+
+          echo ""
+          echo "Mirror complete. Failures: $${FAILED}/$${TOTAL}"
+          if [ "$$FAILED" -gt 0 ]; then
+            exit 1
+          fi
+        env:
+        - name: ECR_REGISTRY
+          value: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        - name: PROW_VERSION
+          value: "${PROW_VERSION}"
+        - name: TOOLS_VERSION
+          value: "${TOOLS_VERSION}"
+        volumeMounts:
+        - name: ecr-auth
+          mountPath: /ecr-auth
+          readOnly: true
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "256Mi"
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+      volumes:
+      - name: ecr-auth
+        emptyDir: {}

@@ -33,3 +33,9 @@ kind: ServiceAccount
 metadata:
   name: periodic-service-account
   namespace: test-pods
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prow-mirror-service-account
+  namespace: test-pods

@@ -93,7 +93,7 @@ resource "aws_iam_role" "artifact_reader" {
     Statement = [{
       Effect    = "Allow"
       Principal = { AWS = "arn:${local.partition}:iam::${local.account_id}:root" }
-      Action    = "sts:AssumeRole"
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
     }]
   })
 }
@@ -122,7 +122,7 @@ resource "aws_iam_role" "artifact_writer" {
     Statement = [{
       Effect    = "Allow"
       Principal = { AWS = "arn:${local.partition}:iam::${local.account_id}:root" }
-      Action    = "sts:AssumeRole"
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
     }]
   })
 }
@@ -154,4 +154,41 @@ resource "aws_ssm_parameter" "ecr_publish_role" {
   name  = "/ack/prow/cd/public_ecr/publish_role"
   type  = "String"
   value = aws_iam_role.artifact_writer[0].arn
+}
+
+################################################################################
+# Prow Images Publish Role (non-prod only)
+# In production, this role exists in the shared publishing account.
+# In non-prod, we create it locally so the build-prow-images job can assume it
+# to push built Prow images to ECR Public.
+################################################################################
+
+resource "aws_iam_role" "publish_prow_images" {
+  count = var.stage != "prod" ? 1 : 0
+
+  name = "publish-prow-images"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { AWS = "arn:${local.partition}:iam::${local.account_id}:root" }
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "publish_prow_images_ecr_public" {
+  count = var.stage != "prod" ? 1 : 0
+
+  role       = aws_iam_role.publish_prow_images[0].name
+  policy_arn = "arn:${local.partition}:iam::aws:policy/AmazonElasticContainerRegistryPublicFullAccess"
+}
+
+resource "aws_ssm_parameter" "prow_ecr_publish_role" {
+  count = var.stage != "prod" ? 1 : 0
+
+  name  = "/ack/prow/cd/test-infra/publish-prow-images"
+  type  = "String"
+  value = aws_iam_role.publish_prow_images[0].arn
 }

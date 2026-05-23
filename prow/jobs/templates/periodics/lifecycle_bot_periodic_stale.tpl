@@ -11,7 +11,7 @@
   spec:
     serviceAccountName: periodic-service-account
     containers:
-      - image: gcr.io/k8s-prow/commenter:v20210422-d12e80af3e
+      - image: ${PROW_MIRROR_REGISTRY}/commenter:${TOOLS_VERSION}
         resources:
           limits:
             cpu: 1
@@ -20,7 +20,7 @@
             cpu: 1
             memory: "500Mi"
         command:
-          - /app/robots/commenter/app.binary
+          - commenter
         args:
           - --query=org:${TEST_INFRA_ORG} -label:lifecycle/frozen -label:lifecycle/rotten -label:lifecycle/stale
           - --updated=4320h

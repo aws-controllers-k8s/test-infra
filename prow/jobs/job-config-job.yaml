@@ -89,7 +89,7 @@ spec:
           echo "Substituting variables in jobs.yaml..."
           # Substitute only the 4 variables needed for Prow job configuration.
           # The $$ prefix is escaped by Flux postBuild (becomes $ after substitution).
-          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI $$CONTROLLER_ECR_REGISTRY' \
+          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI $$CONTROLLER_ECR_REGISTRY $$PROW_MIRROR_REGISTRY $$PROW_VERSION $$TOOLS_VERSION' \
             < /workspace/prow/jobs/jobs.yaml \
             > /output/jobs-substituted.yaml
 
@@ -118,6 +118,12 @@ spec:
           value: "${PROW_IMAGES_REPO_URI}"
         - name: CONTROLLER_ECR_REGISTRY
           value: "${CONTROLLER_ECR_REGISTRY}"
+        - name: PROW_MIRROR_REGISTRY
+          value: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow"
+        - name: PROW_VERSION
+          value: "${PROW_VERSION}"
+        - name: TOOLS_VERSION
+          value: "${TOOLS_VERSION}"
         volumeMounts:
         - name: workspace
           mountPath: /workspace

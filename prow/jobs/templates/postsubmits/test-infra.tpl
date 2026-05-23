@@ -1,4 +1,4 @@
-  ${TEST_INFRA_ORG}/test-infra:
+  ${TEST_INFRA_ORG}/${TEST_INFRA_REPO}:
   - name: build-prow-images
     decorate: true
     run_if_changed: ^(prow\/.*\/images_config.yaml)
@@ -11,6 +11,9 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "build-prow-images") }}
+          env:
+          - name: PROW_IMAGES_REPO_URI
+            value: {{$.ImageContext.ImageRepo}}
           resources:
             limits:
               cpu: 2
@@ -19,5 +22,7 @@
               cpu: 2
               memory: "4096Mi"
           command: ["./prow/jobs/tools/cmd/build-prow-images.sh"]
+          securityContext:
+            privileged: true
     branches:
-    - main                
+    - ${TEST_INFRA_BRANCH}                

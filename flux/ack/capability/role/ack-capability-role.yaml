@@ -67,7 +67,8 @@ spec:
             "Action": ["ecr:*"],
             "Resource": [
               "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/fluxcd/*",
-              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/kubernetes/*"
+              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/kubernetes/*",
+              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/prow/*"
             ]
           },
           {

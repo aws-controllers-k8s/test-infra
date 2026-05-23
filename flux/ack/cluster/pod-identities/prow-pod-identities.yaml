@@ -49,6 +49,17 @@ spec:
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
 metadata:
+  name: prow-mirror-pod-identity
+  namespace: ack-system
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  namespace: test-pods
+  serviceAccount: prow-mirror-service-account
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-mirror-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
   name: prow-workflow-runner-pod-identity
   namespace: ack-system
 spec:

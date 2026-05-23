@@ -13,7 +13,7 @@
     serviceAccountName: periodic-service-account
     containers:
     - name: label-sync
-      image: gcr.io/k8s-prow/label_sync:v20221205-a1b0b85d88
+      image: ${PROW_MIRROR_REGISTRY}/label_sync:${TOOLS_VERSION}
       resources:
         limits:
           cpu: 1

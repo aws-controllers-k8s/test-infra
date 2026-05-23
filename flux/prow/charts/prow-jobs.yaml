@@ -15,3 +15,5 @@ spec:
     substituteFrom:
     - kind: ConfigMap
       name: self-managed-vars
+    - kind: ConfigMap
+      name: prow-version

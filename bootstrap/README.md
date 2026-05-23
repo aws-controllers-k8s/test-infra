@@ -122,6 +122,32 @@ git push
 # Flux self-upgrades on next reconciliation
 ```
 
+## Upgrading Prow
+
+Prow images are mirrored from upstream into a private ECR registry. The version
+is controlled by a single ConfigMap (`flux/prow/version/prow-version-configmap.yaml`).
+
+```bash
+# Auto-detect latest tags for both Prow core and tools, update CRD
+./scripts/upgrade-prow.sh
+
+# Or specify a Prow core tag explicitly
+./scripts/upgrade-prow.sh v20260519-c47e31ece
+
+# Preview changes without modifying files
+./scripts/upgrade-prow.sh --dry-run
+
+# Commit and push
+git add flux/prow/ prow/config/
+git commit -m "chore(prow): upgrade to <tag>"
+git push
+# Flux reconciles: mirror job copies new images to ECR, then Prow redeploys
+```
+
+Image sources:
+- Prow core: `us-docker.pkg.dev/k8s-infra-prow/images` (13 images)
+- Tools (`label_sync`, `commenter`): `gcr.io/k8s-staging-test-infra`
+
 ## Re-running Terraform
 
 ```bash

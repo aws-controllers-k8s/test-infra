@@ -1,0 +1,152 @@
+# Private ECR repositories for mirrored Prow images.
+# Populated by the prow-mirror Job which copies images from upstream registries.
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-crier
+spec:
+  name: prow/crier
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-deck
+spec:
+  name: prow/deck
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-ghproxy
+spec:
+  name: prow/ghproxy
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-hook
+spec:
+  name: prow/hook
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-horologium
+spec:
+  name: prow/horologium
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-controller-manager
+spec:
+  name: prow/prow-controller-manager
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-sinker
+spec:
+  name: prow/sinker
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-status-reconciler
+spec:
+  name: prow/status-reconciler
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-tide
+spec:
+  name: prow/tide
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-clonerefs
+spec:
+  name: prow/clonerefs
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-entrypoint
+spec:
+  name: prow/entrypoint
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-initupload
+spec:
+  name: prow/initupload
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-sidecar
+spec:
+  name: prow/sidecar
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-label-sync
+spec:
+  name: prow/label_sync
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-commenter
+spec:
+  name: prow/commenter
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
