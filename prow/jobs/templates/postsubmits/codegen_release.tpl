@@ -1,6 +1,7 @@
   ${TEST_INFRA_ORG}/code-generator:
   - name: auto-generate-controllers
     decorate: true
+    path_alias: github.com/aws-controllers-k8s/code-generator
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
@@ -16,10 +17,12 @@
       repo: runtime
       base_ref: main
       workdir: false
+      path_alias: github.com/aws-controllers-k8s/runtime
     {{range $_, $service := .Config.AWSServices}}- org: ${TEST_INFRA_ORG}
       repo: {{ $service }}-controller
       base_ref: main
       workdir: false
+      path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     {{end}}spec:
       serviceAccountName: post-submit-service-account
       containers:
