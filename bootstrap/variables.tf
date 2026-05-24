@@ -47,6 +47,18 @@ variable "stage" {
   default     = "prod"
 }
 
+variable "kubernetes_org" {
+  description = "GitHub org that owns the community-operators fork for OLM bundle PRs (e.g., k8s-operatorhub for prod, ack-prow-staging for staging)"
+  type        = string
+  default     = "k8s-operatorhub"
+}
+
+variable "redhat_org" {
+  description = "GitHub org that owns the community-operators-prod fork for OLM bundle PRs (e.g., redhat-openshift-ecosystem for prod, ack-prow-staging for staging)"
+  type        = string
+  default     = "redhat-openshift-ecosystem"
+}
+
 variable "controllers" {
   description = "List of ACK controller names to provision ECR public repositories for (non-prod only). Each controller gets a {name}-controller and {name}-chart repo."
   type        = list(string)

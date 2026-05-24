@@ -11,6 +11,8 @@ spec:
     ecrPublicAccountId: "${PUBLISH_ACCOUNT_ID}"
     ecrPublicReaderRoleArn: "arn:aws:iam::${PUBLISH_ACCOUNT_ID}:role/ArtifactReader"
     stage: "${STAGE}"
+    kubernetesOrg: "${KUBERNETES_ORG}"
+    redhatOrg: "${REDHAT_ORG}"
     github:
       organisation: "${TEST_INFRA_ORG}"
       bot:

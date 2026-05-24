@@ -1,5 +1,5 @@
 # Dockerfile for soak testing
-FROM quay.io/containers/buildah:v1.33.2
+FROM quay.io/containers/buildah:v1.39.0
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}

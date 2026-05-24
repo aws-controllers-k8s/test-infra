@@ -39,6 +39,21 @@ resource "aws_ecrpublic_repository" "chart" {
   force_destroy = true
 }
 
+################################################################################
+# Public ECR Repository for the ACK parent chart (non-prod only)
+# In production, the parent chart is published to public.ecr.aws/aws-controllers-k8s/ack-chart.
+# In non-prod stages, we provision a dedicated repo.
+################################################################################
+
+resource "aws_ecrpublic_repository" "ack_chart" {
+  count    = var.stage != "prod" ? 1 : 0
+  provider = aws.us_east_1
+
+  repository_name = "ack-chart"
+
+  force_destroy = true
+}
+
 locals {
   # For non-prod: derive the alias from the first controller repo URI
   # For prod: use the production alias
