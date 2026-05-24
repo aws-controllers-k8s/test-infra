@@ -4,9 +4,9 @@ images:
     auto-update-controllers: prow-auto-update-controllers-0.0.29
     build-prow-images: prow-build-prow-images-0.0.66
     controller-release-tag: prow-controller-release-tag-0.0.29
-    deploy: prow-deploy-0.0.41
+    deploy: prow-deploy-0.0.42
     deploy-docs: prow-deploy-docs-0.0.14
-    docs: prow-docs-0.0.39
+    docs: prow-docs-0.0.41
     integration-test: prow-integration-0.0.51
     olm-bundle-pr: prow-olm-bundle-pr-0.0.30
     olm-test: prow-olm-test-0.0.29
