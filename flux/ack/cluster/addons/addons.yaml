@@ -28,3 +28,12 @@ spec:
   podIdentityAssociations:
   - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-external-dns-role
     serviceAccount: external-dns
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: coredns
+  namespace: ack-system
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  name: coredns
