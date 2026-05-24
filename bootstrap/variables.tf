@@ -1,66 +1,59 @@
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "us-west-2"
 }
 
 variable "account_id" {
   description = "AWS account ID for the target environment"
   type        = string
-  default     = "453735116143"
 }
 
-# Flux versions - pinned here, also stored in flux/flux-version.yaml
 variable "flux_version" {
   description = "Flux chart version (must match vendored chart in charts/flux2-<version>/)"
   type        = string
-  default     = "2.18.3"
 }
 
 variable "prow_domain" {
   description = "Domain for Prow Deck UI (e.g., prow.ack.aws.dev for prod, prow-staging.ack.aws.dev for dev)"
   type        = string
-  default     = "prow.ack.aws.dev"
 }
 
 variable "test_infra_org" {
   description = "GitHub org for test-infra repo (used in Prow job extra_refs)"
   type        = string
-  default     = "aws-controllers-k8s"
 }
 
 variable "test_infra_repo" {
   description = "GitHub repo name for test-infra (used in Prow job extra_refs)"
   type        = string
-  default     = "test-infra"
 }
 
 variable "test_infra_branch" {
   description = "Git branch for test-infra repo (used in Prow job extra_refs and Flux)"
   type        = string
-  default     = "main"
 }
 
 variable "stage" {
   description = "Deployment stage (e.g., prod, staging, dev)"
   type        = string
-  default     = "prod"
 }
 
 variable "kubernetes_org" {
   description = "GitHub org that owns the community-operators fork for OLM bundle PRs (e.g., k8s-operatorhub for prod, ack-prow-staging for staging)"
   type        = string
-  default     = "k8s-operatorhub"
 }
 
 variable "redhat_org" {
   description = "GitHub org that owns the community-operators-prod fork for OLM bundle PRs (e.g., redhat-openshift-ecosystem for prod, ack-prow-staging for staging)"
   type        = string
-  default     = "redhat-openshift-ecosystem"
 }
 
 variable "controllers" {
   description = "List of ACK controller names to provision ECR public repositories for (non-prod only). Each controller gets a {name}-controller and {name}-chart repo."
   type        = list(string)
-  default     = ["ecrpublic"]
+}
+
+variable "publish_account_id" {
+  description = "AWS account ID that owns the ECR Public repositories for publishing controller images and Helm charts"
+  type        = string
 }

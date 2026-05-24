@@ -152,3 +152,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 *terraform*
+
+# Bootstrap environment files (contain account IDs, stored in SSM)
+bootstrap/environment/*.tfvars

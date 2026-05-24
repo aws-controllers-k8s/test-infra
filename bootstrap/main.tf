@@ -40,6 +40,4 @@ locals {
   cluster_name       = "${local.stack_name}-cluster"
   stack_name         = "ack-test-infra-${var.stage}"
   cluster_version    = "1.35"
-  flux_path          = "./flux"
-  git_repository_url = "https://github.com/${var.test_infra_org}/${var.test_infra_repo}"
 }

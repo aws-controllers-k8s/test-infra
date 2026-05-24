@@ -69,18 +69,35 @@ aws secretsmanager put-resource-policy \
 
 ```bash
 cd test-infra/bootstrap
-./gen-env
+./scripts/bootstrap-env.sh
 ```
 
-This prompts for each variable (region, flux version, GitHub org/repo/branch)
-and writes a `.tfvars` file to `bootstrap/environment/dev.tfvars`.
+The script prompts for the deployment stage first, then for each variable
+(region, account ID, flux version, GitHub org/repo/branch, domain, etc.) with
+smart defaults based on the stage. It stores the config as a SecureString in
+SSM at `/ack/test-infra/bootstrap/env/<stage>` and writes a local `.tfvars`
+file to `bootstrap/environment/<stage>.tfvars`.
+
+On subsequent runs (or on a fresh clone), it pulls the config from SSM without
+prompting. Use `--force` to re-prompt and overwrite.
+
+```bash
+# Re-generate from SSM (no prompts — just select stage)
+./scripts/bootstrap-env.sh
+
+# Force re-prompt and overwrite SSM
+./scripts/bootstrap-env.sh --force
+```
+
+> **Note:** Environment files (`bootstrap/environment/*.tfvars`) are gitignored
+> and must never be committed. The source of truth is SSM.
 
 ### 5. Bootstrap the cluster
 
 ```bash
 cd test-infra/bootstrap
 terraform init
-terraform apply -var-file=environment/dev.tfvars
+terraform apply -var-file=environment/<stage>.tfvars
 ```
 
 ### 6. Create ACM certificate for Prow domain
@@ -151,7 +168,10 @@ Image sources:
 ## Re-running Terraform
 
 ```bash
-terraform apply -var-file=environment/dev.tfvars
+# Regenerate local .tfvars from SSM (if on a fresh clone)
+./scripts/bootstrap-env.sh
+
+terraform apply -var-file=environment/<stage>.tfvars
 ```
 
 ## Day-2 Infrastructure Changes (ACK Manifests)

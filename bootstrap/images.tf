@@ -88,7 +88,7 @@ resource "null_resource" "bootstrap_prow_images" {
 
 ################################################################################
 # ArtifactReader Role (non-prod only)
-# In production, this role exists in the shared publishing account (628432846661).
+# In production, this role exists in the shared publishing account.
 # In non-prod, we create it locally so the ackdiscover tool can assume it
 # to read ECR Public repositories in the same account.
 ################################################################################
@@ -117,7 +117,7 @@ resource "aws_iam_role_policy_attachment" "artifact_reader_ecr_public" {
 
 ################################################################################
 # ArtifactWriter Role (non-prod only)
-# In production, this role exists in the shared publishing account (628432846661).
+# In production, this role exists in the shared publishing account.
 # In non-prod, we create it locally so postsubmit jobs can assume it
 # to publish controller images and Helm charts to ECR Public.
 ################################################################################

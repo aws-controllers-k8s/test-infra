@@ -42,7 +42,7 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
     CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
     CONTROLLER_ECR_ALIAS         = local.controller_ecr_alias
-    PUBLISH_ACCOUNT_ID           = var.stage == "prod" ? "628432846661" : local.account_id
+    PUBLISH_ACCOUNT_ID           = var.publish_account_id
     STAGE                        = var.stage
     KUBERNETES_ORG               = var.kubernetes_org
     REDHAT_ORG                   = var.redhat_org
