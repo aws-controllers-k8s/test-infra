@@ -23,47 +23,12 @@ spec:
         - |
           set -euo pipefail
 
-          # Skip image builds in production — images are managed externally
-          if [[ "${STAGE}" == "prod" ]]; then
-            echo "prow-build-images] STAGE=prod, skipping image build."
-            exit 0
-          fi
-
-          # Login to public ECR
-          aws ecr-public get-login-password --region us-east-1 | \
-            buildah login -u AWS --password-stdin public.ecr.aws
-
           # Checkout source
           git clone --branch ${TEST_INFRA_BRANCH} https://github.com/${TEST_INFRA_ORG}/${TEST_INFRA_REPO} /workspace
           cd /workspace
 
-          # Resolve image repo in config
-          envsubst < ./prow/jobs/images_config.yaml > /tmp/images_config.yaml
-          envsubst < ./prow/plugins/images_config.yaml > /tmp/plugins_images_config.yaml
-          envsubst < ./prow/agent-workflows/images_config.yaml > /tmp/agent_workflows_images_config.yaml
-
-          # Build and push all job images
-          ack-build-tools build-prow-images \
-            --images-config-path /tmp/images_config.yaml \
-            --jobs-config-path ./prow/jobs/jobs_config.yaml \
-            --jobs-templates-path ./prow/jobs/templates/ \
-            --jobs-output-path /dev/null \
-            --prow-ecr-repository ${STACK_NAME}-prow-images
-
-          # Build and push plugin images
-          ack-build-tools build-prow-plugin-images \
-            --images-config-path /tmp/plugins_images_config.yaml \
-            --prow-ecr-repository ${STACK_NAME}-prow-images
-
-          # Build and push agent workflow images
-          ack-build-tools build-prow-agent-workflow-images \
-            --images-config-path /tmp/agent_workflows_images_config.yaml \
-            --prow-ecr-repository ${STACK_NAME}-prow-images \
-            --agent-workflows-templates-path ./prow/agent-workflows/templates \
-            --agent-workflows-output-path /dev/null
+          ./prow/jobs/tools/cmd/build-prow-images.sh
         env:
-        - name: STAGE
-          value: "${STAGE}"
         - name: PROW_IMAGES_REPO_URI
           value: "${PROW_IMAGES_REPO_URI}"
         - name: PROW_IMAGES_REPO_NAME
@@ -74,6 +39,13 @@ spec:
           value: "${TEST_INFRA_REPO}"
         - name: TEST_INFRA_BRANCH
           value: "${TEST_INFRA_BRANCH}"
+        - name: REPO_NAME
+          value: "${TEST_INFRA_REPO}"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: prowjob-github-pat-token
+              key: token
         resources:
           requests:
             cpu: "2"

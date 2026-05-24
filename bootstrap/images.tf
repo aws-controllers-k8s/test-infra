@@ -1,12 +1,10 @@
 ################################################################################
-# Public ECR Repository for Prow images (non-prod only)
-# In production, prow images are published to public.ecr.aws/m5q3e4b2/prow.
-# In non-prod stages, we provision a dedicated repo.
+# Public ECR Repository for Prow images (all environments)
+# Each environment gets its own ECR Public repo for Prow job images.
 # Public ECR is global but managed from us-east-1.
 ################################################################################
 
 resource "aws_ecrpublic_repository" "prow_images" {
-  count    = var.stage != "prod" ? 1 : 0
   provider = aws.us_east_1
 
   repository_name = local.prow_images_repo
@@ -59,9 +57,8 @@ locals {
   # For prod: use the production alias
   controller_ecr_alias    = var.stage != "prod" ? regex("public\\.ecr\\.aws/([^/]+)", aws_ecrpublic_repository.controller[var.controllers[0]].repository_uri)[0] : "aws-controllers-k8s"
   controller_ecr_registry = "public.ecr.aws/${local.controller_ecr_alias}"
-  # For non-prod: use the provisioned prow images repo
-  # For prod: use the production prow images registry
-  prow_images_repo_uri = var.stage != "prod" ? aws_ecrpublic_repository.prow_images[0].repository_uri : "public.ecr.aws/m5q3e4b2/prow"
+  # All environments use the provisioned prow images repo
+  prow_images_repo_uri = aws_ecrpublic_repository.prow_images.repository_uri
 }
 
 ################################################################################
@@ -71,11 +68,9 @@ locals {
 ################################################################################
 
 resource "null_resource" "bootstrap_prow_images" {
-  count = var.stage != "prod" ? 1 : 0
-
   # Only re-run if these change
   triggers = {
-    repository_uri = aws_ecrpublic_repository.prow_images[0].repository_uri
+    repository_uri = aws_ecrpublic_repository.prow_images.repository_uri
     account_id     = local.account_id
   }
 
@@ -84,7 +79,7 @@ resource "null_resource" "bootstrap_prow_images" {
     environment = {
       AWS_ACCOUNT_ID      = local.account_id
       AWS_REGION          = var.region
-      PROW_IMAGE_REPO_URI = aws_ecrpublic_repository.prow_images[0].repository_uri
+      PROW_IMAGE_REPO_URI = aws_ecrpublic_repository.prow_images.repository_uri
     }
   }
 

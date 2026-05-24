@@ -9,7 +9,6 @@
 #   AWS_ACCOUNT_ID:     AWS account ID (required)
 #   AWS_REGION:         AWS region (default: us-west-2)
 #   PROW_IMAGE_REPO_URI: Full public ECR repository URI (required)
-#   VERSION:            Image tag version (default: git describe)
 #   GO_VERSION:         Go version for builds (default: 1.22.5)
 
 set -eo pipefail
@@ -23,11 +22,26 @@ AWS_REGION="${AWS_REGION:-us-west-2}"
 PROW_IMAGE_REPO_URI="${PROW_IMAGE_REPO_URI:?PROW_IMAGE_REPO_URI is required}"
 GO_VERSION="${GO_VERSION:-"1.22.5"}"
 
+# Read the versioned tag from images_config.yaml
+IMAGES_CONFIG="${DIR}/../images_config.yaml"
+if [ ! -f "$IMAGES_CONFIG" ]; then
+  echo "ERROR: images_config.yaml not found at $IMAGES_CONFIG"
+  exit 1
+fi
+
+BUILDER_VERSION_TAG=$(grep 'build-prow-images:' "$IMAGES_CONFIG" | awk '{print $2}')
+if [ -z "$BUILDER_VERSION_TAG" ]; then
+  echo "ERROR: Could not read build-prow-images tag from $IMAGES_CONFIG"
+  exit 1
+fi
+
 BUILDER_IMAGE="prow/build-prow-images"
-BUILDER_TAG="${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
+BUILDER_VERSIONED="${PROW_IMAGE_REPO_URI}:${BUILDER_VERSION_TAG}"
+BUILDER_LATEST="${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
 
 echo "=== Prow Images Bootstrap ==="
 echo "Repository: ${PROW_IMAGE_REPO_URI}"
+echo "Tag (versioned): ${BUILDER_VERSION_TAG}"
 echo ""
 
 # --- Step 1: Login to public ECR ---
@@ -45,9 +59,13 @@ docker build --platform="linux/amd64" \
   "${TEST_INFRA_ROOT}"
 
 echo "Pushing builder image..."
-docker tag "${BUILDER_IMAGE}" "${BUILDER_TAG}"
-docker push "${BUILDER_TAG}"
-echo "  ✓ Pushed: ${BUILDER_TAG}"
+docker tag "${BUILDER_IMAGE}" "${BUILDER_VERSIONED}"
+docker push "${BUILDER_VERSIONED}"
+echo "  ✓ Pushed: ${BUILDER_VERSIONED}"
+
+docker tag "${BUILDER_IMAGE}" "${BUILDER_LATEST}"
+docker push "${BUILDER_LATEST}"
+echo "  ✓ Pushed: ${BUILDER_LATEST}"
 
 echo ""
 echo "=== Bootstrap complete ==="
