@@ -41,7 +41,6 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     TEST_INFRA_BRANCH        = var.test_infra_branch
     FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
     CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
-    CONTROLLER_ECR_ALIAS         = local.controller_ecr_alias
     PUBLISH_ACCOUNT_ID           = var.publish_account_id
     STAGE                        = var.stage
     KUBERNETES_ORG               = var.kubernetes_org
