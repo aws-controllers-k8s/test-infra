@@ -39,7 +39,7 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     TEST_INFRA_ORG           = var.test_infra_org
     TEST_INFRA_REPO          = var.test_infra_repo
     TEST_INFRA_BRANCH        = var.test_infra_branch
-    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
+    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd"
     CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
     PUBLISH_ACCOUNT_ID           = var.publish_account_id
     STAGE                        = var.stage
@@ -111,5 +111,34 @@ resource "null_resource" "validate_kustomizations" {
 
   depends_on = [
     null_resource.bootstrap_flux,
+  ]
+}
+
+################################################################################
+# Restore FLUX_IMAGE_REGISTRY to ECR
+#
+# During bootstrap, FLUX_IMAGE_REGISTRY is temporarily set to ghcr.io/fluxcd
+# so Flux can start before the ECR pull-through cache exists. Once all
+# Kustomizations are healthy (meaning ACK has created the pull-through cache),
+# we re-apply the ConfigMap to restore the ECR registry value. On next
+# reconciliation Flux will self-upgrade to use ECR images.
+################################################################################
+
+resource "null_resource" "restore_flux_registry" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region} 2>/dev/null
+      kubectl patch configmap self-managed-vars -n flux-system \
+        --type merge -p '{"data":{"FLUX_IMAGE_REGISTRY":"${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd"}}'
+    EOT
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations,
   ]
 }
