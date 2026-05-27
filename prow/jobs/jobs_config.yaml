@@ -62,6 +62,7 @@ aws_services:
 - ram
 - rds
 - recyclebin
+- rolesanywhere
 - route53
 - route53resolver
 - s3
