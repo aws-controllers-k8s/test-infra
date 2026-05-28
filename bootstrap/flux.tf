@@ -142,3 +142,27 @@ resource "null_resource" "restore_flux_registry" {
     null_resource.validate_kustomizations,
   ]
 }
+
+################################################################################
+# Prow Images Build (in-cluster)
+#
+# One-shot Job that builds and pushes all Prow images using ack-build-tools.
+# Runs after kustomization validation ensures pod identities, namespaces, and
+# secrets are in place.
+################################################################################
+
+resource "null_resource" "bootstrap_prow_images_job" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/bootstrap-prow-images.sh ${aws_eks_cluster.this.name} ${var.region} ${local.prow_images_repo_uri} ${local.prow_build_images_tag}"
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations,
+    null_resource.bootstrap_prow_images,
+  ]
+}
