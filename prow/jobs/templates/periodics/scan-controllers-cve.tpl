@@ -13,6 +13,7 @@
     path_alias: github.com/aws-controllers-k8s/test-infra
   labels:
     preset-github-secrets: "true"
+    preset-controller-registry: "true"
   agent: kubernetes
   spec:
     serviceAccountName: periodic-service-account

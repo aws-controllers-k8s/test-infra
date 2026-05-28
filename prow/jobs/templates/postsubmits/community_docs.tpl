@@ -11,6 +11,7 @@
     - org: ${TEST_INFRA_ORG}
       repo: ${TEST_INFRA_REPO}
       base_ref: ${TEST_INFRA_BRANCH}
+      path_alias: github.com/aws-controllers-k8s/test-infra
     - org: ${TEST_INFRA_ORG}
       repo: runtime
       base_ref: main
@@ -21,6 +22,9 @@
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "docs") }}
+          env:
+          - name: TEST_INFRA_REPO
+            value: "test-infra"
           resources:
             limits:
               cpu: 1
