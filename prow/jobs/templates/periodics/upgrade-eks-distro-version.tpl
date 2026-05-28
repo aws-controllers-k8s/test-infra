@@ -27,5 +27,6 @@
             memory: "500Mi"
         command: ["ack-build-tools", "upgrade-eks-distro-version",
             "--images-config-path", "./prow/jobs/images_config.yaml",
+            "--base-branch", "${TEST_INFRA_BRANCH}",
             "--source-owner", "${TEST_INFRA_ORG}",
             "--source-repo", "${TEST_INFRA_REPO}"]

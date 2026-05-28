@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	baseBranch = "main"
+// baseBranch default is now controlled via --base-branch flag (OptBaseBranch)
 )
 
 var (

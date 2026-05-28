@@ -14,6 +14,8 @@
           env:
           - name: PROW_IMAGES_REPO_URI
             value: {{$.ImageContext.ImageRepo}}
+          - name: TEST_INFRA_BRANCH
+            value: "${TEST_INFRA_BRANCH}"
           resources:
             limits:
               cpu: 2
