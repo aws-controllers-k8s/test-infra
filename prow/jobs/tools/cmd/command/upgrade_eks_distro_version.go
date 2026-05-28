@@ -25,6 +25,9 @@ func init() {
 	upgradeEksDistroCMD.PersistentFlags().StringVar(
 		&OptBuildConfigPath, "build-config-path", "./build_config.yaml", "path to build_config.yaml, where all the build versions are stored",
 	)
+	upgradeEksDistroCMD.PersistentFlags().StringVar(
+		&OptBaseBranch, "base-branch", "main", "Base branch to open the PR against",
+	)
 	rootCmd.AddCommand(upgradeEksDistroCMD)
 }
 
@@ -72,7 +75,7 @@ func runUpgradeEksDistro(cmd *cobra.Command, args []string) error {
 	prDescription := fmt.Sprintf(updateEksDistroPRDescription, olderVersion, highestEcrEksDistroVersion)
 
 	log.Println("Commiting changes and creating PR")
-	err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateEksDistroSourceFiles, baseBranch, prSubject, prDescription)
+	err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateEksDistroSourceFiles, OptBaseBranch, prSubject, prDescription)
 	if err != nil && !strings.Contains(err.Error(), "pull request already exists") {
 		return err
 	}
