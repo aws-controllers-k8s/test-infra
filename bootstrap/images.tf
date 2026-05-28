@@ -59,6 +59,8 @@ locals {
   controller_ecr_registry = "public.ecr.aws/${local.controller_ecr_alias}"
   # All environments use the provisioned prow images repo
   prow_images_repo_uri = aws_ecrpublic_repository.prow_images.repository_uri
+  # Builder image tag from images_config.yaml (source of truth)
+  prow_build_images_tag = regex("build-prow-images:\\s+(\\S+)", file("${path.module}/../prow/jobs/images_config.yaml"))[0]
 }
 
 ################################################################################

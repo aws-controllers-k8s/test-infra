@@ -62,7 +62,7 @@ aws secretsmanager create-secret \
 # ECR needs permission to read the pull-through cache secret
 aws secretsmanager put-resource-policy \
   --secret-id "ecr-pullthroughcache/ghcr-fluxcd" \
-  --resource-policy '{"Version":"2012-10-17","Statement":[{"Sid":"AllowECRAccess","Effect":"Allow","Principal":{"Service":"ecr.amazonaws.com"},"Action":"secretsmanager:GetSecretValue","Resource":"*"}]}'
+  --resource-policy '{"Version":"2012-10-17","Statement":[{"Sid":"AllowECRAccess","Effect":"Allow","Principal":{"Service":"ecr.amazonaws.com"},"Action":[ "secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue" ],"Resource":"*"}]}'
 ```
 
 ### 4. Generate your environment
@@ -234,7 +234,6 @@ Common kustomization names:
 | `ack-prow` | Prow AWS resources (S3, Route53) |
 | `ack-flux` | ECR pull-through cache |
 | `prow-crds` | Prow CRDs |
-| `prow-build-images` | Prow image build jobs |
 | `prow-charts` | Prow Helm releases |
 
 If a kustomization shows `dependency '<name>' is not ready`, trigger the

@@ -185,7 +185,16 @@ if kubectl get ns bootstrap-flux-system 2>/dev/null | grep -q Terminating; then
     | kubectl replace --raw "/api/v1/namespaces/bootstrap-flux-system/finalize" -f - 2>/dev/null || true
 fi
 
+# Force-delete any pods stuck in Terminating state
+kubectl delete pods --all -n bootstrap-flux-system --grace-period=0 --force 2>/dev/null || true
+
 # Clean up cluster-scoped resources
 kubectl delete clusterrolebinding bootstrap-flux-cluster-admin 2>/dev/null || true
+
+# Force-reconcile all kustomizations so they pick up the artifact URL from the
+# vendored source-controller instead of the now-deleted bootstrap one.
+echo "  Forcing reconciliation of all Kustomizations in flux-system..."
+kubectl annotate kustomization --all -n flux-system \
+  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
 
 echo "=== Flux bootstrap complete ==="

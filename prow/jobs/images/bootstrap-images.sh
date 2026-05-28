@@ -37,7 +37,6 @@ fi
 
 BUILDER_IMAGE="prow/build-prow-images"
 BUILDER_VERSIONED="${PROW_IMAGE_REPO_URI}:${BUILDER_VERSION_TAG}"
-BUILDER_LATEST="${PROW_IMAGE_REPO_URI}:prow-build-prow-images-latest"
 
 echo "=== Prow Images Bootstrap ==="
 echo "Repository: ${PROW_IMAGE_REPO_URI}"
@@ -62,10 +61,6 @@ echo "Pushing builder image..."
 docker tag "${BUILDER_IMAGE}" "${BUILDER_VERSIONED}"
 docker push "${BUILDER_VERSIONED}"
 echo "  ✓ Pushed: ${BUILDER_VERSIONED}"
-
-docker tag "${BUILDER_IMAGE}" "${BUILDER_LATEST}"
-docker push "${BUILDER_LATEST}"
-echo "  ✓ Pushed: ${BUILDER_LATEST}"
 
 echo ""
 echo "=== Bootstrap complete ==="

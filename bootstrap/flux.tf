@@ -39,7 +39,7 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
     TEST_INFRA_ORG           = var.test_infra_org
     TEST_INFRA_REPO          = var.test_infra_repo
     TEST_INFRA_BRANCH        = var.test_infra_branch
-    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd"
+    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
     CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
     PUBLISH_ACCOUNT_ID           = var.publish_account_id
     STAGE                        = var.stage
@@ -134,11 +134,35 @@ resource "null_resource" "restore_flux_registry" {
     command = <<-EOT
       aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region} 2>/dev/null
       kubectl patch configmap self-managed-vars -n flux-system \
-        --type merge -p '{"data":{"FLUX_IMAGE_REGISTRY":"${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd"}}'
+        --type merge -p '{"data":{"FLUX_IMAGE_REGISTRY":"${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"}}'
     EOT
   }
 
   depends_on = [
     null_resource.validate_kustomizations,
+  ]
+}
+
+################################################################################
+# Prow Images Build (in-cluster)
+#
+# One-shot Job that builds and pushes all Prow images using ack-build-tools.
+# Runs after kustomization validation ensures pod identities, namespaces, and
+# secrets are in place.
+################################################################################
+
+resource "null_resource" "bootstrap_prow_images_job" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/bootstrap-prow-images.sh ${aws_eks_cluster.this.name} ${var.region} ${local.prow_images_repo_uri} ${local.prow_build_images_tag}"
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations,
+    null_resource.bootstrap_prow_images,
   ]
 }
