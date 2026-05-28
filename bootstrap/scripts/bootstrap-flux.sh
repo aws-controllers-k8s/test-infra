@@ -70,11 +70,18 @@ subjects:
   namespace: bootstrap-flux-system
 EOF
 
-# Copy ConfigMaps from flux-system to bootstrap-flux-system, overriding
-# FLUX_IMAGE_REGISTRY to use public ghcr.io images so the initial install
-# doesn't depend on the ECR pull-through cache being warm.
+# Temporarily override FLUX_IMAGE_REGISTRY in flux-system to use public
+# ghcr.io images so the vendored Flux can start without the ECR pull-through
+# cache (which is created later by ACK). The original value is restored after
+# Flux is running and the pull-through cache is available.
+ORIGINAL_REGISTRY=$(kubectl get configmap self-managed-vars -n flux-system -o jsonpath='{.data.FLUX_IMAGE_REGISTRY}')
+kubectl patch configmap self-managed-vars -n flux-system \
+  --type merge -p '{"data":{"FLUX_IMAGE_REGISTRY":"ghcr.io/fluxcd"}}'
+
+# Copy ConfigMaps from flux-system to bootstrap-flux-system (already has
+# ghcr.io/fluxcd from the patch above).
 kubectl get configmap self-managed-vars -n flux-system -o json \
-  | jq '.metadata.namespace = "bootstrap-flux-system" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp) | .data.FLUX_IMAGE_REGISTRY = "ghcr.io/fluxcd"' \
+  | jq '.metadata.namespace = "bootstrap-flux-system" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' \
   | kubectl apply -f -
 
 kubectl get configmap flux-version -n flux-system -o json \
@@ -162,6 +169,7 @@ done
 # Step 4: Tear down bootstrap Flux
 echo "  Step 4: Removing bootstrap Flux..."
 
+
 # Strip all finalizers in the namespace so nothing blocks deletion
 kubectl get all,gitrepositories.source.toolkit.fluxcd.io,kustomizations.kustomize.toolkit.fluxcd.io,helmreleases.helm.toolkit.fluxcd.io,helmcharts.source.toolkit.fluxcd.io -n bootstrap-flux-system -o name 2>/dev/null | while read -r res; do
   kubectl patch "$res" -n bootstrap-flux-system --type merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
@@ -177,7 +185,16 @@ if kubectl get ns bootstrap-flux-system 2>/dev/null | grep -q Terminating; then
     | kubectl replace --raw "/api/v1/namespaces/bootstrap-flux-system/finalize" -f - 2>/dev/null || true
 fi
 
+# Force-delete any pods stuck in Terminating state
+kubectl delete pods --all -n bootstrap-flux-system --grace-period=0 --force 2>/dev/null || true
+
 # Clean up cluster-scoped resources
 kubectl delete clusterrolebinding bootstrap-flux-cluster-admin 2>/dev/null || true
+
+# Force-reconcile all kustomizations so they pick up the artifact URL from the
+# vendored source-controller instead of the now-deleted bootstrap one.
+echo "  Forcing reconciliation of all Kustomizations in flux-system..."
+kubectl annotate kustomization --all -n flux-system \
+  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
 
 echo "=== Flux bootstrap complete ==="

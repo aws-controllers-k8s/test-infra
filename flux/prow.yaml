@@ -1,9 +1,8 @@
-# Prow deployment - 4-stage dependency chain:
+# Prow deployment - dependency chain:
 # 1. prow-version: ConfigMap with PROW_VERSION (must exist before substitution)
 # 2. prow-crds: CRDs must exist before anything else
 # 3. prow-mirror: Copies official Prow images from us-docker.pkg.dev into ECR
-# 4. prow-build-images: Kubernetes Job that builds and pushes ACK job images
-# 5. prow-charts: Prow components that depend on images from steps 3+4
+# 4. prow-charts: Prow components that depend on images from step 3
 
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -61,27 +60,6 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: prow-build-images
-  namespace: flux-system
-spec:
-  interval: 60m
-  sourceRef:
-    kind: GitRepository
-    name: test-infra
-  path: ./flux/prow/build-images
-  prune: false
-  force: true
-  postBuild:
-    substituteFrom:
-    - kind: ConfigMap
-      name: self-managed-vars
-  dependsOn:
-  - name: prow-crds
-  - name: ack-pod-identities
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
   name: prow-charts
   namespace: flux-system
 spec:
@@ -99,5 +77,4 @@ spec:
     - kind: ConfigMap
       name: prow-version
   dependsOn:
-  - name: prow-build-images
   - name: prow-mirror

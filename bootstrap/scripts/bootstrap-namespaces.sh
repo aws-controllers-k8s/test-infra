@@ -8,7 +8,14 @@ CLUSTER="$1"
 REGION="$2"
 NAMESPACE="$3"
 
-aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" 2>/dev/null
+# Use a temporary kubeconfig to avoid concurrent writes to ~/.kube/config
+# when multiple provisioners run in parallel.
+KUBECONFIG_TMP="$(mktemp)"
+trap 'rm -f "$KUBECONFIG_TMP"' EXIT
+
+aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" --kubeconfig "$KUBECONFIG_TMP" 2>/dev/null
+
+export KUBECONFIG="$KUBECONFIG_TMP"
 
 if kubectl get namespace "$NAMESPACE" &>/dev/null; then
   echo "Namespace $NAMESPACE already exists."

@@ -113,3 +113,56 @@ resource "null_resource" "validate_kustomizations" {
     null_resource.bootstrap_flux,
   ]
 }
+
+################################################################################
+# Restore FLUX_IMAGE_REGISTRY to ECR
+#
+# During bootstrap, FLUX_IMAGE_REGISTRY is temporarily set to ghcr.io/fluxcd
+# so Flux can start before the ECR pull-through cache exists. Once all
+# Kustomizations are healthy (meaning ACK has created the pull-through cache),
+# we re-apply the ConfigMap to restore the ECR registry value. On next
+# reconciliation Flux will self-upgrade to use ECR images.
+################################################################################
+
+resource "null_resource" "restore_flux_registry" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region} 2>/dev/null
+      kubectl patch configmap self-managed-vars -n flux-system \
+        --type merge -p '{"data":{"FLUX_IMAGE_REGISTRY":"${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"}}'
+    EOT
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations,
+  ]
+}
+
+################################################################################
+# Prow Images Build (in-cluster)
+#
+# One-shot Job that builds and pushes all Prow images using ack-build-tools.
+# Runs after kustomization validation ensures pod identities, namespaces, and
+# secrets are in place.
+################################################################################
+
+resource "null_resource" "bootstrap_prow_images_job" {
+  triggers = {
+    cluster_name = aws_eks_cluster.this.name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/scripts/bootstrap-prow-images.sh ${aws_eks_cluster.this.name} ${var.region} ${local.prow_images_repo_uri} ${local.prow_build_images_tag}"
+  }
+
+  depends_on = [
+    null_resource.validate_kustomizations,
+    null_resource.bootstrap_prow_images,
+  ]
+}
