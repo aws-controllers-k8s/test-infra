@@ -197,7 +197,10 @@ spec:
           {
             "Effect": "Allow",
             "Action": ["sts:AssumeRole", "sts:TagSession"],
-            "Resource": "arn:*:iam::*:role/*-ack-test-role-DO-NOT-DELETE"
+            "Resource": [
+              "arn:*:iam::*:role/*-ack-test-role-DO-NOT-DELETE",
+              "arn:*:iam::*:role/ack-carm-role-DO-NOT-DELETE"
+            ]
           },
           {
             "Effect": "Allow",
@@ -213,7 +216,10 @@ spec:
           {
             "Effect": "Allow",
             "Action": ["ssm:GetParameter"],
-            "Resource": "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/ack/prow/service_team_role/*"
+            "Resource": [
+              "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/ack/prow/service_team_role/*",
+              "arn:aws:ssm:${REGION}:${ACCOUNT_ID}:parameter/ack/prow/carm_role"
+            ]
           }
         ]
       }
