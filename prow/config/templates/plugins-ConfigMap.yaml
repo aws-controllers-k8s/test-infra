@@ -35,6 +35,16 @@ data:
       xl:  500
       xxl: 1000
 
+    label:
+      restricted_labels:
+        {{ .Values.github.organisation }}:
+          - label: "release/minor"
+            allowed_teams:
+              - ack-admin
+          - label: "release/patch"
+            allowed_teams:
+              - ack-admin
+
     plugins:
       {{ .Values.github.organisation }}:
         plugins:

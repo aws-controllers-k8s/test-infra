@@ -1,5 +1,50 @@
 #!/usr/bin/env bash
 
+# extract_pr_number extracts a PR number from a squash-merge commit title.
+# Squash merges use the format "Title (#123)".
+# Usage:
+#
+# pr_number=$(extract_pr_number "$commit_title")
+extract_pr_number() {
+    echo "$1" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+'
+}
+
+# get_pr_labels fetches the labels of a PR from a GitHub repository.
+# Usage:
+#
+# labels=$(get_pr_labels "ORG/REPO" "PR_NUMBER")
+get_pr_labels() {
+  if [[ $# -ne 2 ]]; then
+    echo "gh.sh][ERROR] get_pr_labels requires two arguments, 'ORG_REPO' and 'PR_NUMBER'. But $# arguments were passed" >&2
+    return 1
+  fi
+
+  local __org_repo=$1
+  local __pr_number=$2
+  gh pr view "$__pr_number" --repo "$__org_repo" --json labels --jq '.labels[].name'
+}
+
+# compute_next_version computes the next semver version given a release type.
+# Usage:
+#
+# next_version=$(compute_next_version "v1.2.3" "patch")  # -> v1.2.4
+# next_version=$(compute_next_version "v1.2.3" "minor")  # -> v1.3.0
+compute_next_version() {
+  if [[ $# -ne 2 ]]; then
+    echo "gh.sh][ERROR] compute_next_version requires two arguments, 'LATEST_TAG' and 'RELEASE_TYPE'. But $# arguments were passed" >&2
+    return 1
+  fi
+
+  local __latest_tag=$1
+  local __release_type=$2
+
+  if [[ $__release_type == "minor" ]]; then
+    echo "$__latest_tag" | awk -F. -v OFS=. '{$2++;$3=0;print}'
+  else
+    echo "$__latest_tag" | awk -F. -v OFS=. '{$NF++;print}'
+  fi
+}
+
 # open_gh_issue first queries for already open issues with 'ISSUE_TITLE' in 'ORG_REPO'.
 # If an issue is already present, it updates the body of issue with contents of
 # 'ISSUE_BODY_FILE_PATH'. If no such issue is found, this function will create a
