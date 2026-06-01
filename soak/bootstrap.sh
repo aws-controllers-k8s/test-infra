@@ -35,7 +35,7 @@ Environment variables:
                             for the soak tests to run.
                             Default: 0
   CONTROLLER_IMAGE_REPO:    The controller image repository URL.
-                            Default: public.ecr.aws/aws-controllers-k8s/\$AWS_SERVICE
+                            Default: $CONTROLLER_ECR_REGISTRY/\$AWS_SERVICE-controller
 "
 
 if [ $# -ne 2 ]; then
@@ -60,7 +60,7 @@ CLUSTER_CONFIG_PATH="$SOAK_DIR/cluster-config.yaml"
 # EKS cluster name if not specified in cluster config
 DEFAULT_CLUSTER_NAME="ack-soak-test"
 # Default controller image repository URL
-DEFAULT_CONTROLLER_IMAGE_REPO="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
+DEFAULT_CONTROLLER_IMAGE_REPO="${CONTROLLER_ECR_REGISTRY}/$AWS_SERVICE-controller"
 # Controller repository URL
 CONTROLLER_IMAGE_REPO=${CONTROLLER_IMAGE_REPO:-$DEFAULT_CONTROLLER_IMAGE_REPO}
 # AWS Region for ACK service controller

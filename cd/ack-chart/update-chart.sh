@@ -50,8 +50,7 @@ fi
 
 LOCAL_GIT_BRANCH="main"
 
-DEFAULT_GITHUB_ORG="aws-controllers-k8s"
-GITHUB_ORG=${GITHUB_ORG:-$DEFAULT_GITHUB_ORG}
+GITHUB_ORG=${GITHUB_ORG:-$TEST_INFRA_ORG}
 
 DEFAULT_GITHUB_REPO="ack-chart"
 GITHUB_REPO=${GITHUB_REPO:-$DEFAULT_GITHUB_REPO}
@@ -194,11 +193,12 @@ _add_chart_dependency() {
     local __service_name=$3
 
     NAME=$__dependency_name SERVICE_NAME=$__service_name VERSION=$__dependency_version \
+    CHART_REGISTRY="oci://${CONTROLLER_ECR_REGISTRY}" \
     yq --inplace '.dependencies += {
         "name": env(NAME),
         "alias": env(SERVICE_NAME),
         "version": env(VERSION),
-        "repository": "oci://public.ecr.aws/aws-controllers-k8s",
+        "repository": env(CHART_REGISTRY),
         "condition": (env(SERVICE_NAME) + ".enabled")
     }' "$PARENT_CHART_CONFIG"
 }
@@ -273,7 +273,8 @@ _poll_for_upgraded_chart() {
     tag_list_authentication_token=$(curl -ss -k https://public.ecr.aws/token/ | jq -r '.token')
 
     local chart_name
-    chart_name="aws-controllers-k8s/${REPO_NAME//-controller/-chart}"
+    local ecr_alias="${CONTROLLER_ECR_REGISTRY#public.ecr.aws/}"
+    chart_name="${ecr_alias}/${REPO_NAME//-controller/-chart}"
 
     echo "Waiting until $chart_name@$newest_chart_version becomes available on ECR public"
     # Use SECONDS as timeout counter

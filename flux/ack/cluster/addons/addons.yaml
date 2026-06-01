@@ -1,0 +1,39 @@
+# EKS Addons managed by ACK
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: secrets-store-csi
+  namespace: ack-system
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  name: aws-secrets-store-csi-driver-provider
+  configurationValues: |-
+    {
+      "secrets-store-csi-driver": {
+        "syncSecret": {
+          "enabled": true
+        }
+      }
+    }
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: external-dns-addon
+  namespace: ack-system
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  name: external-dns
+  podIdentityAssociations:
+  - roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-external-dns-role
+    serviceAccount: external-dns
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: coredns
+  namespace: ack-system
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  name: coredns

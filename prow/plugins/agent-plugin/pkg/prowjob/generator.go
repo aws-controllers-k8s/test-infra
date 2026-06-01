@@ -171,12 +171,11 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 				CensoringOptions: &prowv1.CensoringOptions{
 					IncludeDirectories: []string{"/etc/github"},
 				},
-				S3CredentialsSecret: String("s3-credentials"),
 				UtilityImages: &k8s.UtilityImages{
-					CloneRefs:  "us-docker.pkg.dev/k8s-infra-prow/images/clonerefs:v20240802-66b115076",
-					InitUpload: "us-docker.pkg.dev/k8s-infra-prow/images/initupload:v20240802-66b115076",
-					Entrypoint: "us-docker.pkg.dev/k8s-infra-prow/images/entrypoint:v20240802-66b115076",
-					Sidecar:    "us-docker.pkg.dev/k8s-infra-prow/images/sidecar:v20240802-66b115076",
+					CloneRefs:  "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
+					InitUpload: "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
+					Entrypoint: "public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6",
+					Sidecar:    "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6",
 				},
 			},
 			PodSpec: &v1.PodSpec{

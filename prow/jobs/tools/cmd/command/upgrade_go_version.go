@@ -39,6 +39,9 @@ func init() {
 	upgradeGoVersionCMD.PersistentFlags().StringVar(
 		&OptGoEcrRepository, "golang-ecr-repository", "docker/library/golang", "ecr gallery repository for golang",
 	)
+	upgradeGoVersionCMD.PersistentFlags().StringVar(
+		&OptBaseBranch, "base-branch", "main", "Base branch to open the PR against",
+	)
 
 	rootCmd.AddCommand(upgradeGoVersionCMD)
 }
@@ -105,7 +108,7 @@ func runUpgradeGoVersion(cmd *cobra.Command, args []string) error {
 	prDescription := fmt.Sprintf(updateGoPRDescription, goBuildVersion.GoVersion, highestEcrGoVersion)
 
 	log.Println("Committing and creating PR with changes")
-	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateGoSourceFiles, baseBranch, prSubject, prDescription); err != nil {
+	if err = commitAndSendPR(OptSourceOwner, OptSourceRepo, commitBranch, updateGoSourceFiles, OptBaseBranch, prSubject, prDescription); err != nil {
 		return err
 	}
 	log.Println("Successfully created PR")

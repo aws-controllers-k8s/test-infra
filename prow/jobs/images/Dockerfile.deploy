@@ -1,5 +1,5 @@
 # Dockerfile for Prow CD postsubmit jobs
-FROM quay.io/containers/buildah:v1.33.2
+FROM quay.io/containers/buildah:v1.39.0
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
@@ -9,7 +9,13 @@ ENV GO_VERSION=${GO_VERSION}
 
 ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
-    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
+    PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH} \
+    BUILDAH_ISOLATION=chroot
+
+# Configure storage for running in a container without user namespaces
+RUN mkdir -p /etc/containers /var/lib/containers/storage /run/containers/storage \
+    && printf '[storage]\ndriver = "vfs"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' > /etc/containers/storage.conf \
+    && rm -f /etc/subuid /etc/subgid
 
 RUN dnf -y install \
 		which \

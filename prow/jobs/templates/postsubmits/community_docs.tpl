@@ -1,21 +1,30 @@
-  aws-controllers-k8s/community:
+  ${TEST_INFRA_ORG}/community:
   - name: community-docs-release
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
+      preset-controller-registry: "true"
     extra_refs:
-    - org: aws-controllers-k8s
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
       repo: runtime
       base_ref: main
-    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+    {{range $_, $service := .Config.AWSServices}}- org: ${TEST_INFRA_ORG}
       repo: {{ $service }}-controller
       base_ref: main
     {{end}}spec:
       serviceAccountName: post-submit-service-account
       containers:
         - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "docs") }}
+          env:
+          - name: TEST_INFRA_REPO
+            value: "test-infra"
           resources:
             limits:
               cpu: 1

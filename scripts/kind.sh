@@ -124,7 +124,7 @@ _install_additional_controller() {
     _perform_helm_login
 
     helm install --create-namespace -n "$__controller_namespace" \
-        oci://public.ecr.aws/aws-controllers-k8s/$__controller_service-chart \
+        oci://${CONTROLLER_ECR_REGISTRY}/$__controller_service-chart \
         --version=$__controller_version --generate-name --set=aws.region=$__region
 }
 

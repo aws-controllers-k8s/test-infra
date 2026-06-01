@@ -13,7 +13,7 @@ if [ -z "${GITHUB_ACTOR}" ]; then
 fi
 
 GITHUB_SRC_GOPATH="${GOPATH}/src/github.com/"
-COMMUNITY_REPO="${COMMUNITY_REPO:-"aws-controllers-k8s/community"}"
+COMMUNITY_REPO="${COMMUNITY_REPO:-"${TEST_INFRA_ORG}/community"}"
 
 DEFAULT_COMMUNITY_PATH="${GITHUB_SRC_GOPATH}${COMMUNITY_REPO}"
 COMMUNITY_PATH="${COMMUNITY_PATH:-$DEFAULT_COMMUNITY_PATH}"
@@ -24,8 +24,17 @@ GEN_SERVICES_FLAGS="${GEN_SERVICES_FLAGS:-"--debug"}"
 
 pushd $DOCS_PATH 1> /dev/null
 
+# Install acktools from the local test-infra checkout first (before requirements.txt)
+# TEST_INFRA_REPO matches the extra_ref repo name used by Prow for cloning
+TEST_INFRA_PATH="${GITHUB_SRC_GOPATH}${TEST_INFRA_ORG}/${TEST_INFRA_REPO:-ack-test-infra}"
+if [ -d "${TEST_INFRA_PATH}/tools" ]; then
+    echo "build-docs.sh] 📦 Installing acktools from local test-infra..."
+    pip install "${TEST_INFRA_PATH}/tools"
+fi
+
 echo "build-docs.sh] 📝 Installing requirements file... "
-pip install -r requirements.txt
+# Skip the acktools line since we installed from local checkout above
+grep -v '^acktools' requirements.txt | pip install -r /dev/stdin
 
 echo -n "build-docs.sh] 📄 Generating services page... "
 python3 ./scripts/gen_services.py ${GEN_SERVICES_FLAGS}

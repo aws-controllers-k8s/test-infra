@@ -61,7 +61,6 @@ spec:
         - --github-endpoint=http://ghproxy
         - --github-endpoint=https://api.github.com
         - --github-graphql-endpoint=http://ghproxy/graphql
-        - --s3-credentials-file=/etc/s3-credentials/service-account.json
         - --status-path=s3://{{ .Values.prow.tideStatusReconcilerBucketName }}/tide-status
         - --history-uri=s3://{{ .Values.prow.tideStatusReconcilerBucketName }}/tide-history.json
         ports:
@@ -77,8 +76,8 @@ spec:
         - name: job-config
           mountPath: /etc/job-config
           readOnly: true
-        - name: s3-credentials
-          mountPath: /etc/s3-credentials
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
           readOnly: true
       volumes:
       - name: github-token
@@ -90,6 +89,9 @@ spec:
       - name: job-config
         configMap:
           name: job-config
-      - name: s3-credentials
-        secret:
-          secretName: s3-credentials
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets

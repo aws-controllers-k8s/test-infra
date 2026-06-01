@@ -19,12 +19,12 @@ Environment variables:
   DOCKER_REPOSITORY:        Name for the Docker repository to push to
                             Default: $DEFAULT_DOCKER_REPOSITORY
   AWS_SERVICE_DOCKER_IMG:   Controller container image tag
-                            Default: public.ecr.aws/aws-controllers-k8s/<AWS_SERVICE>-controller:<VERSION>
+                            Default: $CONTROLLER_ECR_REGISTRY/<AWS_SERVICE>-controller:<VERSION>
                             VERSION is calculated from $PULL_BASE_REF
   QUIET:                    Build controller container image quietly (<true|false>)
                             Default: false
   HELM_REGISTRY:            Name for the helm registry to push to
-                            Default: public.ecr.aws/aws-controllers-k8s
+                            Default: $CONTROLLER_ECR_REGISTRY
 "
 
 # find out the service name and semver tag from the prow environment variables.
@@ -72,18 +72,18 @@ echo "VERSION is $VERSION"
 # an image without a v prefix.
 CHART_VERSION=${VERSION//v/}
 
-ASSUME_EXIT_VALUE=0
-ECR_PUBLISH_ARN=$(aws ssm get-parameter --name /ack/prow/cd/public_ecr/publish_role --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
-if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
-  echo "release-controller.sh] [SETUP] Could not find the iam role to publish images to public ecr repository"
-  exit 1
-fi
-export ECR_PUBLISH_ARN
-echo "release-controller.sh] [SETUP] exported ECR_PUBLISH_ARN"
+  ASSUME_EXIT_VALUE=0
+  ECR_PUBLISH_ARN=$(aws ssm get-parameter --name /ack/prow/cd/public_ecr/publish_role --query Parameter.Value --output text 2>/dev/null) || ASSUME_EXIT_VALUE=$?
+  if [ "$ASSUME_EXIT_VALUE" -ne 0 ]; then
+    echo "release-controller.sh] [SETUP] Could not find the iam role to publish images to public ecr repository"
+    exit 1
+  fi
+  export ECR_PUBLISH_ARN
+  echo "release-controller.sh] [SETUP] exported ECR_PUBLISH_ARN"
 
-ASSUME_COMMAND=$(aws sts assume-role --role-arn $ECR_PUBLISH_ARN --role-session-name 'publish-images' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
-eval $ASSUME_COMMAND
-echo "release-controller.sh] [SETUP] Assumed ECR_PUBLISH_ARN"
+  ASSUME_COMMAND=$(aws sts assume-role --role-arn $ECR_PUBLISH_ARN --role-session-name 'publish-images' --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
+  eval $ASSUME_COMMAND
+  echo "release-controller.sh] [SETUP] Assumed ECR_PUBLISH_ARN"
 
 # Setup the destination repository for buildah and helm
 perform_buildah_and_helm_login
@@ -96,7 +96,7 @@ QUIET=${QUIET:-"false"}
 BUILD_DATE=$(date +%Y-%m-%dT%H:%M)
 CONTROLLER_IMAGE_DOCKERFILE_PATH=$CODE_GEN_DIR/Dockerfile
 
-DEFAULT_DOCKER_REPOSITORY="public.ecr.aws/aws-controllers-k8s/$AWS_SERVICE-controller"
+DEFAULT_DOCKER_REPOSITORY="${CONTROLLER_ECR_REGISTRY}/$AWS_SERVICE-controller"
 DOCKER_REPOSITORY=${DOCKER_REPOSITORY:-"$DEFAULT_DOCKER_REPOSITORY"}
 
 ensure_repository "$AWS_SERVICE"
@@ -166,7 +166,7 @@ fi
 
 cd "$WORKSPACE_DIR"
 
-DEFAULT_HELM_REGISTRY="public.ecr.aws/aws-controllers-k8s"
+DEFAULT_HELM_REGISTRY="${CONTROLLER_ECR_REGISTRY}"
 HELM_REPO="$AWS_SERVICE-chart"
 
 HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}

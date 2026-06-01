@@ -38,6 +38,9 @@ func init() {
 		&OptCommitBranch, "commit-branch", "", "Branch to commit changes to and open a PR with",
 	)
 	publishPrCmd.PersistentFlags().StringVar(
+		&OptBaseBranch, "base-branch", "main", "Base branch to open the PR against",
+	)
+	publishPrCmd.PersistentFlags().StringVar(
 		&OptPrSubject, "subject", "", "Subject of the PR",
 	)
 	publishPrCmd.PersistentFlags().StringVar(
@@ -51,13 +54,13 @@ func init() {
 
 func publishPr(cmd *cobra.Command, args []string) error {
 	log.SetPrefix("publish-pr")
-	log.Printf("Attempting to publish PR for branch %s to %s/%s", OptCommitBranch, OptSourceOwner, OptSourceRepo)
+	log.Printf("Attempting to publish PR for branch %s to %s/%s (base: %s)", OptCommitBranch, OptSourceOwner, OptSourceRepo, OptBaseBranch)
 	err := commitAndSendPR(
 		OptSourceOwner,
 		OptSourceRepo,
 		OptCommitBranch,
 		OptSourceFiles,
-		baseBranch,
+		OptBaseBranch,
 		OptPrSubject,
 		OptPrDescription,
 	)

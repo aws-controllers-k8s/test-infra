@@ -4,7 +4,7 @@
 # Controls whether periodic jobs are included in the generated jobs.yaml.
 # Set to false during initial cluster bootstrap to prevent periodic jobs from
 # firing before the cluster is fully operational.
-periodics_enabled: false
+periodics_enabled: true
 
 # Adding a service to the `aws_services` array will enable CI/CD
 

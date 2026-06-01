@@ -1,0 +1,183 @@
+# Private ECR repositories for mirrored Prow images.
+# Populated by the prow-mirror Job which copies images from upstream registries.
+# force-delete: "true" ensures ACK can delete repos even when they contain images.
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-crier
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/crier
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-deck
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/deck
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-ghproxy
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/ghproxy
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-hook
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/hook
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-horologium
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/horologium
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-controller-manager
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/prow-controller-manager
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-sinker
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/sinker
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-status-reconciler
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/status-reconciler
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-tide
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/tide
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-clonerefs
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/clonerefs
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-entrypoint
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/entrypoint
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-initupload
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/initupload
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-sidecar
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/sidecar
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-label-sync
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/label_sync
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
+---
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  name: prow-commenter
+  annotations:
+    ecr.services.k8s.aws/force-delete: "true"
+spec:
+  name: prow/commenter
+  imageTagMutability: MUTABLE
+  imageScanningConfiguration:
+    scanOnPush: false
