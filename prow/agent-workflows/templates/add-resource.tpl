@@ -5,7 +5,7 @@
         required_args: ["service", "resource"]
         optional_args: ["model", "aws-sdk-version"]
         environment:
-            GITHUB_ORG: aws-controllers-k8s
+            GITHUB_ORG: ${TEST_INFRA_ORG}
             GITHUB_EMAIL_PREFIX: "82905295"
             GITHUB_ACTOR: ack-bot
             JOBS_CONFIG_PATH: "/prow/jobs/jobs_config.yaml"

@@ -19,6 +19,7 @@ metadata:
     app: ghproxy
   name: ghproxy
 spec:
+  storageClassName: auto-ebs-sc
   accessModes:
     - ReadWriteOnce
   resources:

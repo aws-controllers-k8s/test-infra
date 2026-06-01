@@ -1,0 +1,120 @@
+# ACK Capability IAM Role - adopts the Terraform-created role.
+# Terraform creates the role with minimal bootstrap permissions; ACK adopts
+# it and reconciles the full set of inline policies going forward.
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: ack-capability-role
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+    services.k8s.aws/adoption-fields: '{"name": "${STACK_NAME}-ack-capability-role"}'
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: ${STACK_NAME}-ack-capability-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "capabilities.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    EKSSelfManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:*"],
+            "Resource": [
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:capability/${STACK_NAME}-cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:access-entry/${STACK_NAME}-cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:podidentityassociation/${STACK_NAME}-cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:addon/${STACK_NAME}-cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:cluster/${STACK_NAME}-cluster"
+            ]
+          }
+        ]
+      }
+    IAMManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["iam:*"],
+            "Resource": [
+              "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-*",
+              "arn:aws:iam::${ACCOUNT_ID}:role/Nova-DO-NOT-DELETE"
+            ]
+          }
+        ]
+      }
+    ECRManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:*"],
+            "Resource": [
+              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/fluxcd/*",
+              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/kubernetes/*",
+              "arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/prow/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ecr:CreatePullThroughCacheRule",
+              "ecr:DeletePullThroughCacheRule",
+              "ecr:DescribePullThroughCacheRules",
+              "ecr:ValidatePullThroughCacheRule"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ecr-pullthroughcache/*"
+          }
+        ]
+      }
+    S3ProwLogs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:*"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
+            "Resource": "*"
+          }
+        ]
+      }
+    Route53Management: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["route53:*"],
+            "Resource": "*"
+          }
+        ]
+      }

@@ -31,7 +31,3 @@ statusreconciler:
 tide:
   serviceAccount:
     name: ''
-
-s3Credentials:
-  secret:
-    create: true

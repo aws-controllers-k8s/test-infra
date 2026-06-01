@@ -60,6 +60,9 @@ data:
         "*": https://{{ .Values.prow.domain }}/view/
       job_queue_capacities:
         olm-bundle-prs: 4
+      # Give EKS Auto Mode enough time to provision nodes for pending pods
+      pod_pending_timeout: 15m
+      pod_running_timeout: 48h
       report_templates:
         '*': >-
             [Full PR test history](https://{{ .Values.prow.domain }}/pr-history?{{ "org={{.Spec.Refs.Org}}&repo={{.Spec.Refs.Repo}}&pr={{with index .Spec.Refs.Pulls 0}}{{.Number}}{{end}}" }}).
@@ -73,10 +76,16 @@ data:
           censoring_options:
             include_directories:
               - "/etc/github"
+          pod_annotations:
+            karpenter.sh/do-not-disrupt: "true"
+          env:
+            - name: AWS_REGION
+              value: "{{ .Values.region }}"
+            - name: AWS_DEFAULT_REGION
+              value: "{{ .Values.region }}"
           gcs_configuration:
             bucket: s3://{{ .Values.prow.presubmitsBucketName }}
             path_strategy: explicit
-          s3_credentials_secret: s3-credentials
           utility_images:
             clonerefs:  {{ .Values.utility_images.clonerefs }}
             entrypoint: {{ .Values.utility_images.entrypoint }}
@@ -165,11 +174,33 @@ data:
             value: {{ .Values.github.bot.username | required "github.bot.username is required" | quote }}
           - name: GITHUB_EMAIL_ID
             value: {{ .Values.github.bot.emailID | required "github.bot.emailID is required" | quote }}
+          - name: TEST_INFRA_ORG
+            value: {{ .Values.github.organisation | required "github.organisation is required" | quote }}
+          - name: KUBERNETES_ORG
+            value: {{ .Values.kubernetesOrg | required "kubernetesOrg is required" | quote }}
+          - name: REDHAT_ORG
+            value: {{ .Values.redhatOrg | required "redhatOrg is required" | quote }}
         volumes:
           - name: github-token
-            secret:
-              secretName: {{ .Values.github.bot.personalAccessToken.secretName | required "github.bot.personalAccessToken.secretName is required" }}
+            csi:
+              driver: secrets-store.csi.k8s.io
+              readOnly: true
+              volumeAttributes:
+                secretProviderClass: prow-secrets
         volumeMounts:
           - name: github-token
             mountPath: /etc/github
             readOnly: true
+      - labels:
+          preset-controller-registry: "true"
+        env:
+          - name: CONTROLLER_ECR_REGISTRY
+            value: {{ .Values.controllerEcrRegistry | required "controllerEcrRegistry is required" | quote }}
+          - name: HELM_REGISTRY
+            value: {{ .Values.controllerEcrRegistry | required "controllerEcrRegistry is required" | quote }}
+          - name: ECR_PUBLIC_AWS_ACCOUNT_ID
+            value: {{ printf "%.0f" (float64 .Values.ecrPublicAccountId) | quote }}
+          - name: ECR_PUBLIC_READER_ROLE_ARN
+            value: {{ .Values.ecrPublicReaderRoleArn | default "" | quote }}
+          - name: STAGE
+            value: {{ .Values.stage | default "" | quote }}

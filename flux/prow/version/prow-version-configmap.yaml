@@ -1,0 +1,10 @@
+# Prow image versions for postBuild substitution.
+# Updated by ./scripts/upgrade-prow.sh or manually.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prow-version
+  namespace: flux-system
+data:
+  PROW_VERSION: "v20260519-c47e31ece"
+  TOOLS_VERSION: "v20260515-778139c32d"

@@ -1,0 +1,9 @@
+# This ConfigMap provides FLUX_VERSION for postBuild substitution.
+# Update the version here when upgrading Flux.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-version
+  namespace: flux-system
+data:
+  FLUX_VERSION: "2.18.2"

@@ -21,7 +21,7 @@ import github
 
 from . import ecrpublic, maintenance_phases, project_stages, service
 
-GITHUB_ORG_NAME = "aws-controllers-k8s"
+GITHUB_ORG_NAME = os.environ.get("TEST_INFRA_ORG")
 GITHUB_ISSUE_REPO = "community"
 SERVICE_CONTROLLER_LABEL = "kind/new-service"
 
@@ -145,23 +145,24 @@ def collect_all(writer, gh, services):
             image_repo_latest_version = ecrpublic.get_repository_latest_tag(
                 ep_client, image_repo,
             )
-            latest_release.controller_version = image_repo_latest_version
-            project_stage = project_stages.RELEASED
-            maintenance_phase = maintenance_phases.PREVIEW
-            runtime_version, aws_sdk_version = get_runtime_and_aws_sdk_version(
-                writer, repo, image_repo_latest_version,
-            )
-            latest_release.ack_runtime_version = runtime_version
-            latest_release.aws_sdk_go_version = aws_sdk_version
-            
-            try:
-                gh_repo_release_version = image_repo_latest_version
-                if not gh_repo_release_version.startswith("v"):
-                    gh_repo_release_version = "v" + gh_repo_release_version
-                gh_release = repo.get_release(gh_repo_release_version)
-                latest_release.release_url = gh_release.html_url
-            except github.UnknownObjectException:
-                writer.debug(f"[controller.collect_all] no github release associated with controller version {gh_repo_release_version}")
+            if image_repo_latest_version:
+                latest_release.controller_version = image_repo_latest_version
+                project_stage = project_stages.RELEASED
+                maintenance_phase = maintenance_phases.PREVIEW
+                runtime_version, aws_sdk_version = get_runtime_and_aws_sdk_version(
+                    writer, repo, image_repo_latest_version,
+                )
+                latest_release.ack_runtime_version = runtime_version
+                latest_release.aws_sdk_go_version = aws_sdk_version
+                
+                try:
+                    gh_repo_release_version = image_repo_latest_version
+                    if not gh_repo_release_version.startswith("v"):
+                        gh_repo_release_version = "v" + gh_repo_release_version
+                    gh_release = repo.get_release(gh_repo_release_version)
+                    latest_release.release_url = gh_release.html_url
+                except github.UnknownObjectException:
+                    writer.debug(f"[controller.collect_all] no github release associated with controller version {gh_repo_release_version}")
 
         chart_repo_url = f"{ecrpublic.BASE_ECR_URL}/{service_package_name}-chart"
         chart_repo = ecrpublic.get_repository(writer, ep_client, chart_repo_url)
@@ -169,9 +170,10 @@ def collect_all(writer, gh, services):
             chart_repo_latest_version = ecrpublic.get_repository_latest_tag(
                 ep_client, chart_repo,
             )
-            latest_release.chart_version = chart_repo_latest_version
-            if ecrpublic.chart_has_nonzero_major_version(ep_client, chart_repo):
-                maintenance_phase = maintenance_phases.GENERAL_AVAILABILITY
+            if chart_repo_latest_version:
+                latest_release.chart_version = chart_repo_latest_version
+                if ecrpublic.chart_has_nonzero_major_version(ep_client, chart_repo):
+                    maintenance_phase = maintenance_phases.GENERAL_AVAILABILITY
 
         controller = Controller(
             service=service,
@@ -218,8 +220,8 @@ def fetch_project_data(writer):
     token = os.getenv('GITHUB_TOKEN')
     
     query = '''
-    query {
-      organization(login: "aws-controllers-k8s") {
+    query($org: String!) {
+      organization(login: $org) {
         projectV2(number: 10) {
           id
           title
@@ -263,10 +265,15 @@ def fetch_project_data(writer):
         'Content-Type': 'application/json',
     }
 
-    response = requests.post(url, json={'query': query}, headers=headers)
+    response = requests.post(url, json={'query': query, 'variables': {'org': GITHUB_ORG_NAME}}, headers=headers)
     
     if response.status_code == 200:
-        return response.json()['data']['organization']['projectV2']['items']['nodes']
+        data = response.json()
+        try:
+            return data['data']['organization']['projectV2']['items']['nodes']
+        except (KeyError, TypeError):
+            writer.debug(f"[fetch_project_data] No project data found (org may not have projectV2 configured)")
+            return []
     else:
         writer.error(f"Failed to fetch project data: {response.status_code}")
         return []

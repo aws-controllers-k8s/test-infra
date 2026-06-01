@@ -17,8 +17,7 @@ Environment variables:
                         containers.
                         Defaults to 'buildah'
   HELM_REGISTRY:        ECR public URL of the registry where the Helm chart will
-                        be published. Defaults to
-                        'public.ecr.aws/aws-controllers-k8s'
+                        be published. Defaults to CONTROLLER_ECR_REGISTRY env var.
 "
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -33,7 +32,7 @@ TEST_INFRA_LIB_DIR="$TEST_INFRA_DIR/scripts/lib"
 DEFAULT_CONTAINER_BUILDER="buildah"
 CONTAINER_BUILDER=${CONTAINER_BUILDER:-$DEFAULT_CONTAINER_BUILDER}
 
-DEFAULT_HELM_REGISTRY="public.ecr.aws/aws-controllers-k8s"
+DEFAULT_HELM_REGISTRY="${CONTROLLER_ECR_REGISTRY}"
 HELM_REGISTRY=${HELM_REGISTRY:-$DEFAULT_HELM_REGISTRY}
 
 PACKAGE_DIR="$ACK_CHART_DIR/build/"

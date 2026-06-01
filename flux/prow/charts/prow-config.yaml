@@ -1,0 +1,85 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: prow-config
+  namespace: flux-system
+spec:
+  interval: 5m
+  targetNamespace: prow
+  values:
+    controllerEcrRegistry: "${CONTROLLER_ECR_REGISTRY}"
+    ecrPublicAccountId: "${PUBLISH_ACCOUNT_ID}"
+    ecrPublicReaderRoleArn: "arn:aws:iam::${PUBLISH_ACCOUNT_ID}:role/ArtifactReader"
+    stage: "${STAGE}"
+    kubernetesOrg: "${KUBERNETES_ORG}"
+    redhatOrg: "${REDHAT_ORG}"
+    github:
+      organisation: "${TEST_INFRA_ORG}"
+      bot:
+        username: "ack-bot"
+        emailID: "82905295"
+        personalAccessToken:
+          secretName: "prowjob-github-pat-token"
+    region: "us-west-2"
+    ingress:
+      create: true
+      annotations:
+        alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
+        alb.ingress.kubernetes.io/scheme: "internet-facing"
+        alb.ingress.kubernetes.io/success-codes: "200-302"
+        alb.ingress.kubernetes.io/target-type: "ip"
+        alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
+        external-dns.alpha.kubernetes.io/hostname: "${PROW_DOMAIN}"
+    prow:
+      domain: "${PROW_DOMAIN}"
+      presubmitsBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
+      tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
+    crier:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/crier:${PROW_VERSION}"
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    deck:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/deck:${PROW_VERSION}"
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    ghproxy:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/ghproxy:${PROW_VERSION}"
+    hook:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/hook:${PROW_VERSION}"
+      scrapeMetrics: true
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    horologium:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/horologium:${PROW_VERSION}"
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    prowControllerManager:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/prow-controller-manager:${PROW_VERSION}"
+      scrapeMetrics: true
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    sinker:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/sinker:${PROW_VERSION}"
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    statusreconciler:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/status-reconciler:${PROW_VERSION}"
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    tide:
+      image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/tide:${PROW_VERSION}"
+      scrapeMetrics: true
+      serviceAccount:
+        name: "prow-deployment-service-account"
+    utility_images:
+      clonerefs: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/clonerefs:${PROW_VERSION}"
+      entrypoint: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/entrypoint:${PROW_VERSION}"
+      initupload: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/initupload:${PROW_VERSION}"
+      sidecar: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/sidecar:${PROW_VERSION}"
+  chart:
+    spec:
+      chart: ./prow/config
+      sourceRef:
+        kind: GitRepository
+        name: test-infra

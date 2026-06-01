@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  interval: 60m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/flux
+  prune: false
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: flux-version
+    - kind: ConfigMap
+      name: self-managed-vars

@@ -3,7 +3,8 @@
   interval: 6h
   annotations:
     description: Runs label_sync to synchronize GitHub repo labels with the label config defined in label_sync/labels.yaml.
-    karpenter.sh/do-not-evict: "true"
+    # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
   labels:
     app: label-sync
     preset-github-secrets: "true"
@@ -12,7 +13,7 @@
     serviceAccountName: periodic-service-account
     containers:
     - name: label-sync
-      image: gcr.io/k8s-prow/label_sync:v20221205-a1b0b85d88
+      image: ${PROW_MIRROR_REGISTRY}/label_sync:${TOOLS_VERSION}
       resources:
         limits:
           cpu: 1
@@ -25,7 +26,7 @@
       args:
       - --config=/etc/config/labels.yaml
       - --confirm=true
-      - --orgs=aws-controllers-k8s
+      - --orgs=${TEST_INFRA_ORG}
       - --github-token-path=/etc/github/token
       - --github-endpoint=http://ghproxy.prow.svc.cluster.local
       - --github-endpoint=https://api.github.com

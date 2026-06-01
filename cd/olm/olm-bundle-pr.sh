@@ -72,6 +72,14 @@ source "$CD_DIR"/lib/gh.sh
 check_is_installed git
 check_is_installed gh
 
+# Determine the authenticated GitHub user from the token (decouples push
+# target from the GITHUB_ACTOR display name).
+GITHUB_PUSH_USER=$(gh api user --jq '.login')
+if [[ -z "$GITHUB_PUSH_USER" ]]; then
+  echo "olm-bundle-pr.sh][ERROR] Failed to determine authenticated GitHub user from token. Exiting"
+  exit 1
+fi
+
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
 if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
     USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${USER_EMAIL}"
@@ -122,7 +130,22 @@ if ! ./scripts/build-controller-release.sh "$SERVICE" > "$OLM_BUNDLE_STDOUT_FILE
 fi
 
 # OH stands for operator hub
-for OH_ORG_REPO in k8s-operatorhub/community-operators redhat-openshift-ecosystem/community-operators-prod
+# KUBERNETES_ORG controls which org owns the community-operators fork.
+# REDHAT_ORG controls which org owns the community-operators-prod fork.
+# In prod these are k8s-operatorhub and redhat-openshift-ecosystem respectively;
+# in staging both point to the staging org (e.g., ack-prow-staging).
+if [[ -z "${KUBERNETES_ORG}" ]]; then
+  echo "olm-bundle-pr.sh][ERROR] KUBERNETES_ORG is not set. Exiting"
+  exit 1
+fi
+if [[ -z "${REDHAT_ORG}" ]]; then
+  echo "olm-bundle-pr.sh][ERROR] REDHAT_ORG is not set. Exiting"
+  exit 1
+fi
+
+OH_REPOS=("$KUBERNETES_ORG/community-operators" "$REDHAT_ORG/community-operators-prod")
+
+for OH_ORG_REPO in "${OH_REPOS[@]}"
 do
   cd "$WORKSPACE_DIR"
   OH_ORG=$(echo "$OH_ORG_REPO" | cut -d"/" -f1)
@@ -181,7 +204,7 @@ do
   git add . >/dev/null
   COMMIT_MSG="ack-$CONTROLLER_NAME artifacts for version $OLM_BUNDLE_VERSION"
   git commit -m "$COMMIT_MSG" --signoff > /dev/null
-  git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_ACTOR/$OH_REPO.git" \
+  git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_PUSH_USER/$OH_REPO.git" \
    "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" &>/dev/null
   # fetch all remotes to bring changes locally
   git fetch --all >/dev/null
@@ -199,7 +222,7 @@ do
   # label does not exist in those repos. Unsetting the variable will not add this
   # label while creating pull requests.
   unset GITHUB_LABEL
-  if ! open_pull_request "$OH_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE_PATH" "$GITHUB_ACTOR"; then
+  if ! open_pull_request "$OH_ORG_REPO" "$COMMIT_MSG" "$GITHUB_PR_BODY_FILE_PATH" "$GITHUB_PUSH_USER"; then
     exit 1
   fi
 done

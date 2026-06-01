@@ -84,18 +84,22 @@ spec:
         - name: plugins
           mountPath: /etc/plugins
           readOnly: true
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8081
-          initialDelaySeconds: 3
-          periodSeconds: 3
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 6
         readinessProbe:
           httpGet:
             path: /healthz/ready
             port: 8081
-          initialDelaySeconds: 10
-          periodSeconds: 3
+          initialDelaySeconds: 15
+          periodSeconds: 10
           timeoutSeconds: 600
       volumes:
       - name: hmac
@@ -113,3 +117,9 @@ spec:
       - name: job-config
         configMap:
           name: job-config
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: prow-secrets

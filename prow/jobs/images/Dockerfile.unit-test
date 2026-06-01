@@ -1,5 +1,5 @@
 # Common Dockerfile for unit and integration test
-FROM debian:bookworm-slim
+FROM public.ecr.aws/docker/library/debian:trixie-slim
 
 ARG GOPROXY=https://proxy.golang.org|direct
 ENV GOPROXY=${GOPROXY}
@@ -20,12 +20,10 @@ RUN echo "Installing packages ..." \
         curl \
         git \
         gnupg2 \
-        software-properties-common \
         lsb-release \
         wget \
         jq \
         uuid-runtime \
-        apt-transport-https \
         unzip
 
 RUN echo "Installing yq ..." \

@@ -1,31 +1,80 @@
+# Prow deployment - dependency chain:
+# 1. prow-version: ConfigMap with PROW_VERSION (must exist before substitution)
+# 2. prow-crds: CRDs must exist before anything else
+# 3. prow-mirror: Copies official Prow images from us-docker.pkg.dev into ECR
+# 4. prow-charts: Prow components that depend on images from step 3
+
 ---
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: prow-version
+  namespace: flux-system
+spec:
+  interval: 60m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/prow/version
+  prune: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: prow-crds
   namespace: flux-system
 spec:
-  interval: 1h
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow-crds
+  path: ./flux/prow/crds
   prune: true
-  validation: client
+  dependsOn:
+  - name: ack-pod-identities
 ---
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta1
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: prow-mirror
+  namespace: flux-system
+spec:
+  interval: 60m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/prow/mirror
+  prune: false
+  force: true
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+    - kind: ConfigMap
+      name: prow-version
+  dependsOn:
+  - name: prow-version
+  - name: ack-pod-identities
+  - name: ack-prow
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: prow-charts
   namespace: flux-system
 spec:
-  interval: 5m
+  interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow-charts
+  path: ./flux/prow/charts
   prune: true
   targetNamespace: flux-system
-  validation: client
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+    - kind: ConfigMap
+      name: prow-version
   dependsOn:
-  - name: prow-crds
+  - name: prow-mirror

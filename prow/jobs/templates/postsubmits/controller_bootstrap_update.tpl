@@ -1,16 +1,18 @@
-  aws-controllers-k8s/controller-bootstrap:
+  ${TEST_INFRA_ORG}/controller-bootstrap:
   - name: auto-update-controllers
     decorate: true
     annotations:
-      karpenter.sh/do-not-evict: "true"
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
     labels:
       preset-github-secrets: "true"
     extra_refs:
-    - org: aws-controllers-k8s
-      repo: test-infra
-      base_ref: main
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
       workdir: true
-    {{range $_, $service := .Config.AWSServices}}- org: aws-controllers-k8s
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    {{range $_, $service := .Config.AWSServices}}- org: ${TEST_INFRA_ORG}
       repo: {{ $service }}-controller
       base_ref: main
       workdir: false

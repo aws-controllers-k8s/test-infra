@@ -553,7 +553,7 @@ default:
       addedBy: prow
 
 repos:
-  aws-controllers-k8s/community:
+  ${TEST_INFRA_ORG}/community:
     labels:
     - color: ffddbf
       description: Indicates issues or PRs related to all the service controllers.
@@ -575,8 +575,8 @@ repos:
       addedBy: anyone
     {{ end }}
   # TODO(a-hilaly): Maybe these repository needs specific labels to them
-  aws-controllers-k8s/runtime:
-  aws-controllers-k8s/code-generator:
+  ${TEST_INFRA_ORG}/runtime:
+  ${TEST_INFRA_ORG}/code-generator:
     labels:
         - color: bfffdd
           description: Indicates downstream controller releases should bump the patch version.
@@ -588,7 +588,7 @@ repos:
           name: version/minor
           target: prs
           addedBy: human
-  aws-controllers-k8s/test-infra:
-  aws-controllers-k8s/pkg:
-  aws-controllers-k8s/dev-tools:
-  aws-controllers-k8s/examples:
+  ${TEST_INFRA_ORG}/test-infra:
+  ${TEST_INFRA_ORG}/pkg:
+  ${TEST_INFRA_ORG}/dev-tools:
+  ${TEST_INFRA_ORG}/examples:

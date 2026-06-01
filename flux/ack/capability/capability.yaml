@@ -1,0 +1,16 @@
+# ACK EKS Capability - the controller that reconciles the Cluster resource above.
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Capability
+metadata:
+  name: ack-eks-capability
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+    services.k8s.aws/adoption-fields: '{"name": "ack-eks", "clusterName": "${STACK_NAME}-cluster"}'
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  name: ack-eks
+  type: ACK
+  deletePropagationPolicy: RETAIN
+  roleARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-ack-capability-role"

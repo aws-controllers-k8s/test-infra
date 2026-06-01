@@ -1,0 +1,27 @@
+# Flux GitRepository source - controls where Flux syncs from.
+# Change the url or branch here, push to your current branch,
+# and Flux will pick up the new source on next reconciliation.
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: test-infra
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/${TEST_INFRA_ORG}/${TEST_INFRA_REPO}
+  ref:
+    branch: ${TEST_INFRA_BRANCH}
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: test-infra
+  namespace: flux-system
+spec:
+  interval: 60m
+  path: ./flux
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
