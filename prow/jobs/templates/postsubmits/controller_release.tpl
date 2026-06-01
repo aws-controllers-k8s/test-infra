@@ -97,6 +97,43 @@
           command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-tag.sh"]
     branches:
     - main
+  - name: {{ $service }}-controller-release-pr
+    decorate: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    labels:
+      preset-github-secrets: "true"
+    extra_refs:
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
+      workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    - org: ${TEST_INFRA_ORG}
+      repo: code-generator
+      base_ref: main
+      workdir: false
+      path_alias: github.com/aws-controllers-k8s/code-generator
+    - org: ${TEST_INFRA_ORG}
+      repo: runtime
+      base_ref: main
+      workdir: false
+      path_alias: github.com/aws-controllers-k8s/runtime
+    spec:
+      serviceAccountName: post-submit-service-account
+      containers:
+        - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-generate-controllers") }}
+          resources:
+            limits:
+              cpu: 1
+              memory: "500Mi"
+            requests:
+              cpu: 1
+              memory: "500Mi"
+          command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-pr.sh"]
+    branches:
+    - main
   - name: {{ $service }}-controller-olm-bundle-pr
     decorate: true
     path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller

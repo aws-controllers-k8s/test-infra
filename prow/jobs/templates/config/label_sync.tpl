@@ -155,6 +155,18 @@ default:
       target: both
       addedBy: label
 
+    # Release labels
+    - color: 0e8a16
+      description: Indicates this PR should trigger a minor version release on merge.
+      name: release/minor
+      target: prs
+      addedBy: label
+    - color: 0e8a16
+      description: Indicates this PR should trigger a patch version release on merge.
+      name: release/patch
+      target: prs
+      addedBy: label
+
     # Triage labels
     - color: 8fc951
       description: Indicates an issue or PR is ready to be actively worked on.

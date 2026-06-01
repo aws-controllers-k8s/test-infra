@@ -2,23 +2,17 @@
 
 set -eo pipefail
 
-extract_pr_number() {
-    echo "$1" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+'
-}
-
-get_commit_title() {
+get_codegen_pr_labels() {
+    local latest_tag
     latest_tag=$(git describe --tags --abbrev=0)
-    title=$(git log --format="%s" -n 1 "$latest_tag")
-    echo "$title"
-    return
-}
-
-get_pr_labels() {
-    commit_title=$(get_commit_title)
+    local commit_title
+    commit_title=$(git log --format="%s" -n 1 "$latest_tag")
     echo "auto-generate-controllers.sh][INFO] extracting PR number from Git commit title: $commit_title" >&2
+    local pr_number
     pr_number=$(extract_pr_number "$commit_title")
     echo "auto-generate-controllers.sh][INFO] extracted PR number: $pr_number" >&2
-    labels=$(gh pr view $pr_number --repo "aws-controllers-k8s/code-generator" --json labels --jq '.labels[].name')
+    local labels
+    labels=$(get_pr_labels "$GITHUB_ORG/code-generator" "$pr_number")
     echo "auto-generate-controllers.sh][INFO] extracted labels: $labels" >&2
     echo "$labels"
     return
@@ -121,7 +115,7 @@ else
 fi
 
 # Get Labels for Release PR
-PR_LABELS=$(get_pr_labels)
+PR_LABELS=$(get_codegen_pr_labels)
 
 # Set type of version bump to apply to downstream controller releases.
 CONTROLLER_RELEASE_TYPE=""
@@ -229,12 +223,7 @@ for CONTROLLER_NAME in $CONTROLLER_NAMES; do
       echo "auto-generate-controllers.sh][INFO] Unable to find latest git tag for $CONTROLLER_NAME"
       unset RELEASE_VERSION
     else
-      if [[ $CONTROLLER_RELEASE_TYPE == "minor" ]]; then
-        export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$2++;$3=0;print}')
-      else
-        export RELEASE_VERSION=$(echo "$LATEST_TAG" | awk -F. -v OFS=. '{$NF++;print}')
-      fi
-
+      export RELEASE_VERSION=$(compute_next_version "$LATEST_TAG" "$CONTROLLER_RELEASE_TYPE")
       echo "auto-generate-controllers.sh][INFO] Using $RELEASE_VERSION as new release version. Previous version: $LATEST_TAG"
     fi
   popd >/dev/null
