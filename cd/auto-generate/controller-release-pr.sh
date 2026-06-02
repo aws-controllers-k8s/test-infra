@@ -45,6 +45,7 @@ MISSING_GIT_TAG="missing-git-tag"
 
 source "$TEST_INFRA_DIR"/scripts/lib/common.sh
 source "$CD_DIR"/lib/gh.sh
+source "$CD_DIR"/lib/attribution.sh
 check_is_installed git
 check_is_installed gh
 check_is_installed yq
@@ -135,6 +136,9 @@ if ! ./scripts/build-controller-release.sh "$AWS_SERVICE"; then
 fi
 
 cd "$CONTROLLER_DIR"
+
+# Generate/regenerate ATTRIBUTION.md
+generate_attribution "$CONTROLLER_DIR"
 
 # Stage all changes and commit
 git add .
