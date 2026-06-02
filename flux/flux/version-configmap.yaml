@@ -6,4 +6,4 @@ metadata:
   name: flux-version
   namespace: flux-system
 data:
-  FLUX_VERSION: "2.18.2"
+  FLUX_VERSION: "2.18.4"
