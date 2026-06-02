@@ -126,11 +126,11 @@
         - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-generate-controllers") }}
           resources:
             limits:
-              cpu: 1
-              memory: "500Mi"
+              cpu: 2
+              memory: "2048Mi"
             requests:
-              cpu: 1
-              memory: "500Mi"
+              cpu: 2
+              memory: "2048Mi"
           command: ["/bin/bash", "-c", "./cd/auto-generate/controller-release-pr.sh"]
     branches:
     - main
