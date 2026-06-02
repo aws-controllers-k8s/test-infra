@@ -127,6 +127,8 @@ if ! make build-ack-generate >/dev/null 2>&1; then
   exit 1
 fi
 
+./scripts/install-controller-gen.sh
+
 if ! ./scripts/build-controller-release.sh "$AWS_SERVICE"; then
   echo "controller-release-pr.sh][ERROR] build-controller-release.sh failed"
   exit 1
