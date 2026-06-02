@@ -72,6 +72,7 @@ aws_services:
 - s3
 - s3control
 - s3files
+- s3tables
 - sagemaker
 - secretsmanager
 - servicecatalog
