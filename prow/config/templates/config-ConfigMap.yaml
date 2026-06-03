@@ -25,9 +25,10 @@ data:
       # defaults to 1 hour
       resync_period: 2m
       # defaults to 1 day
-      max_pod_age: 12h
+      max_pod_age: 48h
       # defaults to max_pod_age
       terminated_pod_ttl: 5m
+      max_prowjob_age: 48h
 
     branch-protection:
       required_pull_request_reviews:
