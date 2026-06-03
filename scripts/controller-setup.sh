@@ -192,6 +192,19 @@ rotate_temp_creds() {
 
     aws_generate_temp_creds
 
+    # Refresh the bind-mounted test container credentials (atomic rename)
+    local test_creds_file="$HOME/.aws/ack-test-credentials"
+    local profile_name="${TEST_AWS_PROFILE_NAME:-ack-test}"
+    if [[ -f "$test_creds_file" ]]; then
+        cat > "${test_creds_file}.tmp" <<EOF
+[$profile_name]
+aws_access_key_id=$AWS_ACCESS_KEY_ID
+aws_secret_access_key=$AWS_SECRET_ACCESS_KEY
+aws_session_token=$AWS_SESSION_TOKEN
+EOF
+        mv "${test_creds_file}.tmp" "$test_creds_file"
+    fi
+
     kubectl -n $__controller_namespace set env deployment/$__deployment_name \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
