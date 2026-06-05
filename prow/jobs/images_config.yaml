@@ -12,6 +12,6 @@ images:
     olm-test: prow-olm-test-0.0.33
     scan-controllers-cve: prow-scan-controllers-cve-0.0.27
     soak-test: prow-soak-0.0.32
-    unit-test: prow-unit-0.0.36
+    unit-test: prow-unit-0.0.37
     upgrade-go-version: prow-upgrade-go-version-0.0.34
     verify-attribution: prow-verify-attribution-0.0.32

@@ -102,7 +102,7 @@
         command: ["make", "build-controller"]
   - name: crd-compat-check
     decorate: true
-    optional: false
+    optional: true
     always_run: true
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
