@@ -40,6 +40,12 @@ RUN echo "Installing Go ..." \
     && rm "${GO_TARBALL}"\
     && mkdir -p "${GOPATH}/bin"
 
+RUN echo "Installing Helm ... " \
+    && export HELM_TARBALL="helm.tar.gz" \
+    && curl -fsSL https://get.helm.sh/helm-v3.11.1-linux-amd64.tar.gz --output "${HELM_TARBALL}" \
+    && tar xzf "${HELM_TARBALL}" --strip-components 1 -C /usr/bin \
+    && rm "${HELM_TARBALL}"
+
 RUN curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
     && unzip awscliv2.zip \
     && aws/install \

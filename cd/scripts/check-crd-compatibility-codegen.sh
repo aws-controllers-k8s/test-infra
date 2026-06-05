@@ -25,6 +25,7 @@ source "$TEST_INFRA_DIR/scripts/lib/logging.sh"
 
 check_is_installed git
 check_is_installed make
+check_is_installed helm
 
 if [ -z "$SERVICES" ]; then
     error_msg "SERVICES environment variable must be set"
