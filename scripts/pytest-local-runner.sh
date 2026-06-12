@@ -48,7 +48,10 @@ run_python_tests() {
     done
 
     pushd "${SERVICE_CONTROLLER_E2E_TEST_PATH}" 1> /dev/null
-        pytest -n ${PYTEST_NUM_THREADS} --dist no -o log_cli=true ${markers_args} \
+        # The full test-infra repo is copied into the image as ./acktest (used
+        # to pip-install the library). Exclude it from collection so acktest's
+        # own unit tests are never discovered as part of a controller's e2e run.
+        pytest -n ${PYTEST_NUM_THREADS} --dist no -o log_cli=true --ignore=acktest ${markers_args} \
             ${method_args} --log-cli-level "${PYTEST_LOG_LEVEL}" \
             --log-level "${PYTEST_LOG_LEVEL}" .
         local test_exit_code=$?
