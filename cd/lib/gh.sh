@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
 
-# extract_pr_number extracts a PR number from a squash-merge commit title.
-# Squash merges use the format "Title (#123)".
+# extract_pr_number extracts a PR number from a merge commit title.
+# Handles both squash-merge format "Title (#123)" and merge-commit format
+# "Merge pull request #123 from ...".
 # Usage:
 #
 # pr_number=$(extract_pr_number "$commit_title")
 extract_pr_number() {
-    echo "$1" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+'
+    local title="$1"
+    local pr_num=""
+
+    # Try squash-merge format: "Title (#123)"
+    pr_num=$(echo "$title" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+' || true)
+
+    # Try merge-commit format: "Merge pull request #123 from ..."
+    if [[ -z "$pr_num" ]]; then
+        pr_num=$(echo "$title" | grep -oE '^Merge pull request #[0-9]+' | grep -oE '[0-9]+' || true)
+    fi
+
+    echo "$pr_num"
 }
 
 # get_pr_labels fetches the labels of a PR from a GitHub repository.
