@@ -159,9 +159,10 @@ fi
 PR_BODY_FILE=/tmp/release_pr_body
 {
   echo "Releasing changes:"
-  git log "$LATEST_TAG"..main --oneline --grep='(#' | grep -oE '\(#[0-9]+\)' | grep -oE '[0-9]+' | while read -r pr_num; do
+  # Support both squash-merge "Title (#123)" and merge-commit "Merge pull request #123" formats
+  git log "$LATEST_TAG"..main --oneline | grep -oE '(\(#[0-9]+\)|Merge pull request #[0-9]+)' | grep -oE '[0-9]+' | sort -u | while read -r pr_num; do
     echo "* https://github.com/$GITHUB_ORG/$CONTROLLER_NAME/pull/$pr_num"
-  done
+  done || true
 } > "$PR_BODY_FILE"
 
 open_pull_request "$GITHUB_ORG/$CONTROLLER_NAME" "$COMMIT_MSG" "$PR_BODY_FILE"
