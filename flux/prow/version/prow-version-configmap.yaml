@@ -6,5 +6,5 @@ metadata:
   name: prow-version
   namespace: flux-system
 data:
-  PROW_VERSION: "v20260602-e7f2be80c"
+  PROW_VERSION: "v20260617-37d12bec7"
   TOOLS_VERSION: "v20260515-778139c32d"
