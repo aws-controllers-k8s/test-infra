@@ -59,6 +59,16 @@ The script uses `aws eks describe-addon-versions` to discover versions and updat
 
 **Prerequisites:** AWS CLI (configured with EKS access), [yq](https://github.com/mikefarah/yq)
 
+Before running the script, ensure you have valid AWS credentials:
+
+```bash
+# Grab fresh credentials (e.g., via ada, isengard, or your preferred method)
+ada credentials update --account=<account-id> --role=<role-name> --provider=isengard
+
+# Verify credentials are working
+aws sts get-caller-identity
+```
+
 ## Contributing
 
 We welcome community contributions and pull requests.

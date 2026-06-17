@@ -13,7 +13,7 @@
 #   ./scripts/upgrade-secrets-csi-driver.sh <version>    # use specific version
 #   ./scripts/upgrade-secrets-csi-driver.sh --dry-run    # show what would change
 #
-# Requires: aws CLI, yq
+# Requires: aws CLI
 # Optional: --kubernetes-version flag to constrain compatibility
 
 set -euo pipefail
@@ -80,11 +80,6 @@ if ! command -v aws >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v yq >/dev/null 2>&1; then
-  echo "error: yq is required (https://github.com/mikefarah/yq)" >&2
-  exit 1
-fi
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Discover version
 # ─────────────────────────────────────────────────────────────────────────────
@@ -92,28 +87,17 @@ fi
 if [[ -z "$TARGET_VERSION" ]]; then
   if [[ "$USE_DEFAULT" == "true" ]]; then
     echo "Discovering default $ADDON_NAME version..."
-
-    # Query for the version marked as default for the given Kubernetes version.
-    # The defaultVersion field in compatibilities indicates EKS's recommended version.
-    EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME"
-      --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
-      --output text)
-
-    if [[ -n "$K8S_VERSION" ]]; then
-      EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
-      echo "  Constraining to Kubernetes version: $K8S_VERSION"
-    fi
+    QUERY='addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
   else
     echo "Discovering latest $ADDON_NAME version..."
+    QUERY='addons[0].addonVersions[0].addonVersion'
+  fi
 
-    EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME"
-      --query 'addons[0].addonVersions[0].addonVersion'
-      --output text)
+  EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME" --query "$QUERY" --output text)
 
-    if [[ -n "$K8S_VERSION" ]]; then
-      EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
-      echo "  Constraining to Kubernetes version: $K8S_VERSION"
-    fi
+  if [[ -n "$K8S_VERSION" ]]; then
+    EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
+    echo "  Constraining to Kubernetes version: $K8S_VERSION"
   fi
 
   TARGET_VERSION=$(aws "${EKS_ARGS[@]}" 2>/dev/null)
@@ -146,17 +130,11 @@ for addon_file in "${ADDON_FILES[@]}"; do
 
   echo "Processing: $addon_file"
 
-  # Find the document index for the secrets-store-csi addon
-  # The file contains multiple YAML documents separated by ---
-  doc_index=$(yq eval-all 'select(.metadata.name == "secrets-store-csi") | documentIndex' "$addon_file" 2>/dev/null)
-
-  if [[ -z "$doc_index" ]]; then
-    echo "  warning: no secrets-store-csi Addon found in $addon_file" >&2
-    continue
+  # Check current version
+  current_version=$(grep -A 30 'name: secrets-store-csi' "$addon_file" | grep 'addonVersion:' | head -1 | awk '{print $2}' || true)
+  if [[ -z "$current_version" ]]; then
+    current_version="(not pinned)"
   fi
-
-  # Check current version (may be empty if not pinned)
-  current_version=$(yq eval "select(documentIndex == $doc_index) | .spec.addonVersion // \"(not pinned)\"" "$addon_file")
 
   if [[ "$current_version" == "$TARGET_VERSION" ]]; then
     echo "  Already at $TARGET_VERSION — no change needed."
@@ -167,7 +145,24 @@ for addon_file in "${ADDON_FILES[@]}"; do
   echo "  Target:  $TARGET_VERSION"
 
   if [[ "$DRY_RUN" == "false" ]]; then
-    yq eval -i "select(documentIndex == $doc_index) | .spec.addonVersion = \"$TARGET_VERSION\"" "$addon_file"
+    if [[ "$current_version" != "(not pinned)" ]]; then
+      # Replace existing addonVersion line within the secrets-store-csi document
+      awk -v ver="$TARGET_VERSION" '
+        /name: secrets-store-csi/ { in_target=1 }
+        /^---/ && in_target { in_target=0 }
+        in_target && /addonVersion:/ { sub(/addonVersion:.*/, "addonVersion: " ver) }
+        { print }
+      ' "$addon_file" > "${addon_file}.tmp" && mv "${addon_file}.tmp" "$addon_file"
+    else
+      # Insert addonVersion as the last field in the secrets-store-csi spec block
+      # (before the next --- separator)
+      awk -v ver="$TARGET_VERSION" '
+        /name: secrets-store-csi/ { in_target=1 }
+        in_target && /^---/ { print "  addonVersion: " ver; in_target=0 }
+        { print }
+        END { if (in_target) print "  addonVersion: " ver }
+      ' "$addon_file" > "${addon_file}.tmp" && mv "${addon_file}.tmp" "$addon_file"
+    fi
     echo "  Updated."
   else
     echo "  [dry-run] Would set .spec.addonVersion = \"$TARGET_VERSION\""
