@@ -34,23 +34,28 @@ import acktest
 
 ## Upgrading EKS Addons
 
-The test clusters use EKS managed addons (secrets-store-csi-driver, external-dns, coredns) defined in `flux/ack/cluster/addons/addons.yaml`. To upgrade the `aws-secrets-store-csi-driver-provider` addon to the latest version:
+The test clusters use EKS managed addons (secrets-store-csi-driver, external-dns, coredns) defined in `flux/ack/cluster/addons/addons.yaml`. To upgrade the `aws-secrets-store-csi-driver-provider` addon:
 
 ```bash
-# Auto-detect and apply the latest version
-./scripts/upgrade-secrets-csi-driver.sh
+# Recommended: use the EKS default version (stable, tested by EKS team)
+./scripts/upgrade-secrets-csi-driver.sh --default
+
+# Use the default version for a specific Kubernetes version
+./scripts/upgrade-secrets-csi-driver.sh --default --kubernetes-version=1.31
 
 # Preview changes without modifying files
-./scripts/upgrade-secrets-csi-driver.sh --dry-run
+./scripts/upgrade-secrets-csi-driver.sh --default --dry-run
+
+# Use the absolute latest version (may not be marked as default yet)
+./scripts/upgrade-secrets-csi-driver.sh
 
 # Pin to a specific version
 ./scripts/upgrade-secrets-csi-driver.sh v1.0.0-eksbuild.1
-
-# Constrain to a specific Kubernetes version
-./scripts/upgrade-secrets-csi-driver.sh --kubernetes-version=1.31
 ```
 
-The script uses `aws eks describe-addon-versions` to discover the latest compatible version and updates the `addonVersion` field in the Addon manifest. It also updates the `test-infra-upgrade` sibling repo if present.
+Using `--default` is recommended for upgrades because EKS marks a version as default only after it has been validated for stability and compatibility. The latest version may be newer but hasn't necessarily completed the EKS qualification process.
+
+The script uses `aws eks describe-addon-versions` to discover versions and updates the `addonVersion` field in the Addon manifest. It also updates the `test-infra-upgrade` sibling repo if present.
 
 **Prerequisites:** AWS CLI (configured with EKS access), [yq](https://github.com/mikefarah/yq)
 

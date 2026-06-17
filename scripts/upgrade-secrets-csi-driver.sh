@@ -9,6 +9,7 @@
 #
 # Usage:
 #   ./scripts/upgrade-secrets-csi-driver.sh              # auto-detect latest
+#   ./scripts/upgrade-secrets-csi-driver.sh --default    # use EKS default version (recommended)
 #   ./scripts/upgrade-secrets-csi-driver.sh <version>    # use specific version
 #   ./scripts/upgrade-secrets-csi-driver.sh --dry-run    # show what would change
 #
@@ -33,6 +34,7 @@ fi
 
 # --- Parse arguments ---
 DRY_RUN=false
+USE_DEFAULT=false
 TARGET_VERSION=""
 K8S_VERSION=""
 
@@ -41,12 +43,16 @@ for arg in "$@"; do
     --dry-run)
       DRY_RUN=true
       ;;
+    --default)
+      USE_DEFAULT=true
+      ;;
     --help|-h)
-      echo "Usage: $0 [--dry-run] [--kubernetes-version=X.XX] [<version>]"
+      echo "Usage: $0 [--dry-run] [--default] [--kubernetes-version=X.XX] [<version>]"
       echo ""
       echo "Upgrades the $ADDON_NAME EKS addon version."
       echo ""
       echo "Options:"
+      echo "  --default                  Use the EKS default version for the Kubernetes version (recommended)"
       echo "  --dry-run                  Show what would change without modifying files"
       echo "  --kubernetes-version=X.XX  Constrain to versions compatible with this K8s version"
       echo "  <version>                  Specific addon version (e.g., v1.0.0-eksbuild.1)"
@@ -80,29 +86,50 @@ if ! command -v yq >/dev/null 2>&1; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Discover latest version
+# Discover version
 # ─────────────────────────────────────────────────────────────────────────────
 
 if [[ -z "$TARGET_VERSION" ]]; then
-  echo "Discovering latest $ADDON_NAME version..."
+  if [[ "$USE_DEFAULT" == "true" ]]; then
+    echo "Discovering default $ADDON_NAME version..."
 
-  EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME" --query 'addons[0].addonVersions[0].addonVersion' --output text)
+    # Query for the version marked as default for the given Kubernetes version.
+    # The defaultVersion field in compatibilities indicates EKS's recommended version.
+    EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME"
+      --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]'
+      --output text)
 
-  if [[ -n "$K8S_VERSION" ]]; then
-    EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
-    echo "  Constraining to Kubernetes version: $K8S_VERSION"
+    if [[ -n "$K8S_VERSION" ]]; then
+      EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
+      echo "  Constraining to Kubernetes version: $K8S_VERSION"
+    fi
+  else
+    echo "Discovering latest $ADDON_NAME version..."
+
+    EKS_ARGS=(eks describe-addon-versions --addon-name "$ADDON_NAME"
+      --query 'addons[0].addonVersions[0].addonVersion'
+      --output text)
+
+    if [[ -n "$K8S_VERSION" ]]; then
+      EKS_ARGS+=(--kubernetes-version "$K8S_VERSION")
+      echo "  Constraining to Kubernetes version: $K8S_VERSION"
+    fi
   fi
 
   TARGET_VERSION=$(aws "${EKS_ARGS[@]}" 2>/dev/null)
 
   if [[ -z "$TARGET_VERSION" || "$TARGET_VERSION" == "None" ]]; then
-    echo "error: could not discover latest version for $ADDON_NAME" >&2
+    echo "error: could not discover version for $ADDON_NAME" >&2
     echo "  Ensure the AWS CLI is configured and has EKS access." >&2
     echo "  Or provide a version manually: $0 v1.0.0-eksbuild.1" >&2
     exit 1
   fi
 
-  echo "  Latest: $TARGET_VERSION"
+  if [[ "$USE_DEFAULT" == "true" ]]; then
+    echo "  Default: $TARGET_VERSION"
+  else
+    echo "  Latest: $TARGET_VERSION"
+  fi
 fi
 
 echo ""
