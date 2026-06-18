@@ -8,6 +8,7 @@ metadata:
 spec:
   clusterName: ${STACK_NAME}-cluster
   name: aws-secrets-store-csi-driver-provider
+  addonVersion: v3.1.1-eksbuild.1
   configurationValues: |-
     {
       "secrets-store-csi-driver": {
