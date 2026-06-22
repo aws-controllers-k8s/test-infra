@@ -1,10 +1,10 @@
 ## Introduction
 
-The ACK core team provides a soak testing framework and template cluster where
-service teams can execute long running soak tests to test the performance and
-stability of the service controllers. Running soak tests is one of the
-requirements for cutting a new major version release for any service controller.
-Find more details on the release process
+The ACK core team provides a soak testing framework where service teams can
+execute long running soak tests to test the performance and stability of the
+service controllers. Running soak tests is one of the requirements for cutting
+a new major version release for any service controller. Find more details on
+the release process
 [here](https://github.com/aws-controllers-k8s/community/blob/main/docs/content/docs/community/releases.md).
 
 Under the hood, the soak test introduces load by repeatedly running the
@@ -17,6 +17,31 @@ infrastructure in their own accounts, based off the templates and configuration
 provided in this repository. Soak tests will be started by Prow jobs before
 cutting a new major version release, but can also be manually triggered. Use the
 following guide to configure your soak testing infrastructure.
+
+## Parallel Soak Testing
+
+All resources created by this framework are scoped per AWS service, allowing
+multiple controllers to be soak-tested in parallel without conflicts. Each
+invocation of `bootstrap.sh` creates its own:
+
+| Resource | Naming Convention |
+|----------|-------------------|
+| EKS Cluster | `ack-soak-<service>` |
+| ECR Public Repo | `ack-<service>-soak` |
+| Controller Helm Release | `soak-test-<service>` |
+| Soak Runner Helm Release | `soak-runner-<service>` |
+| Prometheus Namespace | `prometheus-<service>` |
+| Prometheus Helm Release | `kube-prom-<service>` |
+| Loki Helm Release | `loki-<service>` |
+
+For example, running soak tests for both `s3` and `ecr` simultaneously:
+```bash
+./bootstrap.sh s3 v1.0.0
+./bootstrap.sh ecr v0.0.12
+```
+
+This creates two independent EKS clusters (`ack-soak-s3` and `ack-soak-ecr`),
+each with their own monitoring stack and test runner.
 
 ## Bootstrapping your soak test cluster
 
@@ -50,15 +75,15 @@ terminal before following the rest of the documents.
 
 Run the `bootstrap.sh` script in the current directory. This script will do the
 following: 
-1. Create an ECR public repository for the soak test runner
-1. Create an EKS cluster with the default soak test configuration (from
-  `cluster-config.yaml`)
-1. Install the controller Helm chart
-1. Install Prometheus and Grafana
+1. Create an ECR public repository for the soak test runner (`ack-<service>-soak`)
+1. Create an EKS cluster named `ack-soak-<service>` with the default soak test
+   configuration (from `cluster-config.yaml`)
+1. Install the controller Helm chart (`soak-test-<service>`)
+1. Install Prometheus and Grafana in namespace `prometheus-<service>`
 1. Install the custom ACK soak test Grafana dashboard (from
    `./monitoring/grafana/ack-dashboard-source.json`)
 1. Build and push the soak test runner image
-1. Install the soak test runner Helm chart
+1. Install the soak test runner Helm chart (`soak-runner-<service>`)
 
 The script requires the name of the service and the semver tag of the controller
 version up for testing. For example:
@@ -66,24 +91,100 @@ version up for testing. For example:
 ./bootstrap.sh s3 v0.0.12
 ```
 
-### Step 2 (Log onto the Prometheus dashboard)
+### Step 2 (Log onto the Grafana dashboard)
 
-After the script concludes, it should provide an example of the command to
-port-forward Prometheus. By default, the command should look like the following:
+After the script concludes, it will provide the exact command to port-forward
+Grafana. The command includes the service-specific namespace:
 
 ```bash
-kubectl port-forward -n prometheus service/kube-prom-grafana 3000:80 --address='0.0.0.0' >/dev/null &
+kubectl port-forward -n prometheus-s3 service/kube-prom-s3-grafana 3000:80 --address='0.0.0.0' >/dev/null &
 ```
 
-Navigate to `http://127.0.0.1:3000/` and log in. You should be able to log into
-the dashboard with the following credentials:
-- Username: `admin`
-- Password: `prom-operator`
+Navigate to `http://127.0.0.1:3000/` and log in. Retrieve the admin password:
+```bash
+kubectl get secret -n prometheus-<service> kube-prom-<service>-grafana \
+    -o jsonpath='{.data.admin-password}' | base64 -d && echo
+```
 
-Using the menu bar on the left, side navigate to `Dashboards` > `Browse`. Select
+Using the menu bar on the left, navigate to `Dashboards` > `Browse`. Select
 the `ACK Dashboard` at the top of the list. The `ACK Dashboard` will show the
 ACK-specific request counts and error codes used by the controller when making
 calls to AWS APIs. 
 
 The `Kubernetes/Compute Resources/Pod` dashboard will show the resource
 consumption by the controller pod.
+
+### Step 3 (Monitor soak test progress)
+
+Check the status of the soak test Job:
+```bash
+kubectl get jobs -n ack-system | grep <service>
+kubectl logs -n ack-system -f job/<service>-soak-test
+```
+
+### Step 4 (View all dashboards)
+
+To discover all running soak tests and open their Grafana dashboards:
+```bash
+./dashboards.sh
+```
+
+This script will:
+1. Scan for all `ack-soak-*` EKS clusters in the region
+2. Port-forward each cluster's Grafana on sequential ports (starting at 3000)
+3. Print the URL and credentials for each dashboard
+
+Example output:
+```
+========================================
+ ACK Soak Test Dashboards
+========================================
+
+  emrserverless
+    Cluster:   ack-soak-emrserverless
+    Dashboard: http://localhost:3000/
+    Creds:     admin / <password>
+    Soak Job:  Running
+
+  glue
+    Cluster:   ack-soak-glue
+    Dashboard: http://localhost:3001/
+    Creds:     admin / <password>
+    Soak Job:  Running
+
+========================================
+ All dashboards are port-forwarded.
+ Stop with: pkill -f 'kubectl port-forward.*grafana'
+========================================
+```
+
+To stop all port-forwards:
+```bash
+pkill -f 'kubectl port-forward.*grafana'
+```
+
+### Step 5 (Tear down resources)
+
+After reviewing results, clean up all resources for a specific service:
+```bash
+./teardown.sh <service>
+```
+
+Or manually:
+```bash
+eksctl delete cluster --name ack-soak-<service> --region us-west-2
+aws --region us-east-1 ecr-public delete-repository --repository-name ack-<service>-soak --force
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEPLOY_REGION` | `us-west-2` | AWS region for cluster and resources |
+| `CLUSTER_NAME` | `ack-soak-<service>` | Override the EKS cluster name |
+| `SOAK_IMAGE_REPO_NAME` | `ack-<service>-soak` | ECR public repo name |
+| `OCI_BUILDER` | `docker` | Container image builder binary |
+| `TEST_DURATION_DAYS` | `1` | Days to run soak test |
+| `TEST_DURATION_HOURS` | `0` | Additional hours |
+| `TEST_DURATION_MINUTES` | `0` | Additional minutes |
+| `CONTROLLER_IMAGE_REPO` | Auto-detected | Controller image repository URL |
