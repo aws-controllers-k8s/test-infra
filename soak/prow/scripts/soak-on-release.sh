@@ -78,10 +78,11 @@ AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export AWS_ACCOUNT_ID
 echo "soak-on-release.sh] [SETUP] Exported ACCOUNT_ID."
 
-aws eks update-kubeconfig --name soak-test-cluster >/dev/null
+SOAK_CLUSTER_NAME="ack-soak-${AWS_SERVICE}"
+aws eks update-kubeconfig --name $SOAK_CLUSTER_NAME >/dev/null
 # Use 'default' namespace by default and not 'test-pods' during helm commands.
 kubectl config set-context --current --namespace=default >/dev/null
-echo "soak-on-release.sh] [INFO] Updated the kubeconfig to communicate with 'soak-test-cluster' eks cluster."
+echo "soak-on-release.sh] [INFO] Updated the kubeconfig to communicate with '$SOAK_CLUSTER_NAME' eks cluster."
 
 export HELM_EXPERIMENTAL_OCI=1
 cd "$SERVICE_CONTROLLER_DIR"/helm
@@ -99,9 +100,9 @@ yq eval "$SERVICE_ACCOUNT_ANNOTATION_EVAL" -i values.yaml \
 && yq eval "$AWS_REGION_EVAL" -i values.yaml \
 && yq eval "$AWS_ACCOUNT_ID_EVAL" -i values.yaml
 
-export CONTROLLER_CHART_RELEASE_NAME="soak-test"
-chart_name=$(helm list -f '^soak-test$' -o json | jq -r '.[]|.name')
-[[ -n $chart_name ]] && echo "Chart soak-test already exists. Uninstalling..." && helm uninstall $CONTROLLER_CHART_RELEASE_NAME
+export CONTROLLER_CHART_RELEASE_NAME="soak-test-${AWS_SERVICE}"
+chart_name=$(helm list -f "^soak-test-${AWS_SERVICE}$" -o json | jq -r '.[]|.name')
+[[ -n $chart_name ]] && echo "Chart $CONTROLLER_CHART_RELEASE_NAME already exists. Uninstalling..." && helm uninstall $CONTROLLER_CHART_RELEASE_NAME
 helm install $CONTROLLER_CHART_RELEASE_NAME . >/dev/null
 echo "soak-on-release.sh] [INFO] Helm chart $CONTROLLER_CHART_RELEASE_NAME successfully installed."
 
@@ -119,10 +120,10 @@ buildah push $SOAK_RUNNER_IMAGE >/dev/null
 echo "soak-on-release.sh] [INFO] Successfully built and pushed soak runner image $SOAK_RUNNER_IMAGE"
 
 # Check for already existing soak-test-runner helm chart
-export SOAK_CHART_RELEASE_NAME="soak-test-runner"
-chart_name=$(helm list -f '^soak-test-runner$' -o json | jq -r '.[]|.name')
+export SOAK_CHART_RELEASE_NAME="soak-runner-${AWS_SERVICE}"
+chart_name=$(helm list -f "^soak-runner-${AWS_SERVICE}$" -o json | jq -r '.[]|.name')
 [[ -n $chart_name ]] \
-&& echo "soak-on-release.sh] [INFO] Chart soak-test-runner already exists. Uninstalling..." \
+&& echo "soak-on-release.sh] [INFO] Chart $SOAK_CHART_RELEASE_NAME already exists. Uninstalling..." \
 && helm uninstall $SOAK_CHART_RELEASE_NAME >/dev/null
 
 cd "$TEST_INFRA_DIR"/soak/helm/ack-soak-test
