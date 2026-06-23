@@ -170,11 +170,41 @@ After reviewing results, clean up all resources for a specific service:
 ./teardown.sh <service>
 ```
 
+Or tear down all soak clusters at once:
+```bash
+./teardown-all.sh
+```
+
 Or manually:
 ```bash
 eksctl delete cluster --name ack-soak-<service> --region us-west-2
 aws --region us-east-1 ecr-public delete-repository --repository-name ack-<service>-soak --force
 ```
+
+## Batch Operations
+
+### Running all soak tests at once
+
+The `run-all.sh` script launches soak tests for multiple controllers in parallel.
+Edit the `CONTROLLERS` array in the script to configure which services to test:
+
+```bash
+./run-all.sh
+```
+
+Environment variables:
+- `TEST_DURATION_DAYS` — Duration per test (default: 7)
+- `MAX_PARALLEL` — Max concurrent bootstraps (default: 5)
+
+Logs are written to `/tmp/soak-logs/<service>.log`.
+
+### Tearing down all soak clusters
+
+```bash
+./teardown-all.sh
+```
+
+This discovers and deletes all `ack-soak-*` clusters in parallel.
 
 ## Environment Variables
 
