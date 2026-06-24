@@ -63,7 +63,10 @@ CLUSTER_CONFIG_TEMPLATE="$SOAK_DIR/cluster-config.yaml"
 # Generate a per-service cluster config by replacing the placeholder
 CLUSTER_CONFIG_PATH="$SOAK_DIR/cluster-config-${AWS_SERVICE}.yaml"
 sed "s/PLACEHOLDER/${AWS_SERVICE}/g" "$CLUSTER_CONFIG_TEMPLATE" > "$CLUSTER_CONFIG_PATH"
-trap 'rm -f "$CLUSTER_CONFIG_PATH"' EXIT
+
+# Use a per-service kubeconfig to avoid races during parallel execution
+export KUBECONFIG="${SOAK_DIR}/.kubeconfig-${AWS_SERVICE}"
+trap 'rm -f "$CLUSTER_CONFIG_PATH" "$KUBECONFIG"' EXIT
 
 # EKS cluster name — unique per service
 DEFAULT_CLUSTER_NAME="ack-soak-${AWS_SERVICE}"
