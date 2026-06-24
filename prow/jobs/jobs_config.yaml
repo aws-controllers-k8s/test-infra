@@ -53,6 +53,7 @@ aws_services:
 - kms
 - keyspaces
 - lambda
+- lambdamicrovms
 - memorydb
 - mq
 - mwaa
