@@ -15,10 +15,10 @@ package generator
 
 import (
 	"fmt"
-	"html/template"
 	"os"
 	"slices"
 	"strings"
+	"text/template"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -192,6 +192,47 @@ func Generate(what, jobsConfigPath, imagesConfigPath, templatePath, outputPath s
 	case "labels":
 		err = generateLabelSyncConfig(templatePath, outputPath, config)
 	}
+	return err
+}
+
+// GenerateManifest processes a single template file with image context and
+// writes the result to outputPath. Used for standalone manifests like
+// job-config-job.yaml that aren't part of the prow jobs/presubmits/postsubmits
+// structure but still need image tag substitution.
+func GenerateManifest(imagesConfigPath, templatePath, outputPath string) error {
+	imageContext, err := loadImages(imagesConfigPath)
+	if err != nil {
+		return err
+	}
+
+	fileData, err := os.ReadFile(templatePath)
+	if err != nil {
+		return fmt.Errorf("unable to read template %s: %v", templatePath, err)
+	}
+
+	tmpl, err := template.New("manifest").Funcs(template.FuncMap{"contains": contains}).Parse(string(fileData))
+	if err != nil {
+		return fmt.Errorf("unable to parse template %s: %v", templatePath, err)
+	}
+
+	data := map[string]interface{}{
+		"ImageContext": imageContext,
+	}
+
+	var content strings.Builder
+	addAutoGenHeader(&content)
+
+	if err := tmpl.Execute(&content, data); err != nil {
+		return fmt.Errorf("unable to execute template %s: %v", templatePath, err)
+	}
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content.String())
 	return err
 }
 

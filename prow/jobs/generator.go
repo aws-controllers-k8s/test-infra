@@ -35,6 +35,9 @@ const pluginsImageConfig = pluginsDir + imagesConfigPath
 const pluginsTemplateDir = pluginsDir + templatesDir
 const pluginsOutputDir = pluginsDir + "/deployments"
 
+const jobConfigJobTemplate = jobsTemplateDir + "/job-config-job.yaml.tpl"
+const jobConfigJobOutput = jobsDir + "/job-config-job.yaml"
+
 func main() {
 
 	err := generator.Generate(
@@ -71,6 +74,15 @@ func main() {
 		pluginsImageConfig,
 		pluginsTemplateDir,
 		pluginsOutputDir,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	err = generator.GenerateManifest(
+		jobsImageConfig,
+		jobConfigJobTemplate,
+		jobConfigJobOutput,
 	)
 	if err != nil {
 		panic(err)
