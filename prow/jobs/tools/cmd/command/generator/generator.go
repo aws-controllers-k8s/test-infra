@@ -38,6 +38,12 @@ type JobsConfig struct {
 	AWSServices                   []string `yaml:"aws_services"`
 	CarmTestServices              []string `yaml:"carm_test_services"`
 	IRSTestServices               []string `yaml:"irs_test_services"`
+	// AdditionalControllerTestServices maps a service name to a comma-separated
+	// list of additional ACK controllers (`<name>@<chart-version>`) that must
+	// be installed into that service's e2e KIND cluster. Used for
+	// cross-controller reference tests (e.g. kafka securityGroupRefs -> ec2
+	// SecurityGroup).
+	AdditionalControllerTestServices map[string]string `yaml:"additional_controller_test_services"`
 	SoakTestOnReleaseServiceNames []string `yaml:"soak_test_on_release_service_names"`
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`

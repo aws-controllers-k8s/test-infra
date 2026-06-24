@@ -96,6 +96,15 @@ carm_test_services:
 irs_test_services:
 - sqs
 
+# Map of service -> additional ACK controllers (as `<name>@<chart-version>`,
+# comma-separated for multiple) that must be installed into the service's e2e
+# KIND cluster, in addition to any controllers listed in the shared test-config
+# ConfigMap. Used for cross-controller reference tests. For example, the kafka
+# controller's `securityGroupRefs` tests reference ec2 SecurityGroup resources,
+# so the ec2-controller must be running in the test cluster.
+additional_controller_test_services:
+  kafka: ec2-controller@v1.15.2
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
