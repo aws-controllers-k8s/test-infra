@@ -131,7 +131,7 @@ spec:
           mountPath: /output
       containers:
       - name: apply-configmap
-        image: ${PROW_IMAGES_REPO_URI}:prow-kubectl-0.0.1
+        image: public.ecr.aws/bitnami/kubectl:latest
         command:
         - /bin/bash
         - -ec
