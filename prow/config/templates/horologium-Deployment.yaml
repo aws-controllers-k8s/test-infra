@@ -48,6 +48,12 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         image: {{ .Values.horologium.image }}
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
         args:
         - --dry-run={{ .Values.dryRun }}
         - --config-path=/etc/config/config.yaml

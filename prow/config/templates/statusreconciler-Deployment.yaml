@@ -45,6 +45,12 @@ spec:
               name: github-token
               key: appid
         image: {{ .Values.statusreconciler.image }}
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
         args:
         - --dry-run={{ .Values.dryRun }}
         - --continue-on-error=true

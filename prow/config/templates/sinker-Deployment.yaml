@@ -48,6 +48,12 @@ spec:
         args:
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: config
           mountPath: /etc/config

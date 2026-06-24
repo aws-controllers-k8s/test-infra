@@ -59,6 +59,12 @@ spec:
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         image: {{ .Values.prowControllerManager.image }}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
         volumeMounts:
         - name: github-token
           mountPath: /etc/github

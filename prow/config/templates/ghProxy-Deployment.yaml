@@ -47,6 +47,12 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         image: {{ .Values.ghproxy.image }}
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
         args:
         - --cache-dir=/cache
         - --cache-sizeGB={{ add .Values.ghproxy.volumeSize -1 }}
