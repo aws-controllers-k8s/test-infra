@@ -52,6 +52,14 @@
         {{ end -}}
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
+        {{ $additionalControllers := index $.Config.AdditionalControllerTestServices $service -}}
+        {{ if $additionalControllers -}}
+        # Additional ACK controllers required by this service's e2e tests
+        # (cross-controller reference tests). Installed into the KIND cluster by
+        # the e2e test scripts.
+        - name: ADDITIONAL_CONTROLLERS
+          value: "{{ $additionalControllers }}"
+        {{ end -}}
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ $service }}-release-test

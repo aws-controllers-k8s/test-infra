@@ -90,6 +90,17 @@ _install_additional_controllers() {
 
     local install_region=$(get_aws_region)
     local additional_controllers=( $(get_cluster_additional_controllers | yq -o=j -I=0 '.[]' -) )
+
+    # Also honor controllers requested via the ADDITIONAL_CONTROLLERS env var
+    # (comma- or space-separated `<name>@<chart-version>` pairs). This lets a
+    # per-service Prow job request extra controllers (for cross-controller
+    # reference tests) without modifying the shared test-config ConfigMap.
+    if [[ -n "${ADDITIONAL_CONTROLLERS:-}" ]]; then
+        local env_controllers
+        IFS=', ' read -r -a env_controllers <<< "${ADDITIONAL_CONTROLLERS}"
+        additional_controllers+=( "${env_controllers[@]}" )
+    fi
+
     for controller_version_pair in "${additional_controllers[@]}"; do
         local controller_name=$(echo $controller_version_pair | tr -d '"' | cut -d "@" -f 1)
         local controller_version=$(echo $controller_version_pair | tr -d '"' | cut -d "@" -f 2)
