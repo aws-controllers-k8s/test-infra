@@ -8,6 +8,7 @@ images:
     deploy-docs: prow-deploy-docs-0.0.13
     docs: prow-docs-0.0.38
     integration-test: prow-integration-0.0.55
+    kubectl: prow-kubectl-0.0.1
     olm-bundle-pr: prow-olm-bundle-pr-0.0.34
     olm-test: prow-olm-test-0.0.33
     scan-controllers-cve: prow-scan-controllers-cve-0.0.27
