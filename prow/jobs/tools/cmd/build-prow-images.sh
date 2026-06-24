@@ -68,7 +68,7 @@ fi
 if [ -n "$BUILT_JOB_TAGS" ] || [ -n "$BUILT_AGENT_WORKFLOW_TAGS" ] || [ -n "$BUILT_PLUGIN_TAGS" ]; then
   if [ -n "$BUILT_JOB_TAGS" ]; then
     PR_DESCRIPTION+="Built and pushed prow job images:"$'\n'"$BUILT_JOB_TAGS"$'\n\n'
-    SOURCE_FILES+="prow/jobs/jobs.yaml:prow/jobs/jobs.yaml"
+    SOURCE_FILES+="prow/jobs/jobs.yaml:prow/jobs/jobs.yaml,prow/jobs/job-config-job.yaml:prow/jobs/job-config-job.yaml"
   fi
 
   if [ -n "$BUILT_AGENT_WORKFLOW_TAGS" ]; then

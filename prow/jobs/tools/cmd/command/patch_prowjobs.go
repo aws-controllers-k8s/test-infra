@@ -80,6 +80,14 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 	}
 	log.Println("Successfully generated \"jobs.yaml\" with up-to-date prow image tags")
 
+	jobConfigJobTemplate := OptJobsTemplatesPath + "/job-config-job.yaml.tpl"
+	jobConfigJobOutput := "./prow/jobs/job-config-job.yaml"
+	err = generator.GenerateManifest(OptImagesConfigPath, jobConfigJobTemplate, jobConfigJobOutput)
+	if err != nil {
+		return err
+	}
+	log.Println("Successfully generated \"job-config-job.yaml\" with up-to-date prow image tags")
+
 	writeBuiltTags(builtTags)
 	return err
 }

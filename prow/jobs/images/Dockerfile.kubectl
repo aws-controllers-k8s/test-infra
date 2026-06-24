@@ -1,0 +1,15 @@
+# Minimal image with kubectl and bash for Kubernetes API operations
+FROM public.ecr.aws/docker/library/debian:trixie-slim
+
+ARG KUBECTL_VERSION=v1.35.5
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        curl \
+    && curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
+    && chmod +x /usr/local/bin/kubectl \
+    && apt-get remove -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
