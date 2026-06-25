@@ -1,4 +1,6 @@
-# Single NodePool for all cluster workloads.
+# NodePool for e2e test compute and general workloads.
+# The Prow control plane runs on a separate, tainted pool (see
+# nodepool-control-plane.yaml).
 # Built-in `general-purpose` pool is disabled in cluster.yaml to avoid
 # spinning up small instances that hit the pod capacity limit.
 apiVersion: karpenter.sh/v1
@@ -11,7 +13,7 @@ spec:
       nodeClassRef:
         group: eks.amazonaws.com
         kind: NodeClass
-        name: default
+        name: prow-compute
       expireAfter: 10h
       requirements:
         - key: "eks.amazonaws.com/instance-family"

@@ -1,0 +1,26 @@
+# Custom EKS Auto Mode NodeClass for the e2e compute pool.
+#
+# The built-in `default` NodeClass is managed by EKS and provisions node
+# volumes at the gp3 baseline (125 MB/s throughput, 3000 IOPS). The e2e
+# workloads are disk-intensive, so this NodeClass raises the ephemeral
+# volume's provisioned throughput/IOPS to give nodes more headroom.
+#
+# Selectors mirror the default NodeClass discovery (cluster-owned security
+# group, private subnets, the stack node role) so this stays portable across
+# environments via ${STACK_NAME} substitution.
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: prow-compute
+spec:
+  role: ${STACK_NAME}-node-role
+  ephemeralStorage:
+    size: 100Gi
+    iops: 6000
+    throughput: 500
+  securityGroupSelectorTerms:
+    - tags:
+        kubernetes.io/cluster/${STACK_NAME}-cluster: owned
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/role/internal-elb: "1"

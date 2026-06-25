@@ -1,0 +1,48 @@
+# Dedicated NodePool for the Prow control plane (deck, hook, tide, crier,
+# sinker, horologium, statusreconciler, prow-controller-manager, ghproxy).
+#
+# These nodes are tainted so that only control-plane workloads (which tolerate
+# the taint and select the node-role label) schedule here, keeping them
+# isolated from the general e2e compute pool.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: prow-control-plane
+spec:
+  template:
+    metadata:
+      labels:
+        ack.aws.dev/node-role: control-plane
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: default
+      taints:
+        - key: ack.aws.dev/control-plane
+          value: "true"
+          effect: NoSchedule
+      # Long expiry: the control plane should not be recycled on the same
+      # aggressive 10h cadence as the e2e compute pool.
+      expireAfter: 720h
+      requirements:
+        - key: "eks.amazonaws.com/instance-family"
+          operator: In
+          values: ["c6a", "c6i", "m6a", "m6i"]
+        # xlarge+ avoids the ENI-based pod-density limits that small instances
+        # hit (same reason the general-purpose pool is disabled in cluster.yaml).
+        - key: "eks.amazonaws.com/instance-size"
+          operator: In
+          values: ["xlarge", "2xlarge"]
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["on-demand"]
+  limits:
+    cpu: "32"
+    memory: 64Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 15m

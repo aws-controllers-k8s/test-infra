@@ -37,6 +37,7 @@ spec:
       labels:
         app: ghproxy
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       containers:
       - name: ghproxy
         env:
