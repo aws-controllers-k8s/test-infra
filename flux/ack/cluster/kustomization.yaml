@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
 - cluster.yaml
 - access-entries.yaml
-- nodeclass-compute.yaml
 - nodepool.yaml
 - nodepool-control-plane.yaml
 - storage-class.yaml

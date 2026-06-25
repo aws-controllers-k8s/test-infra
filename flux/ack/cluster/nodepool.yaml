@@ -13,7 +13,7 @@ spec:
       nodeClassRef:
         group: eks.amazonaws.com
         kind: NodeClass
-        name: prow-compute
+        name: default
       expireAfter: 10h
       requirements:
         - key: "eks.amazonaws.com/instance-family"
