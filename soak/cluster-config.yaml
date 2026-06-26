@@ -25,3 +25,14 @@ iam:
       namespace: ack-system
     attachPolicyARNs:
     - "arn:aws:iam::aws:policy/AdministratorAccess"
+
+# The EBS CSI driver is required so the monitoring stack's Loki
+# PersistentVolumeClaim can be dynamically provisioned. Without it the Loki
+# pod stays Pending and controller logs are never persisted for the soak run.
+# Permissions are granted via an EKS Pod Identity association (eksctl
+# automatically installs the eks-pod-identity-agent addon as a prerequisite
+# and creates the IAM role using the well-known EBS CSI controller policy).
+addons:
+- name: eks-pod-identity-agent
+- name: aws-ebs-csi-driver
+  useDefaultPodIdentityAssociations: true
