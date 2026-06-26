@@ -77,9 +77,11 @@ Run the `bootstrap.sh` script in the current directory. This script will do the
 following: 
 1. Create an ECR public repository for the soak test runner (`ack-<service>-soak`)
 1. Create an EKS cluster named `ack-soak-<service>` with the default soak test
-   configuration (from `cluster-config.yaml`)
+   configuration (from `cluster-config.yaml`). This includes the EBS CSI driver
+   addon (with an EKS Pod Identity association), which is required to provision
+   the persistent volume that stores controller logs in Loki.
 1. Install the controller Helm chart (`soak-test-<service>`)
-1. Install Prometheus and Grafana in namespace `prometheus-<service>`
+1. Install Prometheus, Grafana, and Loki in namespace `prometheus-<service>`
 1. Install the custom ACK soak test Grafana dashboard (from
    `./monitoring/grafana/ack-dashboard-source.json`)
 1. Build and push the soak test runner image
@@ -162,6 +164,62 @@ To stop all port-forwards:
 ```bash
 pkill -f 'kubectl port-forward.*grafana'
 ```
+
+### Investigating test failures
+
+Controller and test-runner logs are shipped by Promtail and stored in Loki on a
+persistent volume (provisioned by the EBS CSI driver installed with the
+cluster). Because the logs are persisted, you can investigate a failed test run
+even after the controller pod restarts — for the lifetime of the cluster.
+
+> **Note:** Logs live only as long as the cluster. The Loki volume uses
+> `reclaimPolicy: Delete`, so investigate before tearing the cluster down.
+
+**Option A — Grafana (Explore view):**
+
+1. Open the service's Grafana (see Step 2 or run `./dashboards.sh`).
+2. Go to `Explore` and select the `Loki` datasource.
+3. Run a LogQL query. Useful examples:
+   ```logql
+   # All controller logs
+   {namespace="ack-system", container="controller"}
+
+   # Only controller errors
+   {namespace="ack-system", container="controller"} |= "\"level\":\"error\""
+
+   # Test-runner (pytest) output
+   {namespace="ack-system", pod=~"<service>-soak-test.*"}
+   ```
+4. Use the time picker to narrow to the window of the failed iteration.
+
+**Option B — Loki API (scriptable):**
+
+Query Loki directly from inside the Loki pod (no extra port-forward needed):
+```bash
+NS=prometheus-<service>
+LOKI_POD=loki-<service>-0
+
+# Find the controller pod name
+CTRL_POD=$(kubectl get pods -n ack-system --no-headers | grep chart | awk '{print $1}')
+
+# Query the last 30 minutes of controller logs
+END=$(date +%s)000000000
+START=$(( $(date +%s) - 1800 ))000000000
+kubectl exec -n "$NS" "$LOKI_POD" -- \
+  wget -qO- "http://localhost:3100/loki/api/v1/query_range?query=%7Bpod%3D%22${CTRL_POD}%22%7D&start=${START}&end=${END}&limit=2000&direction=backward"
+```
+
+**Correlating a failed test with controller activity:**
+
+1. From the test-runner stream, find the timestamp of the failing iteration
+   (look for the pytest summary line, e.g. `1 failed, 2 passed ...`).
+2. Query the controller stream (`{pod="<controller-pod>"}`) for the same time
+   window to see exactly what the controller did — `created/updated/deleted
+   resource`, `desired resource state has changed` deltas, and any
+   `Reconciler error` / AWS API exceptions.
+
+This is the fastest way to root-cause issues like reconciliation churn, stuck
+resources, or AWS-side errors that surface as test failures.
 
 ### Step 5 (Tear down resources)
 
