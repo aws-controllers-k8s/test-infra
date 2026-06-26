@@ -22,9 +22,10 @@ spec:
         - key: ack.aws.dev/control-plane
           value: "true"
           effect: NoSchedule
-      # Long expiry: the control plane should not be recycled on the same
-      # aggressive 10h cadence as the e2e compute pool.
-      expireAfter: 720h
+      # Longer expiry than the e2e pool's 10h so the control plane isn't
+      # recycled aggressively, while staying within Karpenter's limit that
+      # expireAfter + terminationGracePeriod (default 24h) must be <= 21 days.
+      expireAfter: 168h
       requirements:
         - key: "eks.amazonaws.com/instance-family"
           operator: In
