@@ -39,6 +39,7 @@ spec:
       labels:
         app: hook
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.hook.serviceAccount.name | default "hook" | quote }}
       terminationGracePeriodSeconds: 180
       containers:

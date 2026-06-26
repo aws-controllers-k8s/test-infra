@@ -39,6 +39,7 @@ spec:
       labels:
         app: deck
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.deck.serviceAccount.name | default "deck" | quote }}
       terminationGracePeriodSeconds: 30
       containers:

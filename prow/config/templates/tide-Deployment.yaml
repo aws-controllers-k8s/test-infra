@@ -36,6 +36,7 @@ spec:
       labels:
         app: tide
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.tide.serviceAccount.name | default "tide" | quote }}
       containers:
       - name: tide

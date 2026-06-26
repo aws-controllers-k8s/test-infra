@@ -36,6 +36,7 @@ spec:
       labels:
         app: horologium
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.horologium.serviceAccount.name | default "horologium" | quote }}
       terminationGracePeriodSeconds: 30
       containers:

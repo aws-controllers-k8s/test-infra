@@ -34,6 +34,7 @@ spec:
       labels:
         app: prow-controller-manager
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.prowControllerManager.serviceAccount.name | default "prow-controller-manager" | quote }}
       containers:
       - name: prow-controller-manager

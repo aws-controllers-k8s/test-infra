@@ -34,6 +34,7 @@ spec:
       labels:
         app: sinker
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.sinker.serviceAccount.name | default "sinker" | quote }}
       containers:
       - name: sinker

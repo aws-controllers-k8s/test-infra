@@ -28,6 +28,7 @@ spec:
       labels:
         app: statusreconciler
     spec:
+      {{- include "prow-config.controlPlaneScheduling" . | nindent 6 }}
       serviceAccountName: {{ .Values.statusreconciler.serviceAccount.name | default "statusreconciler" | quote }}
       terminationGracePeriodSeconds: 180
       containers:
