@@ -19,16 +19,16 @@ MAX_PARALLEL=${MAX_PARALLEL:-5}
 
 # Define controllers to soak test: "service:version"
 CONTROLLERS=(
-  "opensearchserverless:v0.4.1"
-  "autoscaling:v0.2.0"
-  "emrserverless:v0.2.0"
-  "glue:v0.4.0"
-  "backup:v0.2.0"
-  "quicksight:v0.4.0"
+  "opensearchserverless:v0.4.3"
+  "autoscaling:v0.2.2"
+  "emrserverless:v0.2.1"
+  "glue:v0.4.1"
+  "backup:v0.3.0"
+  "quicksight:v0.4.1"
   "mwaa:v0.2.0"
-  "firehose:v0.3.0"
-  "dsql:v0.1.0"
-  "s3files:v0.2.0"
+  "firehose:v0.3.1"
+  "dsql:v0.1.1"
+  "s3files:v0.2.1"
 )
 
 LOG_DIR="/tmp/soak-logs"
