@@ -15,6 +15,9 @@
 
 import pytest
 
+from datetime import datetime
+from typing import Optional
+
 from . import resource
 
 CONDITION_TYPE_ADOPTED = "ACK.Adopted"
@@ -113,6 +116,24 @@ def assert_synced(ref: resource.CustomResourceReference):
         a True status.
     """
     return assert_synced_status(ref, True)
+
+
+def get_synced_last_transition_time(
+    ref: resource.CustomResourceReference,
+) -> Optional[datetime]:
+    """Returns the lastTransitionTime of the ACK.ResourceSynced condition.
+
+    Returned as a timezone-aware datetime, or None if the resource has no
+    ACK.ResourceSynced condition (or it carries no lastTransitionTime).
+
+    ACK rewrites this timestamp on every reconcile (not only on status
+    transitions), so capturing it before patching a resource and then waiting
+    for a newer value is a reliable way to confirm the controller has reconciled
+    the change. Pair it with ``resource.wait_on_condition(...,
+    last_transition_after=<captured value>)``.
+    """
+    cond = resource.get_resource_condition(ref, CONDITION_TYPE_RESOURCE_SYNCED)
+    return resource.parse_condition_last_transition_time(cond)
 
 
 def assert_not_synced(ref: resource.CustomResourceReference):

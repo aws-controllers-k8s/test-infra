@@ -18,6 +18,7 @@ import logging
 import base64
 import os
 import distutils.util as util
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 from typing import Dict, Optional, Union
@@ -334,6 +335,20 @@ def delete_secret(namespace: str,
     _api_client = _get_k8s_api_client()
     client.CoreV1Api(_api_client).delete_namespaced_secret(name.lower(), namespace.lower())
 
+def parse_condition_last_transition_time(condition) -> Optional[datetime]:
+    """Parses a condition's lastTransitionTime into a timezone-aware datetime.
+
+    Returns None if the condition is None or has no lastTransitionTime.
+    """
+    if condition is None:
+        return None
+    ts = condition.get('lastTransitionTime')
+    if ts is None:
+        return None
+    # Kubernetes serializes the timestamp as RFC3339 with a trailing 'Z'.
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
 def wait_on_condition(reference: CustomResourceReference,
                       condition_name: str,
                       desired_condition_status: str,
@@ -362,6 +377,67 @@ def wait_on_condition(reference: CustomResourceReference,
         if desired_condition is not None and desired_condition['status'] == desired_condition_status:
             logging.info(f"Condition {condition_name} has status {desired_condition_status}, continuing...")
             return True
+
+        sleep(period_length)
+
+    if not desired_condition:
+        logging.error(f"Resource {reference} does not have a condition of type {condition_name}.")
+    else:
+        logging.error(f"Wait for condition {condition_name} to reach status {desired_condition_status} timed out. Condition has message '{desired_condition['message']}'")
+    return False
+
+
+def wait_on_condition_after(reference: CustomResourceReference,
+                            condition_name: str,
+                            desired_condition_status: str,
+                            last_transition_after: Optional[datetime] = None,
+                            wait_periods: int = 2,
+                            period_length: int = 60) -> bool:
+    """
+    Waits for the specified condition to reach the desired value via a reconcile
+    that happened after `last_transition_after`.
+
+    This is a timestamp-aware variant of `wait_on_condition`. It is a separate
+    function (rather than an extra argument on `wait_on_condition`) to avoid any
+    behavioral change for existing callers.
+
+    Precondition:
+        resource must be consumed by the controller (i.e. have a .status field)
+
+    Args:
+        last_transition_after: when provided, the condition is only considered
+            met once its lastTransitionTime is strictly newer than this value.
+            This guards against reading a stale condition left over from a
+            previous reconcile -- for example, right after patching a resource,
+            ACK.ResourceSynced can still read the desired status from the prior
+            reconcile. Capture the condition's lastTransitionTime before the
+            patch (see condition.get_synced_last_transition_time) and pass it
+            here to wait for a fresh reconcile. When None the timestamp check is
+            skipped, making this behave like `wait_on_condition`.
+
+    Returns:
+        False if the resource doesn't exist, have .status.conditions at all, have the requested
+            condition type, or if the wait times out. True otherwise.
+    """
+
+    if not get_resource_exists(reference):
+        logging.error(f"Resource {reference} does not exist")
+        return False
+
+    desired_condition = None
+    for i in range(wait_periods):
+        logging.debug(f"Waiting on condition {condition_name} to reach {desired_condition_status} for resource {reference} ({i})")
+
+        desired_condition = get_resource_condition(reference, condition_name)
+        if desired_condition is not None and desired_condition['status'] == desired_condition_status:
+            if last_transition_after is None:
+                logging.info(f"Condition {condition_name} has status {desired_condition_status}, continuing...")
+                return True
+
+            last_transition = parse_condition_last_transition_time(desired_condition)
+            if last_transition is not None and last_transition > last_transition_after:
+                logging.info(f"Condition {condition_name} has status {desired_condition_status} with a fresh lastTransitionTime ({last_transition}), continuing...")
+                return True
 
         sleep(period_length)
 
