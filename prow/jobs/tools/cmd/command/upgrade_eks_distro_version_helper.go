@@ -22,7 +22,7 @@ const (
 // YYYY-MM-DD-TTMMSS000.2
 // This format of date can be compared using string comparison
 // In the future if the meaning or the standard of the version
-// changes, we need to change this function to reflect 
+// changes, we need to change this function to reflect
 // the comparison of eks-distro version
 func eksDistroVersionIsGreaterThan(v1 string, v2 string) bool {
 	return v1 > v2
@@ -31,11 +31,11 @@ func eksDistroVersionIsGreaterThan(v1 string, v2 string) bool {
 func findHighestEcrEksDistroVersion(tags []string) (string, error) {
 
 	regex := regexp.MustCompile(`[a-z]`)
-	max := "2000-08-13-1723575672.2"
+	max := "2000-08-13-1723575672.2023"
 
 	for _, tag := range tags {
 		temp := strings.Split(tag, ".")
-		if regex.MatchString(tag) || len(temp) != 2 || temp[1] != "2" {
+		if regex.MatchString(tag) || len(temp) != 2 || temp[1] != "2023" {
 			continue
 		}
 		if eksDistroVersionIsGreaterThan(tag, max) {
