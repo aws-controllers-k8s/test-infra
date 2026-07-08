@@ -1,18 +1,18 @@
 image_repo: ${PROW_IMAGES_REPO_URI}
 images:
-    auto-generate-controllers: prow-auto-generate-controllers-0.0.42
-    auto-update-controllers: prow-auto-update-controllers-0.0.33
-    build-prow-images: prow-build-prow-images-0.0.70
-    controller-release-tag: prow-controller-release-tag-0.0.33
-    deploy: prow-deploy-0.0.44
-    deploy-docs: prow-deploy-docs-0.0.13
-    docs: prow-docs-0.0.38
-    integration-test: prow-integration-0.0.55
-    kubectl: prow-kubectl-0.0.1
-    olm-bundle-pr: prow-olm-bundle-pr-0.0.34
-    olm-test: prow-olm-test-0.0.33
-    scan-controllers-cve: prow-scan-controllers-cve-0.0.27
-    soak-test: prow-soak-0.0.32
-    unit-test: prow-unit-0.0.37
-    upgrade-go-version: prow-upgrade-go-version-0.0.35
-    verify-attribution: prow-verify-attribution-0.0.32
+    auto-generate-controllers: prow-auto-generate-controllers-0.0.43
+    auto-update-controllers: prow-auto-update-controllers-0.0.34
+    build-prow-images: prow-build-prow-images-0.0.71
+    controller-release-tag: prow-controller-release-tag-0.0.34
+    deploy: prow-deploy-0.0.45
+    deploy-docs: prow-deploy-docs-0.0.14
+    docs: prow-docs-0.0.39
+    integration-test: prow-integration-0.0.56
+    kubectl: prow-kubectl-0.0.2
+    olm-bundle-pr: prow-olm-bundle-pr-0.0.35
+    olm-test: prow-olm-test-0.0.34
+    scan-controllers-cve: prow-scan-controllers-cve-0.0.28
+    soak-test: prow-soak-0.0.33
+    unit-test: prow-unit-0.0.38
+    upgrade-go-version: prow-upgrade-go-version-0.0.36
+    verify-attribution: prow-verify-attribution-0.0.33
