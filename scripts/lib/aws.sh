@@ -61,6 +61,36 @@ ensure_aws_credentials() {
         ( error_msg "No AWS credentials found. Please run \`aws configure\` to set up the CLI for your credentials" && exit 1)
 }
 
+# refresh_assumed_role_creds() re-mints the static credentials in the current
+# shell by assuming the service team role again from Pod Identity.
+#
+# wrapper.sh assumes the role once at job start; that credential is capped at 1
+# hour. In the code-generator core-validator the unit, e2e and helm phases run
+# back-to-back in a single pod, so a late phase (helm) can inherit an expired
+# credential. This re-mints from Pod Identity -- reachable only from the pod,
+# and non-expiring -- using the host aws CLI rather than daws, which runs in a
+# nested container that cannot reach the Pod Identity endpoint.
+#
+# No-op outside Prow, where the preserved Pod Identity reference is absent.
+refresh_assumed_role_creds() {
+    [[ -z "${ACK_POD_IDENTITY_CREDENTIALS_FULL_URI:-}" || -z "${ASSUMED_ROLE_ARN:-}" ]] && return 0
+
+    local json
+    json=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+           AWS_CONTAINER_CREDENTIALS_FULL_URI="${ACK_POD_IDENTITY_CREDENTIALS_FULL_URI}" \
+           AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE="${ACK_POD_IDENTITY_AUTHORIZATION_TOKEN_FILE}" \
+           aws sts assume-role \
+             --role-arn "${ASSUMED_ROLE_ARN}" \
+             --role-session-name "${PROW_JOB_ID:-refresh}" \
+             --duration-seconds 3600 \
+             --output json) || { error_msg "Unable to refresh assumed-role credentials"; return 1; }
+
+    export AWS_ACCESS_KEY_ID=$(echo "${json}" | jq --raw-output ".Credentials.AccessKeyId")
+    export AWS_SECRET_ACCESS_KEY=$(echo "${json}" | jq --raw-output ".Credentials.SecretAccessKey")
+    export AWS_SESSION_TOKEN=$(echo "${json}" | jq --raw-output ".Credentials.SessionToken")
+    info_msg "Refreshed assumed-role credentials"
+}
+
 # generate_aws_temp_creds function will generate temporary AWS credentials which
 # are valid for 3600 seconds
 aws_generate_temp_creds() {
