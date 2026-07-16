@@ -58,6 +58,7 @@ aws_services:
 - memorydb
 - mq
 - mwaa
+- mwaaserverless
 - networkfirewall
 - networkmanager
 - opensearchservice
