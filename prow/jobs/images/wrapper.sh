@@ -134,6 +134,11 @@ export ASSUMED_ROLE_ARN
 
 ASSUME_COMMAND=$(aws sts assume-role --role-arn $ASSUMED_ROLE_ARN --role-session-name $PROW_JOB_ID --duration-seconds 3600 | jq -r '.Credentials | "export AWS_ACCESS_KEY_ID=\(.AccessKeyId)\nexport AWS_SECRET_ACCESS_KEY=\(.SecretAccessKey)\nexport AWS_SESSION_TOKEN=\(.SessionToken)\n"')
 eval $ASSUME_COMMAND
+# Preserve the Pod Identity reference before unsetting it. A later phase can
+# re-mint a fresh credential from it (see refresh_assumed_role_creds in
+# scripts/lib/aws.sh) once this 1-hour static credential lapses.
+export ACK_POD_IDENTITY_CREDENTIALS_FULL_URI="${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}"
+export ACK_POD_IDENTITY_AUTHORIZATION_TOKEN_FILE="${AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE:-}"
 # Unset Pod Identity env vars so nested Docker containers use the static
 # credentials (AWS_ACCESS_KEY_ID/SECRET/TOKEN) instead of trying to use pod identity
 unset AWS_CONTAINER_CREDENTIALS_FULL_URI 2>/dev/null || true

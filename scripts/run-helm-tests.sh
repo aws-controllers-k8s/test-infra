@@ -92,6 +92,12 @@ _cleanup_helm_chart() {
 }
 
 run() {
+    # This phase can start over an hour after wrapper.sh minted the job's
+    # static credentials (after a long e2e phase in the core-validator), by
+    # which point they have expired. Re-mint from Pod Identity first. No-op
+    # outside Prow.
+    refresh_assumed_role_creds
+
     ensure_aws_credentials
 
     ensure_cluster
