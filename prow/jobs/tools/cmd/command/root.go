@@ -26,13 +26,30 @@ const (
 )
 
 var (
-	OptImagesConfigPath  string
-	OptSourceOwner       string
-	OptSourceRepo        string
-	OptProwEcrRepository string
-	OptCreatePR          string
-	OptPushImages        string
+	OptImagesConfigPath         string
+	OptImagesGenerateConfigPath string
+	OptSourceOwner              string
+	OptSourceRepo               string
+	OptProwEcrRepository        string
+	OptCreatePR                 string
+	OptPushImages               string
 )
+
+// resolveGenerateConfigPath returns the config path to use for GENERATION of
+// deployment manifests (jobs.yaml, job-config-job.yaml, agent-workflows.yaml).
+//
+// The build/push step needs a config whose image_repo is resolved to the real
+// ECR URI (produced by envsubst into /tmp), but generation must emit the raw
+// ${PROW_IMAGES_REPO_URI} variable so the committed manifests match what
+// `make prow-gen` produces (which reads the raw config). Callers pass the
+// generation-config flag value; when it is empty we fall back to the
+// build/push config path to preserve backward-compatible behavior.
+func resolveGenerateConfigPath(generateConfigPath, imagesConfigPath string) string {
+	if generateConfigPath == "" {
+		return imagesConfigPath
+	}
+	return generateConfigPath
+}
 
 var rootCmd = &cobra.Command{
 	Use:          appName,
@@ -44,6 +61,9 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(
 		&OptImagesConfigPath, "images-config-path", "images_config.yaml", "path to images_config.yaml, where prow job image versions are stored",
+	)
+	rootCmd.PersistentFlags().StringVar(
+		&OptImagesGenerateConfigPath, "images-generate-config-path", "", "path to the images_config.yaml used when GENERATING deployment manifests (jobs.yaml, job-config-job.yaml, agent-workflows.yaml). Defaults to --images-config-path when empty. Pass the RAW config (with ${PROW_IMAGES_REPO_URI}) here so generated manifests keep the variable, while --images-config-path stays resolved for the build/push step.",
 	)
 	rootCmd.PersistentFlags().StringVar(
 		&OptSourceOwner, "source-owner", "aws-controllers-k8s", "Name of the owner of the repo to create the commit in.",
