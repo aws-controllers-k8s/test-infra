@@ -74,7 +74,11 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	err = generator.Generate("jobs", OptJobsConfigPath, OptImagesConfigPath, OptJobsTemplatesPath, OptJobsOutputPath)
+	// Build/push uses OptImagesConfigPath (resolved ECR URI), but generation
+	// must use the raw config so manifests keep ${PROW_IMAGES_REPO_URI}.
+	generateConfigPath := resolveGenerateConfigPath(OptImagesGenerateConfigPath, OptImagesConfigPath)
+
+	err = generator.Generate("jobs", OptJobsConfigPath, generateConfigPath, OptJobsTemplatesPath, OptJobsOutputPath)
 	if err != nil {
 		return err
 	}
@@ -82,7 +86,7 @@ func buildProwImages(cmd *cobra.Command, args []string) error {
 
 	jobConfigJobTemplate := OptJobsTemplatesPath + "/job-config-job.yaml.tpl"
 	jobConfigJobOutput := "./prow/jobs/job-config-job.yaml"
-	err = generator.GenerateManifest(OptImagesConfigPath, jobConfigJobTemplate, jobConfigJobOutput)
+	err = generator.GenerateManifest(generateConfigPath, jobConfigJobTemplate, jobConfigJobOutput)
 	if err != nil {
 		return err
 	}
