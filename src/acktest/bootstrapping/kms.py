@@ -9,6 +9,7 @@ from . import Bootstrappable
 class Key(Bootstrappable):
     # Outputs
     id: str = field(init=False)
+    arn: str = field(init=False)
 
     @property
     def kms_client(self):
@@ -18,6 +19,7 @@ class Key(Bootstrappable):
         """Creates a key."""
         key = self.kms_client.create_key()
         self.id = key["KeyMetadata"]["KeyId"]
+        self.arn = key["KeyMetadata"]["Arn"]
 
     def cleanup(self):
         """Disables a key and schedules it for deletion."""
