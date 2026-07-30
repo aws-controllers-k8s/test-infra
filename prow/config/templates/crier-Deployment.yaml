@@ -62,6 +62,7 @@ spec:
         - --kubernetes-blob-storage-workers=10
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
+        {{- include "prow-config.buildClusterArg" . | nindent 8 }}
         volumeMounts:
         - name: config
           mountPath: /etc/config
@@ -75,6 +76,7 @@ spec:
         - name: secrets-store
           mountPath: /mnt/secrets-store
           readOnly: true
+        {{- include "prow-config.buildClusterVolumeMount" . | nindent 8 }}
       volumes:
       - name: config
         configMap:
@@ -91,3 +93,4 @@ spec:
           readOnly: true
           volumeAttributes:
             secretProviderClass: prow-secrets
+      {{- include "prow-config.buildClusterVolume" . | nindent 6 }}

@@ -44,3 +44,39 @@ tolerations:
   value: "true"
   effect: NoSchedule
 {{- end }}
+
+{{/*
+Build-cluster kubeconfig arg for the components that reach the build cluster.
+Emits the --kubeconfig flag only when the build cluster is enabled; Prow then
+loads every context in the file as an additional build cluster (the in-cluster
+`default` context is always available regardless).
+*/}}
+{{- define "prow-config.buildClusterArg" -}}
+{{- if .Values.buildCluster.enabled }}
+- --kubeconfig={{ .Values.buildCluster.kubeconfigMountPath }}/config
+{{- end }}
+{{- end }}
+
+{{/*
+Volume mount for the build-cluster kubeconfig ConfigMap. Gated on enablement.
+*/}}
+{{- define "prow-config.buildClusterVolumeMount" -}}
+{{- if .Values.buildCluster.enabled }}
+- name: build-cluster-kubeconfig
+  mountPath: {{ .Values.buildCluster.kubeconfigMountPath }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{/*
+Volume backing the build-cluster kubeconfig. It is a ConfigMap (no secret
+material — the `build` context authenticates via an in-container exec plugin
+running aws-iam-authenticator, so only cluster coordinates are stored).
+*/}}
+{{- define "prow-config.buildClusterVolume" -}}
+{{- if .Values.buildCluster.enabled }}
+- name: build-cluster-kubeconfig
+  configMap:
+    name: build-cluster-kubeconfig
+{{- end }}
+{{- end }}

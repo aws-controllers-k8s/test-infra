@@ -35,6 +35,22 @@ spec:
       domain: "${PROW_DOMAIN}"
       presubmitsBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
       tideStatusReconcilerBucketName: "${STACK_NAME}-prow-logs-${ACCOUNT_ID}"
+    # Build cluster. Wires crier/deck/sinker/plank to the dedicated build
+    # cluster's API so pre-submit pods run there, isolated from the control plane.
+    # Gated on `enabled`; the four Deployments render unchanged while false (see
+    # prow-config.buildCluster* helpers in _helpers.tpl). The components
+    # authenticate as their own Pod Identity (prow-deployment-role), mapped to the
+    # `prow-build-cluster` group by the prow-deployment-build-access AccessEntry.
+    # server + certificateAuthorityData come from the ACK Cluster CR status via
+    # the build-cluster-connection ConfigMap.
+    buildCluster:
+      # Provisioned and staged by this deployment but not yet wired into the four
+      # components; flip to true in a follow-up once the build cluster is verified.
+      enabled: false
+      name: build
+      clusterName: "${STACK_NAME}-build-cluster"
+      server: "${BUILD_CLUSTER_ENDPOINT}"
+      certificateAuthorityData: "${BUILD_CLUSTER_CA}"
     crier:
       image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/crier:${PROW_VERSION}"
       serviceAccount:
