@@ -1,0 +1,18 @@
+# In-cluster objects remote-applied to the build cluster by control-plane Flux
+# (kustomize-controller via kubeConfig.configMapRef) — ACK can't create
+# Kubernetes-native objects inside the build cluster's API server.
+#
+# pre-submit-service-account must exist here because the PodIdentityAssociation
+# (flux/ack/build-cluster/pod-identities/) binds it — a pre-submit pod can't
+# obtain its IAM identity until this SA is present.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-pods
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pre-submit-service-account
+  namespace: test-pods
