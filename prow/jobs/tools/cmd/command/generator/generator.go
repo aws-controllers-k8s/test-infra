@@ -42,6 +42,10 @@ type JobsConfig struct {
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`
 	ACKTestPresubmitServices      []string `yaml:"acktest_presubmit_services"`
+	// PresubmitCluster routes pre-submit jobs to a named Prow build cluster
+	// (the kubeconfig context name, e.g. "build"). Empty => jobs omit the
+	// `cluster:` field and run on the implicit in-cluster "default" cluster.
+	PresubmitCluster string `yaml:"presubmit_cluster"`
 }
 
 func loadImages(imageConfigPath string) (*ImageContext, error) {

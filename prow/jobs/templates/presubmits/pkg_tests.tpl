@@ -1,5 +1,8 @@
   ${TEST_INFRA_ORG}/pkg:
   - name: unit-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -20,6 +23,9 @@
         command: ["make", "test"]
 
   - name: verify-attribution
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
     # run_if_changed: "go.mod"

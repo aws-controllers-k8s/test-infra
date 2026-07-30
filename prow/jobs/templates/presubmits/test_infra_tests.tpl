@@ -1,6 +1,9 @@
   ${TEST_INFRA_ORG}/test-infra:
 {{- range $_, $service := .Config.ACKTestPresubmitServices }}
   - name: acktest-{{ $service }}-e2e-tests
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     # only if src/acktest/ code changed
