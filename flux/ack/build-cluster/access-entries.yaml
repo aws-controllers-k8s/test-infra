@@ -1,0 +1,106 @@
+# Build cluster EKS Access Entries, reconciled by the control-plane ACK EKS
+# controller. They grant Kubernetes API access to the build cluster: a
+# break-glass admin role, the account's Admin/ReadOnly roles for humans, the
+# Prow components' role, and the Flux kustomize-controller role.
+#
+# The Flux entry uses an access policy rather than a kubernetesGroups mapping so
+# its authorization exists on the first reconcile — otherwise the RBAC authorizing
+# Flux would itself be an object Flux must apply. Mirrors kustomize-controller on
+# the control plane.
+---
+# Dedicated build-cluster admin role (assumable by account root for break-glass)
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: build-cluster-admin-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-build-cluster-admin-access-role"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# Admin role — cluster admin access for humans (mirrors control-plane).
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: build-admin-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/Admin"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# ReadOnly role — view-only access for humans (mirrors control-plane).
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: build-readonly-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/ReadOnly"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy
+    accessScope:
+      type: cluster
+---
+# Prow components' identity — reaches the build cluster API to schedule/clean/
+# report on test pods. Mapped to the `prow-build-cluster` group, which the
+# remote-applied RBAC (flux/prow/build-cluster-rbac) binds in test-pods.
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: prow-deployment-build-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-prow-deployment-role"
+  type: STANDARD
+  kubernetesGroups:
+  - prow-build-cluster
+---
+# Flux kustomize-controller identity — remote-applies the in-cluster objects
+# ACK cannot create. Cluster-admin via access policy (see header note). Backed
+# by flux-build-cluster-role + flux-pod-identity.yaml.
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: flux-build-cluster-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-flux-build-cluster-role"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster

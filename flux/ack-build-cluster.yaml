@@ -1,0 +1,34 @@
+# Build-cluster ACK resources (all-ACK, same account as the control plane).
+#
+# A single Flux Kustomization reconciles the whole build-cluster tree. Unlike
+# the control-plane cluster (Terraform shell + ACK day-2), the build cluster is
+# provisioned end-to-end by the EC2/EKS/IAM controllers from these CRs — no
+# Terraform. Internal ordering needs no Flux dependsOn: the day-2 CRs clusterRef
+# the create-path Cluster CR, so ACK waits for status ACTIVE on its own.
+#
+# dependsOn ack-capability + ack-capability-role so the capability role's
+# widened EC2/EKS scope lands before ACK attempts any creates.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ack-build-infra
+  namespace: flux-system
+spec:
+  interval: 60m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/ack/build-cluster
+  prune: true
+  deletionPolicy: WaitForTermination
+  targetNamespace: ack-system
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
+  dependsOn:
+  - name: ack-capability
+  - name: ack-capability-role
+  wait: true
+  timeout: 30m

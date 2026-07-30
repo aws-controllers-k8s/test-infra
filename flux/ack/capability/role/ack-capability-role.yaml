@@ -35,12 +35,60 @@ spec:
             "Effect": "Allow",
             "Action": ["eks:*"],
             "Resource": [
-              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:capability/${STACK_NAME}-cluster/*",
-              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:access-entry/${STACK_NAME}-cluster/*",
-              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:podidentityassociation/${STACK_NAME}-cluster/*",
-              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:addon/${STACK_NAME}-cluster/*",
-              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:cluster/${STACK_NAME}-cluster"
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:capability/${STACK_NAME}-*cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:access-entry/${STACK_NAME}-*cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:podidentityassociation/${STACK_NAME}-*cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:addon/${STACK_NAME}-*cluster/*",
+              "arn:aws:eks:${REGION}:${ACCOUNT_ID}:cluster/${STACK_NAME}-*cluster"
             ]
+          }
+        ]
+      }
+    EC2Management: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ec2:CreateVpc",
+              "ec2:DeleteVpc",
+              "ec2:DescribeVpcs",
+              "ec2:DescribeVpcAttribute",
+              "ec2:ModifyVpcAttribute",
+              "ec2:AssociateVpcCidrBlock",
+              "ec2:DisassociateVpcCidrBlock",
+              "ec2:CreateSubnet",
+              "ec2:DeleteSubnet",
+              "ec2:DescribeSubnets",
+              "ec2:ModifySubnetAttribute",
+              "ec2:CreateInternetGateway",
+              "ec2:DeleteInternetGateway",
+              "ec2:DescribeInternetGateways",
+              "ec2:AttachInternetGateway",
+              "ec2:DetachInternetGateway",
+              "ec2:CreateNatGateway",
+              "ec2:DeleteNatGateway",
+              "ec2:DescribeNatGateways",
+              "ec2:AllocateAddress",
+              "ec2:ReleaseAddress",
+              "ec2:DescribeAddresses",
+              "ec2:CreateRouteTable",
+              "ec2:DeleteRouteTable",
+              "ec2:DescribeRouteTables",
+              "ec2:CreateRoute",
+              "ec2:DeleteRoute",
+              "ec2:AssociateRouteTable",
+              "ec2:DisassociateRouteTable",
+              "ec2:DescribeManagedPrefixLists",
+              "ec2:DescribeSecurityGroups",
+              "ec2:DescribeSecurityGroupRules",
+              "ec2:RevokeSecurityGroupEgress",
+              "ec2:RevokeSecurityGroupIngress",
+              "ec2:CreateTags",
+              "ec2:DeleteTags"
+            ],
+            "Resource": "*"
           }
         ]
       }

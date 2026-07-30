@@ -1,0 +1,55 @@
+# Build cluster — created (not adopted) by the ACK EKS controller running on the
+# control-plane cluster, against the AWS API in the same account.
+#   - roleRef     → the cluster IAM role CR (roles.yaml)
+#   - subnetRefs  → the private Subnet CRs (subnets.yaml); ACK resolves the IDs
+#                   once those reconcile, so no hardcoded IDs
+#   - nodeRoleARN → literal ARN (EKS has no nodeRoleRef); safe because ACK creates
+#                   the role with the deterministic name ${STACK_NAME}-build-node-role
+#
+# EKS Auto Mode is the trio computeConfig / elasticLoadBalancing / blockStorage
+# enabled, mirroring the control-plane cluster (bootstrap/cluster.tf).
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Cluster
+metadata:
+  name: build-cluster
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: ${STACK_NAME}-build-cluster
+  version: "1.35"
+  roleRef:
+    from:
+      name: build-cluster-role
+  resourcesVPCConfig:
+    subnetRefs:
+    - from:
+        name: build-subnet-private-a
+    - from:
+        name: build-subnet-private-b
+    endpointPublicAccess: true
+    endpointPrivateAccess: true
+  accessConfig:
+    authenticationMode: API
+    bootstrapClusterCreatorAdminPermissions: true
+  bootstrapSelfManagedAddons: false
+  computeConfig:
+    enabled: true
+    nodePools:
+    - general-purpose
+    nodeRoleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-build-node-role
+  kubernetesNetworkConfig:
+    elasticLoadBalancing:
+      enabled: true
+  storageConfig:
+    blockStorage:
+      enabled: true
+  logging:
+    clusterLogging:
+    - enabled: true
+      types:
+      - api
+      - audit
+      - authenticator
+      - controllerManager
+      - scheduler

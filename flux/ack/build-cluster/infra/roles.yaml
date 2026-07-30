@@ -1,0 +1,103 @@
+# Build cluster IAM roles, reconciled by the ACK IAM controller on the
+# control-plane cluster. Mirror the roles bootstrap/cluster.tf creates for the
+# control-plane cluster, but here ACK owns them end-to-end.
+#
+# The capability role's IAMManagement policy is scoped to
+# arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-* , so every role below (named
+# ${STACK_NAME}-build-*) is within its permission boundary.
+---
+# EKS cluster role — assumed by the EKS service to manage the cluster.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: build-cluster-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-build-cluster-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": { "Service": "eks.amazonaws.com" },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  policies:
+  - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+  - arn:aws:iam::aws:policy/AmazonEKSComputePolicy
+  - arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy
+  - arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy
+  - arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy
+---
+# EKS Auto Mode node role — assumed by managed nodes. Includes ECR pull-through
+# cache permissions so nodes can import images from ghcr.io on first pull.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: build-node-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-build-node-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": { "Service": "ec2.amazonaws.com" },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }
+  policies:
+  - arn:aws:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy
+  - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly
+  inlinePolicies:
+    ECRPullThroughCache: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:CreateRepository", "ecr:BatchImportUpstreamImage"],
+            "Resource": ["arn:aws:ecr:${REGION}:${ACCOUNT_ID}:repository/fluxcd/*"]
+          }
+        ]
+      }
+---
+# Break-glass admin role — assumable by account root for direct cluster access.
+# The AccessEntry mapping this role to AmazonEKSClusterAdminPolicy is applied in
+# a later stage (flux/ack/build-cluster/access-entries.yaml).
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: build-cluster-admin-access-role
+  namespace: ack-system
+spec:
+  name: ${STACK_NAME}-build-cluster-admin-access-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": { "AWS": "arn:aws:iam::${ACCOUNT_ID}:root" },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }
+  inlinePolicies:
+    DescribeCluster: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:DescribeCluster"],
+            "Resource": "arn:aws:eks:${REGION}:${ACCOUNT_ID}:cluster/${STACK_NAME}-build-cluster"
+          }
+        ]
+      }
