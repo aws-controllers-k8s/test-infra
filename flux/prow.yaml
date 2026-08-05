@@ -7,10 +7,10 @@
 # Build cluster:
 # - prow-build-cluster-kubeconfig: applies the aws-provider kubeconfig ConfigMap
 #   LOCALLY (flux-system) so kustomize-controller can reach the build cluster.
-# - prow-build-cluster-rbac: REMOTE-applies namespace/SA/RBAC to the build
-#   cluster via kubeConfig.configMapRef (the only Kustomization here that targets
-#   a remote cluster). Depends on the ConfigMap + the ACK resources that grant
-#   Flux its identity/access (ack-build-infra).
+# - prow-build-cluster-resources: REMOTE-applies the in-cluster objects (namespace,
+#   SA, RBAC, NodeClass, NodePool) to the build cluster via kubeConfig.configMapRef
+#   (the only Kustomization here that targets a remote cluster). Depends on the
+#   ConfigMap + the ACK resources that grant Flux its identity/access (ack-build-infra).
 # - prow-build-cluster-connection: Job that reads the build cluster's endpoint +
 #   CA from the ACK Cluster CR status into the build-cluster-connection ConfigMap,
 #   which prow-charts substitutes into the components' build-cluster kubeconfig.
@@ -144,25 +144,34 @@ spec:
     - kind: ConfigMap
       name: self-managed-vars
 ---
-# Build cluster in-cluster objects (namespace / SA / RBAC) — REMOTE-applied via
-# kubeConfig.configMapRef (aws workload identity); the only Kustomization here
-# targeting a remote cluster. Depends on the local kubeconfig ConfigMap and on
-# ack-build-infra (the Flux IAM role/PodIdentity/AccessEntry that authorize it).
+# Build cluster in-cluster objects (namespace / SA / RBAC / NodeClass / NodePool)
+# — REMOTE-applied via kubeConfig.configMapRef (aws workload identity); the only
+# Kustomization here targeting a remote cluster. Depends on the local kubeconfig
+# ConfigMap and on ack-build-infra (the Flux IAM role/PodIdentity/AccessEntry that
+# authorize it).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: prow-build-cluster-rbac
+  name: prow-build-cluster-resources
   namespace: flux-system
 spec:
   interval: 60m
   sourceRef:
     kind: GitRepository
     name: test-infra
-  path: ./flux/prow/build-cluster-rbac
+  path: ./flux/prow/build-cluster-resources
   prune: true
   kubeConfig:
     configMapRef:
       name: build-cluster-flux-kubeconfig
+  # The NodeClass references the node role by its ${STACK_NAME}-prefixed name and
+  # the cluster security group by the ${STACK_NAME}-build-cluster tag; substitute
+  # them the same way the other Kustomizations do. Only the NodeClass uses vars —
+  # the RBAC/namespace manifests contain no unescaped $ tokens.
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: self-managed-vars
   dependsOn:
   - name: prow-build-cluster-kubeconfig
   - name: ack-build-infra

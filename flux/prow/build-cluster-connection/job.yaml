@@ -31,23 +31,23 @@ spec:
           CR_NS="ack-system"
           CR="build-cluster"
 
-          echo "Reading connection details from Cluster CR ${CR_NS}/${CR}..."
-          EP=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
+          echo "Reading connection details from Cluster CR $${CR_NS}/$${CR}..."
+          EP=$$(kubectl -n "$$CR_NS" get cluster.eks.services.k8s.aws "$$CR" \
                  -o jsonpath='{.status.endpoint}')
-          CA=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
+          CA=$$(kubectl -n "$$CR_NS" get cluster.eks.services.k8s.aws "$$CR" \
                  -o jsonpath='{.status.certificateAuthority.data}')
 
-          if [ -z "$EP" ] || [ -z "$CA" ]; then
+          if [ -z "$$EP" ] || [ -z "$$CA" ]; then
             echo "ERROR: endpoint or CA empty — is the build-cluster CR synced?" >&2
             exit 1
           fi
 
-          echo "  endpoint: $EP"
-          echo "  ca: ${CA:0:40}...(truncated)"
+          echo "  endpoint: $$EP"
+          echo "  ca: $${CA:0:40}...(truncated)"
 
           kubectl create configmap build-cluster-connection -n flux-system \
-            --from-literal=BUILD_CLUSTER_ENDPOINT="$EP" \
-            --from-literal=BUILD_CLUSTER_CA="$CA" \
+            --from-literal=BUILD_CLUSTER_ENDPOINT="$$EP" \
+            --from-literal=BUILD_CLUSTER_CA="$$CA" \
             --dry-run=client -o yaml | kubectl apply -f -
 
           echo "build-cluster-connection ConfigMap updated."

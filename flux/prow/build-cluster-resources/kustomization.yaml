@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
 - namespace.yaml
 - rbac.yaml
+- nodeclass.yaml
+- nodepool.yaml

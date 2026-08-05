@@ -1,0 +1,39 @@
+# NodePool for pre-submit test compute on the build cluster.
+# Mirrors the control-plane's prow-compute pool (flux/ack/cluster/nodepool.yaml)
+# to avoid the ENI pod-density limits that hit small instances on the built-in
+# general-purpose pool. Remote-applied by Flux via the build-cluster kubeconfig.
+#
+# References the custom prow-compute NodeClass (nodeclass.yaml) rather than the
+# EKS-managed `default` class — the build cluster enables Auto Mode with no
+# built-in NodePools, so no `default` NodeClass exists.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: prow-compute
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: prow-compute
+      expireAfter: 10h
+      requirements:
+        - key: "eks.amazonaws.com/instance-family"
+          operator: In
+          values: ["c6g", "c7g", "c6a", "c6i", "m6a", "m6g", "m6i", "r6a", "r6g", "r6i"]
+        - key: "eks.amazonaws.com/instance-size"
+          operator: In
+          values: ["xlarge", "2xlarge", "4xlarge", "8xlarge"]
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["on-demand"]
+  limits:
+    cpu: "1000"
+    memory: 1000Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 15m

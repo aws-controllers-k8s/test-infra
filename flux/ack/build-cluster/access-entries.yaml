@@ -1,7 +1,9 @@
 # Build cluster EKS Access Entries, reconciled by the control-plane ACK EKS
 # controller. They grant Kubernetes API access to the build cluster: a
 # break-glass admin role, the account's Admin/ReadOnly roles for humans, the
-# Prow components' role, and the Flux kustomize-controller role.
+# Prow components' role, the Flux kustomize-controller role, and the EC2 node
+# role (Auto Mode nodes — required because we run a custom NodeClass with no
+# built-in pools, so EKS doesn't auto-create the node entry).
 #
 # The Flux entry uses an access policy rather than a kubernetesGroups mapping so
 # its authorization exists on the first reconcile — otherwise the RBAC authorizing
@@ -67,7 +69,7 @@ spec:
 ---
 # Prow components' identity — reaches the build cluster API to schedule/clean/
 # report on test pods. Mapped to the `prow-build-cluster` group, which the
-# remote-applied RBAC (flux/prow/build-cluster-rbac) binds in test-pods.
+# remote-applied RBAC (flux/prow/build-cluster-resources) binds in test-pods.
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: AccessEntry
 metadata:
@@ -102,5 +104,39 @@ spec:
   type: STANDARD
   accessPolicies:
   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# Node role — lets EKS Auto Mode nodes join the cluster. EKS auto-creates this
+# entry only for built-in node pools; because the build cluster runs a custom
+# NodeClass with no built-in pools (infra/cluster.yaml computeConfig.nodePools:
+# []), we must supply it. Type EC2 + AmazonEKSAutoNodePolicy is the required
+# combination for Auto Mode node roles (custom NodeClass docs: create-node-class).
+#
+# adopt-or-create: a fresh Design-B cluster never ran a built-in pool, so EKS
+# never made this entry → ACK creates it. But a cluster that previously ran
+# general-purpose (e.g. before the switch to nodePools: []) already has an
+# EKS-created EC2 entry for this same principal → ACK adopts it instead of
+# failing terminal on "resource already exists".
+#
+# No adoption-fields annotation needed: adopt-or-create reads the find/create
+# identifiers (principalARN + the clusterRef-resolved clusterName) from the spec.
+# adoption-fields is only required when a lookup field lives in status.
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: build-node-access
+  namespace: ack-system
+  annotations:
+    services.k8s.aws/deletion-policy: retain
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-build-node-role"
+  type: EC2
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAutoNodePolicy
     accessScope:
       type: cluster
