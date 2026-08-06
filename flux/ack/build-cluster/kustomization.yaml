@@ -1,0 +1,18 @@
+# Build-cluster ACK resources — the whole tree, one Kustomization.
+#
+# infra/ creates the network + IAM roles + the create-path Cluster CR; the day-2
+# CRs (access-entries, pod-identities, roles) clusterRef that Cluster CR, so ACK
+# blocks their creates until it reports ResourceSynced=True (status ACTIVE).
+# Ordering is handled by the refs, not by kustomize order.
+#
+# No addons/ — EKS Auto Mode provides cluster DNS built-in, and there's no
+# Deck UI/ingress here, so coredns/external-dns/ingress are all omitted.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- infra
+- roles
+- access-entries.yaml
+- pod-identities
+- flux-pod-identity.yaml

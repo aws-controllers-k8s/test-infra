@@ -49,6 +49,7 @@ spec:
         args:
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config
+        {{- include "prow-config.buildClusterArg" . | nindent 8 }}
         volumeMounts:
         - name: config
           mountPath: /etc/config
@@ -56,6 +57,7 @@ spec:
         - name: job-config
           mountPath: /etc/job-config
           readOnly: true
+        {{- include "prow-config.buildClusterVolumeMount" . | nindent 8 }}
       volumes:
       - name: config
         configMap:
@@ -63,3 +65,4 @@ spec:
       - name: job-config
         configMap:
           name: job-config
+      {{- include "prow-config.buildClusterVolume" . | nindent 6 }}

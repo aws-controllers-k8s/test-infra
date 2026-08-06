@@ -11,9 +11,10 @@ Push to git → Flux syncs → ACK EKS controller reconciles → EKS API updates
 | Directory | What it manages |
 |-----------|----------------|
 | `capability/` | ACK EKS capability + IAM role |
-| `cluster/` | Cluster config, access entries, nodepool, storage class |
+| `cluster/` | Control-plane cluster config, access entries, nodepool, storage class |
 | `cluster/addons/` | EKS managed addons (Secrets Store CSI, etc.) + addon roles |
 | `cluster/pod-identities/` | IAM roles, namespaces, and pod identity associations |
+| `build-cluster/` | Dedicated Prow build cluster (VPC, subnets, NAT, IAM roles, EKS cluster, access entries, pod identities) |
 | `prow/` | S3 logs bucket, Route53 DNS, Supernova role |
 | `flux/` | ECR pull-through cache for Flux images |
 

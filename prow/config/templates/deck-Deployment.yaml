@@ -70,6 +70,7 @@ spec:
         - --spyglass=true
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
+        {{- include "prow-config.buildClusterArg" . | nindent 8 }}
         ports:
           - name: http
             containerPort: 8080
@@ -89,6 +90,7 @@ spec:
         - name: secrets-store
           mountPath: /mnt/secrets-store
           readOnly: true
+        {{- include "prow-config.buildClusterVolumeMount" . | nindent 8 }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -122,3 +124,4 @@ spec:
           readOnly: true
           volumeAttributes:
             secretProviderClass: prow-secrets
+      {{- include "prow-config.buildClusterVolume" . | nindent 6 }}

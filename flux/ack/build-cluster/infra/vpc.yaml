@@ -1,0 +1,32 @@
+# Build cluster VPC + Internet Gateway — created by ACK EC2 controller.
+#
+# Non-overlapping CIDR (10.1.0.0/16) so the build cluster's network is isolated
+# from the control-plane VPC (10.0.0.0/16, bootstrap/cluster.tf). All downstream
+# resources reference these by name via *Ref, so ACK resolves creation order.
+---
+apiVersion: ec2.services.k8s.aws/v1alpha1
+kind: VPC
+metadata:
+  name: build-vpc
+  namespace: ack-system
+spec:
+  cidrBlocks:
+  - "10.1.0.0/16"
+  enableDNSSupport: true
+  enableDNSHostnames: true
+  tags:
+  - key: Name
+    value: ${STACK_NAME}-build-vpc
+---
+apiVersion: ec2.services.k8s.aws/v1alpha1
+kind: InternetGateway
+metadata:
+  name: build-igw
+  namespace: ack-system
+spec:
+  vpcRef:
+    from:
+      name: build-vpc
+  tags:
+  - key: Name
+    value: ${STACK_NAME}-build-igw

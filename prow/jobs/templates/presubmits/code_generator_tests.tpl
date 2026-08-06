@@ -1,5 +1,8 @@
   ${TEST_INFRA_ORG}/code-generator:
   - name: unit-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -20,6 +23,9 @@
         command: ["make", "test"]
 
   - name: verify-attribution
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
     # run_if_changed: "go.mod"
@@ -61,6 +67,9 @@
         - "./cd/scripts/verify-attribution.sh"
 
   - name: s3-olm-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: true
     always_run: true
@@ -101,6 +110,9 @@
           value: "true"
         command: ["make", "build-controller"]
   - name: crd-compat-check
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: true
     always_run: true
@@ -146,6 +158,9 @@
 
   {{- range $_, $service := .Config.CodegenPresubmitServices }}
   - name: {{ $service }}-controller-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true

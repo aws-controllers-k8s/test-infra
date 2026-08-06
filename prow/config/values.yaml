@@ -23,6 +23,25 @@ dryRun: false
 
 region: 'us-west-2'
 
+# Dedicated build cluster for pre-submit jobs (isolation from the control plane).
+# Inert by default; enabled via the Flux HelmRelease (flux/prow/charts/prow-config.yaml)
+# once the build cluster is provisioned. When enabled, the four components that
+# schedule/clean/report on build-cluster pods (prow-controller-manager, sinker,
+# crier, deck) mount a kubeconfig with a `build` context whose exec credential
+# authenticates to the build cluster's API server.
+buildCluster:
+  enabled: false
+  # Context name in the kubeconfig; MUST equal the `cluster:` field set on jobs.
+  name: build
+  # EKS cluster name of the build cluster (e.g. ack-test-infra-prod-build-cluster).
+  clusterName: ''
+  # Build cluster API server endpoint (https URL) and base64 cluster CA data.
+  # Populated by Flux substitution from the provisioned cluster.
+  server: ''
+  certificateAuthorityData: ''
+  # Where the kubeconfig ConfigMap is mounted in each component container.
+  kubeconfigMountPath: /etc/kubeconfig
+
 ingress:
   create: false
   annotations: {}

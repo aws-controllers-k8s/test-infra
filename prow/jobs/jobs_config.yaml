@@ -6,6 +6,13 @@
 # firing before the cluster is fully operational.
 periodics_enabled: true
 
+# Routes pre-submit jobs to a dedicated Prow build cluster by name (the
+# kubeconfig context, e.g. "build"). Empty => pre-submits omit the `cluster:`
+# field and run on the implicit in-cluster "default" cluster (current behavior).
+# Set to "build" only after the build cluster is provisioned and registered
+# (buildCluster.enabled). Postsubmits/periodics always stay on "default".
+presubmit_cluster: ""
+
 # Adding a service to the `aws_services` array will enable CI/CD
 
 # List of AWS services supported in ACK testing infrastructure.

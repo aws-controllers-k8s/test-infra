@@ -1,5 +1,8 @@
   ${TEST_INFRA_ORG}/runtime:
   - name: unit-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -20,6 +23,9 @@
         command: ["make", "test"]
 
   - name: verify-attribution
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
     # run_if_changed: "go.mod"
@@ -61,6 +67,9 @@
         - "./cd/scripts/verify-attribution.sh"
 
   - name: runtime-crd-compat-check
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     run_if_changed: "^(config/crd/|helm/crds/)"
@@ -99,6 +108,9 @@
 
 {{ range $_, $service := .Config.RuntimePresubmitServices }}
   - name: {{ $service }}-controller-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     run_if_changed: ^(pkg|apis|go.mod|go.sum)

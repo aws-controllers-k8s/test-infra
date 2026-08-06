@@ -1,5 +1,8 @@
   ${TEST_INFRA_ORG}/controller-bootstrap:
   - name: unit-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true

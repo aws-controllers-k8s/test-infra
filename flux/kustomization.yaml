@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - flux.yaml
 - ack.yaml
+- ack-build-cluster.yaml
 - secrets.yaml
 - prow.yaml
 - prometheus.yaml

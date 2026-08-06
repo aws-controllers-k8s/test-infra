@@ -1,0 +1,40 @@
+# Custom EKS Auto Mode NodeClass for the build cluster.
+#
+# Required because the ACK Cluster CR enables Auto Mode with NO built-in NodePools
+# (computeConfig.nodePools: []), so EKS does not auto-provision the managed
+# `default` NodeClass. This custom class supplies the infrastructure template the
+# prow-compute NodePool (nodepool.yaml) references.
+#
+# Must NOT be named `default` — that name is reserved for the EKS-managed class.
+#
+# Selectors resolve at apply time against tags ACK/EKS put on the build cluster's
+# resources:
+#   - role                       → ${STACK_NAME}-build-node-role (roles.yaml); the
+#                                   node AccessEntry is in access-entries.yaml
+#   - subnetSelectorTerms        → the two private subnets (subnets.yaml), matched
+#                                   by their Name tag; nodes launch private, spread
+#                                   across both AZs. The Name tag (not the shared
+#                                   kubernetes.io/role/internal-elb tag) scopes the
+#                                   match to THIS VPC — other clusters in the
+#                                   account carry the internal-elb tag too, and a
+#                                   cross-VPC match fails with
+#                                   SecurityGroupSubnetVPCMismatch.
+#   - securityGroupSelectorTerms → the EKS-created cluster security group, tagged
+#                                   aws:eks:cluster-name by EKS on cluster create
+#
+# ${STACK_NAME} is substituted by Flux postBuild.substituteFrom (self-managed-vars)
+# on the prow-build-cluster-resources Kustomization (flux/prow.yaml).
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: prow-compute
+spec:
+  role: ${STACK_NAME}-build-node-role
+  subnetSelectorTerms:
+    - tags:
+        Name: ${STACK_NAME}-build-private-us-west-2a
+    - tags:
+        Name: ${STACK_NAME}-build-private-us-west-2b
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: ${STACK_NAME}-build-cluster

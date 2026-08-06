@@ -1,6 +1,9 @@
 {{ range $_, $service := .Config.AWSServices }}
   ${TEST_INFRA_ORG}/{{ $service }}-controller:
   - name: {{ $service }}-kind-e2e
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -55,6 +58,9 @@
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ $service }}-release-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -100,6 +106,9 @@
         command: ["wrapper.sh", "bash", "-c", "make kind-helm-test SERVICE=$SERVICE"]
 
   - name: {{ $service }}-recommended-policy-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -134,6 +143,9 @@
         command: ["wrapper.sh", "bash", "-c", "make test-recommended-policy SERVICE=$SERVICE"]
 
   - name: {{ $service }}-unit-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -158,6 +170,9 @@
         command: ["make", "test"]
 
   - name: {{ $service }}-metadata-file-test
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     always_run: true
@@ -188,6 +203,9 @@
         command: ["bash", "-c", "make test-metadata-file SERVICE=$SERVICE"]
 
   - name: {{ $service }}-verify-attribution
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
     # run_if_changed: "go.mod"
@@ -230,6 +248,9 @@
         - "./cd/scripts/verify-attribution.sh"
 
   - name: {{ $service }}-verify-code-gen
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     always_run: true
     decorate: true
     optional: false
@@ -273,6 +294,9 @@
         - "./cd/scripts/verify-code-gen.sh"
 
   - name: {{ $service }}-crd-compat-check
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
     decorate: true
     optional: false
     run_if_changed: "^(config/crd/|helm/crds/)"
