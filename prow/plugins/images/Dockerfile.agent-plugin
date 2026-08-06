@@ -22,6 +22,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o webhook-server ./
 # Runtime stage
 FROM public.ecr.aws/docker/library/alpine:3.19
 
+# Apply outstanding OS security updates. Advisories for base packages
+# (expat/openssl/curl) are published faster than the pinned Alpine tag is
+# refreshed, so without this the image ships with known CVEs.
+RUN apk -U upgrade --no-cache
+
 # Install ca-certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates
 

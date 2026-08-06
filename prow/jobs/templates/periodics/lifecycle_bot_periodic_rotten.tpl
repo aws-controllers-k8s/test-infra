@@ -11,7 +11,7 @@
   spec:
     serviceAccountName: periodic-service-account
     containers:
-      - image: ${PROW_MIRROR_REGISTRY}/commenter:${TOOLS_VERSION}
+      - image: ${PROW_MIRROR_REGISTRY}/commenter:${TOOLS_VERSION}-ack.${PROW_PATCH_REVISION}
         resources:
           limits:
             cpu: 1

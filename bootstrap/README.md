@@ -141,8 +141,19 @@ git push
 
 ## Upgrading Prow
 
-Prow images are mirrored from upstream into a private ECR registry. The version
-is controlled by a single ConfigMap (`flux/prow/version/prow-version-configmap.yaml`).
+Prow images are mirrored from upstream into a private ECR registry **and rebuilt
+with current OS packages** on the way through. Upstream Prow pins its ko base
+images in `.ko.yaml` and only refreshes that pin every few months, so even the
+newest Prow release ships stale `expat`/`openssl`/`curl`. The `prow-mirror` Job
+runs `apk upgrade` over each image and publishes it as
+`<upstream-tag>-ack.<PROW_PATCH_REVISION>`, plus the bare `<upstream-tag>` as a
+compatibility alias carrying the same patched content. The suffixed tag is what
+`prow-config` pins, so bumping the revision is what triggers a rollout; the bare
+alias means a reference that has not moved to the suffixed tag still gets patched
+packages rather than silently staying vulnerable.
+
+Both the version and the patch revision live in a single ConfigMap
+(`flux/prow/version/prow-version-configmap.yaml`).
 
 ```bash
 # Auto-detect latest tags for both Prow core and tools, update CRD
@@ -154,16 +165,74 @@ is controlled by a single ConfigMap (`flux/prow/version/prow-version-configmap.y
 # Preview changes without modifying files
 ./scripts/upgrade-prow.sh --dry-run
 
+# Re-patch the CURRENT Prow version against newly published OS security
+# updates, without moving to a new upstream release. Increments
+# PROW_PATCH_REVISION, which is what makes the mirror Job rebuild.
+./scripts/upgrade-prow.sh --bump-patch
+
 # Commit and push
 git add flux/prow/ prow/config/
 git commit -m "chore(prow): upgrade to <tag>"
 git push
-# Flux reconciles: mirror job copies new images to ECR, then Prow redeploys
+# Flux reconciles: mirror job rebuilds patched images into ECR, then Prow redeploys
 ```
+
+`PROW_PATCH_REVISION` is a monotonic counter and is never reset. `PROW_VERSION`
+and `TOOLS_VERSION` move independently but share the one suffix, so resetting it
+on a version change would repoint the untouched tag at a revision that already
+exists in ECR — the mirror would skip the rebuild and that component would
+silently roll back to its least-patched build.
 
 Image sources:
 - Prow core: `us-docker.pkg.dev/k8s-infra-prow/images` (13 images)
 - Tools (`label_sync`, `commenter`): `gcr.io/k8s-staging-test-infra`
+
+The mirror Job refuses to publish an image whose base has no `apk`, rather than
+silently shipping it unpatched. If upstream moves a component to a distroless
+base, that component will fail loudly and needs a different patch strategy.
+
+### Reacting to an image vulnerability report
+
+**Mirrored Prow components** (`.../prow/<component>`) are almost always outdated
+OS packages in the upstream base image, not a Prow defect. Bumping the Prow
+version alone usually does **not** fix them. Run
+`./scripts/upgrade-prow.sh --bump-patch`, push, then force-reconcile
+`prow-mirror`.
+
+**Our own job images** (`public.ecr.aws/<alias>/...-prow-images:*`) apply OS
+updates at build time, so they only need a tag bump to be rebuilt. Note the
+two-phase flow — do not shortcut it:
+
+1. In your PR, bump the tag in `prow/jobs/images_config.yaml` (or the
+   `prow/plugins/` / `prow/agent-workflows/` equivalent) and **nothing else**.
+   `compareImageVersions` only builds a tag strictly greater than what is in
+   ECR, so an unchanged tag is never rebuilt.
+2. On merge, the `build-prow-images` postsubmit builds and pushes the new tags.
+3. A bot PR then commits the regenerated `jobs.yaml` / `job-config-job.yaml` /
+   `agent-workflows.yaml` / `prow/plugins/deployments/`.
+
+Do not run `make prow-gen` and commit its output in step 1. `job-config-job.yaml`
+is applied directly by the `prow-jobs` Kustomization (`interval: 5m`,
+`force: true`), so committing a tag before the image exists makes Flux recreate
+`job-config-substitutor` on a missing image within minutes of merge, halting
+`job-config` refreshes until the postsubmit lands.
+
+#### Exceptions the generator does not cover
+
+- **`build-prow-images` is safe to bump on its own.** It is the image the
+  postsubmit itself runs as, but the running pod resolves it from the
+  already-applied `job-config` ConfigMap, not from `images_config.yaml`. So the
+  job builds its own successor. This only holds while step 1 above is respected;
+  hand-committing a regenerated `jobs.yaml` would point the job at the image it
+  has not built yet.
+- **`flux/prow/build-cluster-connection/job.yaml`** pins a `prow-kubectl` tag
+  but is not in the generator's output set, so `make prow-gen` will never update
+  it. Bump it by hand once the new tag is in ECR, or its OS packages silently
+  stay behind.
+
+Keep notes like these here rather than as comments in `images_config.yaml`: the
+`upgrade-go-version` periodic rewrites that file through a typed struct and a
+YAML encoder, which strips comments.
 
 ## Re-running Terraform
 
@@ -234,6 +303,8 @@ Common kustomization names:
 | `ack-prow` | Prow AWS resources (S3, Route53) |
 | `ack-flux` | ECR pull-through cache |
 | `prow-crds` | Prow CRDs |
+| `prow-version` | `prow-version` ConfigMap (Prow/tools versions + patch revision) |
+| `prow-mirror` | Job that rebuilds upstream Prow images with current OS packages |
 | `prow-charts` | Prow Helm releases |
 
 If a kustomization shows `dependency '<name>' is not ready`, trigger the

@@ -26,6 +26,10 @@ ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
     PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
 
+RUN echo "Applying OS security updates ..." \
+    && dnf -y upgrade --refresh \
+    && dnf clean all
+
 RUN dnf -y install \
 		which \
 		git \
