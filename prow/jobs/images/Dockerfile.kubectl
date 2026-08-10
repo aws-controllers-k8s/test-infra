@@ -4,6 +4,7 @@ FROM public.ecr.aws/docker/library/debian:trixie-slim
 ARG KUBECTL_VERSION=v1.35.5
 
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         bash \
         ca-certificates \

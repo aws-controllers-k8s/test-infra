@@ -18,6 +18,10 @@ ENV GOPATH=/home/prow/go \
 # Set working directory
 WORKDIR /app
 
+# Apply outstanding OS security updates before installing anything else
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 # Install git and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

@@ -87,18 +87,19 @@ spec:
           apk add --no-cache gettext > /dev/null 2>&1
 
           echo "Substituting variables in jobs.yaml..."
-          # Substitute only the 4 variables needed for Prow job configuration.
+          # Substitute only the variables needed for Prow job configuration.
           # The $$ prefix is escaped by Flux postBuild (becomes $ after substitution).
-          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI $$CONTROLLER_ECR_REGISTRY $$PROW_MIRROR_REGISTRY $$PROW_VERSION $$TOOLS_VERSION' \
+          envsubst '$$TEST_INFRA_ORG $$TEST_INFRA_REPO $$TEST_INFRA_BRANCH $$PROW_IMAGES_REPO_URI $$CONTROLLER_ECR_REGISTRY $$PROW_MIRROR_REGISTRY $$PROW_VERSION $$TOOLS_VERSION $$PROW_PATCH_REVISION' \
             < /workspace/prow/jobs/jobs.yaml \
             > /output/jobs-substituted.yaml
 
-          # Verify no unresolved TEST_INFRA variables remain
+          # Verify no unresolved variables remain
           if grep -qF 'TEST_INFRA_ORG}' /output/jobs-substituted.yaml || \
              grep -qF 'TEST_INFRA_REPO}' /output/jobs-substituted.yaml || \
-             grep -qF 'TEST_INFRA_BRANCH}' /output/jobs-substituted.yaml; then
+             grep -qF 'TEST_INFRA_BRANCH}' /output/jobs-substituted.yaml || \
+             grep -qF 'PROW_PATCH_REVISION}' /output/jobs-substituted.yaml; then
             echo "ERROR: Variable substitution incomplete!"
-            grep -c 'TEST_INFRA' /output/jobs-substituted.yaml || true
+            grep -c 'TEST_INFRA\|PROW_PATCH_REVISION' /output/jobs-substituted.yaml || true
             exit 1
           fi
 
@@ -124,6 +125,8 @@ spec:
           value: "${PROW_VERSION}"
         - name: TOOLS_VERSION
           value: "${TOOLS_VERSION}"
+        - name: PROW_PATCH_REVISION
+          value: "${PROW_PATCH_REVISION}"
         volumeMounts:
         - name: workspace
           mountPath: /workspace

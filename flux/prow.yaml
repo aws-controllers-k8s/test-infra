@@ -57,6 +57,14 @@ spec:
   path: ./flux/prow/mirror
   prune: false
   force: true
+  # Wait for the Job to COMPLETE, not just apply. prow-charts depends on this
+  # Kustomization and pins the -ack.<revision> tags this Job produces, so
+  # without wait the components roll out before the tags exist and land in
+  # ImagePullBackOff. A serial buildah pull/upgrade/commit/push across 15 images
+  # on vfs storage takes minutes rather than the seconds `crane copy` took, so
+  # the timeout is deliberately generous.
+  wait: true
+  timeout: 30m
   postBuild:
     substituteFrom:
     - kind: ConfigMap

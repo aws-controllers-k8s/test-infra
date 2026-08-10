@@ -1,5 +1,9 @@
 FROM public.ecr.aws/docker/library/debian:trixie-slim AS base
 
+RUN echo "Applying OS security updates ..." \
+    && apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 RUN echo "Installing packages ..." \
     && apt-get update \
     && apt-get install -y --no-install-recommends\

@@ -134,7 +134,7 @@ spec:
           mountPath: /output
       containers:
       - name: apply-configmap
-        image: public.ecr.aws/m5q3e4b2/ack-test-infra-prod-prow-images:prow-kubectl-0.0.2
+        image: ${PROW_IMAGES_REPO_URI}:prow-kubectl-0.0.2
         command:
         - /bin/bash
         - -ec

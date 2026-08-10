@@ -5,6 +5,8 @@ FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine
 WORKDIR /scripts
 COPY deploy-docs.sh /scripts/deploy-docs.sh
 
+RUN apk -U upgrade --no-cache
+
 RUN apk add --no-cache \
     bash \
     git \

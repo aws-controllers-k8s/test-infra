@@ -10,6 +10,10 @@ ENV GOPATH=/home/prow/go \
     GO111MODULE=on \
     PATH=/home/prow/go/bin:/usr/local/go/bin:${PATH}
 
+RUN echo "Applying OS security updates ..." \
+    && apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 RUN echo "Installing packages ..." \
     && apt-get update \
     && apt-get install -y --no-install-recommends\

@@ -17,6 +17,10 @@ RUN mkdir -p /etc/containers /var/lib/containers/storage /run/containers/storage
     && printf '[storage]\ndriver = "vfs"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' > /etc/containers/storage.conf \
     && rm -f /etc/subuid /etc/subgid
 
+RUN echo "Applying OS security updates ..." \
+    && dnf -y upgrade --refresh \
+    && dnf clean all
+
 RUN dnf -y install \
 		which \
 		git \

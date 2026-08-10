@@ -13,7 +13,7 @@
     serviceAccountName: periodic-service-account
     containers:
     - name: label-sync
-      image: ${PROW_MIRROR_REGISTRY}/label_sync:${TOOLS_VERSION}
+      image: ${PROW_MIRROR_REGISTRY}/label_sync:${TOOLS_VERSION}-ack.${PROW_PATCH_REVISION}
       resources:
         limits:
           cpu: 1

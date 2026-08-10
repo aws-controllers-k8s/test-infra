@@ -12,6 +12,10 @@ ENV GOPATH=/home/prow/go \
 
 ENV OPERATOR_SDK_BIN_PATH=/usr/local/bin
 
+RUN echo "Applying OS security updates ..." \
+    && apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 RUN echo "Installing packages ..." \
     && apt-get update \
     && apt-get install -y --no-install-recommends\

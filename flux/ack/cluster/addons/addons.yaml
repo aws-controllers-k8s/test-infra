@@ -8,7 +8,13 @@ metadata:
 spec:
   clusterName: ${STACK_NAME}-cluster
   name: aws-secrets-store-csi-driver-provider
-  addonVersion: v3.1.1-eksbuild.1
+  # Keep this at the newest published version. The addon bundles the upstream
+  # secrets-store-csi-driver image, so an old bundle leaves the driver DaemonSet
+  # running outdated OS packages. Check for newer versions with:
+  #   aws eks describe-addon-versions \
+  #     --addon-name aws-secrets-store-csi-driver-provider \
+  #     --kubernetes-version 1.35 --region us-west-2
+  addonVersion: v3.1.2-eksbuild.1
   configurationValues: |-
     {
       "secrets-store-csi-driver": {

@@ -1,13 +1,40 @@
-# Mirrors official Prow images into a private ECR repository.
-# ECR does not support pull-through cache for Google Artifact Registry,
-# so we use crane to copy images on each Flux reconciliation.
+# Mirrors official Prow images into a private ECR repository, applying
+# outstanding OS security updates on the way through.
+#
+# Why we rebuild instead of straight-copying:
+#   Upstream Prow pins its ko base images (gcr.io/k8s-staging-test-infra/{alpine,
+#   git,git-custom-k8s-auth}) in .ko.yaml and only refreshes that pin every few
+#   months. Any Prow release built against an old base ships outdated expat,
+#   openssl and curl packages, so every Prow pod carries known CVEs no matter
+#   how recent the Prow tag is. Running `apk upgrade` here decouples our patch
+#   cadence from upstream's base-image bump cadence.
+#
+# ECR does not support pull-through cache for Google Artifact Registry, so the
+# images have to be copied either way.
 #
 # Images come from two upstream registries:
-#   - us-docker.pkg.dev/k8s-infra-prow/images (Prow core)
-#   - gcr.io/k8s-staging-test-infra (label_sync, commenter)
+#   - us-docker.pkg.dev/k8s-infra-prow/images (Prow core, ${PROW_VERSION})
+#   - gcr.io/k8s-staging-test-infra (label_sync, commenter, ${TOOLS_VERSION})
 #
-# This Job runs before prow-charts deploys, ensuring images are available
-# in ECR before Prow pods attempt to pull them.
+# Each patched image is published under two tags:
+#   <upstream-tag>-ack.${PROW_PATCH_REVISION}  authoritative; what prow-config
+#                                              pins, so a revision bump is what
+#                                              triggers a Deployment rollout
+#   <upstream-tag>                             compatibility alias, same patched
+#                                              content, for references that have
+#                                              not moved to the suffixed tag
+#
+# The suffix is load bearing. This Kustomization reconciles hourly with
+# force: true, so a mutable bare tag alone gives no way to pin or roll out a
+# specific patch build. Bump PROW_PATCH_REVISION in
+# flux/prow/version/prow-version-configmap.yaml to force a fresh rebuild without
+# changing the Prow version.
+#
+# The Job is idempotent. The init container skips any image whose patched tag is
+# already in ECR, so the hourly reconcile is a no-op once everything is built.
+#
+# This Job runs before prow-charts deploys, ensuring images are available in ECR
+# before Prow pods attempt to pull them.
 ---
 apiVersion: batch/v1
 kind: Job
@@ -22,95 +49,204 @@ spec:
       serviceAccountName: prow-mirror-service-account
       restartPolicy: Never
       initContainers:
-      - name: ecr-login
+      # Works out which images actually need building and stashes an ECR
+      # password for the build container (which has no aws CLI).
+      - name: plan
         image: amazon/aws-cli:latest
         command:
         - /bin/sh
+        - -eu
         - -c
         - |
-          aws ecr get-login-password --region $${AWS_REGION} > /ecr-auth/password
+          aws ecr get-login-password --region "$${AWS_REGION}" > /work/ecr-password
+
+          cat > /work/images.txt <<'EOF'
+          PROW|crier
+          PROW|deck
+          PROW|ghproxy
+          PROW|hook
+          PROW|horologium
+          PROW|prow-controller-manager
+          PROW|sinker
+          PROW|status-reconciler
+          PROW|tide
+          PROW|clonerefs
+          PROW|entrypoint
+          PROW|initupload
+          PROW|sidecar
+          TOOLS|label_sync
+          TOOLS|commenter
+          EOF
+
+          : > /work/build-list
+
+          while IFS='|' read -r class img; do
+            [ -z "$${class:-}" ] && continue
+
+            case "$$class" in
+              PROW)
+                src="us-docker.pkg.dev/k8s-infra-prow/images"
+                tag="$${PROW_VERSION}"
+                ;;
+              TOOLS)
+                src="gcr.io/k8s-staging-test-infra"
+                tag="$${TOOLS_VERSION}"
+                ;;
+              *)
+                echo "unknown image class: $$class" >&2
+                exit 1
+                ;;
+            esac
+
+            dst_tag="$${tag}-ack.$${PROW_PATCH_REVISION}"
+
+            if aws ecr describe-images \
+                 --region "$${AWS_REGION}" \
+                 --repository-name "prow/$${img}" \
+                 --image-ids "imageTag=$${dst_tag}" >/dev/null 2>&1; then
+              echo "  = prow/$${img}:$${dst_tag} already present"
+            else
+              echo "  + prow/$${img}:$${dst_tag} queued for build"
+              printf '%s|%s|%s|%s\n' "$$src" "$$img" "$$tag" "$$dst_tag" >> /work/build-list
+            fi
+          done < /work/images.txt
+
+          echo ""
+          echo "Queued $$(wc -l < /work/build-list) image(s) for patching."
         env:
         - name: AWS_REGION
           value: "${REGION}"
-        volumeMounts:
-        - name: ecr-auth
-          mountPath: /ecr-auth
-      containers:
-      - name: mirror
-        image: gcr.io/go-containerregistry/crane:debug
-        command:
-        - /busybox/sh
-        - -c
-        - |
-          set -eu
-
-          PROW_SRC="us-docker.pkg.dev/k8s-infra-prow/images"
-          TOOLS_SRC="gcr.io/k8s-staging-test-infra"
-          DST="$${ECR_REGISTRY}/prow"
-          TAG="$${PROW_VERSION}"
-          TOOLS_TAG="$${TOOLS_VERSION}"
-
-          # Authenticate to ECR using password from init container
-          crane auth login "$${ECR_REGISTRY}" --username AWS --password-stdin < /ecr-auth/password
-
-          # Prow core images (from us-docker.pkg.dev/k8s-infra-prow/images)
-          PROW_IMAGES="crier deck ghproxy hook horologium prow-controller-manager sinker status-reconciler tide"
-          # Pod utility images
-          PROW_IMAGES="$$PROW_IMAGES clonerefs entrypoint initupload sidecar"
-
-          # test-infra tool images (from gcr.io/k8s-staging-test-infra)
-          TOOL_IMAGES="label_sync commenter"
-
-          FAILED=0
-          TOTAL=0
-
-          # Mirror Prow core images
-          for img in $$PROW_IMAGES; do
-            TOTAL=$$((TOTAL + 1))
-            echo "→ $${img}:$${TAG}"
-            if crane copy "$${PROW_SRC}/$${img}:$${TAG}" "$${DST}/$${img}:$${TAG}" 2>&1; then
-              echo "  ✓ done"
-            else
-              echo "  ✗ FAILED"
-              FAILED=$$((FAILED + 1))
-            fi
-          done
-
-          # Mirror test-infra tool images
-          for img in $$TOOL_IMAGES; do
-            TOTAL=$$((TOTAL + 1))
-            echo "→ $${img}:$${TOOLS_TAG} (from k8s-staging-test-infra)"
-            if crane copy "$${TOOLS_SRC}/$${img}:$${TOOLS_TAG}" "$${DST}/$${img}:$${TOOLS_TAG}" 2>&1; then
-              echo "  ✓ done"
-            else
-              echo "  ✗ FAILED"
-              FAILED=$$((FAILED + 1))
-            fi
-          done
-
-          echo ""
-          echo "Mirror complete. Failures: $${FAILED}/$${TOTAL}"
-          if [ "$$FAILED" -gt 0 ]; then
-            exit 1
-          fi
-        env:
-        - name: ECR_REGISTRY
-          value: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
         - name: PROW_VERSION
           value: "${PROW_VERSION}"
         - name: TOOLS_VERSION
           value: "${TOOLS_VERSION}"
+        - name: PROW_PATCH_REVISION
+          value: "${PROW_PATCH_REVISION}"
         volumeMounts:
-        - name: ecr-auth
-          mountPath: /ecr-auth
+        - name: work
+          mountPath: /work
+      containers:
+      - name: patch
+        image: quay.io/containers/buildah:v1.39.0
+        # buildah needs to unpack and re-commit image layers. Matches the
+        # privilege level already used by the build-prow-images postsubmit.
+        securityContext:
+          privileged: true
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -uo pipefail
+
+          if [ ! -s /work/build-list ]; then
+            echo "All patched images already present in ECR. Nothing to do."
+            exit 0
+          fi
+
+          buildah login -u AWS --password-stdin "$${ECR_REGISTRY}" < /work/ecr-password
+
+          # Pull the upstream image, apply pending apk updates, push under the
+          # patched tag. Returns 2 for "cannot patch", which is not retryable.
+          patch_one() {
+            __src="$$1"; __img="$$2"; __tag="$$3"; __dst_tag="$$4"
+            __dst="$${ECR_REGISTRY}/prow/$${__img}:$${__dst_tag}"
+
+            __ctr=$$(buildah from --pull=always "$${__src}/$${__img}:$${__tag}") || return 1
+
+            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'command -v apk >/dev/null 2>&1'; then
+              echo "     base image has no apk; refusing to publish unpatched" >&2
+              buildah rm "$$__ctr" >/dev/null 2>&1 || true
+              return 2
+            fi
+
+            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'apk -U upgrade --no-cache'; then
+              buildah rm "$$__ctr" >/dev/null 2>&1 || true
+              return 1
+            fi
+
+            buildah commit --rm "$$__ctr" "$$__dst" >/dev/null || return 1
+
+            if ! buildah push "$$__dst"; then
+              buildah rmi "$$__dst" >/dev/null 2>&1 || true
+              return 1
+            fi
+
+            # Also publish the patched image under the bare upstream tag. The
+            # suffixed tag is authoritative and is what prow-config pins, but
+            # generated job config lags behind a tag bump by design (see
+            # bootstrap/README.md), and hand-maintained manifests can reference
+            # the bare tag too. Pointing it at patched content means a missed
+            # reference degrades to "patched but unpinned" instead of
+            # "silently unpatched".
+            __bare="$${ECR_REGISTRY}/prow/$${__img}:$${__tag}"
+            buildah tag "$$__dst" "$$__bare" >/dev/null 2>&1 || true
+            if ! buildah push "$$__bare"; then
+              echo "     warning: could not update bare tag $${__tag}" >&2
+            fi
+
+            buildah rmi "$$__dst" "$$__bare" >/dev/null 2>&1 || true
+            return 0
+          }
+
+          FAILED=0
+          TOTAL=0
+
+          while IFS='|' read -r src img tag dst_tag; do
+            [ -z "$${src:-}" ] && continue
+            TOTAL=$$((TOTAL + 1))
+            echo "-> $${img}:$${dst_tag} (from $${src}/$${img}:$${tag})"
+
+            attempt=1
+            rc=1
+            while [ "$$attempt" -le 3 ]; do
+              patch_one "$$src" "$$img" "$$tag" "$$dst_tag"
+              rc=$$?
+              [ "$$rc" -eq 0 ] && break
+              # Unpatchable base image, retrying will not help.
+              [ "$$rc" -eq 2 ] && break
+              echo "   retry $$attempt/3"
+              attempt=$$((attempt + 1))
+              sleep 10
+            done
+
+            if [ "$$rc" -eq 0 ]; then
+              echo "   done"
+            else
+              echo "   FAILED (rc=$$rc)"
+              FAILED=$$((FAILED + 1))
+            fi
+          done < /work/build-list
+
+          echo ""
+          echo "Patch complete. Failures: $${FAILED}/$${TOTAL}"
+          [ "$$FAILED" -gt 0 ] && exit 1
+          exit 0
+        env:
+        - name: ECR_REGISTRY
+          value: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: BUILDAH_ISOLATION
+          value: chroot
+        volumeMounts:
+        - name: work
+          mountPath: /work
           readOnly: true
+        - name: containers-storage
+          mountPath: /var/lib/containers
         resources:
           requests:
-            cpu: "500m"
-            memory: "256Mi"
-          limits:
             cpu: "1"
-            memory: "512Mi"
+            memory: "2Gi"
+            ephemeral-storage: "20Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+            ephemeral-storage: "30Gi"
       volumes:
-      - name: ecr-auth
+      - name: work
         emptyDir: {}
+      # vfs storage duplicates layers per image, so give it real room.
+      - name: containers-storage
+        emptyDir:
+          sizeLimit: 30Gi
