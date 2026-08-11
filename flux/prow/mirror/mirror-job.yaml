@@ -159,13 +159,13 @@ spec:
 
             __ctr=$$(buildah from --pull=always "$${__src}/$${__img}:$${__tag}") || return 1
 
-            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'command -v apk >/dev/null 2>&1'; then
+            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'command -v apk >/dev/null 2>&1' < /dev/null; then
               echo "     base image has no apk; refusing to publish unpatched" >&2
               buildah rm "$$__ctr" >/dev/null 2>&1 || true
               return 2
             fi
 
-            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'apk -U upgrade --no-cache'; then
+            if ! buildah run --user root "$$__ctr" -- /bin/sh -c 'apk -U upgrade --no-cache' < /dev/null; then
               buildah rm "$$__ctr" >/dev/null 2>&1 || true
               return 1
             fi
@@ -196,8 +196,12 @@ spec:
 
           FAILED=0
           TOTAL=0
+          EXPECTED=$$(wc -l < /work/build-list | tr -d ' ')
 
-          while IFS='|' read -r src img tag dst_tag; do
+          # Read the work list on FD 3, not stdin. buildah run attaches the
+          # container's stdin, which drains an inherited stdin and silently ends
+          # the loop after the first image.
+          while IFS='|' read -r src img tag dst_tag <&3; do
             [ -z "$${src:-}" ] && continue
             TOTAL=$$((TOTAL + 1))
             echo "-> $${img}:$${dst_tag} (from $${src}/$${img}:$${tag})"
@@ -221,10 +225,19 @@ spec:
               echo "   FAILED (rc=$$rc)"
               FAILED=$$((FAILED + 1))
             fi
-          done < /work/build-list
+          done 3< /work/build-list
 
           echo ""
-          echo "Patch complete. Failures: $${FAILED}/$${TOTAL}"
+          echo "Patch complete. Processed $${TOTAL}/$${EXPECTED}, failures: $${FAILED}"
+
+          # Fail loudly if the loop did not cover the whole work list. Without
+          # this the Job reports success after a partial run, and prow-charts
+          # then rolls components onto tags that were never built.
+          if [ "$$TOTAL" -ne "$$EXPECTED" ]; then
+            echo "ERROR: processed $${TOTAL} of $${EXPECTED} queued images" >&2
+            exit 1
+          fi
+
           [ "$$FAILED" -gt 0 ] && exit 1
           exit 0
         env:
