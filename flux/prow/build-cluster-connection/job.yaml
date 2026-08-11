@@ -21,7 +21,9 @@ spec:
       restartPolicy: Never
       containers:
       - name: surface-connection
-        image: "${PROW_IMAGES_REPO_URI}:prow-kubectl-0.0.2"
+        # Not in the generator's output set, so `make prow-gen` will never bump
+        # this. Keep in sync with `kubectl` in prow/jobs/images_config.yaml.
+        image: "${PROW_IMAGES_REPO_URI}:prow-kubectl-0.0.3"
         command:
         - /bin/bash
         - -c
