@@ -98,7 +98,7 @@ spec:
                 ;;
             esac
 
-            dst_tag="$${tag}-ack.$${PROW_PATCH_REVISION}"
+            dst_tag="$${tag}$${PATCH_SUFFIX}"
 
             if aws ecr describe-images \
                  --region "$${AWS_REGION}" \
@@ -120,8 +120,14 @@ spec:
           value: "${PROW_VERSION}"
         - name: TOOLS_VERSION
           value: "${TOOLS_VERSION}"
-        - name: PROW_PATCH_REVISION
-          value: "${PROW_PATCH_REVISION}"
+        # Pass the whole suffix, not the bare revision. `kustomize build` strips
+        # the redundant quotes from value: "${PROW_PATCH_REVISION}", and Flux
+        # then substitutes a bare number, which YAML parses as an int -- the API
+        # server rejects the Job because env[].value must be a string. Keeping a
+        # non-numeric prefix in the value makes it a string under any quoting.
+        # Must stay in sync with the tag suffix in flux/prow/charts/prow-config.yaml.
+        - name: PATCH_SUFFIX
+          value: "-ack.${PROW_PATCH_REVISION}"
         volumeMounts:
         - name: work
           mountPath: /work
