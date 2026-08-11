@@ -1,8 +1,27 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# disableNameSuffixHash so the generated ConfigMap keeps the bare name
+# `test-config` — the `preset-test-config` preset mounts it by that exact name,
+# and a content hash suffix would break the volume mount. Mirrors
+# prow/jobs/kustomization.yaml.
+generatorOptions:
+  disableNameSuffixHash: true
+
 resources:
 - namespace.yaml
 - rbac.yaml
 - nodeclass.yaml
 - nodepool.yaml
+
+# test-config ConfigMap for pre-submit pods running on the build cluster.
+# References the SAME source file the control plane uses (prow/jobs/test_config.yaml)
+# so the two clusters can't drift. Flux's kustomize-controller builds with load
+# restrictions disabled (LoadRestrictionsNone), so this out-of-path file reference
+# is permitted; a plain `kustomize build` needs --load-restrictor LoadRestrictionsNone.
+configMapGenerator:
+- name: test-config
+  namespace: test-pods
+  behavior: create
+  files:
+  - ../../../prow/jobs/test_config.yaml
