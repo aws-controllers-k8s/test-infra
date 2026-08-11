@@ -225,6 +225,9 @@ is applied directly by the `prow-jobs` Kustomization (`interval: 5m`,
   job builds its own successor. This only holds while step 1 above is respected;
   hand-committing a regenerated `jobs.yaml` would point the job at the image it
   has not built yet.
+- **Changing `prow/jobs/tools/` requires bumping `build-prow-images`.**
+  `ack-build-tools` is compiled into that image, so without a bump the new binary
+  is never built.
 - **`flux/prow/build-cluster-connection/job.yaml`** pins a `prow-kubectl` tag
   but is not in the generator's output set, so `make prow-gen` will never update
   it. Bump it by hand once the new tag is in ECR, or its OS packages silently
