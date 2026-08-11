@@ -44,9 +44,10 @@ spec:
     # server + certificateAuthorityData come from the ACK Cluster CR status via
     # the build-cluster-connection ConfigMap.
     buildCluster:
-      # Provisioned and staged by this deployment but not yet wired into the four
-      # components; flip to true in a follow-up once the build cluster is verified.
-      enabled: false
+      # Build cluster provisioned and verified; wired into the four components.
+      # Pre-submit routing is enabled separately via presubmit_cluster in
+      # prow/jobs/jobs_config.yaml.
+      enabled: true
       name: build
       clusterName: "${STACK_NAME}-build-cluster"
       server: "${BUILD_CLUSTER_ENDPOINT}"
