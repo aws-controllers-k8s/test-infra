@@ -10,7 +10,14 @@ WORKDIR /app
 
 # Copy go mod files
 COPY go.mod go.sum ./
-ENV GOPROXY=direct
+# Resolve modules through the module proxy, falling back to direct VCS on any
+# error. GOPROXY=direct alone cannot resolve this module graph: go.opencensus.io
+# pulls in google.golang.org/grpc v1.33.2, which needs a pseudo-version of
+# github.com/cncf/udpa/go, and that repository has since moved to cncf/xds, so
+# the git fetch fails. The proxy serves an immutable copy. The `|` separator
+# falls back to direct on any error, so this can only add a resolution path.
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
 RUN go mod download
 
 # Copy source code
