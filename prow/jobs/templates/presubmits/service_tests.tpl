@@ -3,8 +3,6 @@
   - name: {{ $service }}-kind-e2e
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false
@@ -62,8 +60,6 @@
   - name: {{ $service }}-release-test
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false
@@ -112,8 +108,6 @@
   - name: {{ $service }}-recommended-policy-test
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false
@@ -151,8 +145,6 @@
   - name: {{ $service }}-unit-test
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false
@@ -180,8 +172,6 @@
   - name: {{ $service }}-metadata-file-test
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false
@@ -215,8 +205,6 @@
   - name: {{ $service }}-verify-attribution
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     # We probably want to uncomment the following line once we have the attribution
     # files verified for all the controlelrs
@@ -262,8 +250,6 @@
   - name: {{ $service }}-verify-code-gen
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     always_run: true
     decorate: true
@@ -310,8 +296,6 @@
   - name: {{ $service }}-crd-compat-check
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
-{{- else if eq $service "ecr" }}
-    cluster: build
 {{- end }}
     decorate: true
     optional: false

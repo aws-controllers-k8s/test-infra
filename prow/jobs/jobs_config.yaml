@@ -11,7 +11,7 @@ periodics_enabled: true
 # field and run on the implicit in-cluster "default" cluster (current behavior).
 # Set to "build" only after the build cluster is provisioned and registered
 # (buildCluster.enabled). Postsubmits/periodics always stay on "default".
-presubmit_cluster: ""
+presubmit_cluster: "build"
 
 # Adding a service to the `aws_services` array will enable CI/CD
 
