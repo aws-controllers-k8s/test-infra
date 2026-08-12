@@ -92,8 +92,10 @@ spec:
   path: ./flux/prow/build-cluster-connection
   prune: false
   force: true
-  # wait for the Job to COMPLETE (not just apply), so prow-charts' dependsOn
-  # blocks until the ConfigMap it substitutes from actually exists.
+  # Wait for the Job to COMPLETE (not just apply) so this Kustomization's own
+  # readiness reflects the build-cluster-connection ConfigMap actually existing.
+  # Nothing gates on it any more (see prow-charts below), so a failure here is
+  # contained to the build cluster wiring.
   wait: true
   timeout: 5m
   postBuild:
@@ -128,9 +130,20 @@ spec:
     - kind: ConfigMap
       name: build-cluster-connection
       optional: true
+  # Deliberately NOT dependent on prow-build-cluster-connection. Correctness is
+  # already enforced inside the chart rather than by ordering:
+  #   - build-cluster-kubeconfig-ConfigMap.yaml is wrapped in
+  #     `if .Values.buildCluster.enabled`, so while the flag is false the endpoint
+  #     and CA are unused and their absence cannot matter.
+  #   - when the flag is true, `required` on buildCluster.server,
+  #     certificateAuthorityData and clusterName makes the render fail loudly, so
+  #     a missing ConfigMap can never produce a silently broken kubeconfig.
+  # Gating on it instead meant any failure of that Job — for example a
+  # prow-kubectl tag absent from one environment's registry — blocked the entire
+  # Prow control plane rollout. Failing locally in prow-charts and retrying is a
+  # far smaller blast radius than wedging every component.
   dependsOn:
   - name: prow-mirror
-  - name: prow-build-cluster-connection
 ---
 # Build cluster kubeconfig ConfigMap — applied LOCALLY to flux-system on the
 # control-plane cluster. Substitutes the cluster ARN into the aws-provider
