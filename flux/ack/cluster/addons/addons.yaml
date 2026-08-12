@@ -19,7 +19,7 @@ spec:
   #     --addon-name aws-secrets-store-csi-driver-provider \
   #     --kubernetes-version 1.35 --region us-west-2 \
   #     --query 'addons[0].addonVersions[].addonVersion'
-  addonVersion: v3.1.1-eksbuild.2
+  addonVersion: v3.1.2-eksbuild.1
   configurationValues: |-
     {
       "secrets-store-csi-driver": {
