@@ -143,6 +143,9 @@ filter_patterns_for_file() {
         NOTES.txt)
             echo 'controller:[0-9]+\.[0-9]+\.[0-9]+'
             ;;
+        pkg/version/version.go)
+         echo 'ACKGenerateBuildDate'
+          ;;
         *)
             # No patterns to filter for other files
             echo ''
