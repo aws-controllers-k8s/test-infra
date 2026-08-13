@@ -73,13 +73,15 @@ info_msg "Checking for differences..."
 # validated (semver prefix must match, 'dirty' suffix is rejected) before
 # the git-describe suffix is filtered out as noise.
 #
-# Patterns are applied only to the files that contain them:
+# Patterns are applied only to the files that contain them. Note that the
+# case labels are matched against each file's basename, not its full path:
 #   ack-generate-metadata.yaml: api_directory_checksum, build_date,
 #                                build_hash, go_version, version
 #   kustomization.yaml:         newTag
 #   Chart.yaml:                 version, appVersion
 #   values.yaml:                tag
 #   NOTES.txt:                  embedded image tag (controller:X.Y.Z)
+#   version.go:                 ACKGenerateBuildDate (pkg/version/version.go)
 
 # Validates the version field in ack-generate-metadata.yaml.
 # Fails if either version contains 'dirty' or the semver prefixes differ.
@@ -143,9 +145,9 @@ filter_patterns_for_file() {
         NOTES.txt)
             echo 'controller:[0-9]+\.[0-9]+\.[0-9]+'
             ;;
-        pkg/version/version.go)
-         echo 'ACKGenerateBuildDate'
-          ;;
+        version.go)
+            echo '\s*ACKGenerateBuildDate\s*='
+            ;;
         *)
             # No patterns to filter for other files
             echo ''
