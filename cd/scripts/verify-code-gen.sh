@@ -146,7 +146,7 @@ filter_patterns_for_file() {
             echo 'controller:[0-9]+\.[0-9]+\.[0-9]+'
             ;;
         version.go)
-            echo '\s*ACKGenerateBuildDate\s*='
+            echo '\s*(ACKGenerateBuildDate|ACKGenerateVersion)\s*='
             ;;
         *)
             # No patterns to filter for other files
