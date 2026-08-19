@@ -1,19 +1,18 @@
 {{- $prowImagesRepoUri := required "prowImagesRepoUri is required" .Values.prowImagesRepoUri }}
 {{- $stackName := required "stackName is required" .Values.stackName }}
-# Surfaces the build cluster's endpoint + CA into the build-cluster-connection
-# ConfigMap in flux-system, read from the build-cluster Cluster CR's status.
+# Reads the build cluster's endpoint, CA and ARN from the build-cluster Cluster CR's
+# status, then assembles the kubeconfig Prow mounts, registers the cluster as an Argo CD
+# spoke, authorises it in the AppProject and applies its Application.
 #
-# Why a Job (not a static ConfigMap): the build cluster is created by ACK, not
-# Terraform, so its endpoint/CA aren't in self-managed-vars at bootstrap. Reading
-# the CR status means a cluster re-creation (the only event that changes these) is
-# picked up automatically. prow-charts then substitutes BUILD_CLUSTER_ENDPOINT /
-# BUILD_CLUSTER_CA from this ConfigMap into the components' build-cluster
-# kubeconfig. Runs each reconcile (Flux force-replaces the immutable Job).
+# Why a Job (not static manifests): the build cluster is created by ACK, not Terraform, so
+# none of these values are in self-managed-vars at bootstrap. Reading the CR status means a
+# cluster re-creation - the only event that changes them - is picked up automatically.
+# Runs on every reconcile as a Helm hook.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: build-cluster-connection
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
   annotations:
     # Run as a Helm hook, not as a tracked release object.
     #
@@ -61,13 +60,6 @@ spec:
 
           echo "  endpoint: $EP"
           echo "  ca: ${CA:0:40}...(truncated)"
-
-          kubectl create configmap build-cluster-connection -n flux-system \
-            --from-literal=BUILD_CLUSTER_ENDPOINT="$EP" \
-            --from-literal=BUILD_CLUSTER_CA="$CA" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-          echo "build-cluster-connection ConfigMap updated."
 
           # Assemble the kubeconfig the four components mount, here rather than in
           # the prow chart.
@@ -217,7 +209,7 @@ spec:
             #
             # This script's steps are kubectl PIPELINES - `kubectl create ... | kubectl label
             # --local | kubectl apply -f -` runs three Go binaries concurrently, each tens of MB,
-            # and the script now has five such steps rather than three. Peak is concurrent, not
+            # and the script has four such steps. Peak is concurrent, not
             # sequential, so the ceiling has to clear several kubectl processes at once.
             memory: "512Mi"
         volumeMounts:

@@ -1,23 +1,38 @@
 # RBAC for the build-cluster-connection Job (job.yaml).
 #
-# The Job reads the build cluster's connection details (API server endpoint +
-# cluster CA) from the ACK Cluster CR's status and writes them into the
-# build-cluster-connection ConfigMap, which prow-charts substitutes into the
-# four components' build-cluster kubeconfig (server / certificate-authority-data).
+# The Job reads the build cluster's endpoint, CA and ARN from the ACK Cluster CR's status
+# and does three things with them: assembles the build-cluster-kubeconfig ConfigMap in
+# `prow` that the four components mount, registers the cluster as an Argo CD spoke, and
+# applies the prow-build-cluster-resources Application.
 #
-# It also assembles the finished build-cluster-kubeconfig ConfigMap in the prow
-# namespace, which the four components mount directly. That removes the render-time
-# substitution step, which Argo CD cannot perform.
+# NOTHING HERE IS FLUX WIRING, which is worth stating because the chart began life in
+# flux-system and that is easy to misread. Flux's own route to the build cluster was
+# kustomize-controller remote-applying through build-cluster-flux-kubeconfig, a different
+# ConfigMap from a different chart (prow-build-cluster-kubeconfig), and it dies with Flux.
+# Of the three things above, two exist only BECAUSE of Argo CD, and the kubeconfig is a
+# Prow requirement under either reconciler.
 #
-# Least privilege: read the one Cluster CR in ack-system, write one ConfigMap in
-# flux-system and one in prow. No AWS/IAM credentials needed — the endpoint + CA
-# live in the CR status (ACK keeps them synced), so this is pure in-cluster RBAC.
+# The chart previously also wrote a build-cluster-connection ConfigMap in its own
+# namespace, for prow-charts to substitute BUILD_CLUSTER_ENDPOINT / BUILD_CLUSTER_CA from
+# at render time. Argo CD cannot substitute, so the Job assembles the finished kubeconfig
+# instead and that ConfigMap has no reader - `flux/prow.yaml` records the substitution being
+# removed. It and its Role are gone.
+#
+# The home namespace is .Release.Namespace, not a literal: Argo CD places this in
+# ack-system, next to the Cluster CR the Job reads, while stages still on Flux get
+# flux-system from their HelmRelease's targetNamespace. The ack-system, prow and argocd
+# references below stay literal - those are where the TARGET objects live, not where this
+# chart is installed.
+#
+# Least privilege: read the one Cluster CR in ack-system, write one ConfigMap in prow, and
+# in argocd write the registration Secret, patch the AppProject and apply one Application.
+# No AWS/IAM credentials - the values live in the CR status.
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: build-cluster-connection
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
 ---
 # Read the build-cluster Cluster CR's status (endpoint + certificateAuthority).
 apiVersion: rbac.authorization.k8s.io/v1
@@ -42,32 +57,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: build-cluster-connection
-  namespace: flux-system
----
-# Write the build-cluster-connection ConfigMap in flux-system.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: build-cluster-connection-write
-  namespace: flux-system
-rules:
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get", "create", "update", "patch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: build-cluster-connection-write
-  namespace: flux-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: build-cluster-connection-write
-subjects:
-- kind: ServiceAccount
-  name: build-cluster-connection
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
 ---
 # Write the assembled kubeconfig ConfigMap that crier, deck, sinker and
 # prow-controller-manager mount. Scoped to configmaps in prow only.
@@ -93,7 +83,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: build-cluster-connection
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
 ---
 # Register the build cluster as an Argo CD spoke by writing a labelled cluster Secret in
 # the argocd namespace. Scoped to secrets in argocd only.
@@ -151,4 +141,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: build-cluster-connection
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
