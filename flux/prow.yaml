@@ -51,6 +51,10 @@ spec:
   # what makes that dangerous: Flux garbage-collects what a Kustomization applied when it is
   # deleted, and here that is the ProwJob CRD, which would take every ProwJob with it.
   prune: false
+  # SUSPENDED: cut over to Argo CD (Application `prow-crds`). Suspend rather than delete, because
+  # deleting the Kustomization is what would trigger garbage collection; suspending stops
+  # reconciliation and pruning both, and reverses by flipping one field.
+  suspend: true
   dependsOn:
   - name: ack-pod-identities
 ---
@@ -208,6 +212,17 @@ spec:
   # raw object stale, and prune deletes stale objects. Must be live before the
   # content change (D19-P1).
   prune: false
+  # SUSPENDED: cut over to Argo CD (Application `prow-build-cluster-resources`, which is the one
+  # Application the connection Job applies rather than Terraform, because its destination is the
+  # build cluster - D13).
+  #
+  # Suspended rather than deleting the raw manifests in this path, which an earlier plan called
+  # for. Suspend is reversible by one field and stops reconciliation without touching the objects,
+  # and it leaves the remote-apply route intact should the cutover need backing out. The raw
+  # manifests under flux/prow/build-cluster-resources/ are now redundant with the chart at
+  # flux/prow/charts/prow-build-cluster-resources/ and should be deleted in Phase 5, not here -
+  # they are the only fallback while this is still being proven.
+  suspend: true
   kubeConfig:
     configMapRef:
       name: build-cluster-flux-kubeconfig

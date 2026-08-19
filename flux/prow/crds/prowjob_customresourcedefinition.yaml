@@ -5,6 +5,22 @@ metadata:
   annotations:
     api-approved.kubernetes.io: https://github.com/kubernetes/test-infra/pull/8669
     controller-gen.kubebuilder.io/version: v0.17.3
+    # THE ONLY LOCAL EDIT TO THIS UPSTREAM FILE. scripts/upgrade-prow.sh regenerates it from
+    # kubernetes/test-infra, so this line has to be re-added after an upgrade or Argo CD stops
+    # being able to apply the CRD at all.
+    #
+    # This manifest is 667 KB. Client-side apply stores the whole thing in
+    # kubectl.kubernetes.io/last-applied-configuration, which the API server rejects:
+    #   metadata.annotations: Too long: may not be more than 262144 bytes
+    # Reproduced outside Argo CD - `kubectl apply --dry-run=server` fails with exactly that,
+    # while `kubectl apply --server-side --dry-run=server` succeeds - so the object is fine and
+    # only the apply mode matters.
+    #
+    # ServerSideApply=true is already set on the Application, but Argo CD applied this resource
+    # client-side regardless, through a manually requested sync, an automated sync, and with
+    # Replace=true. A per-resource sync-option annotation is the documented way to set it on the
+    # object itself, and unlike the Application-level option it travels with the manifest.
+    argocd.argoproj.io/sync-options: ServerSideApply=true
   name: prowjobs.prow.k8s.io
 spec:
   preserveUnknownFields: false

@@ -209,10 +209,17 @@ spec:
         resources:
           requests:
             cpu: "50m"
-            memory: "64Mi"
+            memory: "128Mi"
           limits:
             cpu: "200m"
-            memory: "128Mi"
+            # 128Mi was not enough and the failure mode was opaque: the pod was OOMKilled three
+            # times in a row, which Argo CD surfaces only as a PostSync hook stuck in Running.
+            #
+            # This script's steps are kubectl PIPELINES - `kubectl create ... | kubectl label
+            # --local | kubectl apply -f -` runs three Go binaries concurrently, each tens of MB,
+            # and the script now has five such steps rather than three. Peak is concurrent, not
+            # sequential, so the ceiling has to clear several kubectl processes at once.
+            memory: "512Mi"
         volumeMounts:
         - name: application
           mountPath: /etc/application

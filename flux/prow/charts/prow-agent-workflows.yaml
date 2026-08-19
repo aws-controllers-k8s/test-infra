@@ -5,6 +5,13 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m
+  # SUSPENDED: this path is cut over to Argo CD (Application `prow-agent-workflows`). kustomize-controller stops
+  # reconciling, so these objects are managed solely by Argo CD.
+  #
+  # Declared here rather than applied with kubectl, because the root test-infra Kustomization
+  # re-applies this spec: an imperative suspend is silently reverted on the next reconcile and
+  # both reconcilers end up owning the same objects.
+  suspend: true
   sourceRef:
     kind: GitRepository
     name: test-infra

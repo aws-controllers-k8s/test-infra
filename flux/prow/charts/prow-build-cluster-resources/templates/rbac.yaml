@@ -12,7 +12,7 @@
 # Argo CD can apply these unaided, unlike the Role and RoleBinding objects it applies on
 # the hub. Escalation prevention requires the applier to already hold every permission it
 # grants, and it only sees in-cluster RBAC — which on the hub meant EKS access policies
-# counted for nothing and flux/argocd/namespaced-rbac.yaml had to grant the rules
+# counted for nothing and bootstrap/argocd-rbac.tf had to grant the rules
 # explicitly. On the build cluster the capability holds cluster-admin
 # (argocd-build-cluster-access, in the ack-build-infra chart), so the check is satisfied
 # directly. That grant is what makes this path work without a namespaced-rbac equivalent
