@@ -1,0 +1,63 @@
+# EKS Addons managed by ACK.
+#
+# namespace is omitted throughout so the release namespace
+# (HelmRelease.spec.targetNamespace) places the objects. The chart owns no
+# Namespace.
+{{- $stackName := required "stackName is required" .Values.stackName }}
+{{- $accountId := required "accountId is required" .Values.accountId }}
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: secrets-store-csi
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  clusterName: {{ $stackName }}-cluster
+  name: aws-secrets-store-csi-driver-provider
+  # Keep this at the newest version supported by THIS cluster's Kubernetes
+  # version. The addon bundles the upstream secrets-store-csi-driver image, so an
+  # old bundle leaves the driver DaemonSet running outdated OS packages.
+  #
+  # Always pass --kubernetes-version when checking; the unfiltered output lists
+  # versions for newer Kubernetes releases too, and picking one of those puts the
+  # Addon CR into ACK.Terminal with "Addon version specified is not supported":
+  #   aws eks describe-addon-versions \
+  #     --addon-name aws-secrets-store-csi-driver-provider \
+  #     --kubernetes-version 1.35 --region us-west-2 \
+  #     --query 'addons[0].addonVersions[].addonVersion'
+  addonVersion: v3.1.2-eksbuild.1
+  configurationValues: |-
+    {
+      "secrets-store-csi-driver": {
+        "syncSecret": {
+          "enabled": true
+        }
+      }
+    }
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: external-dns-addon
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  clusterName: {{ $stackName }}-cluster
+  name: external-dns
+  podIdentityAssociations:
+  - roleARN: arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-external-dns-role
+    serviceAccount: external-dns
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: coredns
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  clusterName: {{ $stackName }}-cluster
+  name: coredns

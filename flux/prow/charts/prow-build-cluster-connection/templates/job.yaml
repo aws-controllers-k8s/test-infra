@@ -1,0 +1,133 @@
+{{- $prowImagesRepoUri := required "prowImagesRepoUri is required" .Values.prowImagesRepoUri }}
+{{- $stackName := required "stackName is required" .Values.stackName }}
+# Surfaces the build cluster's endpoint + CA into the build-cluster-connection
+# ConfigMap in flux-system, read from the build-cluster Cluster CR's status.
+#
+# Why a Job (not a static ConfigMap): the build cluster is created by ACK, not
+# Terraform, so its endpoint/CA aren't in self-managed-vars at bootstrap. Reading
+# the CR status means a cluster re-creation (the only event that changes these) is
+# picked up automatically. prow-charts then substitutes BUILD_CLUSTER_ENDPOINT /
+# BUILD_CLUSTER_CA from this ConfigMap into the components' build-cluster
+# kubeconfig. Runs each reconcile (Flux force-replaces the immutable Job).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-cluster-connection
+  namespace: flux-system
+  annotations:
+    # Run as a Helm hook, not as a tracked release object.
+    #
+    # A Job's spec.template is immutable, and upgrade.force does NOT get around
+    # that: Helm's force performs a replace (PUT), which the API server still
+    # rejects with "field is immutable". Flux's Kustomization force: true worked
+    # because kustomize-controller deletes and recreates on that error. Only
+    # delete-then-create works, which is exactly what before-hook-creation does.
+    #
+    # post-install and post-upgrade so the ServiceAccount and RBAC in this chart
+    # are applied before the Job runs.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: build-cluster-connection
+      restartPolicy: Never
+      containers:
+      - name: surface-connection
+        # Not in the generator's output set, so `make prow-gen` will never bump
+        # this. Keep in sync with `kubectl` in prow/jobs/images_config.yaml.
+        image: "{{ $prowImagesRepoUri }}:prow-kubectl-0.0.3"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+
+          CR_NS="ack-system"
+          CR="build-cluster"
+
+          echo "Reading connection details from Cluster CR ${CR_NS}/${CR}..."
+          EP=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
+                 -o jsonpath='{.status.endpoint}')
+          CA=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
+                 -o jsonpath='{.status.certificateAuthority.data}')
+
+          if [ -z "$EP" ] || [ -z "$CA" ]; then
+            echo "ERROR: endpoint or CA empty — is the build-cluster CR synced?" >&2
+            exit 1
+          fi
+
+          echo "  endpoint: $EP"
+          echo "  ca: ${CA:0:40}...(truncated)"
+
+          kubectl create configmap build-cluster-connection -n flux-system \
+            --from-literal=BUILD_CLUSTER_ENDPOINT="$EP" \
+            --from-literal=BUILD_CLUSTER_CA="$CA" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "build-cluster-connection ConfigMap updated."
+
+          # Assemble the kubeconfig the four components mount, here rather than in
+          # the prow chart.
+          #
+          # Both values are discovered at RUNTIME from the Cluster CR, but the chart
+          # consumed them at RENDER time via Flux postBuild substitution. Argo CD
+          # renders off-cluster with no API access, so it has no equivalent:
+          # valuesFrom a ConfigMap does not exist (argo-cd#12060) and Helm's lookup
+          # returns empty there. Writing the finished ConfigMap from the Job that
+          # already holds the values removes the render-time dependency and behaves
+          # identically under either reconciler.
+          #
+          # Written with a heredoc into a file rather than inline YAML so the
+          # kubeconfig's own indentation is not sensitive to this script's.
+          BUILD_CTX="build"
+          BUILD_CLUSTER_NAME="{{ $stackName }}-build-cluster"
+
+          cat >/tmp/kubeconfig <<KCFG
+          apiVersion: v1
+          kind: Config
+          current-context: default
+          clusters:
+          - name: ${BUILD_CTX}
+            cluster:
+              server: ${EP}
+              certificate-authority-data: ${CA}
+          contexts:
+          - name: ${BUILD_CTX}
+            context:
+              cluster: ${BUILD_CTX}
+              user: ${BUILD_CTX}
+          users:
+          - name: ${BUILD_CTX}
+            user:
+              exec:
+                apiVersion: client.authentication.k8s.io/v1beta1
+                command: aws-iam-authenticator
+                args:
+                - token
+                - -i
+                - ${BUILD_CLUSTER_NAME}
+          KCFG
+
+          # resource-policy: keep so that when the chart stops rendering this object
+          # Helm treats it as removed-from-manifest without deleting it. The four
+          # components mount it as a volume and will not start without it.
+          kubectl create configmap build-cluster-kubeconfig -n prow \
+            --from-file=config=/tmp/kubeconfig \
+            --dry-run=client -o yaml \
+            | kubectl annotate --local -f - -o yaml \
+                helm.sh/resource-policy=keep \
+                kustomize.toolkit.fluxcd.io/prune=disabled \
+                argocd.argoproj.io/compare-options=IgnoreExtraneous \
+            | kubectl apply -f -
+
+          echo "build-cluster-kubeconfig ConfigMap updated."
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"

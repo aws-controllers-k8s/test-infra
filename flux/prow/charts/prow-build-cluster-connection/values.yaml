@@ -1,0 +1,5 @@
+# Supplied by the HelmRelease from self-managed-vars. Left empty rather than
+# defaulted so a missing value fails at render time via `required`.
+prowImagesRepoUri: ""
+# Used to build the aws-iam-authenticator cluster id in the assembled kubeconfig.
+stackName: ""

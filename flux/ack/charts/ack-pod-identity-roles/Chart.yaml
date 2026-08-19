@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-pod-identity-roles
+description: IAM roles assumed via EKS Pod Identity by Prow components
+type: application
+version: 0.1.0

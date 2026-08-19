@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-cluster
+description: "Cluster-scoped resources - access entries, Karpenter nodepools, storage and ingress classes"
+type: application
+version: 0.1.0

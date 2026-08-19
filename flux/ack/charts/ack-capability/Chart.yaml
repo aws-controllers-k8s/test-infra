@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-capability
+description: "The managed EKS ACK capability that runs the ACK controllers"
+type: application
+version: 0.1.0

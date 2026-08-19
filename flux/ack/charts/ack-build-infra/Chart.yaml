@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-build-infra
+description: "Build cluster infrastructure - VPC, subnets, NAT, route tables, EKS cluster, roles, access entries"
+type: application
+version: 0.1.0

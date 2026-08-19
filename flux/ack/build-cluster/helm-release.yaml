@@ -1,0 +1,48 @@
+# Renders flux/ack/charts/ack-build-infra instead of the token-substituted
+# manifests. The HelmRelease stays inside the existing Kustomization so the
+# dependsOn edges on ack-capability and ack-capability-role (Kustomizations) are
+# preserved: HelmRelease.spec.dependsOn can only reference other HelmReleases.
+#
+# The chart keeps the infra/, roles/ and pod-identities/ layout as template
+# subdirectories. Ordering within the chart is handled by ACK reference
+# resolution, not by directory order: the access entries, pod identities and
+# subnets clusterRef/vpcRef the Cluster and VPC CRs, so ACK waits for each
+# referent to report ResourceSynced before creating the dependent.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ack-build-infra
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: ack-system
+  chart:
+    spec:
+      chart: ./flux/ack/charts/ack-build-infra
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        # Pinned: otherwise the lookup defaults to the HelmRelease's own namespace.
+        namespace: flux-system
+      interval: 60m
+  install:
+    createNamespace: false
+  upgrade:
+    # force would delete and recreate the build cluster's VPC, subnets, NAT
+    # gateway and EKS cluster. Never.
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: ACCOUNT_ID
+    targetPath: accountId
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: REGION
+    targetPath: region
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName

@@ -25,7 +25,11 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace, and valuesFrom always resolves against the
+  # HelmRelease's namespace (it has no namespace field), so a stranded copy in
+  # ack-system cannot read flux-system/self-managed-vars. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap

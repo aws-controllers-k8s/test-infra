@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-flux
+description: ECR pull-through cache rule backing the vendored Flux images
+type: application
+version: 0.1.0

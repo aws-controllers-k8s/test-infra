@@ -1,0 +1,38 @@
+{{- $stackName := required "stackName is required" .Values.stackName }}
+# Build cluster NAT — created by ACK EC2 controller.
+#
+# Single NAT gateway (matches bootstrap/cluster.tf single_nat_gateway = true) in
+# public subnet A, fronted by an Elastic IP. Private subnets route egress here
+# via build-rt-private (routetables.yaml). The EIP allocation is wired to the
+# NAT by allocationRef.
+---
+apiVersion: ec2.services.k8s.aws/v1alpha1
+kind: ElasticIPAddress
+metadata:
+  name: build-nat-eip
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  tags:
+  - key: Name
+    value: {{ $stackName }}-build-nat-eip
+---
+apiVersion: ec2.services.k8s.aws/v1alpha1
+kind: NATGateway
+metadata:
+  name: build-natgw
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  connectivityType: public
+  subnetRef:
+    from:
+      name: build-subnet-public-a
+  allocationRef:
+    from:
+      name: build-nat-eip
+  tags:
+  - key: Name
+    value: {{ $stackName }}-build-natgw

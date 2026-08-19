@@ -1,0 +1,172 @@
+{{- $accountId := required "accountId is required" .Values.accountId }}
+{{- $region := required "region is required" .Values.region }}
+{{- $stackName := required "stackName is required" .Values.stackName }}
+# ACK Capability IAM Role - adopts the Terraform-created role.
+# Terraform creates the role with minimal bootstrap permissions; ACK adopts
+# it and reconciles the full set of inline policies going forward.
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: ack-capability-role
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/adoption-policy: adopt-or-create
+    services.k8s.aws/adoption-fields: '{"name": "{{ $stackName }}-ack-capability-role"}'
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: {{ $stackName }}-ack-capability-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "capabilities.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    EKSSelfManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:*"],
+            "Resource": [
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:capability/{{ $stackName }}-*cluster/*",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:access-entry/{{ $stackName }}-*cluster/*",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:podidentityassociation/{{ $stackName }}-*cluster/*",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:addon/{{ $stackName }}-*cluster/*",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-*cluster"
+            ]
+          }
+        ]
+      }
+    EC2Management: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ec2:CreateVpc",
+              "ec2:DeleteVpc",
+              "ec2:DescribeVpcs",
+              "ec2:DescribeVpcAttribute",
+              "ec2:ModifyVpcAttribute",
+              "ec2:AssociateVpcCidrBlock",
+              "ec2:DisassociateVpcCidrBlock",
+              "ec2:CreateSubnet",
+              "ec2:DeleteSubnet",
+              "ec2:DescribeSubnets",
+              "ec2:ModifySubnetAttribute",
+              "ec2:CreateInternetGateway",
+              "ec2:DeleteInternetGateway",
+              "ec2:DescribeInternetGateways",
+              "ec2:AttachInternetGateway",
+              "ec2:DetachInternetGateway",
+              "ec2:CreateNatGateway",
+              "ec2:DeleteNatGateway",
+              "ec2:DescribeNatGateways",
+              "ec2:AllocateAddress",
+              "ec2:ReleaseAddress",
+              "ec2:DescribeAddresses",
+              "ec2:CreateRouteTable",
+              "ec2:DeleteRouteTable",
+              "ec2:DescribeRouteTables",
+              "ec2:CreateRoute",
+              "ec2:DeleteRoute",
+              "ec2:AssociateRouteTable",
+              "ec2:DisassociateRouteTable",
+              "ec2:DescribeManagedPrefixLists",
+              "ec2:DescribeSecurityGroups",
+              "ec2:DescribeSecurityGroupRules",
+              "ec2:RevokeSecurityGroupEgress",
+              "ec2:RevokeSecurityGroupIngress",
+              "ec2:CreateTags",
+              "ec2:DeleteTags"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    IAMManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["iam:*"],
+            "Resource": [
+              "arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-*",
+              "arn:aws:iam::{{ $accountId }}:role/Nova-DO-NOT-DELETE"
+            ]
+          }
+        ]
+      }
+    ECRManagement: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:*"],
+            "Resource": [
+              "arn:aws:ecr:{{ $region }}:{{ $accountId }}:repository/fluxcd/*",
+              "arn:aws:ecr:{{ $region }}:{{ $accountId }}:repository/kubernetes/*",
+              "arn:aws:ecr:{{ $region }}:{{ $accountId }}:repository/prow/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ecr:CreatePullThroughCacheRule",
+              "ecr:DeletePullThroughCacheRule",
+              "ecr:DescribePullThroughCacheRules",
+              "ecr:ValidatePullThroughCacheRule"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue"],
+            "Resource": "arn:aws:secretsmanager:{{ $region }}:{{ $accountId }}:secret:ecr-pullthroughcache/*"
+          }
+        ]
+      }
+    S3ProwLogs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:*"],
+            "Resource": [
+              "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}",
+              "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"],
+            "Resource": "*"
+          }
+        ]
+      }
+    Route53Management: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["route53:*"],
+            "Resource": "*"
+          }
+        ]
+      }

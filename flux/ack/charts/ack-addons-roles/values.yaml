@@ -1,0 +1,5 @@
+# Supplied by the HelmRelease from the self-managed-vars ConfigMap. Left empty
+# rather than defaulted so a missing value fails at render time via `required`,
+# instead of silently producing a truncated role name the way an unsubstituted
+# postBuild token would.
+stackName: ""
