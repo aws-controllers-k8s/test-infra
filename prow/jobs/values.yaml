@@ -13,12 +13,12 @@ region: ""
 controllerEcrRegistry: ""
 
 # The three version values are NOT per-environment - they are static strings tracked in git,
-# in flux/prow/version/prow-version-configmap.yaml, and reached today via a second
+# in the prow-version ConfigMap, and reached via a second
 # substituteFrom on the prow-jobs Kustomization. Argo CD has no valuesFrom and Terraform has
 # no business knowing them, so they live here as chart defaults.
 #
 # This mirrors flux/prow/charts/prow-mirror/values.yaml exactly, and the values MUST match it
-# and the ConfigMap while all three exist. Phase 5 deletes flux/prow/version/ and leaves the
+# and the ConfigMap while those copies exist. flux/prow/version/ went with Flux, leaving the
 # chart defaults as the only copy.
 #
 # prowPatchRevision is a monotonic counter appended to mirrored image tags and must never be

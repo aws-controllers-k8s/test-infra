@@ -118,36 +118,32 @@ spec:
   to resources that should survive CR deletion (hosted zones, S3 buckets, etc.).
 - **Adopt existing resources:** Use `services.k8s.aws/adoption-policy: adopt-or-create`
   with `services.k8s.aws/adoption-fields` to adopt Terraform-created resources.
-- **Variable substitution:** Use `${VAR}` syntax — Flux substitutes values from
-  the `self-managed-vars` ConfigMap at reconciliation time.
+- **Per-environment values:** declare them in the chart's `values.yaml` and have the Argo CD
+  Application pass them as helm parameters from Terraform (`bootstrap/argocd-applications.tf`,
+  `local.argocd_chart_values`). Do **not** use `${VAR}` placeholders — those were resolved by
+  Flux's postBuild substitution, which Argo CD has no equivalent for.
 
 ### Forcing reconciliation
 
 ```bash
-# Pull latest git changes
-kubectl annotate gitrepository test-infra -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+# Re-read git and re-evaluate one Application
+kubectl annotate applications.argoproj.io <name> -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
 
-# Trigger a specific kustomization
-kubectl annotate kustomization <name> -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+# Note: refreshing the root (root-applications) does NOT re-render its children.
+# Refresh the Application that owns the path you changed.
 ```
 
-## Variable substitution
+## Per-environment values
 
-These manifests use `${VAR}` syntax, substituted by Flux from the
-`self-managed-vars` ConfigMap (created by Terraform bootstrap):
+These charts take per-environment values as **helm parameters on their Argo CD Application**,
+composed by Terraform in `local.argocd_chart_values` (`bootstrap/argocd-applications.tf`). Which
+parameters each chart needs is declared per path in `argocd/applications/values.yaml`.
 
-| Variable | Value |
-|----------|-------|
-| `STACK_NAME` | Stack name prefix (e.g., `ack-test-infra-dev`) |
-| `CLUSTER_NAME` | EKS cluster name |
-| `ACK_CAPABILITY_ROLE_ARN` | IAM role for the ACK capability |
-| `CLUSTER_SG_ID` | Cluster security group ID |
-| `CLUSTER_ADMIN_ROLE_ARN` | Break-glass admin role ARN |
-| `ADMIN_ROLE_ARN` | Admin role ARN |
-| `READONLY_ROLE_ARN` | ReadOnly role ARN |
-| `ACCOUNT_ID` | AWS account ID |
-| `REGION` | AWS region |
-| `GHCR_PTC_SECRET_ARN` | Secrets Manager ARN for ECR pull-through cache |
-| `PROW_DOMAIN` | Prow Deck UI domain |
+Values that are static and git-authored belong in the chart's own `values.yaml` instead — only
+things Terraform alone knows (account id, region, stack name, domains, repo coordinates) travel
+as parameters.
+
+Historically these manifests used `${VAR}` placeholders substituted by Flux from a
+`self-managed-vars` ConfigMap. Argo CD renders off-cluster and has no substitution step, so that
+mechanism and the ConfigMap are gone; see `docs/argocd-migration.md`.

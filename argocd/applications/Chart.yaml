@@ -4,9 +4,9 @@ description: |
   The Argo CD Applications for this repository, rendered by one root Application that
   Terraform owns. Adding or changing a path is a commit here, not a terraform apply.
 
-  Not under flux/, deliberately: everything there is deleted in Phase 5, and this chart
-  outlives it. Not under bootstrap/ either, because Argo CD reads it from git and nothing
-  here is Terraform's to render.
+  Not under flux/, deliberately: that tree held Flux's definitions, which are gone, and it
+  now holds only the charts Argo CD reads. Not under bootstrap/ either, because Argo CD reads
+  this from git and nothing here is Terraform's to render.
 type: application
 
 # Bumped by hand. Nothing reads it - Argo CD renders the chart from the path rather than

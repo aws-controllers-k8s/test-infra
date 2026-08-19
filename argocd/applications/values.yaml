@@ -176,7 +176,7 @@ applications:
     # authorises it in the AppProject and applies its Application - the last three exist only
     # because of Argo CD. Flux's own route to that cluster was kustomize-controller
     # remote-applying through build-cluster-flux-kubeconfig, a different ConfigMap from the
-    # prow-build-cluster-kubeconfig chart, which dies with Flux.
+    # prow-build-cluster-kubeconfig chart, deleted with Flux.
     #
     # It started in flux-system only because that is where it was written, and staying there
     # would have left a namespace named after a reconciler that no longer exists holding the
@@ -184,9 +184,10 @@ applications:
     # and it is already in argocd_hub_namespaces, so the admin RoleBinding covers creating the
     # Roles without a new grant.
     #
-    # The chart uses .Release.Namespace for its own objects, so stages still on Flux keep
-    # rendering into flux-system from their HelmRelease's targetNamespace - this move is
-    # hub-only. Its ack-system, prow and argocd references stay literal, because those name
+    # The chart uses .Release.Namespace for its own objects rather than a literal, which is
+    # what made this move possible without editing every template; environments still on Flux
+    # render into flux-system from their HelmRelease's targetNamespace. Its ack-system, prow
+    # and argocd references stay literal, because those name
     # where the TARGET objects live: the Cluster CR, the kubeconfig Prow mounts, and the
     # registration Secret plus AppProject plus Application.
     path: flux/prow/charts/prow-build-cluster-connection
@@ -298,7 +299,7 @@ applications:
     # would mean `make prow-gen` had no effect until someone also ran terraform apply.
     #
     # The generated file keeps its ${TOKEN} placeholders and the generator is untouched:
-    # stages still on Flux resolve them via postBuild, and emitting Helm actions would
+    # environments still on Flux resolve them via postBuild, and emitting Helm actions would
     # break them on merge and rewrite all seven generated files, since the generator
     # restamps a timestamp on every run. The chart resolves the two tokens with `replace`
     # and fails the render if an unrecognised one appears.
@@ -383,8 +384,7 @@ applications:
     wave: 5
     # prowVersion, toolsVersion and prowPatchRevision are deliberately absent, as on
     # prow-mirror: static git-authored strings, so chart defaults rather than parameters.
-    # Phase 5 deletes flux/prow/version/ and leaves those defaults as the only copy - until
-    # then all three copies must agree.
+    # These are now the only copy - flux/prow/version/ went with Flux.
     values: [prowImagesRepoUri, testInfraOrg, testInfraRepo, testInfraBranch, accountId, region, controllerEcrRegistry]
 
     # Load-bearing here rather than a nicety. ttlSecondsAfterFinished deletes the Job 300s

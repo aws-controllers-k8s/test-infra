@@ -30,7 +30,7 @@
 #
 # WHY THE GENERATED FILE STILL CARRIES ${TOKEN}. Nothing about the generator changes here,
 # deliberately. Those placeholders are how every stage gets per-environment values, and
-# stages still on Flux resolve them with postBuild from self-managed-vars. Emitting Helm
+# environments still on Flux resolve them with postBuild from self-managed-vars. Emitting Helm
 # actions instead would break them the moment this merges, and would rewrite all seven
 # generated files - the generator stamps a fresh `Last generated on` timestamp on every run,
 # so regeneration is never a clean diff. Resolving the tokens here costs one `replace` each

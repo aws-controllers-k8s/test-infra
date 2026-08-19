@@ -10,7 +10,7 @@ kind: Kustomization
 # That reasoning came from the Flux kustomization this path was carved out of and it still
 # holds under Argo CD.
 #
-# It lives under prow/ rather than flux/ because everything under flux/ is deleted in Phase 5
+# It lives under prow/ rather than flux/ because flux/ held Flux's definitions, now deleted,
 # and these objects outlive it.
 resources:
 - prow-namespaces.yaml

@@ -29,7 +29,46 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 REGISTRY="us-docker.pkg.dev/k8s-infra-prow/images"
-VERSION_FILE="$REPO_ROOT/flux/prow/version/prow-version-configmap.yaml"
+# The versions used to live in one place, the prow-version ConfigMap that Flux substituted
+# from. They are now chart defaults in three values files, because Argo CD has no equivalent of
+# postBuild substitution and static git-authored values belong with the structure. All three
+# MUST agree: prow-config composes the component image references, prow-jobs stamps the job
+# config, and prow-mirror decides which tags to mirror into ECR.
+#
+# yq paths differ per file, so each is addressed explicitly rather than by a shared key.
+CONFIG_VALUES="$REPO_ROOT/prow/config/values.yaml"
+JOBS_VALUES="$REPO_ROOT/prow/jobs/values.yaml"
+MIRROR_VALUES="$REPO_ROOT/flux/prow/charts/prow-mirror/values.yaml"
+
+# read_version <key>            -> the value, read from prow-jobs (the file that holds all three)
+# write_version <key> <value>   -> writes every copy, and fails if any file is missing
+read_version() {
+  case "$1" in
+    PROW_VERSION)        yq '.prowVersion' "$JOBS_VALUES" ;;
+    TOOLS_VERSION)       yq '.toolsVersion' "$JOBS_VALUES" ;;
+    PROW_PATCH_REVISION) yq '.prowPatchRevision' "$JOBS_VALUES" ;;
+  esac
+}
+write_version() {
+  local key="$1" val="$2" f
+  for f in "$CONFIG_VALUES" "$JOBS_VALUES" "$MIRROR_VALUES"; do
+    [ -f "$f" ] || { echo "ERROR: $f missing -- the three version copies must stay in sync" >&2; exit 1; }
+  done
+  case "$key" in
+    PROW_VERSION)
+      yq -i ".imageMirror.prowVersion = \"${val}\"" "$CONFIG_VALUES"
+      yq -i ".prowVersion = \"${val}\"" "$JOBS_VALUES"
+      yq -i ".prowVersion = \"${val}\"" "$MIRROR_VALUES" ;;
+    TOOLS_VERSION)
+      # prow-config does not carry toolsVersion; only jobs and mirror consume it
+      yq -i ".toolsVersion = \"${val}\"" "$JOBS_VALUES"
+      yq -i ".toolsVersion = \"${val}\"" "$MIRROR_VALUES" ;;
+    PROW_PATCH_REVISION)
+      yq -i ".imageMirror.prowPatchRevision = \"${val}\"" "$CONFIG_VALUES"
+      yq -i ".prowPatchRevision = \"${val}\"" "$JOBS_VALUES"
+      yq -i ".prowPatchRevision = \"${val}\"" "$MIRROR_VALUES" ;;
+  esac
+}
 CRD_FILE="$REPO_ROOT/flux/prow/crds/prowjob_customresourcedefinition.yaml"
 CRD_UPSTREAM="https://raw.githubusercontent.com/kubernetes-sigs/prow/main/config/prow/cluster/prowjob-crd/prowjob_customresourcedefinition.yaml"
 CHART_FILE="$REPO_ROOT/prow/config/Chart.yaml"
@@ -83,7 +122,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
 
   # --bump-patch re-patches the versions already pinned instead of moving them.
   if [[ "$BUMP_PATCH" == "true" && -z "$TARGET_TAG" ]]; then
-    TARGET_TAG=$(yq '.data.PROW_VERSION' "$VERSION_FILE")
+    TARGET_TAG=$(read_version PROW_VERSION)
     echo "Re-patching pinned Prow version: $TARGET_TAG"
   fi
 
@@ -116,7 +155,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
   fi
 
   # Read current version
-  CURRENT_TAG=$(yq '.data.PROW_VERSION' "$VERSION_FILE")
+  CURRENT_TAG=$(read_version PROW_VERSION)
 
   if [[ "$CURRENT_TAG" == "$TARGET_TAG" ]]; then
     echo "  Already at $TARGET_TAG — no version change needed."
@@ -127,8 +166,8 @@ if [[ "$CRD_ONLY" == "false" ]]; then
     VERSION_CHANGED=true
 
     if [[ "$DRY_RUN" == "false" ]]; then
-      yq -i ".data.PROW_VERSION = \"${TARGET_TAG}\"" "$VERSION_FILE"
-      echo "  Updated: $VERSION_FILE"
+      write_version PROW_VERSION "$TARGET_TAG"
+      echo "  Updated: prow/config, prow/jobs and prow-mirror values"
 
       # Bump chart version
       if [[ -f "$CHART_FILE" ]]; then
@@ -139,7 +178,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
         echo "  Chart: $current_ver → $new_ver"
       fi
     else
-      echo "  [dry-run] Would update $VERSION_FILE: $CURRENT_TAG → $TARGET_TAG"
+      echo "  [dry-run] Would update all three values files: $CURRENT_TAG → $TARGET_TAG"
     fi
   fi
 
@@ -149,7 +188,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
 
   TOOLS_TAG=""
   if [[ "$BUMP_PATCH" == "true" ]]; then
-    TOOLS_TAG=$(yq '.data.TOOLS_VERSION' "$VERSION_FILE")
+    TOOLS_TAG=$(read_version TOOLS_VERSION)
   fi
 
   if [[ -z "$TOOLS_TAG" ]] && command -v crane >/dev/null 2>&1; then
@@ -168,7 +207,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
   fi
 
   if [[ -n "$TOOLS_TAG" ]]; then
-    CURRENT_TOOLS=$(yq '.data.TOOLS_VERSION' "$VERSION_FILE")
+    CURRENT_TOOLS=$(read_version TOOLS_VERSION)
     if [[ "$CURRENT_TOOLS" == "$TOOLS_TAG" ]]; then
       echo "  Tools already at $TOOLS_TAG"
     else
@@ -176,7 +215,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
       echo "  Latest:  $TOOLS_TAG"
       VERSION_CHANGED=true
       if [[ "$DRY_RUN" == "false" ]]; then
-        yq -i ".data.TOOLS_VERSION = \"${TOOLS_TAG}\"" "$VERSION_FILE"
+        write_version TOOLS_VERSION "$TOOLS_TAG"
         echo "  Updated TOOLS_VERSION"
       else
         echo "  [dry-run] Would update TOOLS_VERSION: $CURRENT_TOOLS → $TOOLS_TAG"
@@ -190,7 +229,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
   echo ""
   echo "Resolving patch revision..."
 
-  CURRENT_REV=$(yq '.data.PROW_PATCH_REVISION' "$VERSION_FILE")
+  CURRENT_REV=$(read_version PROW_PATCH_REVISION)
   if [[ -z "$CURRENT_REV" || "$CURRENT_REV" == "null" ]]; then
     CURRENT_REV=0
   fi
@@ -218,7 +257,7 @@ if [[ "$CRD_ONLY" == "false" ]]; then
   if [[ "$TARGET_REV" == "$CURRENT_REV" ]]; then
     echo "  PROW_PATCH_REVISION stays at $CURRENT_REV ($REV_REASON)"
   elif [[ "$DRY_RUN" == "false" ]]; then
-    yq -i ".data.PROW_PATCH_REVISION = \"${TARGET_REV}\"" "$VERSION_FILE"
+    write_version PROW_PATCH_REVISION "$TARGET_REV"
     echo "  PROW_PATCH_REVISION: $CURRENT_REV → $TARGET_REV ($REV_REASON)"
   else
     echo "  [dry-run] Would set PROW_PATCH_REVISION: $CURRENT_REV → $TARGET_REV ($REV_REASON)"

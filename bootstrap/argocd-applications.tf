@@ -59,14 +59,14 @@
 #
 #   prow-build-cluster-kubeconfig, because it does not outlive Flux. The
 #   build-cluster-flux-kubeconfig ConfigMap exists only so kustomize-controller can
-#   remote-apply into the build cluster; Phase 5 deletes it and the Access Entry replaces
-#   it. Migrating it would mean adopting an object in order to delete it. Contrast
-#   flux/prow/build-cluster-connection/, which looks similar and DOES survive, because
+#   remote-apply into the build cluster; it was deleted with Flux and the Access Entry
+#   replaced it. Migrating it would have meant adopting an object in order to delete it. Contrast
+#   the prow-build-cluster-connection chart, which looked similar and DOES survive, because
 #   Prow's own components mount the kubeconfig it writes (D16).
 #
 #   ack-flux is in that same category and is cut over anyway - done before this was
-#   noticed. Its PullThroughCacheRule caches ghcr.io/fluxcd images and Phase 5 removes it.
-#   Left alone rather than reverted: it works, and un-migrating it would be churn.
+#   noticed. Its PullThroughCacheRule cached ghcr.io/fluxcd images and was removed with Flux,
+#   along with this entry.
 ################################################################################
 
 locals {

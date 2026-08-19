@@ -39,8 +39,7 @@ locals {
   #   `flux-system`, once prow-build-cluster-connection moved to ack-system. It was the last
   #   Application targeting that namespace, and it only ever lived there because that is
   #   where it was written - nothing in it is Flux wiring. What remains in flux-system is
-  #   Flux's own machinery, which Flux applies and Phase 5 deletes by hand, so Argo CD needs
-  #   no access to it.
+  #   Flux's own machinery, since removed, so Argo CD never needed access to it.
   #
   # This list also drives the `admin` RoleBindings in argocd-rbac.tf, deliberately: that
   # binding is only defensible as privilege-neutral because it mirrors this association, so

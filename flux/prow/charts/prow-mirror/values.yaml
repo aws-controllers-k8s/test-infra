@@ -6,11 +6,11 @@ accountId: ""
 region: ""
 
 # The three version values are NOT per-environment - they are static strings
-# tracked in git, previously in flux/prow/version/prow-version-configmap.yaml and
+# tracked in git, previously in the prow-version ConfigMap and
 # delivered via valuesFrom purely because Flux made that convenient. Argo CD has no
 # valuesFrom, and Terraform has no business knowing them, so they live here as chart
 # defaults. Flux still overrides them from the ConfigMap with identical values while
-# both reconcilers exist; Phase 5 deletes the ConfigMap and leaves only these.
+# both reconcilers existed; the ConfigMap went with Flux, leaving only these.
 #
 # PROW_PATCH_REVISION is a monotonic counter appended to mirrored image tags and must
 # never be reset. PROW_VERSION and TOOLS_VERSION move independently but share it.

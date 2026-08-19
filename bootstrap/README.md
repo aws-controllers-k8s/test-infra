@@ -19,17 +19,7 @@ cd test-infra/bootstrap
 ./scripts/bootstrap-backend.sh
 ```
 
-### 2. Vendor the Flux chart
-
-```bash
-cd test-infra
-./scripts/pull-flux-chart.sh
-git add charts/flux2-*/
-git commit -m "chore(flux): vendor flux2 chart"
-git push
-```
-
-### 3. Create required AWS Secrets Manager secrets
+### 2. Create required AWS Secrets Manager secrets
 
 Prow requires the following secrets to exist before deployment:
 
@@ -55,6 +45,7 @@ aws secretsmanager create-secret \
   --secret-string "<KNOWLEDGE_BASE_ID>"
 
 # ECR pull-through cache credentials for ghcr.io/fluxcd
+# NOTE: no longer required -- the cache rule served Flux's own images and went with Flux.
 aws secretsmanager create-secret \
   --name "ecr-pullthroughcache/ghcr-fluxcd" \
   --secret-string '{"username":"<GITHUB_USER>","accessToken":"<GITHUB_PAT>"}'
@@ -65,7 +56,7 @@ aws secretsmanager put-resource-policy \
   --resource-policy '{"Version":"2012-10-17","Statement":[{"Sid":"AllowECRAccess","Effect":"Allow","Principal":{"Service":"ecr.amazonaws.com"},"Action":[ "secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue" ],"Resource":"*"}]}'
 ```
 
-### 4. Generate your environment
+### 3. Generate your environment
 
 ```bash
 cd test-infra/bootstrap
@@ -92,7 +83,7 @@ prompting. Use `--force` to re-prompt and overwrite.
 > **Note:** Environment files (`bootstrap/environment/*.tfvars`) are gitignored
 > and must never be committed. The source of truth is SSM.
 
-### 5. Bootstrap the cluster
+### 4. Bootstrap the cluster
 
 ```bash
 cd test-infra/bootstrap
@@ -100,7 +91,7 @@ terraform init
 terraform apply -var-file=environment/<stage>.tfvars
 ```
 
-### 6. Create ACM certificate for Prow domain
+### 5. Create ACM certificate for Prow domain
 
 The ALB requires a TLS certificate matching the Prow domain. Run this after
 the `ack-prow` kustomization is Ready (it creates the Route53 hosted zone):
@@ -113,7 +104,7 @@ the `ack-prow` kustomization is Ready (it creates the Route53 hosted zone):
 The script is idempotent — re-running skips already-issued certs. The ALB
 auto-discovers the certificate by matching the ingress host.
 
-### 7. Configure GitHub webhook
+### 6. Configure GitHub webhook
 
 After Prow is deployed, configure the GitHub App/org webhook to use the Prow
 domain (set via the `prow_domain` variable):
@@ -123,21 +114,18 @@ domain (set via the `prow_domain` variable):
 - **Secret:** same value used in `ack/prow/hmac-token` secret
 
 
-## Upgrading Flux
+## Upgrading Argo CD
+
+The Argo CD control plane is an EKS **capability**, managed by AWS off-cluster, so there is no
+chart to vendor and nothing in this repo pins its version:
 
 ```bash
-# 1. Update the version
-yq -i '.version = "2.9.0"' flux/flux-version.yaml
-
-# 2. Vendor the new chart
-./scripts/pull-flux-chart.sh
-
-# 3. Commit and push
-git add charts/ flux/
-git commit -m "chore(flux): upgrade to 2.9.0"
-git push
-# Flux self-upgrades on next reconciliation
+aws eks describe-capability --cluster-name <cluster> --capability-name argocd --region <region>
 ```
+
+Flux used to be vendored here as an extracted chart under `charts/` with
+`scripts/pull-flux-chart.sh` to refresh it, because Flux had to upgrade itself from a source it
+could read. Both are gone -- see `docs/argocd-migration.md`.
 
 ## Upgrading Prow
 
@@ -153,7 +141,7 @@ alias means a reference that has not moved to the suffixed tag still gets patche
 packages rather than silently staying vulnerable.
 
 Both the version and the patch revision live in a single ConfigMap
-(`flux/prow/version/prow-version-configmap.yaml`).
+(`prow/config/values.yaml`, `prow/jobs/values.yaml` and `flux/prow/charts/prow-mirror/values.yaml`).
 
 ```bash
 # Auto-detect latest tags for both Prow core and tools, update CRD
@@ -171,10 +159,10 @@ Both the version and the patch revision live in a single ConfigMap
 ./scripts/upgrade-prow.sh --bump-patch
 
 # Commit and push
-git add flux/prow/ prow/config/
+git add flux/prow/charts/ prow/config/
 git commit -m "chore(prow): upgrade to <tag>"
 git push
-# Flux reconciles: mirror job rebuilds patched images into ECR, then Prow redeploys
+# Argo CD syncs: the mirror job rebuilds patched images into ECR, then Prow redeploys
 ```
 
 `PROW_PATCH_REVISION` is a monotonic counter and is never reset. `PROW_VERSION`
@@ -213,7 +201,7 @@ two-phase flow — do not shortcut it:
 
 Do not run `make prow-gen` and commit its output in step 1. `job-config-job.yaml`
 is applied directly by the `prow-jobs` Kustomization (`interval: 5m`,
-`force: true`), so committing a tag before the image exists makes Flux recreate
+`Force=true,Replace=true`), so committing a tag before the image exists makes Argo CD recreate
 `job-config-substitutor` on a missing image within minutes of merge, halting
 `job-config` refreshes until the postsubmit lands.
 
@@ -228,7 +216,7 @@ is applied directly by the `prow-jobs` Kustomization (`interval: 5m`,
 - **Changing `prow/jobs/tools/` requires bumping `build-prow-images`.**
   `ack-build-tools` is compiled into that image, so without a bump the new binary
   is never built.
-- **`flux/prow/build-cluster-connection/job.yaml`** pins a `prow-kubectl` tag
+- **`flux/prow/charts/prow-build-cluster-connection/templates/job.yaml`** pins a `prow-kubectl` tag
   but is not in the generator's output set, so `make prow-gen` will never update
   it. Bump it by hand once the new tag is in ECR, or its OS packages silently
   stay behind.
@@ -249,7 +237,7 @@ terraform apply -var-file=environment/<stage>.tfvars
 ## Day-2 Infrastructure Changes (ACK Manifests)
 
 After initial bootstrap, all infrastructure changes go through ACK manifests
-in `flux/ack/` — not Terraform. Terraform only handles the initial cluster
+in `flux/ack/charts/` — not Terraform. Terraform only handles the initial cluster
 creation; ACK manages the cluster's desired state going forward.
 
 See [`flux/ack/README.md`](../flux/ack/README.md) for full guidance on:
@@ -261,57 +249,36 @@ See [`flux/ack/README.md`](../flux/ack/README.md) for full guidance on:
 Workflow:
 
 ```bash
-# 1. Add or edit ACK manifests in flux/ack/
-# 2. Register new files in the appropriate kustomization.yaml
-# 3. Ensure the capability role has permissions for the resource type
-# 4. Commit and push
-# 5. Force reconcile:
-kubectl annotate gitrepository test-infra -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
-kubectl annotate kustomization <name> -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+# 1. Add or edit ACK manifests in the relevant chart under flux/ack/charts/
+# 2. Ensure the capability role has permissions for the resource type
+# 3. Commit and push -- Argo CD syncs automatically
+# 4. To force it immediately:
+kubectl annotate applications.argoproj.io <app> -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
 ```
 
-## Forcing Code Sync from GitHub
+## Forcing a Sync from GitHub
 
-Flux polls the GitRepository on its configured interval (typically 60m).
-To force an immediate sync after pushing changes:
+Argo CD polls git and syncs automatically -- every Application has `automated` on. To force an
+immediate re-evaluation after pushing:
 
 ```bash
-# 1. Force Flux to pull the latest commit
-kubectl annotate gitrepository test-infra -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+kubectl annotate applications.argoproj.io <app> -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
 
-# 2. Wait for the source to be ready
-kubectl wait gitrepository/test-infra -n flux-system \
-  --for=condition=Ready --timeout=60s
-
-# 3. Trigger the relevant kustomization(s)
-kubectl annotate kustomization <name> -n flux-system \
-  reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+kubectl -n argocd get applications.argoproj.io \
+  -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
 ```
 
-Common kustomization names:
+Two things worth knowing:
 
-| Name | What it deploys |
-|------|-----------------|
-| `flux` | Flux self-management (Helm chart) |
-| `ack-capability-role` | ACK capability IAM role |
-| `ack-capability` | ACK EKS capability |
-| `ack-cluster` | Cluster config, access entries, nodepool |
-| `ack-addons-roles` | IAM roles for EKS addons |
-| `ack-addons` | EKS managed addons |
-| `ack-pod-identity-roles` | IAM roles for pod identities |
-| `ack-pod-identities` | Pod identity associations |
-| `ack-prow` | Prow AWS resources (S3, Route53) |
-| `ack-flux` | ECR pull-through cache |
-| `prow-crds` | Prow CRDs |
-| `prow-version` | `prow-version` ConfigMap (Prow/tools versions + patch revision) |
-| `prow-mirror` | Job that rebuilds upstream Prow images with current OS packages |
-| `prow-charts` | Prow Helm releases |
+- **Refreshing the root does not refresh its children.** `root-applications` renders the other
+  Applications; refreshing it re-renders that list, not each child's own source. Refresh the
+  Application that owns the path you changed.
+- **`automated` does not retry a revision it has already reported on.** A path that failed once
+  sits there looking stuck until a hard refresh or a new commit.
 
-If a kustomization shows `dependency '<name>' is not ready`, trigger the
-dependency first and work up the chain.
+Application names match the paths in `argocd/applications/values.yaml`.
 
 ## Tearing Down
 

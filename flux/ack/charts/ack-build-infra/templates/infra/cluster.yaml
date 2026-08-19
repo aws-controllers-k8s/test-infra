@@ -37,7 +37,7 @@ spec:
     # Auto Mode enabled, but NO built-in NodePools. An empty nodePools list keeps
     # EKS from provisioning the general-purpose/system pools (and their small
     # instances that hit the ENI pod-density limit) — matching the control-plane
-    # cluster's end state (flux/ack/cluster/nodepool.yaml), which deletes
+    # cluster's end state (the ack-cluster chart's nodepool.yaml), which deletes
     # general-purpose post-create via bootstrap/scripts/swap-nodepool.sh.
     #
     # Because no built-in pool is enabled, EKS does NOT auto-provision the managed
