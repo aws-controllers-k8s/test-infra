@@ -283,6 +283,13 @@ resource "kubernetes_cluster_role_binding_v1" "argocd_cluster_scoped" {
 # One binding per namespace replaces the open-ended rule list, and any future
 # namespaced Role in those namespaces just works.
 #
+# The coupling works in both directions, which is the point of the for_each: when
+# flux-system came off argocd_hub_namespaces - prow-build-cluster-connection having moved to
+# ack-system, leaving no Application targeting it - this binding went with it in the same
+# apply. Had the list been written out literally here, the binding would have outlived the
+# access policy it claims to mirror, and the privilege-neutral argument above would have
+# quietly stopped being true.
+#
 # WHAT IS DELIBERATELY NOT DONE: binding cluster-admin. That would be a genuine
 # expansion, and after this change the remaining whack-a-mole is small - only
 # cluster-scoped grants and custom resource types need explicit rules, and both are
