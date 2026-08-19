@@ -20,10 +20,11 @@
 # are --set, which reads `.` as a path separator and `,` as a list separator. Threading 16
 # values through a root chart into 19 children as parameters multiplies every escaping
 # hazard this migration already hit. yamlencode also QUOTES every scalar, which is what
-# keeps a 12-digit account id a string: unquoted, Go's YAML parser reads 086987147623 as a
-# float and printf %s yields %!s(float64=8.6987147623e+10) - a valid-looking image
-# reference that fails at pull time, not at render time. Confirmed by writing the same
-# file unquoted by hand and watching the chart's guard catch it.
+# keeps a 12-digit account id a string. Unquoted, Go's YAML parser reads an id with a
+# leading zero - say 012345678901 - as a float, and printf %s then yields
+# %!s(float64=1.2345678901e+10): a valid-looking image reference that fails at pull time
+# rather than at render time. Confirmed by writing the same file unquoted by hand and
+# watching the chart's guard catch it.
 #
 # ORDERING IS IN THE CHART, NOT HERE. Each child carries a sync-wave derived from Flux's
 # dependsOn graph plus three edges Flux omitted; the root applies them wave by wave. Argo

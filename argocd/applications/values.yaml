@@ -69,6 +69,29 @@ testConfigValues: ""
 ################################################################################
 applications:
 
+  # WAVE 0, and it has to be first: the prow and test-pods Namespaces and the five
+  # ServiceAccounts every PodIdentityAssociation binds to.
+  #
+  # This path exists because the conversion left a hole. Flux applied prow-namespaces.yaml
+  # directly from flux/ack/cluster/pod-identities/, alongside the chart rather than inside
+  # it, because no chart may own a Namespace - a Helm uninstall or rollback targets the
+  # namespace and cascades to everything in it. So the ack-pod-identities Application, which
+  # points at the chart, never covered these seven objects: they survived only because prune
+  # is disabled on the Flux side, and a fresh bootstrap would not have created them at all.
+  #
+  # Everything targeting prow or test-pods therefore depends on this, not on
+  # ack-pod-identities as the wave derivation originally recorded. With
+  # CreateNamespace=false everywhere, a path that syncs first fails on a missing namespace.
+  # The later waves are left as they are: they were derived against ack-pod-identities and
+  # remain a correct, if conservative, ordering now that this sits ahead of all of them.
+  #
+  # A plain kustomize directory, no tokens, so no values and no helm block.
+  prow-namespaces:
+    path: prow/namespaces
+    targetNamespace: prow
+    wave: 0
+    automated: true
+
   ##############################################################################
   # WAVE 0-3: the ACK layer. Order here is the dependsOn chain Flux encodes, which exists
   # because these paths create the controllers that reconcile each other's CRs - a CR

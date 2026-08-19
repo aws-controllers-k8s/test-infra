@@ -121,6 +121,33 @@ resource "kubernetes_cluster_role_v1" "argocd_cluster_scoped" {
   }
 
   ##############################################################################
+  # For prow/namespaces: the prow and test-pods Namespaces, plus the ServiceAccounts every
+  # PodIdentityAssociation binds to. Those seven objects were applied by Flux directly and
+  # by nothing else - the ack-pod-identities CHART excludes them on purpose, since a chart
+  # that owns a Namespace can delete one - so they had no owner that survives Flux, and a
+  # fresh bootstrap would never have created them.
+  #
+  # Namespaces are cluster-scoped, so no namespace-scoped access policy reaches them:
+  # AmazonEKSAdminPolicy is associated per namespace and cannot grant creating one. This is
+  # therefore a real grant rather than a restatement, and it is the smallest one that makes
+  # the path work.
+  #
+  # NO DELETE, and that omission is the point. Deleting a Namespace cascades to everything
+  # inside it, which for `prow` is the entire control plane and for `test-pods` is every
+  # running job. Argo CD needs to CREATE these and reconcile their labels; it never needs to
+  # remove one. `prune` is false on the path as well, so the only way to lose a namespace is
+  # by hand.
+  #
+  # The ServiceAccounts need no rule here: they are namespaced, and the admin RoleBindings
+  # below already cover serviceaccounts in prow and test-pods.
+  ##############################################################################
+  rule {
+    api_groups = [""]
+    resources  = ["namespaces"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch"]
+  }
+
+  ##############################################################################
   # 5-8. For prow-plugins. THIS IS A DELIBERATE PRIVILEGE EXPANSION, decided rather
   # than drifted into, and one of the two grants here that is NOT merely a
   # restatement of access Argo CD already holds.

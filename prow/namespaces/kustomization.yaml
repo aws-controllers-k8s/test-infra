@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The prow and test-pods Namespaces and the ServiceAccounts every PodIdentityAssociation
+# binds to. A plain kustomize directory with no ${TOKEN}, so Argo CD reads it unchanged and
+# the Application needs no helm block -- which is what lets tool detection find this file.
+#
+# NOT A CHART, and not folded into ack-pod-identities' chart, deliberately. A chart that owns
+# a Namespace is a chart that can delete one: a Helm uninstall or rollback targets the
+# namespace, and deleting a namespace cascades to everything inside it, including all of Prow.
+# That reasoning came from the Flux kustomization this path was carved out of and it still
+# holds under Argo CD.
+#
+# It lives under prow/ rather than flux/ because everything under flux/ is deleted in Phase 5
+# and these objects outlive it.
+resources:
+- prow-namespaces.yaml
