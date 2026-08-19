@@ -12,6 +12,8 @@ metadata:
   name: build-cluster
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   name: ${STACK_NAME}-build-cluster

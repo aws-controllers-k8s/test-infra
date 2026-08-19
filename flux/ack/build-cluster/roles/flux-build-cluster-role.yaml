@@ -12,6 +12,9 @@ kind: Role
 metadata:
   name: flux-build-cluster-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-flux-build-cluster-role
   assumeRolePolicyDocument: |

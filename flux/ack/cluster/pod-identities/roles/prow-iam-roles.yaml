@@ -6,6 +6,9 @@ kind: Role
 metadata:
   name: prow-deployment-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-deployment-role
   assumeRolePolicyDocument: |
@@ -54,6 +57,9 @@ kind: Role
 metadata:
   name: prow-postsubmit-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-postsubmit-role
   assumeRolePolicyDocument: |
@@ -160,6 +166,9 @@ kind: Role
 metadata:
   name: prow-presubmit-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-presubmit-role
   assumeRolePolicyDocument: |
@@ -252,6 +261,9 @@ kind: Role
 metadata:
   name: prow-periodic-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-periodic-role
   assumeRolePolicyDocument: |
@@ -302,6 +314,9 @@ kind: Role
 metadata:
   name: prow-workflow-runner-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-workflow-runner-role
   assumeRolePolicyDocument: |
@@ -353,6 +368,9 @@ kind: Role
 metadata:
   name: prow-mirror-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-prow-mirror-role
   assumeRolePolicyDocument: |

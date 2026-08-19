@@ -18,6 +18,9 @@ kind: PodIdentityAssociation
 metadata:
   name: flux-build-cluster-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: flux-system

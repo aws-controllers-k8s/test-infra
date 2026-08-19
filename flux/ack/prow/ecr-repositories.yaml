@@ -7,6 +7,8 @@ kind: Repository
 metadata:
   name: prow-crier
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/crier
@@ -19,6 +21,8 @@ kind: Repository
 metadata:
   name: prow-deck
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/deck
@@ -31,6 +35,8 @@ kind: Repository
 metadata:
   name: prow-ghproxy
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/ghproxy
@@ -43,6 +49,8 @@ kind: Repository
 metadata:
   name: prow-hook
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/hook
@@ -55,6 +63,8 @@ kind: Repository
 metadata:
   name: prow-horologium
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/horologium
@@ -67,6 +77,8 @@ kind: Repository
 metadata:
   name: prow-controller-manager
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/prow-controller-manager
@@ -79,6 +91,8 @@ kind: Repository
 metadata:
   name: prow-sinker
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/sinker
@@ -91,6 +105,8 @@ kind: Repository
 metadata:
   name: prow-status-reconciler
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/status-reconciler
@@ -103,6 +119,8 @@ kind: Repository
 metadata:
   name: prow-tide
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/tide
@@ -115,6 +133,8 @@ kind: Repository
 metadata:
   name: prow-clonerefs
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/clonerefs
@@ -127,6 +147,8 @@ kind: Repository
 metadata:
   name: prow-entrypoint
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/entrypoint
@@ -139,6 +161,8 @@ kind: Repository
 metadata:
   name: prow-initupload
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/initupload
@@ -151,6 +175,8 @@ kind: Repository
 metadata:
   name: prow-sidecar
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/sidecar
@@ -163,6 +189,8 @@ kind: Repository
 metadata:
   name: prow-label-sync
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/label_sync
@@ -175,6 +203,8 @@ kind: Repository
 metadata:
   name: prow-commenter
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     ecr.services.k8s.aws/force-delete: "true"
 spec:
   name: prow/commenter

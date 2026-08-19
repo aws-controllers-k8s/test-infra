@@ -7,6 +7,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-deployment-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: prow
@@ -18,6 +21,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-postsubmit-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
@@ -29,6 +35,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-presubmit-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
@@ -40,6 +49,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-periodic-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
@@ -51,6 +63,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-mirror-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: test-pods
@@ -62,6 +77,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-workflow-runner-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   namespace: test-pods

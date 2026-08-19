@@ -7,6 +7,9 @@ kind: PullThroughCacheRule
 metadata:
   name: ghcr-fluxcd
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   ecrRepositoryPrefix: fluxcd
   upstreamRegistryURL: ghcr.io

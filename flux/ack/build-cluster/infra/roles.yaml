@@ -12,6 +12,9 @@ kind: Role
 metadata:
   name: build-cluster-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-build-cluster-role
   assumeRolePolicyDocument: |
@@ -39,6 +42,9 @@ kind: Role
 metadata:
   name: build-node-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-build-node-role
   assumeRolePolicyDocument: |
@@ -76,6 +82,9 @@ kind: Role
 metadata:
   name: build-cluster-admin-access-role
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   name: ${STACK_NAME}-build-cluster-admin-access-role
   assumeRolePolicyDocument: |

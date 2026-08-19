@@ -10,6 +10,9 @@ kind: ElasticIPAddress
 metadata:
   name: build-nat-eip
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   tags:
   - key: Name
@@ -20,6 +23,9 @@ kind: NATGateway
 metadata:
   name: build-natgw
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   connectivityType: public
   subnetRef:

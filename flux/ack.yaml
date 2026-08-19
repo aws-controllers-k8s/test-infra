@@ -25,7 +25,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/capability/role
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -45,7 +48,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/cluster/addons/roles
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -69,7 +75,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/capability
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -93,7 +102,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/cluster
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -117,7 +129,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/cluster/addons
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -142,7 +157,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/cluster/pod-identities/roles
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -166,7 +184,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/cluster/pod-identities
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   postBuild:
     substituteFrom:
@@ -190,7 +211,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/prow
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:
@@ -214,7 +238,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/flux
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:

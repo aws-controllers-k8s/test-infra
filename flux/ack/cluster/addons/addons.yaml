@@ -5,6 +5,9 @@ kind: Addon
 metadata:
   name: secrets-store-csi
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   name: aws-secrets-store-csi-driver-provider
@@ -34,6 +37,9 @@ kind: Addon
 metadata:
   name: external-dns-addon
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   name: external-dns
@@ -46,6 +52,9 @@ kind: Addon
 metadata:
   name: coredns
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterName: ${STACK_NAME}-cluster
   name: coredns

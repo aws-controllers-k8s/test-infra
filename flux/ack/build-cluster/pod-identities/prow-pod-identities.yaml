@@ -15,6 +15,9 @@ kind: PodIdentityAssociation
 metadata:
   name: prow-build-presubmit-pod-identity
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   clusterRef:
     from:

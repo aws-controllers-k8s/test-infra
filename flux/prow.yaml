@@ -146,7 +146,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/build-cluster-kubeconfig
-  prune: true
+  # prune disabled ahead of the chart conversion: converting this path makes the
+  # raw object stale, and prune deletes stale objects. Must be live before the
+  # content change (D19-P1).
+  prune: false
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -168,7 +171,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/build-cluster-resources
-  prune: true
+  # prune disabled ahead of the chart conversion: converting this path makes the
+  # raw object stale, and prune deletes stale objects. Must be live before the
+  # content change (D19-P1).
+  prune: false
   kubeConfig:
     configMapRef:
       name: build-cluster-flux-kubeconfig
