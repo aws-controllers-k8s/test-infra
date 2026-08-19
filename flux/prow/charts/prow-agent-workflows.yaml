@@ -9,10 +9,14 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./prow/agent-workflows
-  # prune deliberately disabled for the Argo CD migration: this path is converted or
-  # deleted later in the sequence, and prune deletes objects that a conversion makes
-  # stale. Deleting a Kustomization with prune enabled also garbage-collects its
-  # inventory, so this must be false before any later stage removes it.
+  # prune disabled ahead of the chart conversion, for the same reason as prow-plugins and
+  # the two build-cluster paths: converting makes the raw object stale and prune deletes
+  # stale objects, so this must be live BEFORE the content change (D19-P1).
+  #
+  # This path renders exactly one object, the agent-workflow-config ConfigMap that the
+  # agent-plugin Deployment mounts. disableNameSuffixHash means the pod does not roll when
+  # it changes, so a prune-deleted ConfigMap would not surface as a failing pod either -
+  # the running plugin would keep its mounted copy until something restarted it.
   prune: false
   postBuild:
     substituteFrom:

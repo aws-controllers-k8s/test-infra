@@ -1,0 +1,95 @@
+{{- $testInfraOrg := required "testInfraOrg is required" .Values.testInfraOrg }}
+{{- $testInfraRepo := required "testInfraRepo is required" .Values.testInfraRepo }}
+{{- $testInfraBranch := required "testInfraBranch is required" .Values.testInfraBranch }}
+{{- $stackName := required "stackName is required" .Values.stackName }}
+{{- $testConfig := required "testConfig is required" .Values.testConfig }}
+# The prow-build-cluster-resources Application, carried as a manifest inside a ConfigMap
+# for the Job to apply.
+#
+# WHY THIS IS NOT IN TERRAFORM. Its destination is the build cluster, and D13 puts anything
+# keyed to that cluster out of Terraform's reach: the cluster is an ACK Cluster CR, so a
+# Terraform-declared Application naming it would be created before the cluster exists on a
+# fresh bootstrap and removed while its objects still depended on it on destroy. The same
+# rule already sends the spoke registration Secret and the AppProject destination through
+# this Job. This is the third object in that set, and the Job already holds the one input
+# Terraform cannot supply - the cluster ARN from the CR status.
+#
+# WHY A CONFIGMAP RATHER THAN A HEREDOC IN THE JOB. Two reasons.
+#
+# The manifest nests a YAML document (the Application) containing a YAML string
+# (helm.values) containing a YAML file (test_config.yaml). Composed here, Helm's `indent`
+# gets all three levels right at render time and the result is reviewable as YAML. Composed
+# in the Job it would be a bash heredoc inside a YAML block scalar, where the same
+# indentation is invisible and one space breaks the mount.
+#
+# It also gives this chart a TRACKED object that carries the Application's desired state.
+# The Job is a Helm hook, and a hook is excluded from Argo CD's comparison, so a chart of
+# nothing but hooks can never drift and never syncs. With the spec in a tracked ConfigMap,
+# editing the Application - enabling automated at cutover, moving the branch - is drift,
+# which syncs, which re-runs the hook that applies it. Same mechanism prow-mirror uses to
+# make its version bumps a trigger.
+#
+# __BUILD_CLUSTER_ARN__ is substituted by the Job. It is deliberately not a chart value:
+# nothing that renders this chart knows the ARN, and constructing it from stackName here
+# would put a build-cluster reference back into render-time input, which is what D13
+# forbids. The Job reads it from the CR status, where the read doubles as proof the cluster
+# exists and is reconciled.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: build-cluster-resources-application
+  namespace: flux-system
+data:
+  application.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: prow-build-cluster-resources
+      namespace: argocd
+    spec:
+      project: test-infra
+
+      source:
+        repoURL: https://github.com/{{ $testInfraOrg }}/{{ $testInfraRepo }}
+        targetRevision: {{ $testInfraBranch }}
+        path: flux/prow/charts/prow-build-cluster-resources
+        helm:
+          parameters:
+          - name: stackName
+            value: {{ $stackName | quote }}
+          # values, not a parameter: --set reads `.` and `,` as path and list separators
+          # and test_config.yaml contains both.
+          values: |
+            testConfig: |
+{{ $testConfig | trimSuffix "\n" | indent 14 }}
+
+      destination:
+        # Must be the ARN. The capability registers clusters by ARN, and an Application
+        # whose destination.server is not listed in its project's destinations is REJECTED
+        # outright rather than failing at sync - which is why the Job appends the
+        # destination before applying this.
+        server: __BUILD_CLUSTER_ARN__
+        namespace: test-pods
+
+      syncPolicy:
+        syncOptions:
+        - ServerSideApply=true
+        # The chart owns the test-pods namespace on that cluster; Argo CD must not create
+        # namespaces itself, here or on the hub.
+        - CreateNamespace=false
+
+        # NOT CUT OVER YET. automated is absent deliberately: the Application is created in
+        # manual sync so Argo CD computes the diff and applies nothing, while
+        # kustomize-controller still owns the 13 objects from
+        # flux/prow/build-cluster-resources/. Enabling it before that path is removed would
+        # give the objects two reconcilers.
+        #
+        # Cutover, once the first manual sync confirms all 13 uids held:
+        #   1. delete flux/prow/build-cluster-resources/ (prune: false is already live on
+        #      its Kustomization, so the live objects survive - D19-P1)
+        #   2. add the block below here, which is drift on this ConfigMap, so the sync that
+        #      picks it up also re-runs the Job that applies it
+        #
+        # automated:
+        #   prune: false
+        #   selfHeal: false

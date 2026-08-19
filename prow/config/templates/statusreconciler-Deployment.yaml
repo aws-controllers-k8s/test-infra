@@ -45,7 +45,7 @@ spec:
             secretKeyRef:
               name: github-token
               key: appid
-        image: {{ .Values.statusreconciler.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "status-reconciler" "override" .Values.statusreconciler.image) }}
         args:
         - --dry-run={{ .Values.dryRun }}
         - --continue-on-error=true

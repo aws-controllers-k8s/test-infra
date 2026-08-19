@@ -1,0 +1,8 @@
+# Left empty rather than defaulted so a missing value fails at render time via `required`,
+# the same convention as the other converted charts.
+#
+# These are the two ${TOKEN} names appearing in the generated agent-workflows.yaml. They are
+# the ONLY values this chart takes: the workflow definitions themselves stay in git and are
+# read with .Files.Get, not passed in. See templates/agent-workflow-config.yaml.
+prowImagesRepoUri: ""
+testInfraOrg: ""

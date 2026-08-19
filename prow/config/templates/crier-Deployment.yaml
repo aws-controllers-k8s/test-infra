@@ -51,7 +51,7 @@ spec:
             secretKeyRef:
               name: github-token
               key: appid
-        image: {{ .Values.crier.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "crier" "override" .Values.crier.image) }}
         args:
         - --blob-storage-workers=10
         - --config-path=/etc/config/config.yaml

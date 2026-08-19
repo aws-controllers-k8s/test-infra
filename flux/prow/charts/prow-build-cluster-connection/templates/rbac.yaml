@@ -94,3 +94,61 @@ subjects:
 - kind: ServiceAccount
   name: build-cluster-connection
   namespace: flux-system
+---
+# Register the build cluster as an Argo CD spoke by writing a labelled cluster Secret in
+# the argocd namespace. Scoped to secrets in argocd only.
+#
+# This has to happen at runtime rather than in Terraform. The build cluster is an ACK
+# Cluster CR, so Terraform owning a registration keyed to it recreates the coupling D13
+# had to unpick: on a fresh bootstrap Terraform would register a destination before the
+# cluster existed, and on destroy it would remove the registration while Applications
+# still referenced it. The Job already reads that CR, so it is the natural place.
+#
+# Argo CD can only apply this Role because flux/argocd/namespaced-rbac.yaml grants the
+# capability the same permission in this namespace. argocd is the one namespace the
+# associated access policies leave uncovered - AmazonEKSAdminPolicy excludes it, and
+# AmazonEKSArgoCDPolicy is the capability's own-operation grant. Without that grantor rule
+# escalation prevention refuses this object.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: build-cluster-connection-registrar
+  namespace: argocd
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "update", "patch"]
+# Append the spoke to the AppProject's destinations. get and patch only: Terraform creates
+# and owns the AppProject, and the Job amends one field. Without the destination an
+# Application targeting the build cluster is rejected outright rather than failing at sync.
+- apiGroups: ["argoproj.io"]
+  resources: ["appprojects"]
+  verbs: ["get", "patch"]
+# Apply the prow-build-cluster-resources Application, whose destination is the build cluster
+# and which Terraform therefore must not declare (D13). Unlike appprojects this needs
+# create: the Job owns the object outright rather than amending one Terraform owns.
+#
+# update as well as patch because `kubectl apply` sends a PATCH to an existing object but
+# falls back to a PUT when it has to replace one, and a hook that failed halfway should not
+# need a different verb to recover. Matches the get,create,update,patch the secrets and
+# configmaps rules use.
+#
+# Scoped to applications in this namespace only - not applicationsets, not delete. Nothing
+# here can remove an Application, so a misfiring hook cannot take one out.
+- apiGroups: ["argoproj.io"]
+  resources: ["applications"]
+  verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: build-cluster-connection-registrar
+  namespace: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: build-cluster-connection-registrar
+subjects:
+- kind: ServiceAccount
+  name: build-cluster-connection
+  namespace: flux-system

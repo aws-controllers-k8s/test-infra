@@ -8,3 +8,4 @@ resources:
 - secrets.yaml
 - prow.yaml
 - prometheus.yaml
+- argocd.yaml

@@ -1,0 +1,27 @@
+# The generator's own templates, which share this chart's templates/ directory.
+#
+# prow/jobs/generator.go reads these with text/template against its own data model
+# ($.Config, $.ImageContext). Helm renders everything under templates/, including
+# subdirectories, so without these lines it tries to evaluate 25 files as manifests and
+# fails. Same situation as prow/agent-workflows, at a larger scale.
+#
+# Listed explicitly rather than as templates/*.tpl so that a new generator template
+# directory breaks the render loudly and someone has to decide what it means.
+templates/config/
+templates/periodics/
+templates/postsubmits/
+templates/presubmits/
+templates/job-config-job.yaml.tpl
+
+# 1.9 MB, and the chart does not need it. jobs.yaml never enters the render: it exceeds the
+# 1 MB ConfigMap limit, so the substitutor Job clones the repo at runtime, resolves it with
+# envsubst and gzips the result into the job-config ConfigMap. Excluding it keeps 1.9 MB out
+# of every manifest generation.
+jobs.yaml
+
+# Not chart inputs: the generator, its image build context, the ack-build-tools CLI and docs.
+generator.go
+images/
+tools/
+requirements.txt
+README.md

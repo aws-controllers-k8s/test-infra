@@ -52,7 +52,7 @@ spec:
             secretKeyRef:
               name: github-token
               key: appid
-        image: {{ .Values.tide.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "tide" "override" .Values.tide.image) }}
         args:
         - --dry-run={{ .Values.dryRun }}
         - --config-path=/etc/config/config.yaml

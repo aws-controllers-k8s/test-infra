@@ -1,0 +1,28 @@
+# Left empty rather than defaulted so a missing value fails at render time via
+# `required`, the same convention as the other converted charts.
+
+# Prefixes the build cluster's node role and the tags the NodeClass selects on.
+stackName: ""
+
+# Full CONTENT of prow/jobs/test_config.yaml, not a path.
+#
+# This is the one value that is a file rather than a string, and the reason this path
+# was the last to convert. The directory previously read the file through a
+# configMapGenerator with a `../../../` relative path, which works only because Flux's
+# kustomize-controller builds with load restrictions disabled. Argo CD's managed
+# capability exposes no equivalent setting, and kustomize refuses to read above the
+# kustomization root.
+#
+# Relocating the file cannot fix that: the two roots that need it (prow/jobs/ and this
+# path) share only the repo root, so "relocating" means duplicating - which is the drift
+# the shared reference exists to prevent. Helm's .Files.Get is chart-rooted and inherits
+# the same limit.
+#
+# So the content is injected instead. Terraform reads the file with file() and passes it
+# as an Application value, keeping prow/jobs/test_config.yaml the single source of truth
+# for both clusters. See bootstrap/argocd-applications.tf.
+#
+# `required` like the rest, deliberately: rendering an empty test-config ConfigMap would
+# leave every pre-submit pod mounting an empty config and failing somewhere far from here,
+# so an unset value must fail at render time instead.
+testConfig: ""

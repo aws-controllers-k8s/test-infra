@@ -31,7 +31,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./prow/prometheus-dashboards
-  prune: true
+  # prune disabled ahead of the Argo CD cutover (D19-P1), for the same reason as prow-crds:
+  # this path is not converted, Argo CD reads the same directory, and cutover is suspending
+  # this Kustomization. With prune enabled that would garbage-collect the dashboards ConfigMap.
+  prune: false
   targetNamespace: prometheus
   dependsOn:
   - name: prometheus

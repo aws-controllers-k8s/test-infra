@@ -1,0 +1,27 @@
+# RBAC the Argo CD capability needs in order to manage cluster-scoped objects.
+#
+# Reconciled by Flux for now. That is deliberate but not permanent: this grant is a
+# prerequisite for Argo CD to function, so Argo CD managing it would be circular, and
+# it probably cannot anyway - ClusterRole and ClusterRoleBinding are cluster-scoped
+# rbac.authorization.k8s.io objects, which the associated access policies do not cover,
+# and Kubernetes escalation prevention blocks creating a ClusterRole granting more than
+# the creator holds. Phase 5 has to decide whether this moves to Terraform alongside
+# the access entry that carries the matching group, or stays as the last thing Flux
+# owns. Leaving it undecided here rather than pretending it is settled.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: argocd-rbac
+  namespace: flux-system
+spec:
+  interval: 60m
+  sourceRef:
+    kind: GitRepository
+    name: test-infra
+  path: ./flux/argocd
+  # prune disabled, consistent with every other path: losing this grant would leave
+  # Argo CD unable to reconcile the cluster-scoped objects in the ack-cluster chart.
+  prune: false
+  # No targetNamespace: ClusterRole and ClusterRoleBinding are cluster-scoped.
+  wait: true

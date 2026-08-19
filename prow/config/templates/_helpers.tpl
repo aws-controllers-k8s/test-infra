@@ -80,3 +80,51 @@ running aws-iam-authenticator, so only cluster coordinates are stored).
     name: build-cluster-kubeconfig
 {{- end }}
 {{- end }}
+
+{{/*
+Resolve a Prow component image: the explicit override if set, otherwise composed from
+imageMirror.
+
+Called as:
+  include "prow-config.image" (dict "ctx" . "name" "<ecr-repo>" "override" .Values.x.image)
+
+THE OVERRIDE IS RESOLVED INSIDE THIS HELPER, not with `default` at the call site. Go
+templates evaluate arguments eagerly, so `.Values.x.image | default (include ...)` runs the
+composition even when the override is set - and its `required` calls then fail on the
+imageMirror values that a Flux-driven render has no reason to supply. Verified by hitting
+exactly that. Keeping the branch here means the composition is only reached when it is
+actually needed.
+
+The suffix is the ECR repository name, which is NOT always the values key - the
+statusreconciler component lives at prow/status-reconciler. Each call site passes the
+repository name explicitly rather than deriving it, so the mapping stays visible where it
+matters.
+
+Only reached when a component's `image` value is empty; an explicit image always wins. See
+the imageMirror block in values.yaml for why this composition belongs to the chart rather
+than to whatever is supplying values.
+
+`required` on all four inputs so a missing one fails at render time. Without it a blank
+accountId would silently produce ".dkr.ecr..amazonaws.com/prow/deck:-ack." and the failure
+would surface as an ImagePullBackOff long after the sync reported healthy.
+*/}}
+{{- define "prow-config.image" -}}
+{{- if .override -}}
+{{- .override -}}
+{{- else -}}
+{{- $m := .ctx.Values.imageMirror -}}
+{{- $account := required "imageMirror.accountId is required to compose a Prow image reference" $m.accountId -}}
+{{- $region := required "imageMirror.region is required to compose a Prow image reference" $m.region -}}
+{{- $version := required "imageMirror.prowVersion is required to compose a Prow image reference" $m.prowVersion -}}
+{{- $revision := required "imageMirror.prowPatchRevision is required to compose a Prow image reference" $m.prowPatchRevision -}}
+{{/*
+  toString on every input, because an AWS account id is a 12-digit string that YAML will
+  happily read as a number if it is ever written unquoted in a values file. printf %s on a
+  float64 yields "%!s(float64=8.6987147623e+10)", which is a syntactically valid image
+  reference that fails at pull time rather than at render time. Verified by hitting exactly
+  that. Argo CD's parameters and Helm's --set both keep it a string; a hand-written values
+  file is the case this guards.
+*/}}
+{{- printf "%s.dkr.ecr.%s.amazonaws.com/prow/%s:%s-ack.%s" (toString $account) (toString $region) .name (toString $version) (toString $revision) -}}
+{{- end -}}
+{{- end }}
