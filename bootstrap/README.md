@@ -44,17 +44,10 @@ aws secretsmanager create-secret \
   --name "ack/prow/api-model-kb" \
   --secret-string "<KNOWLEDGE_BASE_ID>"
 
-# ECR pull-through cache credentials for ghcr.io/fluxcd
-# NOTE: no longer required -- the cache rule served Flux's own images and went with Flux.
-aws secretsmanager create-secret \
-  --name "ecr-pullthroughcache/ghcr-fluxcd" \
-  --secret-string '{"username":"<GITHUB_USER>","accessToken":"<GITHUB_PAT>"}'
-
-# ECR needs permission to read the pull-through cache secret
-aws secretsmanager put-resource-policy \
-  --secret-id "ecr-pullthroughcache/ghcr-fluxcd" \
-  --resource-policy '{"Version":"2012-10-17","Statement":[{"Sid":"AllowECRAccess","Effect":"Allow","Principal":{"Service":"ecr.amazonaws.com"},"Action":[ "secretsmanager:GetSecretValue", "secretsmanager:BatchGetSecretValue" ],"Resource":"*"}]}'
 ```
+
+The `ecr-pullthroughcache/ghcr-fluxcd` secret and its resource policy used to be created here.
+They existed for a pull-through cache rule serving Flux's own images, and both went with Flux.
 
 ### 3. Generate your environment
 
@@ -64,7 +57,7 @@ cd test-infra/bootstrap
 ```
 
 The script prompts for the deployment stage first, then for each variable
-(region, account ID, flux version, GitHub org/repo/branch, domain, etc.) with
+(region, account ID, GitHub org/repo/branch, domain, etc.) with
 smart defaults based on the stage. It stores the config as a SecureString in
 SSM at `/ack/test-infra/bootstrap/env/<stage>` and writes a local `.tfvars`
 file to `bootstrap/environment/<stage>.tfvars`.
