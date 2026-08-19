@@ -57,3 +57,16 @@ variable "publish_account_id" {
   description = "AWS account ID that owns the ECR Public repositories for publishing controller images and Helm charts"
   type        = string
 }
+
+variable "seed_ack_bootstrap_policy" {
+  description = <<-EOT
+    Seed the ACK capability role with the minimal BootstrapPermissions inline policy.
+
+    True only on a FRESH bootstrap, where ACK has not yet adopted the role and needs
+    eks:* on the capability and iam:* on itself to get started. ACK replaces that policy
+    with its own set once it adopts the role, so leaving this true afterwards makes every
+    plan want to recreate a policy ACK has deliberately superseded. See capability.tf.
+  EOT
+  type        = bool
+  default     = false
+}
