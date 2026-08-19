@@ -140,13 +140,6 @@ applications:
     values: [accountId, prowDomain, stackName]
     automated: true
 
-  ack-flux:
-    path: flux/ack/charts/ack-flux
-    targetNamespace: ack-system
-    wave: 2
-    values: [ghcrPtcSecretArn]
-    automated: true
-
   ack-build-infra:
     path: flux/ack/charts/ack-build-infra
     targetNamespace: ack-system
