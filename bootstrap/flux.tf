@@ -28,23 +28,23 @@ resource "kubernetes_config_map_v1" "self_managed_vars" {
   }
 
   data = {
-    STACK_NAME               = local.stack_name
-    ACCOUNT_ID               = local.account_id
-    REGION                   = var.region
-    CLUSTER_SG_ID            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-    VPC_ID                   = module.vpc.vpc_id
-    GHCR_PTC_SECRET_ARN      = data.aws_secretsmanager_secret.ghcr_ptc.arn
-    PROW_DOMAIN              = var.prow_domain
-    PROW_IMAGES_REPO_URI     = local.prow_images_repo_uri
-    TEST_INFRA_ORG           = var.test_infra_org
-    TEST_INFRA_REPO          = var.test_infra_repo
-    TEST_INFRA_BRANCH        = var.test_infra_branch
-    FLUX_IMAGE_REGISTRY      = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
-    CONTROLLER_ECR_REGISTRY      = "public.ecr.aws/${local.controller_ecr_alias}"
-    PUBLISH_ACCOUNT_ID           = var.publish_account_id
-    STAGE                        = var.stage
-    KUBERNETES_ORG               = var.kubernetes_org
-    REDHAT_ORG                   = var.redhat_org
+    STACK_NAME              = local.stack_name
+    ACCOUNT_ID              = local.account_id
+    REGION                  = var.region
+    CLUSTER_SG_ID           = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+    VPC_ID                  = module.vpc.vpc_id
+    GHCR_PTC_SECRET_ARN     = data.aws_secretsmanager_secret.ghcr_ptc.arn
+    PROW_DOMAIN             = var.prow_domain
+    PROW_IMAGES_REPO_URI    = local.prow_images_repo_uri
+    TEST_INFRA_ORG          = var.test_infra_org
+    TEST_INFRA_REPO         = var.test_infra_repo
+    TEST_INFRA_BRANCH       = var.test_infra_branch
+    FLUX_IMAGE_REGISTRY     = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/fluxcd/fluxcd"
+    CONTROLLER_ECR_REGISTRY = "public.ecr.aws/${local.controller_ecr_alias}"
+    PUBLISH_ACCOUNT_ID      = var.publish_account_id
+    STAGE                   = var.stage
+    KUBERNETES_ORG          = var.kubernetes_org
+    REDHAT_ORG              = var.redhat_org
   }
 
   depends_on = [null_resource.flux_system_namespace]
@@ -151,7 +151,19 @@ resource "null_resource" "restore_flux_registry" {
 # secrets are in place.
 ################################################################################
 
+# GATED, because "one-shot" was only ever a comment. A local-exec provisioner has no
+# concept of having already run: it re-runs whenever the resource is replaced, and a tainted
+# instance forces exactly that. This one sat tainted, so every plan wanted to rebuild all 15
+# images - roughly an hour - which is why every apply during the migration had to be
+# -target'ed to avoid it. `ignore_changes` does not help: it suppresses attribute diffs and
+# says nothing about replacement.
+#
+# Fresh bootstrap:  terraform apply -var bootstrap_prow_images=true
+# Afterwards the flag stays off (the default) and images are rebuilt by Prow's own jobs, not
+# by Terraform. To force a rebuild deliberately, set the flag again.
 resource "null_resource" "bootstrap_prow_images_job" {
+  count = var.bootstrap_prow_images ? 1 : 0
+
   triggers = {
     cluster_name = aws_eks_cluster.this.name
     region       = var.region

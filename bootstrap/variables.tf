@@ -70,3 +70,17 @@ variable "seed_ack_bootstrap_policy" {
   type        = bool
   default     = false
 }
+
+variable "bootstrap_prow_images" {
+  description = <<-EOT
+    Build and push the Prow images from Terraform.
+
+    True only on a FRESH bootstrap, where the ECR repo is empty and nothing can pull yet.
+    It drives two local-exec provisioners: one pushes the builder image, the other runs the
+    in-cluster Job that builds the remaining ~15. That takes roughly an hour, and because a
+    provisioner re-runs on every replacement, leaving this on means any taint or trigger
+    change silently costs that hour. Afterwards Prow's own jobs rebuild the images.
+  EOT
+  type        = bool
+  default     = false
+}
