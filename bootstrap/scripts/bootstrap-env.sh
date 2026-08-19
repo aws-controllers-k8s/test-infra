@@ -99,7 +99,6 @@ prompt_all_vars() {
   echo "Configure environment variables:" >&2
   echo "" >&2
 
-  local region account_id flux_version test_infra_org test_infra_repo
   local test_infra_branch stage prow_domain kubernetes_org redhat_org controllers publish_account_id
 
   # Helper to extract existing value from JSON, falling back to provided default
@@ -136,7 +135,6 @@ prompt_all_vars() {
 
   region=$(prompt "AWS region" "$(_default region "us-west-2")")
   account_id=$(prompt "AWS account ID" "$(_default account_id "$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo '')")")
-  flux_version=$(prompt "Flux chart version" "$(_default flux_version "$(grep 'FLUX_VERSION:' "$BOOTSTRAP_DIR/../flux/flux/version-configmap.yaml" | awk -F'"' '{print $2}')")")
   test_infra_org=$(prompt "GitHub org for test-infra repo" "$(_default test_infra_org "$default_org")")
   test_infra_repo=$(prompt "GitHub repo name for test-infra" "$(_default test_infra_repo "test-infra")")
   test_infra_branch=$(prompt "Git branch for Flux and Prow jobs" "$(_default test_infra_branch "main")")
@@ -150,7 +148,6 @@ prompt_all_vars() {
   jq -n \
     --arg region "$region" \
     --arg account_id "$account_id" \
-    --arg flux_version "$flux_version" \
     --arg test_infra_org "$test_infra_org" \
     --arg test_infra_repo "$test_infra_repo" \
     --arg test_infra_branch "$test_infra_branch" \
@@ -163,7 +160,6 @@ prompt_all_vars() {
     '{
       region: $region,
       account_id: $account_id,
-      flux_version: $flux_version,
       test_infra_org: $test_infra_org,
       test_infra_repo: $test_infra_repo,
       test_infra_branch: $test_infra_branch,

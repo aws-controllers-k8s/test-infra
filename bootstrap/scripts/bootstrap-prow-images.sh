@@ -31,10 +31,14 @@ if [ "${STATUS:-0}" -ge 1 ]; then
 fi
 
 # Read variables from the ConfigMap in flux-system
-STACK_NAME=$(kubectl get configmap self-managed-vars -n flux-system -o jsonpath='{.data.STACK_NAME}')
-TEST_INFRA_ORG=$(kubectl get configmap self-managed-vars -n flux-system -o jsonpath='{.data.TEST_INFRA_ORG}')
-TEST_INFRA_REPO=$(kubectl get configmap self-managed-vars -n flux-system -o jsonpath='{.data.TEST_INFRA_REPO}')
-TEST_INFRA_BRANCH=$(kubectl get configmap self-managed-vars -n flux-system -o jsonpath='{.data.TEST_INFRA_BRANCH}')
+# Supplied by Terraform via the provisioner's environment. These used to be read from the
+# self-managed-vars ConfigMap in flux-system, which existed only for Flux's postBuild
+# substitution and went with Flux. Terraform knows all four directly, so there is no reason
+# to round-trip them through the cluster.
+: "${STACK_NAME:?STACK_NAME not set (passed by null_resource.bootstrap_prow_images_job)}"
+: "${TEST_INFRA_ORG:?TEST_INFRA_ORG not set}"
+: "${TEST_INFRA_REPO:?TEST_INFRA_REPO not set}"
+: "${TEST_INFRA_BRANCH:?TEST_INFRA_BRANCH not set}"
 
 # Delete any previous failed Job so we can re-create it
 kubectl delete job prow-build-images -n test-pods 2>/dev/null || true

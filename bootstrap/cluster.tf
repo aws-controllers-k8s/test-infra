@@ -95,26 +95,6 @@ resource "aws_iam_role_policy_attachment" "node_policies" {
   depends_on = [aws_iam_role.node]
 }
 
-resource "aws_iam_role_policy" "node_ecr_ptc" {
-  name = "${local.stack_name}-ECRPullThroughCache"
-  role = aws_iam_role.node.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ecr:CreateRepository",
-        "ecr:BatchImportUpstreamImage"
-      ]
-      Resource = [
-        "arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/fluxcd/*"
-      ]
-    }]
-  })
-
-  depends_on = [aws_iam_role.node]
-}
 
 ################################################################################
 # EKS Cluster
@@ -161,7 +141,6 @@ resource "aws_eks_cluster" "this" {
   depends_on = [
     aws_iam_role_policy_attachment.cluster_policies,
     aws_iam_role_policy_attachment.node_policies,
-    aws_iam_role_policy.node_ecr_ptc,
   ]
 
   # ACK manages the cluster configuration after bootstrap.
@@ -219,7 +198,12 @@ resource "null_resource" "swap_nodepool" {
     command = "${self.triggers.script} ${self.triggers.cluster_name} ${self.triggers.region}"
   }
 
+  # No Terraform gate any more. This waited on validate_kustomizations, which polled Flux
+  # Kustomizations for Ready; Flux is gone, and the prow-compute NodePool it was really
+  # waiting for is now delivered by the ack-cluster Application, which Terraform cannot
+  # observe. swap-nodepool.sh polls for that NodePool itself with its own timeout and skips
+  # cleanly if it never appears, so the wait lives in the script rather than in the graph.
   depends_on = [
-    null_resource.validate_kustomizations
+    aws_eks_cluster.this,
   ]
 }

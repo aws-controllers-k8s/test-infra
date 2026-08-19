@@ -5,7 +5,7 @@
 #
 # Prerequisites:
 #   - The Route53 hosted zone for <domain> must already exist
-#     (created by ACK via flux/ack/prow/prow-dns.yaml)
+#     (created by ACK via flux/ack/charts/ack-prow/templates/prow-dns.yaml)
 #   - AWS credentials with acm:* and route53:* permissions
 #
 # The ALB controller auto-discovers issued ACM certs matching the ingress host.

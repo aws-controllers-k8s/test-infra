@@ -78,7 +78,6 @@ locals {
     region            = var.region
     publishAccountId  = var.publish_account_id
     prowDomain        = var.prow_domain
-    ghcrPtcSecretArn  = data.aws_secretsmanager_secret.ghcr_ptc.arn
     prowImagesRepoUri = local.prow_images_repo_uri
 
     # Repo coordinates, needed by prow-build-cluster-connection because the Application it
