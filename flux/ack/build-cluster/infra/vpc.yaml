@@ -14,6 +14,7 @@ spec:
   - "10.1.0.0/16"
   enableDNSSupport: true
   enableDNSHostnames: true
+  enableNetworkAddressUsageMetrics: false
   tags:
   - key: Name
     value: ${STACK_NAME}-build-vpc
