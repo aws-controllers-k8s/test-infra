@@ -20,7 +20,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/ack/build-cluster
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: converting this path
+  # to a chart makes every raw object stale, and prune deletes stale objects.
+  # Must be live before any content change (see docs, D19-P1).
+  prune: false
   deletionPolicy: WaitForTermination
   targetNamespace: ack-system
   postBuild:

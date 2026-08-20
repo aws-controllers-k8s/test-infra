@@ -21,7 +21,16 @@ metadata:
 spec:
   interval: 60m
   path: ./flux
-  prune: true
+  # prune: false. This is the root: its inventory is every child Kustomization and
+  # HelmRelease, so with prune enabled, removing a file from flux/kustomization.yaml deletes
+  # the corresponding Kustomization - which is how the argocd-rbac path was retired, and it
+  # worked only because that Kustomization had prune off itself.
+  #
+  # Phase 5 removes those files wholesale, and a cascade of deletions driven by a git diff is
+  # the wrong mechanism for it: each deletion should be deliberate and checked. The cost is
+  # that removing a path now leaves its Kustomization object behind for manual deletion,
+  # which is the intended trade.
+  prune: false
   sourceRef:
     kind: GitRepository
     name: test-infra

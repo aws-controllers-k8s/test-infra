@@ -8,6 +8,8 @@ metadata:
   name: prow-hosted-zone
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   name: ${PROW_DOMAIN}

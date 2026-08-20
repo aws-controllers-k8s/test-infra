@@ -27,7 +27,12 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/version
-  prune: true
+  # prune: false, the last three paths to lose it. Phase 5 DELETES this Kustomization, and a
+  # Kustomization with prune enabled garbage-collects its inventory when it is deleted - here
+  # that is the prow-version ConfigMap. The chart defaults that replaced it are git-authored,
+  # so losing the ConfigMap is survivable, but it should be an explicit `kubectl delete` and
+  # not a side effect of removing a file.
+  prune: false
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -40,7 +45,11 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/crds
-  prune: true
+  # prune deliberately disabled for the Argo CD migration: this path is converted or
+  # deleted later in the sequence, and prune deletes objects that a conversion makes
+  # stale. Deleting a Kustomization with prune enabled also garbage-collects its
+  # inventory, so this must be false before any later stage removes it.
+  prune: false
   dependsOn:
   - name: ack-pod-identities
 ---
@@ -114,7 +123,13 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/charts
-  prune: true
+  # prune: false, and on this path it is the difference between a clean Flux removal and an
+  # outage. Its inventory holds the prow-config and prow-data-plane HelmReleases, and
+  # prow-config's release owns Prow's nine Deployments. Deleting this Kustomization while
+  # prune is enabled would garbage-collect those HelmReleases, and whether helm-controller
+  # then UNINSTALLS the releases - taking the Deployments with them - depends on how it treats
+  # a suspended release on deletion. With prune off the question never arises.
+  prune: false
   targetNamespace: flux-system
   postBuild:
     substituteFrom:
@@ -146,7 +161,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/build-cluster-kubeconfig
-  prune: true
+  # prune disabled ahead of the chart conversion: converting this path makes the
+  # raw object stale, and prune deletes stale objects. Must be live before the
+  # content change (D19-P1).
+  prune: false
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -168,7 +186,10 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./flux/prow/build-cluster-resources
-  prune: true
+  # prune disabled ahead of the chart conversion: converting this path makes the
+  # raw object stale, and prune deletes stale objects. Must be live before the
+  # content change (D19-P1).
+  prune: false
   kubeConfig:
     configMapRef:
       name: build-cluster-flux-kubeconfig

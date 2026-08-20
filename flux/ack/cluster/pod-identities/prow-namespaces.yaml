@@ -4,38 +4,60 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: prow
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prow-deployment-service-account
   namespace: prow
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: pre-submit-service-account
   namespace: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: post-submit-service-account
   namespace: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: periodic-service-account
   namespace: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prow-mirror-service-account
   namespace: test-pods
+
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep

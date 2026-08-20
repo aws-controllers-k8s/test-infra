@@ -8,6 +8,9 @@ apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: prow-control-plane
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   template:
     metadata:

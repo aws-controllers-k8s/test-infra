@@ -9,11 +9,15 @@ kind: VPC
 metadata:
   name: build-vpc
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   cidrBlocks:
   - "10.1.0.0/16"
   enableDNSSupport: true
   enableDNSHostnames: true
+  enableNetworkAddressUsageMetrics: false
   tags:
   - key: Name
     value: ${STACK_NAME}-build-vpc
@@ -23,6 +27,9 @@ kind: InternetGateway
 metadata:
   name: build-igw
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   vpcRef:
     from:

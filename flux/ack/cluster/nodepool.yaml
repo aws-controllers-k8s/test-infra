@@ -7,6 +7,9 @@ apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: prow-compute
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   template:
     spec:

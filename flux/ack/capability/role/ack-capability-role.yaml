@@ -8,6 +8,8 @@ metadata:
   name: ack-capability-role
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/adoption-fields: '{"name": "${STACK_NAME}-ack-capability-role"}'
     services.k8s.aws/deletion-policy: retain

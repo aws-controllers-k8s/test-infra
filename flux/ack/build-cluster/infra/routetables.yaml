@@ -10,6 +10,9 @@ kind: RouteTable
 metadata:
   name: build-rt-public
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   vpcRef:
     from:
@@ -28,6 +31,9 @@ kind: RouteTable
 metadata:
   name: build-rt-private
   namespace: ack-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
 spec:
   vpcRef:
     from:

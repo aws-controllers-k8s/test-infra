@@ -17,6 +17,8 @@ metadata:
   name: build-cluster-admin-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   clusterRef:
@@ -36,6 +38,8 @@ metadata:
   name: build-admin-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   clusterRef:
@@ -55,6 +59,8 @@ metadata:
   name: build-readonly-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   clusterRef:
@@ -76,6 +82,8 @@ metadata:
   name: prow-deployment-build-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   clusterRef:
@@ -95,6 +103,8 @@ metadata:
   name: flux-build-cluster-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
 spec:
   clusterRef:
@@ -128,6 +138,8 @@ metadata:
   name: build-node-access
   namespace: ack-system
   annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
     services.k8s.aws/deletion-policy: retain
     services.k8s.aws/adoption-policy: adopt-or-create
 spec:
