@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-capability-role
+description: "IAM role assumed by the ACK EKS capability"
+type: application
+version: 0.1.0

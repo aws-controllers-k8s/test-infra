@@ -1,0 +1,17 @@
+# Route53 Hosted Zone for Prow Deck UI - managed by ACK
+# NS delegation from the parent zone (ack.aws.dev) is already configured.
+# The A record pointing to the Deck NLB is managed by external-dns.
+{{- $prowDomain := required "prowDomain is required" .Values.prowDomain }}
+---
+apiVersion: route53.services.k8s.aws/v1alpha1
+kind: HostedZone
+metadata:
+  name: prow-hosted-zone
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/deletion-policy: retain
+spec:
+  name: {{ $prowDomain }}
+  hostedZoneConfig:
+    comment: "Prow environment - managed by ACK"

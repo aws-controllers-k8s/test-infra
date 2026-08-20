@@ -1,0 +1,9 @@
+# accountId and region come from self-managed-vars; the three version values come
+# from the prow-version ConfigMap. Left empty rather than defaulted so a missing
+# value fails at render time via `required` - a half-substituted image tag would
+# mirror the wrong images.
+accountId: ""
+region: ""
+prowVersion: ""
+prowPatchRevision: ""
+toolsVersion: ""

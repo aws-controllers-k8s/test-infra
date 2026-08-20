@@ -1,0 +1,41 @@
+# Renders flux/ack/charts/ack-prow instead of the token-substituted manifests.
+# The HelmRelease stays inside the existing Kustomization so the dependsOn
+# edge(s) on ack-capability (Kustomizations) are preserved:
+# HelmRelease.spec.dependsOn can only reference other HelmReleases.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ack-prow
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: ack-system
+  chart:
+    spec:
+      chart: ./flux/ack/charts/ack-prow
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        # Pinned: otherwise the lookup defaults to the HelmRelease's own namespace.
+        namespace: flux-system
+      interval: 60m
+  install:
+    createNamespace: false
+  upgrade:
+    # force would delete and recreate the AWS resources behind these CRs.
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: ACCOUNT_ID
+    targetPath: accountId
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: PROW_DOMAIN
+    targetPath: prowDomain
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-pod-identities
+description: "Pod Identity associations binding Prow service accounts to IAM roles"
+type: application
+version: 0.1.0

@@ -137,12 +137,14 @@ spec:
       name: self-managed-vars
     - kind: ConfigMap
       name: prow-version
-    # Build cluster endpoint + CA, written by prow-build-cluster-connection.
-    # Optional so prow-charts still reconciles while buildCluster.enabled is
-    # false (the ConfigMap is only consumed by the gated build-cluster kubeconfig).
-    - kind: ConfigMap
-      name: build-cluster-connection
-      optional: true
+    # build-cluster-connection is deliberately no longer substituted here. Its
+    # endpoint + CA were the only values in this repo that had to be read from the
+    # cluster at render time, which Argo CD cannot do. The
+    # prow-build-cluster-connection Job now assembles the build-cluster-kubeconfig
+    # ConfigMap directly, so every remaining value on this path comes from
+    # Terraform (self-managed-vars) or git (prow-version).
+  # Still ordered after the Job: it must have written build-cluster-kubeconfig
+  # before the four components that mount it are deployed.
   dependsOn:
   - name: prow-mirror
   - name: prow-build-cluster-connection

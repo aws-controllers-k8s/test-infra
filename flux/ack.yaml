@@ -30,7 +30,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -53,7 +55,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -80,7 +84,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -107,7 +113,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -134,7 +142,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -162,7 +172,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -216,7 +228,9 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it would rewrite the
+  # HelmRelease's own namespace. Objects are placed by
+  # HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap
@@ -243,7 +257,10 @@ spec:
   # Must be live before any content change (see docs, D19-P1).
   prune: false
   deletionPolicy: WaitForTermination
-  targetNamespace: ack-system
+  # targetNamespace removed with the chart conversion: it rewrites the namespace
+  # of every object this Kustomization applies, including the HelmRelease itself,
+  # which would strand the HelmRelease in ack-system. The chart's objects are
+  # placed by HelmRelease.spec.targetNamespace instead.
   postBuild:
     substituteFrom:
     - kind: ConfigMap

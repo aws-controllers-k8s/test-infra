@@ -1,0 +1,46 @@
+{{- $accountId := required "accountId is required" .Values.accountId }}
+{{- $region := required "region is required" .Values.region }}
+{{- $stackName := required "stackName is required" .Values.stackName }}
+# Flux build-cluster IAM role, consumed by the control-plane Flux
+# (kustomize-controller) to reach the build cluster's API and remote-apply the
+# in-cluster objects (test-pods namespace, pre-submit-service-account, RBAC) that
+# ACK cannot create. Resolved via flux-pod-identity.yaml; the matching
+# flux-build-cluster-access AccessEntry grants the cluster-side RBAC.
+#
+# Least-privilege: the only AWS permission needed is eks:DescribeCluster (to fetch
+# the endpoint + CA), scoped to the one build cluster.
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: flux-build-cluster-role
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  name: {{ $stackName }}-flux-build-cluster-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    DescribeBuildCluster: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:DescribeCluster"],
+            "Resource": "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-build-cluster"
+          }
+        ]
+      }

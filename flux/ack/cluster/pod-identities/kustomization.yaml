@@ -1,6 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
+# prow-namespaces.yaml stays a raw manifest on purpose. It declares the prow and
+# test-pods Namespaces, and no chart may own a Namespace: if Helm ever uninstalled
+# or rolled back the release it would target the namespace, and deleting a
+# namespace cascades to everything inside it, including all of Prow.
+#
+# roles/ is not included here: it is owned by the ack-pod-identity-roles
+# Kustomization, which this path dependsOn.
 resources:
 - prow-namespaces.yaml
-- prow-pod-identities.yaml
+- helm-release.yaml

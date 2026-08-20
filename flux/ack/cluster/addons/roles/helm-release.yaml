@@ -1,0 +1,31 @@
+# Renders flux/ack/charts/ack-addons-roles instead of the token-substituted
+# manifest. The HelmRelease stays inside the existing Kustomization so the
+# dependsOn edge on ack-capability (a Kustomization) is preserved.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ack-addons-roles
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: ack-system
+  chart:
+    spec:
+      chart: ./flux/ack/charts/ack-addons-roles
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        namespace: flux-system
+      interval: 60m
+  install:
+    createNamespace: false
+  upgrade:
+    # force would delete and recreate the IAM role behind the CR.
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName

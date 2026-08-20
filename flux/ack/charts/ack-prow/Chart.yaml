@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ack-prow
+description: "Prow's supporting AWS resources - ECR repos, hosted zone, logs bucket, roles"
+type: application
+version: 0.1.0

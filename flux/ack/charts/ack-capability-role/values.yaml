@@ -1,0 +1,5 @@
+# Supplied by the HelmRelease from the self-managed-vars ConfigMap. Left empty
+# rather than defaulted so a missing value fails at render time via `required`.
+accountId: ""
+region: ""
+stackName: ""

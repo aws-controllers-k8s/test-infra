@@ -1,0 +1,43 @@
+# Renders flux/prow/charts/prow-build-cluster-connection instead of the
+# token-substituted manifests.
+#
+# targetNamespace is flux-system, but every template keeps its explicit
+# metadata.namespace: the Role and RoleBinding that read the ACK CRs live in
+# ack-system while the Job, ServiceAccount and write RBAC live in flux-system.
+# Stripping those namespaces would collapse the chart onto one namespace and break
+# the cross-namespace read.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: prow-build-cluster-connection
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: flux-system
+  chart:
+    spec:
+      chart: ./flux/prow/charts/prow-build-cluster-connection
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        namespace: flux-system
+      interval: 60m
+  install:
+    createNamespace: false
+  upgrade:
+    # The Job is a Helm hook with hook-delete-policy: before-hook-creation,
+    # which deletes and recreates it. force is not the mechanism and would not
+    # work anyway: Helm force is a replace, and the API server still rejects a
+    # changed Job spec.template as immutable.
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: PROW_IMAGES_REPO_URI
+    targetPath: prowImagesRepoUri
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName

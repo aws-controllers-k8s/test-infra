@@ -41,8 +41,15 @@ spec:
     # prow-config.buildCluster* helpers in _helpers.tpl). The components
     # authenticate as their own Pod Identity (prow-deployment-role), mapped to the
     # `prow-build-cluster` group by the prow-deployment-build-access AccessEntry.
-    # server + certificateAuthorityData come from the ACK Cluster CR status via
-    # the build-cluster-connection ConfigMap.
+    # server and certificateAuthorityData are deliberately NOT set here.
+    #
+    # They are only knowable at runtime, from the build-cluster Cluster CR status,
+    # and passing them as chart values required the reconciler to read a cluster
+    # ConfigMap while rendering. Argo CD renders off-cluster and cannot do that, so
+    # the build-cluster-connection Job now assembles the build-cluster-kubeconfig
+    # ConfigMap directly and the four components mount it, unchanged. With server
+    # unset, build-cluster-kubeconfig-ConfigMap.yaml stops rendering and leaves the
+    # object to the Job.
     buildCluster:
       # Build cluster provisioned and verified; wired into the four components.
       # Pre-submit routing is enabled separately via presubmit_cluster in
@@ -50,8 +57,6 @@ spec:
       enabled: true
       name: build
       clusterName: "${STACK_NAME}-build-cluster"
-      server: "${BUILD_CLUSTER_ENDPOINT}"
-      certificateAuthorityData: "${BUILD_CLUSTER_CA}"
     crier:
       image: "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow/crier:${PROW_VERSION}-ack.${PROW_PATCH_REVISION}"
       serviceAccount:

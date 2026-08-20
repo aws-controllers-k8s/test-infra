@@ -1,0 +1,60 @@
+# EKS Access Entries managed by ACK.
+# These define who can access the cluster and with what permissions.
+{{- $accountId := required "accountId is required" .Values.accountId }}
+{{- $stackName := required "stackName is required" .Values.stackName }}
+---
+# Dedicated cluster admin role (assumable by account root for break-glass)
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: cluster-admin-access
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterName: {{ $stackName }}-cluster
+  principalARN: "arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-cluster-admin-access-role"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# Admin role - cluster admin access
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: admin-access
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/deletion-policy: retain
+    services.k8s.aws/adoption-policy: adopt
+    services.k8s.aws/adoption-fields: '{"clusterName": "{{ $stackName }}-cluster", "principalARN": "arn:aws:iam::{{ $accountId }}:role/Admin"}'
+spec:
+  clusterName: {{ $stackName }}-cluster
+  principalARN: "arn:aws:iam::{{ $accountId }}:role/Admin"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster
+---
+# ReadOnly role - view-only access
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: readonly-access
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterName: {{ $stackName }}-cluster
+  principalARN: "arn:aws:iam::{{ $accountId }}:role/ReadOnly"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy
+    accessScope:
+      type: cluster

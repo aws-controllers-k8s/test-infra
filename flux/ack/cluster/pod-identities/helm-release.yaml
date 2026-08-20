@@ -1,0 +1,39 @@
+# Renders flux/ack/charts/ack-pod-identities instead of the token-substituted
+# manifest. The HelmRelease stays inside the existing Kustomization so the
+# dependsOn edges on ack-cluster and ack-pod-identity-roles (Kustomizations) are
+# preserved: HelmRelease.spec.dependsOn can only reference other HelmReleases.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ack-pod-identities
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: ack-system
+  chart:
+    spec:
+      chart: ./flux/ack/charts/ack-pod-identities
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        # Pinned: otherwise the lookup defaults to the HelmRelease's own namespace.
+        namespace: flux-system
+      interval: 60m
+  install:
+    # The prow and test-pods namespaces are applied as raw manifests alongside
+    # this HelmRelease, never by a chart.
+    createNamespace: false
+  upgrade:
+    # force would delete and recreate the Pod Identity associations.
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: ACCOUNT_ID
+    targetPath: accountId
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName

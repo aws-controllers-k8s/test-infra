@@ -1,0 +1,38 @@
+# Renders flux/ack/charts/ack-capability instead of the token-substituted manifest.
+#
+# Six Kustomizations dependsOn ack-capability, so this is the widest-reaching
+# conversion in the migration. The Capability CR is what provides the ACK
+# controllers themselves, so force: false and the retain policies in the template
+# are what keep a failed upgrade from stranding every ACK resource.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ack-capability
+  namespace: flux-system
+spec:
+  interval: 60m
+  targetNamespace: ack-system
+  chart:
+    spec:
+      chart: ./flux/ack/charts/ack-capability
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: test-infra
+        # Pinned: otherwise the lookup defaults to the HelmRelease's own namespace.
+        namespace: flux-system
+      interval: 60m
+  install:
+    createNamespace: false
+  upgrade:
+    force: false
+  valuesFrom:
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: ACCOUNT_ID
+    targetPath: accountId
+  - kind: ConfigMap
+    name: self-managed-vars
+    valuesKey: STACK_NAME
+    targetPath: stackName
