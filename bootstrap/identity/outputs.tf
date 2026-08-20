@@ -1,11 +1,11 @@
 output "idc_instance_arn" {
   description = "IdC instance ARN. Consumed as argoCd.awsIdc.idcInstanceArn by the capability."
-  value       = awscc_sso_instance.this.instance_arn
+  value       = local.instance_arn
 }
 
 output "idc_identity_store_id" {
   description = "Identity Store ID backing the instance."
-  value       = awscc_sso_instance.this.identity_store_id
+  value       = local.identity_store_id
 }
 
 output "argocd_admin_group_id" {

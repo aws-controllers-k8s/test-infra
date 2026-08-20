@@ -28,3 +28,21 @@ variable "argocd_admins" {
 
   default = []
 }
+
+variable "create_account_instance" {
+  description = <<-EOT
+    Create an IAM Identity Center ACCOUNT instance in this account.
+
+    True for a standalone account, or a member account of an organization. FALSE for an
+    organization's MANAGEMENT account, where CreateInstance is rejected outright:
+
+      Organization management account is not allowed to perform the operation.
+      (Service: SsoAdmin, Status Code: 400)
+
+    With false, an ORGANIZATION instance must already exist -- enabled by hand from the
+    management account's IAM Identity Center console, because no API creates one -- and
+    this module consumes it instead of creating anything.
+  EOT
+  type        = bool
+  default     = true
+}
