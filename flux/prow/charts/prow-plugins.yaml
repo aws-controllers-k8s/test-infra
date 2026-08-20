@@ -9,10 +9,13 @@ spec:
     kind: GitRepository
     name: test-infra
   path: ./prow/plugins/deployments
-  # prune deliberately disabled for the Argo CD migration: this path is converted or
-  # deleted later in the sequence, and prune deletes objects that a conversion makes
-  # stale. Deleting a Kustomization with prune enabled also garbage-collects its
-  # inventory, so this must be false before any later stage removes it.
+  # prune disabled ahead of the chart conversion: converting this path makes the raw
+  # objects stale, and prune deletes stale objects. Must be live BEFORE the content
+  # change, not alongside it (D19-P1) - which is why this is its own commit.
+  #
+  # The cost is that a removed object is no longer garbage-collected here, the same trade
+  # every other converted path already made. What it buys is that the Deployment, Service
+  # and RBAC keep running when the raw manifests stop being rendered.
   prune: false
   postBuild:
     substituteFrom:

@@ -1,33 +1,42 @@
+# Not per-environment. Every value this chart takes is the same static string in every stage,
+# which is why they are defaults here rather than parameters an Application supplies.
+#
+# They were previously passed explicitly by flux/prow/charts/prow-data-plane.yaml, whose values
+# block was identical to this file with the blanks filled in - Flux made that convenient, not
+# necessary. Argo CD has no valuesFrom and Terraform has no business knowing a ServiceAccount
+# name the chart itself defines, so the values live where the structure does. Same rule as
+# flux/prow/charts/prow-mirror/values.yaml.
+#
+# The HelmRelease still sets them, with these identical values, while stages remain on Flux.
+# Phase 5 deletes it and leaves these defaults as the only copy.
 region: 'us-west-2'
-
+# The ServiceAccount the Prow components authenticate as. It lives in the prow namespace and is
+# bound here into test-pods, which is where the Roles and RoleBindings this chart renders land.
+#
+# horologium, statusreconciler and tide are declared for parity with the component list in
+# prow/config, but this chart renders no Role for them - only crier, deck, hook,
+# prow-controller-manager and sinker reach into test-pods.
 crier:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 deck:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 hook:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 horologium:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 prowControllerManager:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 sinker:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 statusreconciler:
   serviceAccount:
-    name: ''
-
+    name: 'prow-deployment-service-account'
 tide:
   serviceAccount:
-    name: ''
+    name: 'prow-deployment-service-account'

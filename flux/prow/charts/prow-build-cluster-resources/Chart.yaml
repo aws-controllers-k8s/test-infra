@@ -1,0 +1,5 @@
+apiVersion: v2
+name: prow-build-cluster-resources
+description: "In-cluster objects applied INTO the build cluster: test-pods namespace, pre-submit ServiceAccount, Prow component RBAC, the prow-compute NodeClass/NodePool and the shared test-config ConfigMap"
+type: application
+version: 0.1.0

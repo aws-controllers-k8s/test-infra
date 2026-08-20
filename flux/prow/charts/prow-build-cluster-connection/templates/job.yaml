@@ -124,6 +124,88 @@ spec:
             | kubectl apply -f -
 
           echo "build-cluster-kubeconfig ConfigMap updated."
+
+          # Register the build cluster as an Argo CD spoke.
+          #
+          # Argo CD discovers target clusters from labelled Secrets in its own namespace.
+          # This one is written at runtime, not by Terraform: the build cluster is an ACK
+          # Cluster CR, so a Terraform-owned registration keyed to it would be created
+          # before the cluster exists on a fresh bootstrap, and removed while Applications
+          # still reference it on destroy (D13).
+          #
+          # server MUST be the cluster ARN. API server URLs are not accepted by the managed
+          # capability, and a URL would also fail to match the AppProject destination -
+          # which rejects the Application outright rather than failing at sync.
+          #
+          # Read from the CR status rather than built from stackName, even though the ARN
+          # is deterministic: reading it proves the cluster exists and is reconciled before
+          # anything is registered. Registering a spoke Argo CD cannot reach is worse than
+          # not registering one.
+          #
+          # No credentials are stored. The capability authenticates as its own role, which
+          # holds a cluster-admin access entry on the build cluster
+          # (argocd-build-cluster-access, in the ack-build-infra chart). Without that entry
+          # this Secret would register an unreachable cluster.
+          ARN=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
+                  -o jsonpath='{.status.ackResourceMetadata.arn}')
+          if [ -z "$ARN" ]; then
+            echo "ERROR: build-cluster ARN empty - refusing to register an unreachable spoke" >&2
+            exit 1
+          fi
+          echo "  arn: $ARN"
+          kubectl create secret generic build-cluster -n argocd \
+            --from-literal=name="{{ $stackName }}-build-cluster" \
+            --from-literal=server="$ARN" \
+            --from-literal=project="test-infra" \
+            --dry-run=client -o yaml \
+            | kubectl label --local -f - -o yaml \
+                argocd.argoproj.io/secret-type=cluster \
+            | kubectl apply -f -
+          echo "build cluster registered as an Argo CD spoke."
+
+          # Authorise the spoke in the AppProject.
+          #
+          # Registration alone is not enough: an Application whose destination.server is
+          # not listed in its project's destinations is REJECTED outright, rather than
+          # failing at sync, which is a confusing way to discover the omission.
+          #
+          # Runtime, like the registration and for the same reason - a destination naming
+          # the build cluster is keyed to a cluster ACK owns, so Terraform must not hold
+          # it (D13). Terraform declares the hub destination and carries
+          # ignore_changes on the list so it does not revert this.
+          #
+          # Idempotent because this hook runs on every sync: the destination is appended
+          # only when absent. A blind `add` would grow the list without bound.
+          PROJECT="test-infra"
+          if kubectl -n argocd get appproject "$PROJECT" \
+               -o jsonpath='{.spec.destinations[*].server}' | grep -qF "$ARN"; then
+            echo "AppProject $PROJECT already authorises the build cluster."
+          else
+            echo "Adding build cluster to AppProject $PROJECT destinations..."
+            kubectl -n argocd patch appproject "$PROJECT" --type=json \
+              -p "[{\"op\":\"add\",\"path\":\"/spec/destinations/-\",\"value\":{\"server\":\"${ARN}\",\"namespace\":\"*\"}}]"
+            echo "AppProject $PROJECT updated."
+          fi
+
+          # Apply the prow-build-cluster-resources Application.
+          #
+          # Third and last of the build-cluster-keyed objects this Job owns, for the same
+          # reason as the other two: its destination names a cluster ACK creates, so
+          # Terraform must not declare it (D13). Terraform supplies the values; the ARN,
+          # the one thing it cannot know, is substituted here.
+          #
+          # The manifest itself is composed by the chart and mounted from the
+          # build-cluster-resources-application ConfigMap - see templates/application.yaml
+          # for why it is not a heredoc here. Only the ARN placeholder is filled in.
+          #
+          # Ordering matters and is why this is last: an Application whose
+          # destination.server is absent from its project's destinations is rejected
+          # outright, so the registration and the AppProject patch above must both have
+          # happened first.
+          echo "Applying the prow-build-cluster-resources Application..."
+          sed "s|__BUILD_CLUSTER_ARN__|${ARN}|" /etc/application/application.yaml \
+            | kubectl apply -f -
+          echo "prow-build-cluster-resources Application applied."
         resources:
           requests:
             cpu: "50m"
@@ -131,3 +213,19 @@ spec:
           limits:
             cpu: "200m"
             memory: "128Mi"
+        volumeMounts:
+        - name: application
+          mountPath: /etc/application
+          readOnly: true
+      volumes:
+      # The composed Application manifest. A mount rather than a `kubectl get -o jsonpath`
+      # read, so the manifest reaches the container exactly as the chart rendered it with
+      # no shell quoting in the path.
+      #
+      # This ConfigMap is a normal tracked object of the chart, not a hook, so both
+      # reconcilers have it in place before the hook runs: Helm applies release resources
+      # before post-install/post-upgrade hooks, and Argo CD applies the sync wave before
+      # PostSync.
+      - name: application
+        configMap:
+          name: build-cluster-resources-application

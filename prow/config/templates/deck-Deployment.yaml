@@ -56,7 +56,7 @@ spec:
             secretKeyRef:
               name: github-token
               key: appid
-        image: {{ .Values.deck.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "deck" "override" .Values.deck.image) }}
         args:
         - --config-path=/etc/config/config.yaml
         - --job-config-path=/etc/job-config

@@ -1,0 +1,54 @@
+{{- $prowImagesRepoUri := required "prowImagesRepoUri is required" .Values.prowImagesRepoUri }}
+{{- $testInfraOrg := required "testInfraOrg is required" .Values.testInfraOrg }}
+{{- $content := .Files.Get "agent-workflows.yaml" }}
+{{- $content = $content | replace "${PROW_IMAGES_REPO_URI}" $prowImagesRepoUri | replace "${TEST_INFRA_ORG}" $testInfraOrg }}
+{{- with regexFind "\\$\\{[A-Z_]+\\}" $content }}
+  {{- fail (printf "agent-workflows.yaml contains %s, which this chart does not resolve. Add a replace for it below and add the value to the Application in bootstrap/argocd-applications.tf." .) }}
+{{- end }}
+# The agent-workflow-config ConfigMap the agent-plugin Deployment mounts as workflows.yaml.
+#
+# Replaces the configMapGenerator in kustomization.yaml, which stays in place for the stages
+# still on Flux - this chart and that generator read the SAME generated file and produce the
+# same object, so the two reconcilers cannot disagree about content.
+#
+# WHY THE CHART LIVES HERE, in the generated file's own directory rather than under
+# flux/prow/charts/ with the others. .Files.Get is chart-rooted, so this is the only layout
+# where the chart can read agent-workflows.yaml from git. That matters more than convention:
+# the alternative is Terraform reading the file with file() and passing the content as a
+# value, which would mean a `make prow-gen` did not take effect until someone also ran
+# terraform apply. Workflow definitions belong to git, so git is what Argo CD reads.
+#
+# Terraform therefore supplies only the two scalars below.
+#
+# THIS IS THE FIRST CHART DIRECTORY IN THE REPO THAT ALSO HOLDS A kustomization.yaml, which
+# makes Argo CD's tool detection load-bearing. It resolves to Helm twice over: the
+# Application sets source.helm, which is explicit configuration and wins outright, and
+# failing that the implicit rule checks Chart.yaml BEFORE kustomization.yaml. So Argo CD
+# renders this chart and never the kustomization, while kustomize-controller reads only
+# kustomization.yaml and never this chart. Do not remove source.helm from the Application on
+# the grounds that its parameters look redundant.
+#
+# WHY THE GENERATED FILE STILL CARRIES ${TOKEN}. Nothing about the generator changes here,
+# deliberately. Those placeholders are how every stage gets per-environment values, and
+# stages still on Flux resolve them with postBuild from self-managed-vars. Emitting Helm
+# actions instead would break them the moment this merges, and would rewrite all seven
+# generated files - the generator stamps a fresh `Last generated on` timestamp on every run,
+# so regeneration is never a clean diff. Resolving the tokens here costs one `replace` each
+# and leaves the generator, its output and the other stages untouched.
+#
+# The guard above is the price of doing substitution in the chart: `replace` silently leaves
+# an unknown token as literal text, which would reach the ConfigMap as
+# `image: ${SOMETHING}:tag` and fail later in a pod pull. regexFind + fail turns that into a
+# render error naming the token.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-workflow-config
+  namespace: prow
+data:
+  # Key name is fixed: kustomization.yaml aliases the file to workflows.yaml
+  # (`workflows.yaml=agent-workflows.yaml`) and deployment.tpl mounts it under that name.
+  # disableNameSuffixHash was set there for the same reason the name matters - the plugin
+  # mounts by name, so a content-hash suffix would break the mount.
+  workflows.yaml: |
+{{ $content | trimSuffix "\n" | indent 4 }}

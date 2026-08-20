@@ -60,7 +60,7 @@ spec:
         - --github-app-id=$(GITHUB_APP_ID)
         - --github-app-private-key-path=/etc/github/cert
         {{- include "prow-config.buildClusterArg" . | nindent 8 }}
-        image: {{ .Values.prowControllerManager.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "prow-controller-manager" "override" .Values.prowControllerManager.image) }}
         volumeMounts:
         - name: github-token
           mountPath: /etc/github

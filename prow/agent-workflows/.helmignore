@@ -1,0 +1,16 @@
+# The generator's own template, which shares this chart's templates/ directory.
+#
+# prow/jobs/generator.go writes templates/add-resource.tpl and reads it with text/template
+# and its own data model ($.ImageContext, $.Config). Helm renders everything under
+# templates/, so without this line Helm tries to evaluate it as a manifest and fails with
+# `nil pointer evaluating interface {}.ImageRepo`. Verified both ways.
+#
+# Named exactly rather than as *.tpl on purpose: if the generator starts emitting another
+# template here, the render breaks loudly and someone has to decide what it means, instead
+# of the file being silently skipped.
+templates/add-resource.tpl
+
+# Not chart inputs. The agent source tree and its Dockerfile are built into the
+# add-resource image; excluding them keeps the chart Argo CD loads small.
+agents/
+images/

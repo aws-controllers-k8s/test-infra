@@ -47,7 +47,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        image: {{ .Values.ghproxy.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "ghproxy" "override" .Values.ghproxy.image) }}
         args:
         - --cache-dir=/cache
         - --cache-sizeGB={{ add .Values.ghproxy.volumeSize -1 }}

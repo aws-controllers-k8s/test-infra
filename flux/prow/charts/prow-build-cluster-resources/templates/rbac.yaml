@@ -1,0 +1,118 @@
+# RBAC for the four Prow control-plane components that reach the build cluster's
+# API to schedule / clean / report on pre-submit pods (prow-controller-manager,
+# sinker, crier, deck). They don't run as in-cluster ServiceAccounts here — they
+# authenticate through the prow-deployment-build-access AccessEntry, which maps
+# prow-deployment-role to the `prow-build-cluster` group, so every RoleBinding
+# below binds that Group, not a ServiceAccount.
+#
+# Rules mirror prow/data-plane/templates/*-Role.yaml. Untemplated: nothing here is
+# per-environment, and they are in a chart only because the rest of the path had to
+# become one.
+#
+# Argo CD can apply these unaided, unlike the Role and RoleBinding objects it applies on
+# the hub. Escalation prevention requires the applier to already hold every permission it
+# grants, and it only sees in-cluster RBAC — which on the hub meant EKS access policies
+# counted for nothing and flux/argocd/namespaced-rbac.yaml had to grant the rules
+# explicitly. On the build cluster the capability holds cluster-admin
+# (argocd-build-cluster-access, in the ack-build-infra chart), so the check is satisfied
+# directly. That grant is what makes this path work without a namespaced-rbac equivalent
+# on the spoke.
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: prow-controller-manager
+  namespace: test-pods
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete", "list", "watch", "create", "patch"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: prow-controller-manager
+  namespace: test-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prow-controller-manager
+subjects:
+- kind: Group
+  name: prow-build-cluster
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: sinker
+  namespace: test-pods
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete", "list", "watch", "get", "patch"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: sinker
+  namespace: test-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sinker
+subjects:
+- kind: Group
+  name: prow-build-cluster
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: crier
+  namespace: test-pods
+rules:
+- apiGroups: [""]
+  resources: ["pods", "events"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["patch"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: crier
+  namespace: test-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: crier
+subjects:
+- kind: Group
+  name: prow-build-cluster
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: deck
+  namespace: test-pods
+rules:
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: deck
+  namespace: test-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deck
+subjects:
+- kind: Group
+  name: prow-build-cluster
+  apiGroup: rbac.authorization.k8s.io

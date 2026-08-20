@@ -1,0 +1,54 @@
+{{- $prowVersion := required "prowVersion is required" .Values.prowVersion }}
+{{- $toolsVersion := required "toolsVersion is required" .Values.toolsVersion }}
+{{- $prowPatchRevision := required "prowPatchRevision is required" .Values.prowPatchRevision }}
+# Records which upstream versions this path has mirrored.
+#
+# THIS OBJECT IS THIS PATH'S SYNC TRIGGER. Do not delete it as redundant bookkeeping.
+#
+# The mirror Job is a Helm post-install/post-upgrade hook. Argo CD maps that to PostSync
+# and runs it whenever a sync has work to do - but it excludes hook objects from the
+# comparison, so a chart whose ONLY object is the hook has nothing that can ever differ.
+# Such an Application is permanently Synced, no drift is possible, and no sync is ever
+# triggered, so the Job never runs. That was this path's state before this ConfigMap
+# existed: Argo CD reported Synced while Flux did all the work.
+#
+# This ConfigMap is a tracked object carrying the three version strings, so bumping a Prow
+# patch in values.yaml changes it, Argo CD sees real drift, syncs, and the PostSync hook
+# runs against the new versions. The trigger is now exactly the event that should cause a
+# re-mirror, and nothing else.
+#
+# It also makes the mirrored state observable. Previously the only way to know which
+# versions were live in ECR was to read image tags.
+#
+# Deliberately NOT annotated prune: disabled or resource-policy: keep. Those guards exist
+# for objects with AWS resources behind them, where deletion is unrecoverable. This is
+# derived bookkeeping: if it is ever removed, the correct response is to recreate it and
+# re-run the mirror, which is what recreating it does.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # namespace is omitted so the release namespace places it, matching the Job. The chart
+  # owns no Namespace.
+  name: prow-mirror-version
+  labels:
+    app.kubernetes.io/name: prow-mirror
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  # Upstream Prow core images (us-docker.pkg.dev/k8s-infra-prow/images).
+  prowVersion: {{ $prowVersion | quote }}
+  # label_sync and commenter, which version independently (gcr.io/k8s-staging-test-infra).
+  toolsVersion: {{ $toolsVersion | quote }}
+  # Monotonic counter appended to every mirrored tag. Never reset it: tags already
+  # referenced by prow-config would be overwritten with different content.
+  prowPatchRevision: {{ $prowPatchRevision | quote }}
+  # The tag suffix the above produces, recorded so the mapping from these three values to
+  # what actually lands in ECR does not have to be re-derived.
+  #
+  # %v, not %s. prowPatchRevision arrives as a STRING from this chart's values.yaml but as
+  # an INTEGER from Flux's valuesFrom, which reads it out of the prow-version ConfigMap.
+  # printf "%s" on an int64 yields the literal text %!s(int64=1) - it does not error, it
+  # just writes a malformed value, which is the failure mode this migration exists to
+  # remove. %v renders both. The Job template's "-ack.{{ $prowPatchRevision }}" is
+  # type-agnostic for the same reason.
+  mirroredTagSuffix: {{ printf "-ack.%v" $prowPatchRevision | quote }}

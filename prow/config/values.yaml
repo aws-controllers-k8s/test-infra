@@ -7,12 +7,15 @@ ecrPublicReaderRoleArn: ""
 stage: ""
 
 github:
+  # Per-environment: the org Prow watches. Supplied by the Application.
   organisation: ''
+  # Static in every stage, so defaults here. The bot's identity and the Secret holding its PAT
+  # are properties of the ACK deployment, not of an environment.
   bot:
-    username: ''
-    emailID: '' # The suffix given to Github email addresses <username>-<suffix>@users.noreply.github.com
+    username: 'ack-bot'
+    emailID: '82905295' # The suffix given to Github email addresses <username>-<suffix>@users.noreply.github.com
     personalAccessToken:
-      secretName: ''
+      secretName: 'prowjob-github-pat-token'
 
 prow:
   domain: ''
@@ -30,7 +33,9 @@ region: 'us-west-2'
 # crier, deck) mount a kubeconfig with a `build` context whose exec credential
 # authenticates to the build cluster's API server.
 buildCluster:
-  enabled: false
+  # Provisioned and verified, and wired into the four components that reach it. Pre-submit routing
+  # is enabled separately via presubmit_cluster in prow/jobs/jobs_config.yaml.
+  enabled: true
   # Context name in the kubeconfig; MUST equal the `cluster:` field set on jobs.
   name: build
   # EKS cluster name of the build cluster (e.g. ack-test-infra-prod-build-cluster).
@@ -43,76 +48,121 @@ buildCluster:
   kubeconfigMountPath: /etc/kubeconfig
 
 ingress:
-  create: false
-  annotations: {}
+  # ALB annotations, static in every environment, so they are defaults here rather than values an
+  # Application supplies. That is not only convention: two of them are JSON containing commas,
+  # which Argo CD's helm.parameters (passed as --set) would misparse as list separators. Keeping
+  # them in git means prow-config needs no helm.values block at all - only scalars.
+  #
+  # external-dns.alpha.kubernetes.io/hostname is deliberately absent; the template composes it
+  # from prow.domain, which the Ingress already uses as its host. It was the only per-environment
+  # annotation.
+  create: true
+  annotations:
+    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/success-codes: "200-302"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-FS-1-2-Res-2020-10"
 
-# Prow component images — overridden by Flux HelmRelease via
-# ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/prow and ${PROW_VERSION} substitution.
-# Defaults here use the upstream registry for local dev/testing.
+# Mirrored image coordinates, from which the chart COMPOSES each component's reference when that
+# component's own `image` below is left empty.
+#
+# Why the chart composes them rather than being handed 13 finished strings. The reference is
+# <accountId>.dkr.ecr.<region>.amazonaws.com/prow/<component>:<prowVersion>-ack.<prowPatchRevision>,
+# and its four inputs have two different owners. accountId and region are per-environment and
+# belong to Terraform; prowVersion and prowPatchRevision are static git-authored strings that
+# Terraform has no business knowing - the same rule that put them in
+# flux/prow/charts/prow-mirror/values.yaml and prow/jobs/values.yaml. Nothing outside this chart
+# holds all four, so nothing outside this chart can build the string.
+#
+# Flux is unaffected: flux/prow/charts/prow-config.yaml passes each `image` explicitly, and an
+# explicit value always wins over the composed one. Rendering with those values is byte-identical
+# before and after this change.
+#
+# prowVersion and prowPatchRevision MUST match flux/prow/version/prow-version-configmap.yaml and
+# the two other charts that carry them, for as long as all four copies exist. Phase 5 deletes the
+# ConfigMap and leaves the chart defaults.
+imageMirror:
+  # Per-environment, supplied by the Application. Left empty so composing without them fails at
+  # render time rather than producing a reference to account "".
+  accountId: ""
+  region: ""
+  prowVersion: "v20260702-fff8399c7"
+  prowPatchRevision: "1"
+
+# Prow component images. EMPTY MEANS COMPOSED from imageMirror above; set one to override it
+# outright, which is what the Flux HelmRelease does for every component.
+#
+# These previously defaulted to the upstream registry (us-docker.pkg.dev/k8s-infra-prow/images/*)
+# "for local dev/testing", but carried no tag, so rendering with the defaults produced an
+# implicitly-`latest` reference that nothing ever used - every reconciler overrode all 13. Empty
+# plus a composed default fails loudly instead, which is the better default for a chart whose
+# images are always mirrored.
 crier:
   scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/crier
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 deck:
   scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/deck
+  image: ""
   service:
     type: 'ClusterIP'
     annotations: {}
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 ghproxy:
   scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/ghproxy
+  image: ""
   volumeSize: 100
 
 hook:
-  scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/hook
+  scrapeMetrics: true
+  image: ""
   service:
     type: 'ClusterIP'
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 horologium:
   scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/horologium
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 prowControllerManager:
-  scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/prow-controller-manager
+  scrapeMetrics: true
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 sinker:
   scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/sinker
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 statusreconciler:
-  image: us-docker.pkg.dev/k8s-infra-prow/images/statusreconciler
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 tide:
-  scrapeMetrics: false
-  image: us-docker.pkg.dev/k8s-infra-prow/images/tide
+  scrapeMetrics: true
+  image: ""
   serviceAccount:
     create: false
-    name: ''
+    name: 'prow-deployment-service-account'
 
 githubApp:
   secret:
@@ -126,8 +176,9 @@ githubWebhookToken:
     create: false
   hmac: ''
 
+# Utility images, same rule: empty means composed from imageMirror.
 utility_images:
-  clonerefs: us-docker.pkg.dev/k8s-infra-prow/images/clonerefs
-  entrypoint: us-docker.pkg.dev/k8s-infra-prow/images/entrypoint
-  initupload: us-docker.pkg.dev/k8s-infra-prow/images/initupload
-  sidecar: us-docker.pkg.dev/k8s-infra-prow/images/sidecar
+  clonerefs: ""
+  entrypoint: ""
+  initupload: ""
+  sidecar: ""

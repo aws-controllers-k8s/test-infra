@@ -1,9 +1,19 @@
-# accountId and region come from self-managed-vars; the three version values come
-# from the prow-version ConfigMap. Left empty rather than defaulted so a missing
-# value fails at render time via `required` - a half-substituted image tag would
-# mirror the wrong images.
+# accountId and region are per-environment and supplied by the reconciler: Flux
+# reads them from self-managed-vars, Argo CD gets them as Application helm
+# parameters emitted by Terraform. Left empty so a missing value fails at render
+# time via `required` rather than mirroring the wrong images.
 accountId: ""
 region: ""
-prowVersion: ""
-prowPatchRevision: ""
-toolsVersion: ""
+
+# The three version values are NOT per-environment - they are static strings
+# tracked in git, previously in flux/prow/version/prow-version-configmap.yaml and
+# delivered via valuesFrom purely because Flux made that convenient. Argo CD has no
+# valuesFrom, and Terraform has no business knowing them, so they live here as chart
+# defaults. Flux still overrides them from the ConfigMap with identical values while
+# both reconcilers exist; Phase 5 deletes the ConfigMap and leaves only these.
+#
+# PROW_PATCH_REVISION is a monotonic counter appended to mirrored image tags and must
+# never be reset. PROW_VERSION and TOOLS_VERSION move independently but share it.
+prowVersion: "v20260702-fff8399c7"
+toolsVersion: "v20260515-778139c32d"
+prowPatchRevision: "1"

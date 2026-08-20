@@ -148,3 +148,55 @@ spec:
   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAutoNodePolicy
     accessScope:
       type: cluster
+---
+# Argo CD capability role — the successor to the Flux entry above.
+#
+# prow-build-cluster-resources applies thirteen in-cluster objects INTO this cluster: a
+# Namespace, a ServiceAccount, four Roles and four RoleBindings, the test-config
+# ConfigMap, a NodeClass and a NodePool. ACK cannot own those - they are Kubernetes
+# objects in a remote cluster, not AWS resources - so something must remote-apply them,
+# and after Flux that is Argo CD. This entry is what makes the build cluster registerable
+# as an Argo CD destination at all; without it, registering the spoke would produce a
+# cluster Argo CD cannot authenticate to, which is worse than not registering it.
+#
+# WHY ClusterAdminPolicy, when the hub deliberately avoids it.
+#
+# On the hub, cluster-scoped access is granted by adding a kubernetesGroups entry to the
+# access entry and binding a narrow ClusterRole (flux/argocd/cluster-scoped-rbac.yaml),
+# specifically to avoid handing Argo CD cluster-admin. That approach cannot work here.
+# The ClusterRole would have to live inside THIS cluster, and once Flux is gone the only
+# thing able to apply it is Argo CD - the very thing it authorises. On the hub that
+# circularity is escaped because Flux owns flux/argocd/ until Phase 5 decides otherwise;
+# on a remote cluster there is no such applier. The narrow role would also have to
+# enumerate every permission in those four Roles, or Kubernetes escalation prevention
+# refuses them: a principal may not create a Role granting permissions it lacks.
+#
+# This is also not an increase in privilege. It is the same grant
+# flux-build-cluster-access already holds, and that entry is removed with Flux in Phase 5,
+# so the number of cluster-admin principals on this cluster stays at one. The build
+# cluster is a CI execution environment rather than the control plane, which is why the
+# trade lands differently here than on the hub.
+#
+# Like the Flux entry, this uses an access policy rather than a kubernetesGroups mapping
+# so the authorization exists on the first reconcile.
+#
+# If prow-build-cluster-resources is ever retired, or the build cluster stops carrying
+# in-cluster objects, this entry should go with it.
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: AccessEntry
+metadata:
+  name: argocd-build-cluster-access
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    services.k8s.aws/deletion-policy: retain
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  principalARN: "arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-argocd-capability-role"
+  type: STANDARD
+  accessPolicies:
+  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster

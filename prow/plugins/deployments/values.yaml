@@ -1,0 +1,11 @@
+# Left empty rather than defaulted so a missing value fails at render time via `required`,
+# the same convention as the other converted charts.
+#
+# These are the three ${TOKEN} names in the generated agent-plugin manifests, all of them in
+# deployment.yaml. The manifests themselves stay in git and are read with .Files.Get, not
+# passed in - see templates/agent-plugin.yaml.
+prowImagesRepoUri: ""
+# stackName and accountId compose the logs bucket the webhook server writes to:
+#   --s3-bucket-name=s3://${STACK_NAME}-prow-logs-${ACCOUNT_ID}
+stackName: ""
+accountId: ""

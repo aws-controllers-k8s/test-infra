@@ -56,7 +56,7 @@ spec:
             secretKeyRef:
               name: github-token
               key: appid
-        image: {{ .Values.hook.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "hook" "override" .Values.hook.image) }}
         imagePullPolicy: Always
         args:
         - --dry-run={{ .Values.dryRun }}

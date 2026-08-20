@@ -88,10 +88,10 @@ data:
             bucket: s3://{{ .Values.prow.presubmitsBucketName }}
             path_strategy: explicit
           utility_images:
-            clonerefs:  {{ .Values.utility_images.clonerefs }}
-            entrypoint: {{ .Values.utility_images.entrypoint }}
-            initupload: {{ .Values.utility_images.initupload }}
-            sidecar: {{ .Values.utility_images.sidecar }}
+            clonerefs:  {{ include "prow-config.image" (dict "ctx" . "name" "clonerefs" "override" .Values.utility_images.clonerefs) }}
+            entrypoint: {{ include "prow-config.image" (dict "ctx" . "name" "entrypoint" "override" .Values.utility_images.entrypoint) }}
+            initupload: {{ include "prow-config.image" (dict "ctx" . "name" "initupload" "override" .Values.utility_images.initupload) }}
+            sidecar: {{ include "prow-config.image" (dict "ctx" . "name" "sidecar" "override" .Values.utility_images.sidecar) }}
 
     tide:
       merge_commit_template:

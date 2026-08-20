@@ -48,7 +48,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        image: {{ .Values.horologium.image }}
+        image: {{ include "prow-config.image" (dict "ctx" . "name" "horologium" "override" .Values.horologium.image) }}
         args:
         - --dry-run={{ .Values.dryRun }}
         - --config-path=/etc/config/config.yaml

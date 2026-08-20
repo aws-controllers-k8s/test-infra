@@ -1,0 +1,29 @@
+# Left empty rather than defaulted so a missing value fails at render time via `required`,
+# the same convention as the other converted charts. These are the ${TOKEN} names appearing
+# in job-config-job.yaml and labels.yaml, which the chart resolves with `replace`.
+prowImagesRepoUri: ""
+testInfraOrg: ""
+testInfraRepo: ""
+testInfraBranch: ""
+accountId: ""
+region: ""
+# public.ecr.aws/<alias>, threaded into the Job's env and passed to envsubst over jobs.yaml.
+# Kept because removing it would change the Job's behaviour, but note it currently has zero
+# occurrences in jobs.yaml - if that stays true it can be dropped from both.
+controllerEcrRegistry: ""
+
+# The three version values are NOT per-environment - they are static strings tracked in git,
+# in flux/prow/version/prow-version-configmap.yaml, and reached today via a second
+# substituteFrom on the prow-jobs Kustomization. Argo CD has no valuesFrom and Terraform has
+# no business knowing them, so they live here as chart defaults.
+#
+# This mirrors flux/prow/charts/prow-mirror/values.yaml exactly, and the values MUST match it
+# and the ConfigMap while all three exist. Phase 5 deletes flux/prow/version/ and leaves the
+# chart defaults as the only copy.
+#
+# prowPatchRevision is a monotonic counter appended to mirrored image tags and must never be
+# reset. It is consumed here as the whole `-ack.<n>` suffix rather than the bare number,
+# because a bare number reaches env[].value as a YAML int and the API server rejects it.
+prowVersion: "v20260702-fff8399c7"
+toolsVersion: "v20260515-778139c32d"
+prowPatchRevision: "1"

@@ -1,0 +1,42 @@
+# In-cluster objects applied INTO the build cluster — ACK can't create
+# Kubernetes-native objects inside the build cluster's API server, only the cluster
+# itself.
+#
+# pre-submit-service-account must exist here because the PodIdentityAssociation
+# (flux/ack/build-cluster/pod-identities/) binds it — a pre-submit pod can't
+# obtain its IAM identity until this SA is present.
+#
+# THIS CHART OWNS A NAMESPACE, which is the one documented exception to the rule that no
+# chart does (see the refactor that converted the other twelve paths). The rule exists
+# because a Helm uninstall or rollback targeting a namespace cascades to everything inside
+# it, and here that would be every running pre-submit pod.
+#
+# The exception stands because there is no alternative applier. On the hub the equivalent
+# namespaces are a raw manifest (flux/ack/cluster/pod-identities/prow-namespaces.yaml)
+# applied alongside the chart, but nothing else reaches INSIDE the build cluster: ACK
+# creates the cluster and cannot write objects into it, and after Phase 5 removes Flux
+# this path is the only writer left. Leaving the namespace unowned would strand it.
+#
+# It is guarded at the object level instead, so the protection does not depend on
+# remembering that prune is off globally:
+#   - kustomize.toolkit.fluxcd.io/prune: disabled  — kustomize-controller, which still
+#     owns this object until cutover, must never garbage-collect it
+#   - helm.sh/resource-policy: keep                — no Helm uninstall/rollback can take it
+#   - argocd.argoproj.io/sync-options              — Argo CD must neither prune it nor
+#     delete it when the Application is deleted, which is what the teardown script's
+#     --cascade=orphan achieves for everything else
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pre-submit-service-account
+  namespace: test-pods

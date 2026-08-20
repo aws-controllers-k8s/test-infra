@@ -1,0 +1,5 @@
+apiVersion: v2
+name: prow-plugins
+description: "The agent-plugin Deployment, Service and RBAC, rendered from the generated manifests"
+type: application
+version: 0.1.0

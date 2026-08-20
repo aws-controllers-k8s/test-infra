@@ -20,8 +20,14 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  {{- /* The external-dns hostname is composed from prow.domain rather than supplied as an
+         annotation, because it was the only per-environment entry in an otherwise static map -
+         and that map contains JSON with commas, which --set cannot carry. An explicitly-set
+         annotation still wins: values are the merge destination. deepCopy because sprig's merge
+         mutates its destination. */}}
+  {{- $annotations := merge (deepCopy .Values.ingress.annotations) (dict "external-dns.alpha.kubernetes.io/hostname" (required "prow.domain is required when ingress.create" .Values.prow.domain)) }}
   annotations:
-{{ toYaml .Values.ingress.annotations| indent 4 }}
+{{ toYaml $annotations | indent 4 }}
   name: prow
 spec:
   ingressClassName: alb
