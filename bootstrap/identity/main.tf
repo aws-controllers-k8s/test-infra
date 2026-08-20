@@ -27,17 +27,59 @@ locals {
   name_prefix = "ack-test-infra-${var.stage}"
 }
 
-# Account instance of IAM Identity Center. Supported for standalone accounts that are
-# not managed by AWS Organizations, which is the case here. One per account, usable
-# only within this account and region.
+# IAM Identity Center instance.
+#
+# WHICH KIND YOU GET DEPENDS ON THE ACCOUNT, and the two are not interchangeable:
+#
+#   ACCOUNT instance  (create_account_instance = true, the default)
+#     Created here via AWS::SSO::Instance. Only valid for a standalone account, or a
+#     MEMBER account of an organization. One per account, usable only in this account
+#     and region.
+#
+#   ORGANIZATION instance (create_account_instance = false)
+#     Must already exist, and can only be enabled from the organization's MANAGEMENT
+#     account through the IAM Identity Center console -- there is no API for it. This
+#     module then consumes it rather than creating anything.
+#
+# CreateInstance is REJECTED in an organization management account. Prod is the
+# management account of its organization, and the failure is explicit rather than
+# subtle:
+#
+#   Organization management account is not allowed to perform the operation.
+#   (Service: SsoAdmin, Status Code: 400)
+#
+# So prod runs with create_account_instance = false and an organization instance
+# enabled by hand first. Staging is standalone and creates its own account instance.
 resource "awscc_sso_instance" "this" {
+  count = var.create_account_instance ? 1 : 0
+
   name = local.name_prefix
+}
+
+# The existing organization instance, when this module is not creating one. There is at
+# most one instance visible to an account, so the lookup is deterministic.
+data "aws_ssoadmin_instances" "existing" {
+  count = var.create_account_instance ? 0 : 1
+}
+
+locals {
+  identity_store_id = var.create_account_instance ? (
+    awscc_sso_instance.this[0].identity_store_id
+    ) : (
+    one(data.aws_ssoadmin_instances.existing[0].identity_store_ids)
+  )
+
+  instance_arn = var.create_account_instance ? (
+    awscc_sso_instance.this[0].instance_arn
+    ) : (
+    one(data.aws_ssoadmin_instances.existing[0].arns)
+  )
 }
 
 # Group mapped to the Argo CD ADMIN role in the capability's rbacRoleMappings.
 # The capability references this by group_id, with identity type SSO_GROUP.
 resource "aws_identitystore_group" "argocd_admins" {
-  identity_store_id = awscc_sso_instance.this.identity_store_id
+  identity_store_id = local.identity_store_id
   display_name      = "${local.name_prefix}-argocd-admins"
   description       = "Argo CD ADMIN role for the ACK test-infra EKS capability"
 }
@@ -46,7 +88,7 @@ resource "aws_identitystore_group" "argocd_admins" {
 resource "aws_identitystore_user" "admins" {
   for_each = { for u in var.argocd_admins : u.user_name => u }
 
-  identity_store_id = awscc_sso_instance.this.identity_store_id
+  identity_store_id = local.identity_store_id
   user_name         = each.value.user_name
   display_name      = "${each.value.given_name} ${each.value.family_name}"
 
@@ -64,7 +106,7 @@ resource "aws_identitystore_user" "admins" {
 resource "aws_identitystore_group_membership" "admins" {
   for_each = aws_identitystore_user.admins
 
-  identity_store_id = awscc_sso_instance.this.identity_store_id
+  identity_store_id = local.identity_store_id
   group_id          = aws_identitystore_group.argocd_admins.group_id
   member_id         = each.value.user_id
 }
