@@ -148,7 +148,22 @@ spec:
   # before the four components that mount it are deployed.
   dependsOn:
   - name: prow-mirror
-  - name: prow-build-cluster-connection
+  # prow-build-cluster-connection was here, and the edge is now stale. It existed so this
+  # path waited until that Job had produced the build-cluster-kubeconfig ConfigMap in
+  # prow, which four Prow components mount. That ConfigMap exists, and from the cutover
+  # onward the Argo CD Application of the same name produces it -- so this waits on a
+  # path Flux no longer owns. Same reasoning as the depends_on edges into
+  # null_resource.validate_kustomizations.
+  #
+  # Leaving it in place is not neutral: that path's chart cannot render under Flux at all,
+  # because it composes an Argo CD Application needing the CONTENT of
+  # prow/jobs/test_config.yaml and valuesFrom cannot supply a file. Its HelmRelease is
+  # therefore suspended and permanently Ready=False, which held this path -- and through
+  # it prometheus and prometheus-dashboards -- at a stale revision, unable to apply
+  # anything.
+  #
+  # The edge goes rather than the health gate: `wait` still means what it says everywhere
+  # it appears, and nothing here reports a failed release as healthy.
 ---
 # Build cluster kubeconfig ConfigMap — applied LOCALLY to flux-system on the
 # control-plane cluster. Substitutes the cluster ARN into the aws-provider
