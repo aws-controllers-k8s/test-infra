@@ -69,7 +69,11 @@ locals {
 # The in-cluster build job handles building all other images.
 ################################################################################
 
+# Same one-shot gate as bootstrap_prow_images_job, which depends on this one: this pushes
+# the builder image that the in-cluster Job then uses to build the rest.
 resource "null_resource" "bootstrap_prow_images" {
+  count = var.bootstrap_prow_images ? 1 : 0
+
   # Only re-run if these change
   triggers = {
     repository_uri = aws_ecrpublic_repository.prow_images.repository_uri
@@ -77,7 +81,7 @@ resource "null_resource" "bootstrap_prow_images" {
   }
 
   provisioner "local-exec" {
-    command     = "${path.module}/../prow/jobs/images/bootstrap-images.sh"
+    command = "${path.module}/../prow/jobs/images/bootstrap-images.sh"
     environment = {
       AWS_ACCOUNT_ID      = local.account_id
       AWS_REGION          = var.region
