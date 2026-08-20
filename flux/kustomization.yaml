@@ -8,4 +8,7 @@ resources:
 - secrets.yaml
 - prow.yaml
 - prometheus.yaml
-- argocd.yaml
+# argocd.yaml was here, declaring the argocd-rbac Kustomization for ./flux/argocd.
+# That directory exists in no commit, so it could never reconcile. The grant it
+# described is Terraform's now: bootstrap/argocd-rbac.tf owns ClusterRole and
+# ClusterRoleBinding argocd-cluster-scoped.
