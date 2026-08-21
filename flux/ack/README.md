@@ -146,4 +146,4 @@ as parameters.
 
 Historically these manifests used `${VAR}` placeholders substituted by Flux from a
 `self-managed-vars` ConfigMap. Argo CD renders off-cluster and has no substitution step, so that
-mechanism and the ConfigMap are gone; see `docs/argocd-migration.md`.
+mechanism and the ConfigMap are gone; values now arrive as Helm parameters from Terraform.

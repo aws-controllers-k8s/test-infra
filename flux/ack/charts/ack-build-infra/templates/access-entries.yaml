@@ -1,16 +1,13 @@
 {{- $accountId := required "accountId is required" .Values.accountId }}
 {{- $stackName := required "stackName is required" .Values.stackName }}
-# Build cluster EKS Access Entries, reconciled by the control-plane ACK EKS
-# controller. They grant Kubernetes API access to the build cluster: a
-# break-glass admin role, the account's Admin/ReadOnly roles for humans, the
-# Prow components' role and the EC2 node
-# role (Auto Mode nodes — required because we run a custom NodeClass with no
-# built-in pools, so EKS doesn't auto-create the node entry).
+# Build cluster EKS Access Entries, reconciled by the control-plane ACK EKS controller.
+# They grant Kubernetes API access to the build cluster: a break-glass admin role, the
+# account's Admin and ReadOnly roles for humans, the Prow components' role, the EC2 node
+# role, and the Argo CD capability role.
 #
-# The Flux entry uses an access policy rather than a kubernetesGroups mapping so
-# its authorization exists on the first reconcile — otherwise the RBAC authorizing
-# Argo CD would itself be an object Argo CD must apply. Mirrors the pattern used on
-# the control plane.
+# Each uses an access policy rather than a kubernetesGroups mapping so authorization
+# exists on the first reconcile - otherwise the RBAC authorizing Argo CD would itself be
+# an object Argo CD must apply.
 ---
 # Dedicated build-cluster admin role (assumable by account root for break-glass)
 apiVersion: eks.services.k8s.aws/v1alpha1
@@ -98,11 +95,10 @@ spec:
 # []), we must supply it. Type EC2 + AmazonEKSAutoNodePolicy is the required
 # combination for Auto Mode node roles (custom NodeClass docs: create-node-class).
 #
-# adopt-or-create: a fresh Design-B cluster never ran a built-in pool, so EKS
-# never made this entry → ACK creates it. But a cluster that previously ran
-# general-purpose (e.g. before the switch to nodePools: []) already has an
-# EKS-created EC2 entry for this same principal → ACK adopts it instead of
-# failing terminal on "resource already exists".
+# adopt-or-create: a cluster that never ran a built-in pool has no such entry, so ACK
+# creates it. One that previously ran general-purpose already has an EKS-created EC2
+# entry for the same principal, so ACK adopts it rather than failing terminal on
+# "resource already exists".
 #
 # No adoption-fields annotation needed: adopt-or-create reads the find/create
 # identifiers (principalARN + the clusterRef-resolved clusterName) from the spec.
@@ -127,40 +123,26 @@ spec:
     accessScope:
       type: cluster
 ---
-# Argo CD capability role — the successor to the Flux entry above.
+# Argo CD capability role. Without this the build cluster cannot be registered as an Argo
+# CD destination at all - registering the spoke would produce a cluster Argo CD cannot
+# authenticate to, which is worse than not registering it. The
+# prow-build-cluster-resources chart applies thirteen in-cluster objects here, which ACK
+# cannot own because they are Kubernetes objects in a remote cluster rather than AWS
+# resources.
 #
-# prow-build-cluster-resources applies thirteen in-cluster objects INTO this cluster: a
-# Namespace, a ServiceAccount, four Roles and four RoleBindings, the test-config
-# ConfigMap, a NodeClass and a NodePool. ACK cannot own those - they are Kubernetes
-# objects in a remote cluster, not AWS resources - so something must remote-apply them,
-# and after Flux that is Argo CD. This entry is what makes the build cluster registerable
-# as an Argo CD destination at all; without it, registering the spoke would produce a
-# cluster Argo CD cannot authenticate to, which is worse than not registering it.
+# WHY ClusterAdminPolicy, when the hub deliberately avoids it. On the hub, cluster-scoped
+# access comes from a kubernetesGroups entry bound to a narrow ClusterRole
+# (bootstrap/argocd-rbac.tf). That cannot work here: the ClusterRole would have to live
+# inside THIS cluster, and the only thing able to apply it is Argo CD - the very thing it
+# authorises. On the hub that circularity is escaped because Terraform owns those objects
+# and reaches the cluster directly; on a remote cluster there is no such applier, and
+# nothing keyed to a cluster ACK owns may be Terraform's. The narrow role would also have
+# to enumerate every permission in those four Roles, or escalation prevention refuses
+# them.
 #
-# WHY ClusterAdminPolicy, when the hub deliberately avoids it.
-#
-# On the hub, cluster-scoped access is granted by adding a kubernetesGroups entry to the
-# access entry and binding a narrow ClusterRole (bootstrap/argocd-rbac.tf), specifically
-# to avoid handing Argo CD cluster-admin. That approach cannot work here.
-# The ClusterRole would have to live inside THIS cluster, and once Flux is gone the only
-# thing able to apply it is Argo CD - the very thing it authorises. On the hub that
-# circularity is escaped because Terraform owns those objects and reaches the cluster
-# directly; on a remote cluster there is no such applier - and Terraform must hold nothing
-# keyed to a cluster ACK owns (D13), so it cannot be the applier here. The narrow role would also have to
-# enumerate every permission in those four Roles, or Kubernetes escalation prevention
-# refuses them: a principal may not create a Role granting permissions it lacks.
-#
-# This is also not an increase in privilege. It is the same grant
-# flux-build-cluster-access held until it was removed with Flux,
-# so the number of cluster-admin principals on this cluster stays at one. The build
-# cluster is a CI execution environment rather than the control plane, which is why the
-# trade lands differently here than on the hub.
-#
-# Like the Flux entry, this uses an access policy rather than a kubernetesGroups mapping
-# so the authorization exists on the first reconcile.
-#
-# If prow-build-cluster-resources is ever retired, or the build cluster stops carrying
-# in-cluster objects, this entry should go with it.
+# The build cluster is a CI execution environment rather than a control plane, which is
+# why the trade lands differently here. If prow-build-cluster-resources is ever retired,
+# this entry should go with it.
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: AccessEntry
 metadata:

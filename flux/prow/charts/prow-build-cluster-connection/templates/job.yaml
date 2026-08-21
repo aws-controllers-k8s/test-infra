@@ -1,13 +1,13 @@
 {{- $prowImagesRepoUri := required "prowImagesRepoUri is required" .Values.prowImagesRepoUri }}
 {{- $stackName := required "stackName is required" .Values.stackName }}
-# Reads the build cluster's endpoint, CA and ARN from the build-cluster Cluster CR's
-# status, then assembles the kubeconfig Prow mounts, registers the cluster as an Argo CD
-# spoke, authorises it in the AppProject and applies its Application.
+# Reads the build cluster's endpoint, CA and ARN from the build-cluster Cluster CR's status,
+# then assembles the kubeconfig Prow mounts, registers the cluster as an Argo CD spoke,
+# authorises it in the AppProject and applies its Application.
 #
-# Why a Job (not static manifests): the build cluster is created by ACK, not Terraform, so
-# none of these values are in self-managed-vars at bootstrap. Reading the CR status means a
-# cluster re-creation - the only event that changes them - is picked up automatically.
-# Runs on every reconcile as a Helm hook.
+# A Job rather than static manifests because the build cluster is created by ACK, so none of
+# these values are knowable at bootstrap. Reading the CR status means a cluster re-creation -
+# the only event that changes them - is picked up automatically. Runs on every reconcile as a
+# Helm hook.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -16,14 +16,13 @@ metadata:
   annotations:
     # Run as a Helm hook, not as a tracked release object.
     #
-    # A Job's spec.template is immutable, and upgrade.force does NOT get around
-    # that: Helm's force performs a replace (PUT), which the API server still
-    # rejects with "field is immutable". Flux's Kustomization force: true worked
-    # because kustomize-controller deletes and recreates on that error. Only
-    # delete-then-create works, which is exactly what before-hook-creation does.
+    # A Job's spec.template is immutable, and upgrade.force does NOT get around that:
+    # Helm's force performs a replace (PUT), which the API server still rejects with
+    # "field is immutable". Only delete-then-create works, which is what
+    # before-hook-creation does.
     #
-    # post-install and post-upgrade so the ServiceAccount and RBAC in this chart
-    # are applied before the Job runs.
+    # post-install and post-upgrade so this chart's ServiceAccount and RBAC are applied
+    # before the Job runs.
     helm.sh/hook: post-install,post-upgrade
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
@@ -35,8 +34,8 @@ spec:
       restartPolicy: Never
       containers:
       - name: surface-connection
-        # Not in the generator's output set, so `make prow-gen` will never bump
-        # this. Keep in sync with `kubectl` in prow/jobs/images_config.yaml.
+        # Not in the generator's output set, so `make prow-gen` will never bump this. Keep
+        # in sync with `kubectl` in prow/jobs/images_config.yaml.
         image: "{{ $prowImagesRepoUri }}:prow-kubectl-0.0.3"
         command:
         - /bin/bash
@@ -61,19 +60,15 @@ spec:
           echo "  endpoint: $EP"
           echo "  ca: ${CA:0:40}...(truncated)"
 
-          # Assemble the kubeconfig the four components mount, here rather than in
-          # the prow chart.
+          # Assemble the kubeconfig the four components mount, here rather than in the prow
+          # chart. Both values are discovered at RUNTIME from the Cluster CR, and Argo CD
+          # renders off-cluster with no API access - valuesFrom a ConfigMap does not exist
+          # (argo-cd#12060) and Helm's lookup returns empty there. Writing the finished
+          # ConfigMap from the Job that already holds the values removes the render-time
+          # dependency entirely.
           #
-          # Both values are discovered at RUNTIME from the Cluster CR, but the chart
-          # consumed them at RENDER time via Flux postBuild substitution. Argo CD
-          # renders off-cluster with no API access, so it has no equivalent:
-          # valuesFrom a ConfigMap does not exist (argo-cd#12060) and Helm's lookup
-          # returns empty there. Writing the finished ConfigMap from the Job that
-          # already holds the values removes the render-time dependency and behaves
-          # identically under either reconciler.
-          #
-          # Written with a heredoc into a file rather than inline YAML so the
-          # kubeconfig's own indentation is not sensitive to this script's.
+          # Heredoc into a file rather than inline YAML so the kubeconfig's own indentation
+          # is not sensitive to this script's.
           BUILD_CTX="build"
           BUILD_CLUSTER_NAME="{{ $stackName }}-build-cluster"
 
@@ -103,9 +98,9 @@ spec:
                 - ${BUILD_CLUSTER_NAME}
           KCFG
 
-          # resource-policy: keep so that when the chart stops rendering this object
-          # Helm treats it as removed-from-manifest without deleting it. The four
-          # components mount it as a volume and will not start without it.
+          # resource-policy: keep so that if the chart stops rendering this object it is
+          # treated as removed-from-manifest without being deleted. The four components
+          # mount it as a volume and will not start without it.
           kubectl create configmap build-cluster-kubeconfig -n prow \
             --from-file=config=/tmp/kubeconfig \
             --dry-run=client -o yaml \
@@ -117,27 +112,23 @@ spec:
 
           echo "build-cluster-kubeconfig ConfigMap updated."
 
-          # Register the build cluster as an Argo CD spoke.
-          #
-          # Argo CD discovers target clusters from labelled Secrets in its own namespace.
-          # This one is written at runtime, not by Terraform: the build cluster is an ACK
-          # Cluster CR, so a Terraform-owned registration keyed to it would be created
-          # before the cluster exists on a fresh bootstrap, and removed while Applications
-          # still reference it on destroy (D13).
+          # Register the build cluster as an Argo CD spoke, which Argo CD discovers from
+          # labelled Secrets in its own namespace. Written at runtime because a
+          # Terraform-owned registration keyed to an ACK-created cluster would be created
+          # before the cluster exists and removed while Applications still reference it.
           #
           # server MUST be the cluster ARN. API server URLs are not accepted by the managed
-          # capability, and a URL would also fail to match the AppProject destination -
-          # which rejects the Application outright rather than failing at sync.
+          # capability, and a URL would also fail to match the AppProject destination, which
+          # rejects the Application outright rather than failing at sync.
           #
-          # Read from the CR status rather than built from stackName, even though the ARN
-          # is deterministic: reading it proves the cluster exists and is reconciled before
-          # anything is registered. Registering a spoke Argo CD cannot reach is worse than
-          # not registering one.
+          # Read from the CR status rather than built from stackName, even though the ARN is
+          # deterministic: reading it proves the cluster exists and is reconciled first.
+          # Registering a spoke Argo CD cannot reach is worse than not registering one.
           #
-          # No credentials are stored. The capability authenticates as its own role, which
-          # holds a cluster-admin access entry on the build cluster
-          # (argocd-build-cluster-access, in the ack-build-infra chart). Without that entry
-          # this Secret would register an unreachable cluster.
+          # No credentials stored. The capability authenticates as its own role, which holds
+          # a cluster-admin access entry on the build cluster (argocd-build-cluster-access,
+          # in the ack-build-infra chart). Without that entry this registers an unreachable
+          # cluster.
           ARN=$(kubectl -n "$CR_NS" get cluster.eks.services.k8s.aws "$CR" \
                   -o jsonpath='{.status.ackResourceMetadata.arn}')
           if [ -z "$ARN" ]; then
@@ -155,19 +146,16 @@ spec:
             | kubectl apply -f -
           echo "build cluster registered as an Argo CD spoke."
 
-          # Authorise the spoke in the AppProject.
+          # Authorise the spoke in the AppProject. Registration alone is not enough: an
+          # Application whose destination.server is not listed in its project's destinations
+          # is REJECTED outright rather than failing at sync.
           #
-          # Registration alone is not enough: an Application whose destination.server is
-          # not listed in its project's destinations is REJECTED outright, rather than
-          # failing at sync, which is a confusing way to discover the omission.
+          # Runtime for the same reason as the registration. Terraform declares only the hub
+          # destination and marks spec.destinations in computed_fields so it does not
+          # reconcile this away - see bootstrap/argocd-access.tf.
           #
-          # Runtime, like the registration and for the same reason - a destination naming
-          # the build cluster is keyed to a cluster ACK owns, so Terraform must not hold
-          # it (D13). Terraform declares the hub destination and carries
-          # ignore_changes on the list so it does not revert this.
-          #
-          # Idempotent because this hook runs on every sync: the destination is appended
-          # only when absent. A blind `add` would grow the list without bound.
+          # Idempotent because this hook runs on every sync: the destination is appended only
+          # when absent. A blind `add` would grow the list without bound.
           PROJECT="test-infra"
           if kubectl -n argocd get appproject "$PROJECT" \
                -o jsonpath='{.spec.destinations[*].server}' | grep -qF "$ARN"; then
@@ -179,21 +167,13 @@ spec:
             echo "AppProject $PROJECT updated."
           fi
 
-          # Apply the prow-build-cluster-resources Application.
+          # Apply the prow-build-cluster-resources Application. The manifest is composed by
+          # the chart and mounted from the build-cluster-resources-application ConfigMap; only
+          # the ARN placeholder is filled in here.
           #
-          # Third and last of the build-cluster-keyed objects this Job owns, for the same
-          # reason as the other two: its destination names a cluster ACK creates, so
-          # Terraform must not declare it (D13). Terraform supplies the values; the ARN,
-          # the one thing it cannot know, is substituted here.
-          #
-          # The manifest itself is composed by the chart and mounted from the
-          # build-cluster-resources-application ConfigMap - see templates/application.yaml
-          # for why it is not a heredoc here. Only the ARN placeholder is filled in.
-          #
-          # Ordering matters and is why this is last: an Application whose
-          # destination.server is absent from its project's destinations is rejected
-          # outright, so the registration and the AppProject patch above must both have
-          # happened first.
+          # Last on purpose: an Application whose destination.server is absent from its
+          # project's destinations is rejected outright, so the registration and the
+          # AppProject patch above must both have happened first.
           echo "Applying the prow-build-cluster-resources Application..."
           sed "s|__BUILD_CLUSTER_ARN__|${ARN}|" /etc/application/application.yaml \
             | kubectl apply -f -
@@ -204,27 +184,23 @@ spec:
             memory: "128Mi"
           limits:
             cpu: "200m"
-            # 128Mi was not enough and the failure mode was opaque: the pod was OOMKilled three
-            # times in a row, which Argo CD surfaces only as a PostSync hook stuck in Running.
-            #
-            # This script's steps are kubectl PIPELINES - `kubectl create ... | kubectl label
-            # --local | kubectl apply -f -` runs three Go binaries concurrently, each tens of MB,
-            # and the script has four such steps. Peak is concurrent, not
-            # sequential, so the ceiling has to clear several kubectl processes at once.
+            # 128Mi was not enough, and the failure mode was opaque: the pod was OOMKilled
+            # three times in a row, which Argo CD surfaces only as a PostSync hook stuck in
+            # Running. The steps above are kubectl PIPELINES, each running several Go
+            # binaries concurrently, so peak is concurrent rather than sequential.
             memory: "512Mi"
         volumeMounts:
         - name: application
           mountPath: /etc/application
           readOnly: true
       volumes:
-      # The composed Application manifest. A mount rather than a `kubectl get -o jsonpath`
-      # read, so the manifest reaches the container exactly as the chart rendered it with
-      # no shell quoting in the path.
+      # The composed Application manifest, mounted rather than read with `kubectl get -o
+      # jsonpath` so it reaches the container exactly as the chart rendered it, with no shell
+      # quoting in the path.
       #
-      # This ConfigMap is a normal tracked object of the chart, not a hook, so both
-      # reconcilers have it in place before the hook runs: Helm applies release resources
-      # before post-install/post-upgrade hooks, and Argo CD applies the sync wave before
-      # PostSync.
+      # This ConfigMap is a normal tracked object rather than a hook, so both reconcilers have
+      # it in place before the hook runs: Helm applies release resources before
+      # post-install/post-upgrade hooks, and Argo CD applies the sync wave before PostSync.
       - name: application
         configMap:
           name: build-cluster-resources-application

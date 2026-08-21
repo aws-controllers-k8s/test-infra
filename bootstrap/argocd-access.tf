@@ -1,49 +1,31 @@
 ################################################################################
-# Argo CD authorization and cluster registration
+# Argo CD authorization and cluster registration. Pure Terraform; no local-exec.
 #
-# Everything here is pure Terraform. No local-exec, no kubectl.
+# Creating the capability already grants AmazonEKSArgoCDClusterPolicy (cluster) and
+# AmazonEKSArgoCDPolicy (namespace=argocd). Those cover Argo CD's own operation -
+# reading its CRs and registration Secrets, API discovery, namespace and CRD create.
+# They do NOT grant deploying workloads or reading arbitrary resources for health
+# assessment, which is what this file adds.
 #
-# What EKS already did for us when the capability was created (verified live):
-#   AmazonEKSArgoCDClusterPolicy  scope=cluster
-#   AmazonEKSArgoCDPolicy         scope=namespace, namespaces=[argocd]
+# Granted through EKS access policies and one added Kubernetes group rather than
+# in-cluster RBAC alone, because Argo CD cannot apply the objects that authorize
+# Argo CD.
 #
-# Those cover Argo CD's OWN operation - reading its CRs, reading cluster
-# registration Secrets, API discovery, namespace creation, CRD create. They do NOT
-# grant permission to deploy workloads or to read arbitrary resources for health
-# assessment. That is what this file adds.
-#
-# Authorization is granted via EKS access policies rather than in-cluster RBAC,
-# because Argo CD cannot apply the object that authorizes Argo CD. The repo already
-# documents this pattern for Flux in flux/ack/build-cluster/access-entries.yaml.
-################################################################################
-
-################################################################################
-# SCOPE: hub cluster only.
-#
-# Nothing here touches the build cluster, deliberately. The build cluster is not
-# registered as an Argo CD spoke until Phase 4, and when it is, its AccessEntry
-# belongs in flux/ack/build-cluster/access-entries.yaml as an ACK CR alongside the
-# eight already there - not in Terraform. See docs/argocd-migration.md, D13.
+# Hub cluster only. Anything keyed to the build cluster is owned at runtime, never
+# by Terraform, because its ARN is not knowable until ACK creates the cluster; its
+# access entry belongs with the other ACK CRs in
+# flux/ack/build-cluster/access-entries.yaml.
 ################################################################################
 
 locals {
   argocd_capability_role_arn = aws_iam_role.argocd_capability.arn
 
-  # Namespaces Argo CD may write to on the hub. Exactly the namespaces some Application
-  # targets - the list is a statement about what is deployed, not a standing allowance.
+  # Namespaces Argo CD may write to. Exactly the namespaces some Application targets,
+  # so this is a statement about what is deployed rather than a standing allowance.
   #
-  # Two entries have been removed on that basis rather than left to linger:
-  #
-  #   `prometheus`, when kube-prometheus-stack was removed from the repo.
-  #
-  #   `flux-system`, once prow-build-cluster-connection moved to ack-system. It was the last
-  #   Application targeting that namespace, and it only ever lived there because that is
-  #   where it was written - nothing in it is Flux wiring. What remains in flux-system is
-  #   Flux's own machinery, since removed, so Argo CD never needed access to it.
-  #
-  # This list also drives the `admin` RoleBindings in argocd-rbac.tf, deliberately: that
-  # binding is only defensible as privilege-neutral because it mirrors this association, so
-  # the two must move together.
+  # This list also drives the `admin` RoleBindings in argocd-rbac.tf, and that binding
+  # is only defensible as privilege-neutral because it mirrors this association. The
+  # two must move together.
   argocd_hub_namespaces = [
     "ack-system",
     "prow",
@@ -51,12 +33,8 @@ locals {
   ]
 }
 
-################################################################################
-# Hub cluster (control plane) authorization
-################################################################################
-
-# Cluster-wide read for resource discovery and health assessment. Argo CD needs to
-# read all resource types cluster-wide even when it writes to only a few namespaces.
+# Cluster-wide read, for resource discovery and health assessment. Needed even though
+# Argo CD writes to only a few namespaces.
 resource "aws_eks_access_policy_association" "argocd_hub_read" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = local.argocd_capability_role_arn
@@ -70,13 +48,10 @@ resource "aws_eks_access_policy_association" "argocd_hub_read" {
 # Write access, namespace-scoped.
 #
 # ONE association carrying the full namespace list - NOT for_each over namespaces.
-# aws_eks_access_policy_association is keyed by (cluster, principal, policy), so its
-# Terraform ID contains no namespace component:
-#   <cluster>#<principal-arn>#<policy-arn>
-# A for_each over namespaces therefore produces N resources all contending for the
-# same AWS resource. They thrash on every apply and only the last writer survives,
-# silently leaving the other namespaces ungranted. namespaces is a list property of
-# a single association, not a key.
+# This resource is keyed by (cluster, principal, policy), so its Terraform ID has no
+# namespace component. A for_each therefore produces N resources contending for the
+# same AWS resource: they thrash on every apply and only the last writer survives,
+# silently leaving the other namespaces ungranted.
 resource "aws_eks_access_policy_association" "argocd_hub_write" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = local.argocd_capability_role_arn
@@ -88,18 +63,12 @@ resource "aws_eks_access_policy_association" "argocd_hub_write" {
   }
 }
 
-################################################################################
-# Cluster registration
+# Cluster registration: a labelled Secret in the capability's namespace. `server` must
+# be the EKS cluster ARN - API server URLs and kubernetes.default.svc are not
+# supported. No credentials; the capability derives them from the capability role and
+# the access entries above.
 #
-# Registration is a labelled Secret in the capability's namespace. The server field
-# must be the EKS cluster ARN - API server URLs and kubernetes.default.svc are not
-# supported. No connection credentials are needed; the capability derives them from
-# the capability role and the access entries above.
-#
-# The hub registration must be Terraform-owned: Argo CD cannot deploy anything until
-# at least one cluster is registered, so this is the chicken-and-egg seam.
-################################################################################
-
+# Terraform-owned because Argo CD can deploy nothing until a cluster is registered.
 resource "kubernetes_secret_v1" "argocd_cluster_hub" {
   metadata {
     name      = "in-cluster"
@@ -119,23 +88,15 @@ resource "kubernetes_secret_v1" "argocd_cluster_hub" {
   depends_on = [awscc_eks_capability.argocd]
 }
 
-################################################################################
-# AppProject
+# AppProject.
 #
 # spec.sourceNamespaces is REQUIRED by the managed capability and must contain the
-# capability's configured namespace. Omitting it does not error clearly - Applications
-# in that namespace simply cannot reference the project, surfacing as deployment
-# failures. The built-in "default" project is not relied upon for this reason.
+# capability's namespace. Omitting it does not error clearly - Applications in that
+# namespace simply cannot reference the project, which surfaces as deployment failures.
 #
-# kubernetes_manifest validates against the live API at PLAN time, so the Argo CD
-# CRDs must already exist. That holds here because the capability created them. On a
-# fresh bootstrap the capability and this resource would be in the same apply, so the
-# capability must be applied first:
-#   terraform apply -target=awscc_eks_capability.argocd
-# then a full apply. Only affects an empty account; on an existing stack the CRDs are
-# already present.
-################################################################################
-
+# kubernetes_manifest validates against the live API at PLAN time, so the Argo CD CRDs
+# must already exist. On a fresh bootstrap, apply the capability first
+# (-target=awscc_eks_capability.argocd) and then apply fully.
 resource "kubernetes_manifest" "argocd_project" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
@@ -155,15 +116,9 @@ resource "kubernetes_manifest" "argocd_project" {
         "https://github.com/${var.test_infra_org}/${var.test_infra_repo}",
       ]
 
-      # HUB ONLY. Spoke destinations are added at runtime, not here.
-      #
-      # A destination naming the build cluster is keyed to a cluster ACK owns, and
-      # Terraform must not hold anything keyed to it (D13) - the same reason the
-      # registration Secret is written by the prow-build-cluster-connection Job rather
-      # than by Terraform. Terraform authorises only the cluster it owns and bootstraps.
-      #
-      # The Job appends the spoke destination, which is why spec.destinations is in
-      # computed_fields below. Read that block before changing this list.
+      # HUB ONLY. The spoke destination is appended at runtime by the
+      # prow-build-cluster-connection Job, because it names a cluster ACK owns. See
+      # computed_fields below before changing this list.
       destinations = [
         {
           server    = aws_eks_cluster.this.arn
@@ -182,86 +137,41 @@ resource "kubernetes_manifest" "argocd_project" {
 
   depends_on = [awscc_eks_capability.argocd]
 
-  # Spoke destinations are appended at runtime by the prow-build-cluster-connection Job,
-  # because a destination naming the build cluster is keyed to a cluster ACK owns and
-  # Terraform must not hold that (D13). This is what stops Terraform reconciling the
-  # addition away.
+  # spec.destinations is written by the connection Job, so Terraform must not
+  # reconcile it away.
   #
-  # THIS WAS `lifecycle { ignore_changes = [manifest.spec.destinations] }` AND THAT DOES
-  # NOT WORK. ignore_changes substitutes the prior STATE value for the CONFIG value of an
-  # argument. Config and state both say hub-only here, so there is nothing to ignore - the
-  # divergence is in `object`, which is computed, and ignore_changes cannot reach a computed
-  # attribute. The provider then plans `manifest` against `object` and applies `manifest`
-  # through server-side apply, and spec.destinations is an atomic list with no merge key, so
-  # applying a one-entry list means "the list is exactly this one entry".
+  # `lifecycle { ignore_changes = [manifest.spec.destinations] }` DOES NOT WORK here.
+  # ignore_changes substitutes the prior STATE value for the CONFIG value of an
+  # argument, and both say hub-only - the divergence is in `object`, which is computed,
+  # and ignore_changes cannot reach a computed attribute. The provider then applies
+  # `manifest` through server-side apply, and destinations is an atomic list with no
+  # merge key, so applying a one-entry list means "the list is exactly this".
   #
-  # Which way that breaks depends on who wrote the field last, because a JSON patch takes
-  # ownership from the applying manager:
+  # Whichever manager wrote the field last decides how that breaks: if the Job did,
+  # the apply fails on a field-manager conflict and takes argocd_root with it, since
+  # that resource depends on this one; if Terraform did, the apply succeeds and absorbs
+  # the spoke ARN into state, which is the coupling this list exists to avoid.
   #
-  #   Job last       -> apply FAILS: conflict with "kubectl-patch" on .spec.destinations,
-  #                     and kubernetes_manifest.argocd_root depends on this resource, so
-  #                     every later apply fails too - including unrelated work.
-  #   Terraform last -> apply SUCCEEDS and absorbs the spoke ARN into `manifest` in state,
-  #                     which is the D13 coupling this list exists to avoid, arrived at
-  #                     silently. Staging is in this state.
-  #
-  # computed_fields is the mechanism the provider documents for a field written by someone
-  # else: "manifest fields whose values can be altered by the API server during 'apply'".
-  # Verified against a throwaway AppProject: declare the hub destination, mark the field
-  # computed, let an external JSON patch take ownership and append a spoke, re-plan ->
-  # "No changes", and `manifest` stays hub-only so the ARN never enters state.
-  #
-  # The two metadata entries are the provider's DEFAULT and must be restated - supplying
-  # computed_fields replaces the default list rather than appending to it, and dropping them
-  # reintroduces churn from the annotations Argo CD and ACK write. sourceRepos,
-  # sourceNamespaces and clusterResourceWhitelist stay Terraform-managed and drift-corrected.
+  # computed_fields is the provider's mechanism for a field written by someone else.
+  # The two metadata entries are its DEFAULT and must be restated - supplying
+  # computed_fields replaces the default list rather than appending to it, and dropping
+  # them reintroduces churn from annotations Argo CD and ACK write. sourceRepos,
+  # sourceNamespaces and clusterResourceWhitelist stay Terraform-managed.
   computed_fields = ["metadata.annotations", "metadata.labels", "spec.destinations"]
 }
 
-################################################################################
-# CRD write exception
+# CRD write.
 #
 # AmazonEKSArgoCDClusterPolicy grants customresourcedefinitions `create`, but
-# get/update/patch/delete only on Argo CD's OWN CRDs. Any Application that manages a
-# third-party CRD therefore installs it successfully on first sync and then fails
-# forever on the next one. Confirmed live in staging:
+# get/update/patch/delete only on Argo CD's OWN CRDs. An Application managing a
+# third-party CRD therefore installs it on first sync and fails forever after, and it
+# does not fail fast - the Application retries and sits in Running, so the symptom is
+# a stuck sync rather than a permission error. This matters for prow-crds, which must
+# refresh the ProwJob CRD when scripts/upgrade-prow.sh pulls a new version.
 #
-#   customresourcedefinitions.apiextensions.k8s.io "..." is forbidden: User
-#   ".../ack-test-infra-staging-argocd-capability-role/..." cannot patch resource
-#   "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope
-#
-# It does not fail fast either - the Application retries indefinitely and sits in
-# Running, so the symptom is a stuck sync rather than a clear permission error.
-#
-# This matters for prow-crds, which installs the ProwJob CRD and must be able to
-# refresh it when scripts/upgrade-prow.sh pulls a new version from upstream.
-#
-# Granted as narrow in-cluster RBAC on exactly one resource type rather than by
-# attaching AmazonEKSClusterAdminPolicy, which would hand over the whole cluster.
-#
-# Terraform must own this: it is the object that authorizes Argo CD, so Argo CD
-# cannot apply it (3.4).
-################################################################################
-
-# Custom in-cluster RBAC CANNOT be used here, which is worth recording because the
-# AWS docs suggest otherwise. The capability's auto-created access entry has:
-#
-#   kubernetesGroups: []
-#   username: arn:aws:sts::<acct>:assumed-role/<role>/{{SessionName}}
-#
-# There is no group to bind to, and the username is session-templated - at runtime it
-# resolves to a fresh value like aws-go-sdk-1787004054908077004. A ClusterRoleBinding
-# to "eks-access-entry:<principal-arn>", which the Register-target-clusters docs
-# recommend, binds to a group that does not exist and silently grants nothing.
-# Verified by attempting exactly that: the CRD patch stayed forbidden.
-#
-# A separate IAM role does not help either - every capability role gets an identical,
-# equally unbindable access entry. The only lever is which access POLICIES are
-# associated.
-#
-# AmazonEKSKROPolicy grants apiextensions.k8s.io/customresourcedefinitions: * . It is
-# AWS-managed and far narrower than AmazonEKSClusterAdminPolicy. Its incidental
-# grants (kro.run/*, leases, events) are inert here - no kro CRDs are installed.
+# AmazonEKSKROPolicy grants apiextensions.k8s.io/customresourcedefinitions: * and is
+# far narrower than AmazonEKSClusterAdminPolicy. Its incidental grants (kro.run/*,
+# leases, events) are inert - no kro CRDs are installed.
 resource "aws_eks_access_policy_association" "argocd_hub_crd" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = local.argocd_capability_role_arn
@@ -272,34 +182,13 @@ resource "aws_eks_access_policy_association" "argocd_hub_crd" {
   }
 }
 
-################################################################################
-# ACK custom resources.
+# ACK custom resources. The AWS-managed policies enumerate standard API groups and do
+# not extend to arbitrary CRDs, so without this Argo CD renders the ~63 ACK CRs it
+# manages but cannot apply them. AmazonEKSACKPolicy is what the ACK capability role
+# itself is granted and is scoped to the *.services.k8s.aws groups.
 #
-# Found by cutting one path over and watching it fail safely:
-#
-#   pullthroughcacherules.ecr.services.k8s.aws "ghcr-fluxcd" is forbidden: User
-#   ".../ack-test-infra-staging-argocd-capability-role/aws-go-sdk-..." cannot patch
-#   resource "pullthroughcacherules" in API group "ecr.services.k8s.aws" in the
-#   namespace "ack-system"
-#
-# AmazonEKSAdminPolicy is already associated for the workload namespaces, but the
-# AWS-managed policies enumerate standard API groups and do not extend to arbitrary
-# CRDs. Argo CD manages 63 ACK custom resources across the *.services.k8s.aws
-# groups, so without this it can render them but never apply them.
-#
-# As established in D14, in-cluster RBAC is not an option: the capability's access
-# entry carries no kubernetesGroups and a session-templated username, so there is no
-# stable subject to bind. Associated access policies are the only lever.
-#
-# AmazonEKSACKPolicy is exactly the right shape - it is what the ACK capability role
-# itself is granted, and it is scoped to the *.services.k8s.aws groups rather than
-# handing out cluster-admin.
-#
-# Cluster scope, matching the ACK capability role's own association: ACK CRs live in
-# ack-system today, but the scope of a policy granting only ACK API groups is already
-# narrow, and namespace scope would silently break if a controller is ever pointed at
-# another namespace.
-################################################################################
+# Cluster scope, matching the ACK capability role: the policy is already narrow, and
+# namespace scope would break silently if a controller is pointed elsewhere.
 resource "aws_eks_access_policy_association" "argocd_hub_ack" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = local.argocd_capability_role_arn
@@ -310,70 +199,45 @@ resource "aws_eks_access_policy_association" "argocd_hub_ack" {
   }
 }
 
-################################################################################
-# Cluster-scoped objects in the ack-cluster chart.
-#
-# Found by cutting one path over and reading the per-resource result. The three
-# namespaced ACK CRs synced; all four cluster-scoped objects were refused:
-#
-#   StorageClass  auto-ebs-sc         SyncFailed  cannot patch StorageClass
-#   IngressClass  alb                 SyncFailed  cannot patch IngressClass
-#   NodePool      prow-compute        SyncFailed  cannot patch NodePool
-#   NodePool      prow-control-plane  SyncFailed  cannot patch NodePool
-#
-# NO ACCESS POLICY SOLVES THIS. Recorded so the next attempt does not repeat it:
+# Cluster-scoped objects in the ack-cluster chart - StorageClass, IngressClass and the
+# two NodePools - are handled by the group below plus a narrow ClusterRole in
+# argocd-rbac.tf, NOT by an access policy. Recorded so the next attempt does not
+# repeat it:
 #
 #   AmazonEKSBlockStorageClusterPolicy and AmazonEKSComputeClusterPolicy cannot be
-#   associated at all - "InvalidParameterException: The specified policyArn can only
-#   be associated with service-linked roles". They are reserved for EKS Auto Mode's
-#   own service-linked roles. Declaring either as a resource here makes every apply
-#   fail, which is why neither appears below.
+#   associated at all ("policyArn can only be associated with service-linked roles").
+#   Declaring either makes every apply fail.
 #
-#   AmazonEKSLoadBalancingClusterPolicy associates but grants no IngressClass write.
-#   AmazonEKSAdminPolicy grants nothing extra at either scope: it mirrors the built-in
-#   admin ClusterRole, which is namespace-oriented and excludes cluster-scoped
-#   resources and CRD instances. It also covers no CRD group, so it misses
-#   karpenter.sh regardless. Associating it at CLUSTER scope REPLACES the
-#   namespace-scoped association above of the same policy, silently widening that
-#   grant - verify with list-associated-access-policies after any change.
+#   AmazonEKSLoadBalancingClusterPolicy grants no IngressClass write.
 #
-#   The only associable policy covering all four is AmazonEKSClusterAdminPolicy, i.e.
-#   cluster-admin for Argo CD.
+#   AmazonEKSAdminPolicy adds nothing at either scope - it mirrors the namespace-
+#   oriented admin ClusterRole and covers no CRD group. Associating it at CLUSTER
+#   scope also REPLACES the namespace-scoped association above, silently widening that
+#   grant; verify with list-associated-access-policies after any change.
 #
-# Solved instead by adding a Kubernetes group to the capability role's access entry
-# and binding a narrow ClusterRole to it - see the access entry at the end of this
-# file and argocd-rbac.tf.
-################################################################################
+#   The only associable policy covering all four is AmazonEKSClusterAdminPolicy.
 
-################################################################################
-# A Kubernetes group on the capability role's access entry.
+# A Kubernetes group on the capability role's access entry, which is what avoids
+# granting Argo CD cluster-admin.
 #
-# This is the lever that avoids granting Argo CD cluster-admin. An earlier decision
-# record concluded in-cluster RBAC was impossible here, because the capability's
-# auto-created access entry ships with kubernetesGroups: [] and a session-templated
-# username that cannot serve as an RBAC subject. The first half is true; the
-# conclusion was not. A group can be ADDED to the entry, and a group is bindable.
+# The capability's auto-created entry ships with kubernetesGroups: [] and a
+# session-templated username that resolves to a fresh value per session, so it cannot
+# itself serve as an RBAC subject - binding to "eks-access-entry:<principal-arn>", as
+# the register-target-clusters docs suggest, binds a group that does not exist and
+# grants nothing. A group can however be ADDED to the entry, and a group is bindable.
 #
-# With this set, argocd-rbac.tf binds a ClusterRole granting
-# exactly storage.k8s.io/storageclasses, networking.k8s.io/ingressclasses,
-# karpenter.sh/nodepools and eks.amazonaws.com/nodeclasses - the cluster-scoped
-# objects in the ack-cluster chart. Verified: all four sync, and adding the group
-# leaves the six associated access policies intact.
-#
-# Kept as a separate resource rather than folded into an access entry declaration,
-# because the entry itself is created by the capability, not by Terraform. Terraform
-# only adds the group to it.
-################################################################################
+# Separate resource because the capability creates the entry; Terraform only adds the
+# group.
 resource "aws_eks_access_entry" "argocd_capability_group" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = local.argocd_capability_role_arn
 
-  # Must match the subject in argocd-rbac.tf, which consumes this via local.argocd_rbac_group.
+  # Must match the subject in argocd-rbac.tf, via local.argocd_rbac_group.
   kubernetes_groups = ["argocd-cluster-scoped"]
 
   lifecycle {
     # The capability owns the entry and sets type and username; Terraform contributes
-    # only the group. Without this, Terraform and the capability fight over the rest.
+    # only the group.
     ignore_changes = [type, user_name]
   }
 }
