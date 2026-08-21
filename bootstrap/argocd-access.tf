@@ -156,9 +156,6 @@ resource "kubernetes_manifest" "argocd_project" {
         "https://github.com/${var.test_infra_org}/${var.test_infra_repo}",
       ]
 
-      # Hub only. The build cluster is added as a destination in Phase 4, when it is
-      # registered as a spoke - not before. A destination for an unregistered cluster
-      # would be misleading.
       # HUB ONLY. Spoke destinations are added at runtime, not here.
       #
       # A destination naming the build cluster is keyed to a cluster ACK owns, and
@@ -166,10 +163,8 @@ resource "kubernetes_manifest" "argocd_project" {
       # registration Secret is written by the prow-build-cluster-connection Job rather
       # than by Terraform. Terraform authorises only the cluster it owns and bootstraps.
       #
-      # The Job appends the spoke destination, which is why destinations is in
-      # ignore_changes below. Without that, the next terraform apply would silently
-      # revert the addition and Applications targeting the build cluster would start
-      # being rejected.
+      # The Job appends the spoke destination, which is why spec.destinations is in
+      # computed_fields below. Read that block before changing this list.
       destinations = [
         {
           server    = aws_eks_cluster.this.arn
@@ -188,20 +183,40 @@ resource "kubernetes_manifest" "argocd_project" {
 
   depends_on = [awscc_eks_capability.argocd]
 
-  lifecycle {
-    # Spoke destinations are appended at runtime by the prow-build-cluster-connection
-    # Job, because a destination naming the build cluster is keyed to a cluster ACK owns
-    # and Terraform must not hold that (D13).
-    #
-    # Without this, every terraform apply would rewrite destinations back to the hub-only
-    # list. Nothing would error - the Job re-adds it on its next run - but in between,
-    # Applications targeting the build cluster are REJECTED rather than failing at sync,
-    # so the symptom appears at a distance from the apply that caused it.
-    #
-    # Scoped to destinations alone. sourceRepos, sourceNamespaces and
-    # clusterResourceWhitelist stay Terraform-managed and drift-corrected.
-    ignore_changes = [manifest.spec.destinations]
-  }
+  # Spoke destinations are appended at runtime by the prow-build-cluster-connection Job,
+  # because a destination naming the build cluster is keyed to a cluster ACK owns and
+  # Terraform must not hold that (D13). This is what stops Terraform reconciling the
+  # addition away.
+  #
+  # THIS WAS `lifecycle { ignore_changes = [manifest.spec.destinations] }` AND THAT DOES
+  # NOT WORK. ignore_changes substitutes the prior STATE value for the CONFIG value of an
+  # argument. Config and state both say hub-only here, so there is nothing to ignore - the
+  # divergence is in `object`, which is computed, and ignore_changes cannot reach a computed
+  # attribute. The provider then plans `manifest` against `object` and applies `manifest`
+  # through server-side apply, and spec.destinations is an atomic list with no merge key, so
+  # applying a one-entry list means "the list is exactly this one entry".
+  #
+  # Which way that breaks depends on who wrote the field last, because a JSON patch takes
+  # ownership from the applying manager:
+  #
+  #   Job last       -> apply FAILS: conflict with "kubectl-patch" on .spec.destinations,
+  #                     and kubernetes_manifest.argocd_root depends on this resource, so
+  #                     every later apply fails too - including unrelated work.
+  #   Terraform last -> apply SUCCEEDS and absorbs the spoke ARN into `manifest` in state,
+  #                     which is the D13 coupling this list exists to avoid, arrived at
+  #                     silently. Staging is in this state.
+  #
+  # computed_fields is the mechanism the provider documents for a field written by someone
+  # else: "manifest fields whose values can be altered by the API server during 'apply'".
+  # Verified against a throwaway AppProject: declare the hub destination, mark the field
+  # computed, let an external JSON patch take ownership and append a spoke, re-plan ->
+  # "No changes", and `manifest` stays hub-only so the ARN never enters state.
+  #
+  # The two metadata entries are the provider's DEFAULT and must be restated - supplying
+  # computed_fields replaces the default list rather than appending to it, and dropping them
+  # reintroduces churn from the annotations Argo CD and ACK write. sourceRepos,
+  # sourceNamespaces and clusterResourceWhitelist stay Terraform-managed and drift-corrected.
+  computed_fields = ["metadata.annotations", "metadata.labels", "spec.destinations"]
 }
 
 ################################################################################
