@@ -15,6 +15,13 @@ metadata:
   name: ack-capability-role
   namespace: flux-system
 spec:
+  # SUSPENDED: this path is cut over to Argo CD (Application `ack-capability-role`). helm-controller stops
+  # reconciling, so these objects are managed solely by Argo CD.
+  #
+  # Declared here rather than applied with kubectl, because the root test-infra Kustomization
+  # re-applies this spec: an imperative suspend is silently reverted on the next reconcile and
+  # both reconcilers end up owning the same objects.
+  suspend: true
   interval: 60m
   targetNamespace: ack-system
   chart:
