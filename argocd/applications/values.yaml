@@ -177,12 +177,27 @@ applications:
   ##############################################################################
 
   prow-build-cluster-connection:
-    # flux-system, not ack-system: the Job writes build-cluster-kubeconfig there and Prow's
-    # crier, deck, sinker and prow-controller-manager mount it from there. Unlike
-    # prow-build-cluster-kubeconfig this path survives Flux (D16), which is why it has an
-    # Application and that one does not.
+    # ack-system, not flux-system, and the move is the point rather than cosmetic. NOTHING in
+    # this chart is Flux wiring: the Job assembles the kubeconfig Prow mounts (a Prow
+    # requirement under either reconciler), registers the build cluster as an Argo CD spoke,
+    # authorises it in the AppProject and applies its Application - the last three exist only
+    # because of Argo CD. Flux's own route to that cluster was kustomize-controller
+    # remote-applying through build-cluster-flux-kubeconfig, a different ConfigMap from the
+    # prow-build-cluster-kubeconfig chart, which dies with Flux.
+    #
+    # It started in flux-system only because that is where it was written, and staying there
+    # would have left a namespace named after a reconciler that no longer exists holding the
+    # chart that replaced it. ack-system is where the Cluster CR the Job reads already lives,
+    # and it is already in argocd_hub_namespaces, so the admin RoleBinding covers creating the
+    # Roles without a new grant.
+    #
+    # The chart uses .Release.Namespace for its own objects, so stages still on Flux keep
+    # rendering into flux-system from their HelmRelease's targetNamespace - this move is
+    # hub-only. Its ack-system, prow and argocd references stay literal, because those name
+    # where the TARGET objects live: the Cluster CR, the kubeconfig Prow mounts, and the
+    # registration Secret plus AppProject plus Application.
     path: flux/prow/charts/prow-build-cluster-connection
-    targetNamespace: flux-system
+    targetNamespace: ack-system
     wave: 3
 
     # The last three exist so the Job can compose the prow-build-cluster-resources

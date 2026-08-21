@@ -38,7 +38,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: build-cluster-resources-application
-  namespace: flux-system
+  namespace: {{ .Release.Namespace }}
 data:
   application.yaml: |
     apiVersion: argoproj.io/v1alpha1
