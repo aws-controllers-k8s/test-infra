@@ -80,15 +80,30 @@ spec:
       to the implicit rule that finds kustomization.yaml.
     */}}
     helm:
+      {{- /*
+        forceString on EVERY parameter, which is what makes Argo CD emit --set-string
+        instead of --set. Quoting the value here is not enough: it makes this manifest a
+        YAML string, but Argo CD then hands the value to Helm's --set, whose parser coerces
+        anything that looks like a number. A 12-digit account id becomes an int64, and a
+        chart that feeds it to `replace` or any other string function dies at render time
+        with "wrong type for value; expected string; got int64" - which is how prow-jobs and
+        prow-plugins failed on the first prod sync, while the ten other paths passing the
+        same accountId rendered fine because they only interpolate it.
+
+        Every key in chartValues is a string by construction - argocd-applications.value
+        fails on a non-string - so there is no parameter here that wants to stay numeric.
+      */}}
       {{- if $params }}
       parameters:
         {{- range $key := (default (list) $app.values) }}
         - name: {{ $key }}
           value: {{ include "argocd-applications.value" (list $cv $key $name) | quote }}
+          forceString: true
         {{- end }}
         {{- range $path, $key := (default (dict) $app.valuePaths) }}
         - name: {{ $path }}
           value: {{ include "argocd-applications.value" (list $cv $key $name) | quote }}
+          forceString: true
         {{- end }}
       {{- end }}
       {{- if default false $app.valuesFromTerraform }}
