@@ -32,7 +32,7 @@
 # The suffix is load bearing. This Kustomization reconciles hourly with
 # force: true, so a mutable bare tag alone gives no way to pin or roll out a
 # specific patch build. Bump PROW_PATCH_REVISION in
-# flux/prow/version/prow-version-configmap.yaml to force a fresh rebuild without
+# prowPatchRevision in values.yaml to force a fresh rebuild without
 # changing the Prow version.
 #
 # The Job is idempotent. The init container skips any image whose patched tag is

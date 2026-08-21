@@ -12,9 +12,9 @@
 # it, and here that would be every running pre-submit pod.
 #
 # The exception stands because there is no alternative applier. On the hub the equivalent
-# namespaces are a raw manifest (flux/ack/cluster/pod-identities/prow-namespaces.yaml)
+# namespaces are a raw manifest (prow/namespaces/prow-namespaces.yaml)
 # applied alongside the chart, but nothing else reaches INSIDE the build cluster: ACK
-# creates the cluster and cannot write objects into it, and after Phase 5 removes Flux
+# creates the cluster and cannot write objects into it, and now that Flux is gone
 # this path is the only writer left. Leaving the namespace unowned would strand it.
 #
 # It is guarded at the object level instead, so the protection does not depend on

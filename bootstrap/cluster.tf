@@ -183,27 +183,3 @@ resource "aws_iam_role_policy" "cluster_admin_describe" {
   depends_on = [aws_iam_role.cluster_admin, aws_eks_cluster.this]
 }
 
-################################################################################
-# NodePool Swap - delete general-purpose once prow-compute is ready
-################################################################################
-
-resource "null_resource" "swap_nodepool" {
-  triggers = {
-    cluster_name = aws_eks_cluster.this.name
-    region       = var.region
-    script       = "${path.module}/scripts/swap-nodepool.sh"
-  }
-
-  provisioner "local-exec" {
-    command = "${self.triggers.script} ${self.triggers.cluster_name} ${self.triggers.region}"
-  }
-
-  # No Terraform gate any more. This waited on validate_kustomizations, which polled Flux
-  # Kustomizations for Ready; Flux is gone, and the prow-compute NodePool it was really
-  # waiting for is now delivered by the ack-cluster Application, which Terraform cannot
-  # observe. swap-nodepool.sh polls for that NodePool itself with its own timeout and skips
-  # cleanly if it never appears, so the wait lives in the script rather than in the graph.
-  depends_on = [
-    aws_eks_cluster.this,
-  ]
-}

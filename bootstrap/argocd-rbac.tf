@@ -2,7 +2,7 @@
 # In-cluster RBAC for the Argo CD capability.
 #
 # WHY TERRAFORM OWNS THIS. Argo CD cannot apply the object that authorises Argo CD,
-# so this path could never be an Application. It was reconciled by Flux until Phase 5,
+# so this path could never be an Application. It was reconciled by Flux until Flux was removed,
 # which made it the last thing Flux owned and blocked Flux removal outright. Terraform
 # is the right owner rather than the residual one: the SUBJECT these objects bind is
 # the kubernetesGroup that Terraform adds to the capability role's access entry
@@ -176,8 +176,9 @@ resource "kubernetes_cluster_role_v1" "argocd_cluster_scoped" {
   # which belongs to whoever owns agent-plugin. If it lands, shrink these rules to
   # match - they only need to remain a superset of what that ClusterRole grants.
   #
-  # What bounds the expansion: kustomize-controller holds strictly more than this and
-  # loses it in Phase 5, so the number of broadly-privileged principals does not rise.
+  # What bounded the expansion when it was made: kustomize-controller held strictly more than
+  # this and has since been removed with Flux, so the number of broadly-privileged principals
+  # went down rather than up.
   # No `delete` on any of it, and no `escalate` - which would let Argo CD create a Role
   # conferring anything at all.
   ##############################################################################

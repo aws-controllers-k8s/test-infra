@@ -1,4 +1,4 @@
-# Supplied by the HelmRelease from the self-managed-vars ConfigMap. Left empty
+# Supplied by the Argo CD Application as helm parameters, from Terraform. Left empty
 # rather than defaulted so a missing value fails at render time via `required`,
 # instead of silently producing a truncated name or ARN the way an
 # unsubstituted postBuild token would.

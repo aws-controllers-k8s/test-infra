@@ -3,7 +3,7 @@
 # Build cluster Pod Identity Associations, reconciled by the control-plane ACK
 # EKS controller. They bind a build-cluster service account to an IAM role via
 # standard Pod Identity (pods.eks.amazonaws.com). The roles already exist in this
-# account (flux/ack/cluster/pod-identities/roles/prow-iam-roles.yaml), so we reuse
+# account (the ack-pod-identity-roles chart), so we reuse
 # them by ARN — no new roles/ tree here.
 #
 # Only pre-submit-service-account is bound: the build cluster runs pre-submit jobs

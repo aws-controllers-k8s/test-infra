@@ -8,7 +8,7 @@
 # flux/prow/charts/prow-mirror/values.yaml.
 #
 # The HelmRelease still sets them, with these identical values, while stages remain on Flux.
-# Phase 5 deletes it and leaves these defaults as the only copy.
+# Flux's copy is gone, so these defaults are the only copy.
 region: 'us-west-2'
 # The ServiceAccount the Prow components authenticate as. It lives in the prow namespace and is
 # bound here into test-pods, which is where the Roles and RoleBindings this chart renders land.

@@ -25,7 +25,7 @@
 #
 # stackName was ${STACK_NAME}, substituted by Flux postBuild.substituteFrom from
 # self-managed-vars. It is a chart value now because postBuild is a Flux feature with no
-# Argo CD equivalent, and self-managed-vars is deleted in Phase 5 rather than replaced.
+# Argo CD equivalent, and self-managed-vars was deleted with Flux rather than replaced.
 #
 # Guarded like the hub's NodePool: deleting the NodeClass leaves the NodePool unable to
 # launch anything, so pre-submit capacity disappears without any object looking broken.

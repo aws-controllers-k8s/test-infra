@@ -151,7 +151,7 @@ spec:
 # refuses them: a principal may not create a Role granting permissions it lacks.
 #
 # This is also not an increase in privilege. It is the same grant
-# flux-build-cluster-access held until Phase 5 removed it with Flux,
+# flux-build-cluster-access held until it was removed with Flux,
 # so the number of cluster-admin principals on this cluster stays at one. The build
 # cluster is a CI execution environment rather than the control plane, which is why the
 # trade lands differently here than on the hub.

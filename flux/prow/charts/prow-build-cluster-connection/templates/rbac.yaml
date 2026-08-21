@@ -8,7 +8,7 @@
 # NOTHING HERE IS FLUX WIRING, which is worth stating because the chart began life in
 # flux-system and that is easy to misread. Flux's own route to the build cluster was
 # kustomize-controller remote-applying through build-cluster-flux-kubeconfig, a different
-# ConfigMap from a different chart (prow-build-cluster-kubeconfig), and it dies with Flux.
+# ConfigMap from a different chart (prow-build-cluster-kubeconfig), and it went with Flux.
 # Of the three things above, two exist only BECAUSE of Argo CD, and the kubeconfig is a
 # Prow requirement under either reconciler.
 #
@@ -19,7 +19,7 @@
 # removed. It and its Role are gone.
 #
 # The home namespace is .Release.Namespace, not a literal: Argo CD places this in
-# ack-system, next to the Cluster CR the Job reads, while stages still on Flux get
+# ack-system, next to the Cluster CR the Job reads, while environments still on Flux get
 # flux-system from their HelmRelease's targetNamespace. The ack-system, prow and argocd
 # references below stay literal - those are where the TARGET objects live, not where this
 # chart is installed.

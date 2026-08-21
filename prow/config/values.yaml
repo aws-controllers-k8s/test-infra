@@ -80,8 +80,8 @@ ingress:
 # explicit value always wins over the composed one. Rendering with those values is byte-identical
 # before and after this change.
 #
-# prowVersion and prowPatchRevision MUST match flux/prow/version/prow-version-configmap.yaml and
-# the two other charts that carry them, for as long as all four copies exist. Phase 5 deletes the
+# prowVersion and prowPatchRevision MUST match
+# the two other charts that carry them, for as long as those copies exist. Flux's copy is gone; the
 # ConfigMap and leaves the chart defaults.
 imageMirror:
   # Per-environment, supplied by the Application. Left empty so composing without them fails at
