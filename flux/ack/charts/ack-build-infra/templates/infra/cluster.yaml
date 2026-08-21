@@ -36,9 +36,12 @@ spec:
   computeConfig:
     # Auto Mode enabled, but NO built-in NodePools. An empty nodePools list keeps
     # EKS from provisioning the general-purpose/system pools (and their small
-    # instances that hit the ENI pod-density limit) — matching the control-plane
-    # cluster's end state (the ack-cluster chart's nodepool.yaml), which deletes
-    # general-purpose post-create via bootstrap/scripts/swap-nodepool.sh.
+    # instances that hit the ENI pod-density limit).
+    #
+    # The hub cluster does NOT do this — it keeps general-purpose (see
+    # bootstrap/cluster.tf). So this file is the only worked example of running
+    # with nodePools: [], which makes it the reference for ever taking the hub
+    # the same way. What that costs is spelled out below.
     #
     # Because no built-in pool is enabled, EKS does NOT auto-provision the managed
     # `default` NodeClass or the node-role AccessEntry. Both are supplied by the
