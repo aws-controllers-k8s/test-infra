@@ -12,10 +12,8 @@ deployed to the cluster and in what order.
 | `ack-build-cluster.yaml` | ACK resources for the dedicated Prow build cluster |
 | `prow.yaml` | Prow deployment (CRDs → image builds → charts → build cluster wiring) |
 | `secrets.yaml` | Secrets Store CSI SecretProviderClass resources |
-| `prometheus.yaml` | Prometheus + Grafana monitoring stack |
 | `flux/` | Flux Helm release, source, and version config |
 | `ack/` | ACK manifests (control-plane cluster, addons, pod identities, prow infra) |
 | `ack/build-cluster/` | Dedicated Prow build cluster (VPC, subnets, NAT, roles, cluster, access entries, pod identities) |
 | `prow/` | Prow Kubernetes resources (CRDs, build jobs, Helm values, build cluster connection/kubeconfig/resources) |
 | `secrets/` | SecretProviderClass and RBAC for Secrets Store CSI |
-| `prometheus/` | Prometheus Helm release and config |

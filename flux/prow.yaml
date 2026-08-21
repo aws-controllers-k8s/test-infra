@@ -163,8 +163,8 @@ spec:
   # because it composes an Argo CD Application needing the CONTENT of
   # prow/jobs/test_config.yaml and valuesFrom cannot supply a file. Its HelmRelease is
   # therefore suspended and permanently Ready=False, which held this path -- and through
-  # it prometheus and prometheus-dashboards -- at a stale revision, unable to apply
-  # anything.
+  # it prometheus and prometheus-dashboards, since removed outright -- at a stale revision,
+  # unable to apply anything.
   #
   # The edge goes rather than the health gate: `wait` still means what it says everywhere
   # it appears, and nothing here reports a failed release as healthy.
