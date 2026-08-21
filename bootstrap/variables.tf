@@ -8,11 +8,6 @@ variable "account_id" {
   type        = string
 }
 
-variable "flux_version" {
-  description = "Flux chart version (must match vendored chart in charts/flux2-<version>/)"
-  type        = string
-}
-
 variable "prow_domain" {
   description = "Domain for Prow Deck UI (e.g., prow.ack.aws.dev for prod, prow-staging.ack.aws.dev for dev)"
   type        = string

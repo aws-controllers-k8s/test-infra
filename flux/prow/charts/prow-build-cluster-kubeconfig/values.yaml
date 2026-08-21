@@ -1,7 +1,0 @@
-# Supplied by the HelmRelease from the self-managed-vars ConfigMap. Left empty
-# rather than defaulted so a missing value fails at render time via `required`.
-# A partially substituted cluster ARN would leave Flux unable to reach the build
-# cluster, which is harder to diagnose than a failed render.
-accountId: ""
-region: ""
-stackName: ""

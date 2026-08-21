@@ -29,19 +29,26 @@
 locals {
   argocd_capability_role_arn = aws_iam_role.argocd_capability.arn
 
-  # Namespaces Argo CD may write to on the hub.
+  # Namespaces Argo CD may write to on the hub. Exactly the namespaces some Application
+  # targets - the list is a statement about what is deployed, not a standing allowance.
   #
-  # Granting authorization is not the same as Argo CD acting: while Flux still owns
-  # these objects there are no Applications targeting them, so this is inert until
-  # Phase 4 cutover. flux-system is transitional and should be dropped in Phase 5.
-  # `prometheus` was here until kube-prometheus-stack was removed from the repo. Nothing
-  # writes to that namespace any more, so the grant went with it rather than lingering as
-  # authorization for something that no longer exists.
+  # Two entries have been removed on that basis rather than left to linger:
+  #
+  #   `prometheus`, when kube-prometheus-stack was removed from the repo.
+  #
+  #   `flux-system`, once prow-build-cluster-connection moved to ack-system. It was the last
+  #   Application targeting that namespace, and it only ever lived there because that is
+  #   where it was written - nothing in it is Flux wiring. What remains in flux-system is
+  #   Flux's own machinery, which Flux applies and Phase 5 deletes by hand, so Argo CD needs
+  #   no access to it.
+  #
+  # This list also drives the `admin` RoleBindings in argocd-rbac.tf, deliberately: that
+  # binding is only defensible as privilege-neutral because it mirrors this association, so
+  # the two must move together.
   argocd_hub_namespaces = [
     "ack-system",
     "prow",
     "test-pods",
-    "flux-system",
   ]
 }
 

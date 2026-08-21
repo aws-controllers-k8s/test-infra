@@ -3,13 +3,13 @@
 # Build cluster EKS Access Entries, reconciled by the control-plane ACK EKS
 # controller. They grant Kubernetes API access to the build cluster: a
 # break-glass admin role, the account's Admin/ReadOnly roles for humans, the
-# Prow components' role, the Flux kustomize-controller role, and the EC2 node
+# Prow components' role and the EC2 node
 # role (Auto Mode nodes — required because we run a custom NodeClass with no
 # built-in pools, so EKS doesn't auto-create the node entry).
 #
 # The Flux entry uses an access policy rather than a kubernetesGroups mapping so
 # its authorization exists on the first reconcile — otherwise the RBAC authorizing
-# Flux would itself be an object Flux must apply. Mirrors kustomize-controller on
+# Argo CD would itself be an object Argo CD must apply. Mirrors the pattern used on
 # the control plane.
 ---
 # Dedicated build-cluster admin role (assumable by account root for break-glass)
@@ -92,28 +92,6 @@ spec:
   kubernetesGroups:
   - prow-build-cluster
 ---
-# Flux kustomize-controller identity — remote-applies the in-cluster objects
-# ACK cannot create. Cluster-admin via access policy (see header note). Backed
-# by flux-build-cluster-role + flux-pod-identity.yaml.
-apiVersion: eks.services.k8s.aws/v1alpha1
-kind: AccessEntry
-metadata:
-  name: flux-build-cluster-access
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: disabled
-    helm.sh/resource-policy: keep
-    services.k8s.aws/deletion-policy: retain
-spec:
-  clusterRef:
-    from:
-      name: build-cluster
-  principalARN: "arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-flux-build-cluster-role"
-  type: STANDARD
-  accessPolicies:
-  - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
-    accessScope:
-      type: cluster
----
 # Node role — lets EKS Auto Mode nodes join the cluster. EKS auto-creates this
 # entry only for built-in node pools; because the build cluster runs a custom
 # NodeClass with no built-in pools (infra/cluster.yaml computeConfig.nodePools:
@@ -173,7 +151,7 @@ spec:
 # refuses them: a principal may not create a Role granting permissions it lacks.
 #
 # This is also not an increase in privilege. It is the same grant
-# flux-build-cluster-access already holds, and that entry is removed with Flux in Phase 5,
+# flux-build-cluster-access held until Phase 5 removed it with Flux,
 # so the number of cluster-admin principals on this cluster stays at one. The build
 # cluster is a CI execution environment rather than the control plane, which is why the
 # trade lands differently here than on the hub.

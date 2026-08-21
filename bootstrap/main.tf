@@ -29,15 +29,12 @@ provider "kubernetes" {
 }
 
 data "aws_partition" "current" {}
-data "aws_secretsmanager_secret" "ghcr_ptc" {
-  name = "ecr-pullthroughcache/ghcr-fluxcd"
-}
 
 locals {
-  account_id         = var.account_id
-  partition          = data.aws_partition.current.partition
-  prow_images_repo   = "${local.stack_name}-prow-images"
-  cluster_name       = "${local.stack_name}-cluster"
-  stack_name         = "ack-test-infra-${var.stage}"
-  cluster_version    = "1.35"
+  account_id       = var.account_id
+  partition        = data.aws_partition.current.partition
+  prow_images_repo = "${local.stack_name}-prow-images"
+  cluster_name     = "${local.stack_name}-cluster"
+  stack_name       = "ack-test-infra-${var.stage}"
+  cluster_version  = "1.35"
 }

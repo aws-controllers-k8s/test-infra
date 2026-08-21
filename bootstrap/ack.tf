@@ -24,8 +24,8 @@ resource "null_resource" "cleanup_ack_capability_role" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
+    when       = destroy
+    command    = <<-EOT
       echo "Cleaning up ACK capability role: ${self.triggers.role_name}"
 
       # Delete all inline policies first
@@ -46,7 +46,7 @@ resource "null_resource" "cleanup_ack_capability_role" {
     on_failure = continue
   }
 
-    depends_on = [null_resource.ack_system_namespace]
+  depends_on = [null_resource.ack_system_namespace]
 
 }
 
@@ -58,8 +58,8 @@ resource "null_resource" "cleanup_prow_logs_bucket" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
+    when       = destroy
+    command    = <<-EOT
       echo "Cleaning up Prow logs bucket: ${self.triggers.bucket_name}"
 
       # Empty the bucket (delete all objects and versions)
@@ -89,8 +89,8 @@ resource "null_resource" "cleanup_prow_hosted_zone" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
+    when       = destroy
+    command    = <<-EOT
       echo "Cleaning up Prow hosted zone: ${self.triggers.prow_domain}"
 
       # Find the hosted zone ID

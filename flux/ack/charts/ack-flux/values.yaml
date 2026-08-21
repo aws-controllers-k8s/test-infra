@@ -1,3 +1,0 @@
-# Supplied by the HelmRelease from the self-managed-vars ConfigMap, so the
-# chart carries no environment-specific values of its own.
-ghcrPtcSecretArn: ""

@@ -1,5 +1,0 @@
-apiVersion: v2
-name: prow-build-cluster-kubeconfig
-description: "Workload-identity kubeconfig ConfigMap that control-plane Flux uses to reach the build cluster"
-type: application
-version: 0.1.0
