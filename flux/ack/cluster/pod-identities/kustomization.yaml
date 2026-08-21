@@ -1,12 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# prow-namespaces.yaml stays a raw manifest on purpose. It declares the prow and
-# test-pods Namespaces, and no chart may own a Namespace: if Helm ever uninstalled
-# or rolled back the release it would target the namespace, and deleting a
-# namespace cascades to everything inside it, including all of Prow.
+# prow-namespaces.yaml MOVED to prow/namespaces/, which now has its own Argo CD
+# Application. It was the last thing on this path that Flux applied directly rather than
+# through the chart, and because the chart deliberately excludes it -- no chart may own a
+# Namespace, since a Helm uninstall or rollback targets the namespace and cascades to
+# everything inside it -- the Argo CD Application for this path never covered it. That left
+# the two Namespaces and five ServiceAccounts with no owner outside Flux: they survived
+# only because prune is disabled here, and a fresh bootstrap would not have created them
+# at all.
+#
+# Dropping it from this list is the cutover. prune stays false, so the live objects are
+# untouched and Argo CD adopts them.
 #
 # roles/ is not included here: it is owned by the ack-pod-identity-roles
 # Kustomization, which this path dependsOn.
 resources:
-- prow-namespaces.yaml
 - helm-release.yaml

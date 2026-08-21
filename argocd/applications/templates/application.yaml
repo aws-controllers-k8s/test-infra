@@ -1,0 +1,180 @@
+{{- /*
+Renders one Argo CD Application per entry in .Values.applications.
+
+This chart is rendered by the ROOT Application, which Terraform owns. The root is not in
+here: an Application that renders itself is a loop with no seam for Terraform to hold, and
+the seam is the point - Terraform owns exactly the objects Argo CD cannot own.
+
+Guards first, because every input here fails quietly rather than loudly. A blank ARN
+produces an Application the AppProject rejects, a blank branch renders the wrong revision,
+and a numeric account id renders as %!s(float64=...) - a valid-looking image reference that
+fails at pull time. All are cheaper to catch here than in a cluster.
+*/}}
+
+{{- $root := . }}
+
+{{- if not $root.Values.project }}
+  {{- fail "project is required: the AppProject Terraform owns, which authorises this repo and the destinations" }}
+{{- end }}
+{{- if not $root.Values.repoURL }}
+  {{- fail "repoURL is required" }}
+{{- end }}
+{{- if not $root.Values.targetRevision }}
+  {{- fail "targetRevision is required: a blank revision renders a different tree, it does not error" }}
+{{- end }}
+{{- if not (regexMatch "^arn:aws[a-z-]*:eks:" ($root.Values.destinationServer | toString)) }}
+  {{- fail (printf "destinationServer must be an EKS cluster ARN, got %q. The capability registers clusters by ARN; a URL does not match the AppProject destination and the Application is REJECTED rather than failing at sync." $root.Values.destinationServer) }}
+{{- end }}
+
+{{- $cv := $root.Values.chartValues }}
+{{- if not $cv }}
+  {{- fail "chartValues is required: Terraform composes it from the same locals as self-managed-vars and passes it as the root Application's helm.values" }}
+{{- end }}
+
+{{- /* Resolve a chartValues key, failing on absent or non-string. */}}
+{{- define "argocd-applications.value" -}}
+  {{- $cv := index . 0 -}}
+  {{- $key := index . 1 -}}
+  {{- $app := index . 2 -}}
+  {{- $v := get $cv $key -}}
+  {{- if kindIs "invalid" $v -}}
+    {{- fail (printf "application %q needs chartValues.%s, which Terraform did not supply. Add it to local.argocd_chart_values." $app $key) -}}
+  {{- end -}}
+  {{- if not (kindIs "string" $v) -}}
+    {{- fail (printf "chartValues.%s must be a string, got %s (application %q). An unquoted 12-digit account id parses as a float and renders as %%!s(float64=8.6987147623e+10) - a valid-looking image reference that fails at pull time rather than at render time." $key (kindOf $v) $app) -}}
+  {{- end -}}
+  {{- $v -}}
+{{- end -}}
+
+{{- range $name, $app := $root.Values.applications }}
+{{- if kindIs "invalid" $app.wave }}
+  {{- fail (printf "application %q has no wave. Waves are derived from the dependsOn graph, not optional - see docs/argocd-migration.md." $name) }}
+{{- end }}
+{{- $params := concat
+      (default (list) $app.values)
+      (keys (default (dict) $app.valuePaths)) }}
+{{- $wantsHelm := or (gt (len $params) 0) (default false $app.valuesFromTerraform) }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Values.argocdNamespace }}
+  annotations:
+    # The root applies its children wave by wave, waiting for each wave to report healthy.
+    # This is the only ordering Argo CD has; it replaces Flux's dependsOn.
+    argocd.argoproj.io/sync-wave: {{ $app.wave | quote }}
+spec:
+  project: {{ $root.Values.project }}
+
+  source:
+    repoURL: {{ $root.Values.repoURL }}
+    targetRevision: {{ $root.Values.targetRevision }}
+    path: {{ $app.path }}
+    {{- if $wantsHelm }}
+    {{- /*
+      helm is OMITTED ENTIRELY for paths that are not charts, which is why this is
+      conditional. A helm block is explicit tool configuration and wins Argo CD's tool
+      detection outright, so emitting `helm: {}` for a kustomize directory makes Argo CD
+      run Helm against a directory with no Chart.yaml and fail, instead of falling through
+      to the implicit rule that finds kustomization.yaml.
+    */}}
+    helm:
+      {{- if $params }}
+      parameters:
+        {{- range $key := (default (list) $app.values) }}
+        - name: {{ $key }}
+          value: {{ include "argocd-applications.value" (list $cv $key $name) | quote }}
+        {{- end }}
+        {{- range $path, $key := (default (dict) $app.valuePaths) }}
+        - name: {{ $path }}
+          value: {{ include "argocd-applications.value" (list $cv $key $name) | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if default false $app.valuesFromTerraform }}
+      {{- if not $root.Values.testConfigValues }}
+      {{- fail (printf "application %q sets valuesFromTerraform but testConfigValues is empty" $name) }}
+      {{- end }}
+      # Composed by Terraform with yamlencode, passed through verbatim. This chart cannot
+      # compose it: .Files.Get is chart-rooted, so a chart here cannot read prow/jobs/.
+      values: {{ $root.Values.testConfigValues | quote }}
+      {{- end }}
+    {{- end }}
+
+  destination:
+    server: {{ $root.Values.destinationServer }}
+    namespace: {{ $app.targetNamespace }}
+
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+      # Namespaces are owned by ack-pod-identities and by Terraform, never by a chart, so
+      # Argo CD must not create them either. This is also what makes the wave ordering
+      # load-bearing: a path targeting prow or test-pods fails outright before
+      # ack-pod-identities has run, rather than creating the namespace itself.
+      - CreateNamespace=false
+      {{- range default (list) $app.extraSyncOptions }}
+      - {{ . }}
+      {{- end }}
+    {{- if default false $app.automated }}
+    {{- /*
+      automated is what makes a sync honour the Application's own syncOptions - a
+      hand-requested operation does not, as prow-crds proved by failing identically under a
+      patched `operation`, under automated, and with Replace=true added.
+
+      prune stays false everywhere. Argo CD deleting whatever its rendered set does not
+      contain is the failure this migration was shaped to avoid, and it is not needed for
+      reconciliation, only for garbage collection.
+
+      selfHeal is false except on the two paths whose entries explain why. It reverts live
+      changes Argo CD did not make, which during diagnosis means fighting a human.
+    */}}
+    {{- /*
+      `prune` is NEVER rendered, and this is load-bearing rather than tidy. It cannot be
+      stored alongside `selfHeal: true`: the API server keeps `prune: false` when selfHeal
+      is false, and DROPS it when selfHeal is true - measured on the live objects, where
+      argocd-controller owns f:prune on the 18 selfHeal-false Applications and only
+      f:selfHeal on the two selfHeal-true ones.
+
+      Rendering it anyway makes those two permanently OutOfSync against a field that cannot
+      persist, and because `automated` does not retry a stale revision, the root then sits
+      OutOfSync until some unrelated commit moves the revision. Absent means false, so
+      omitting it is identical in effect - the same fix, for the same reason, as
+      `automated = {}` on the root Application in bootstrap/argocd-applications.tf.
+    */}}
+    {{- /*
+      `enabled: true` rather than `prune: false, selfHeal: false`, and this is the only
+      shape that is STABLE through Argo CD. Argo CD parses the rendered manifest into its
+      typed Application and re-serialises it with omitempty, which means:
+
+        prune: false, selfHeal: false  ->  serialises to null  ->  CRD REJECTS it
+                                           ("automated in body must be of type object")
+        prune: false, selfHeal: true   ->  serialises to {selfHeal: true}, so the rendered
+                                           prune can never match live: permanently OutOfSync
+        {}                             ->  same null rejection
+
+      Measured, not reasoned: all four shapes round-trip fine through `kubectl apply
+      --server-side`, so the API server is not the constraint - Argo CD's own serialiser is.
+
+      `enabled` is a *bool, so a non-nil true survives omitempty. It states what the other
+      shapes could only imply, and prune/selfHeal keep their false defaults by absence.
+    */}}
+    automated:
+      enabled: true
+      {{- if default false $app.selfHeal }}
+      selfHeal: true
+      {{- end }}
+    {{- end }}
+
+  {{- with default (list) $app.ignoreDifferences }}
+  {{- /*
+    Empty for every path but prow-crds. Do NOT add an entry because `helm template` differs
+    from live: under ServerSideApply Argo CD diffs only the fields it manages, so ACK's
+    late-initialised fields (addonVersion, registryID, maxSessionDuration, …) are not drift.
+    Exceptions for them were added, then removed, and the paths stayed Synced. Add one only
+    for a field Argo CD itself calls OutOfSync.
+  */}}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,409 @@
+################################################################################
+# INPUTS TERRAFORM SUPPLIES.
+#
+# All of these arrive as ONE helm.values string on the root Application, not as
+# parameters. Parameters are --set, and --set reads `.` as a path separator and `,` as a
+# list separator, so threading 17 values through a root chart into 19 children as
+# parameters multiplies every escaping hazard the migration already hit. A single
+# yamlencode blob has none of them.
+#
+# No usable defaults on purpose. A blank cluster ARN does not fail, it produces an
+# Application the AppProject rejects, and a blank branch silently renders the wrong
+# revision. templates/application.yaml fails the render instead - see the guards there.
+################################################################################
+
+# The AppProject. Terraform owns it (bootstrap/argocd-access.tf) because it authorises
+# the repo and the destinations, and children reference it by name.
+project: ""
+
+# Repo coordinates. Terraform already uses these for the root's own source and for the
+# AppProject's sourceRepos, so children get the same data by the same route.
+repoURL: ""
+targetRevision: ""
+
+# The hub cluster ARN. The capability registers clusters by ARN, not URL; a URL here does
+# not match the AppProject destination and the Application is REJECTED rather than failing
+# at sync, so the symptom appears far from the cause.
+#
+# Always the hub. The one Application whose destination is the build cluster is composed
+# at runtime by the prow-build-cluster-connection Job, because Terraform must hold nothing
+# keyed to a cluster ACK owns (D13). It is not in this chart and must not be added.
+destinationServer: ""
+
+# Where the Applications live. Must be in the AppProject's sourceNamespaces.
+argocdNamespace: argocd
+
+# The per-environment values every child draws parameters from, keyed by chart value name.
+# Terraform composes this from the same locals as self-managed-vars, so the two cannot
+# drift while both exist.
+#
+# Every entry must be a STRING. A 12-digit AWS account id written unquoted is read as a
+# float, and printf %s then yields %!s(float64=8.6987147623e+10) - a syntactically valid
+# image reference that fails at pull time rather than at render time. Guarded.
+chartValues: {}
+
+# helm.values for prow-build-cluster-connection, composed by Terraform with yamlencode
+# rather than by this chart.
+#
+# The chart cannot compose it: the content is prow/jobs/test_config.yaml, and .Files.Get
+# is chart-rooted, so a chart under argocd/ cannot read a file under prow/. Terraform
+# reads it with file() and passes the yamlencode output verbatim, which also keeps the
+# rendered string byte-identical to what the Application already carries.
+testConfigValues: ""
+
+################################################################################
+# THE APPLICATIONS.
+#
+# Structure only - paths, namespaces, which parameters each chart needs, sync behaviour.
+# All git-authored, which is why it belongs here and not in HCL: the `prow-mirror` rule,
+# applied once more at the level above the charts.
+#
+# `wave` is the Argo CD sync wave. It is DERIVED from Flux's dependsOn graph rather than
+# chosen, plus three edges Flux omitted - see docs/argocd-migration.md for the derivation
+# and the evidence for each added edge. A node's wave is one deeper than its deepest
+# dependency, not its shallowest, so nothing can sync ahead of a transitive dependency it
+# shares no direct edge with.
+#
+# Waves matter only on a bootstrap into an empty cluster. In a converged cluster every
+# Application is already Synced and the ordering is inert.
+################################################################################
+applications:
+
+  # WAVE 0, and it has to be first: the prow and test-pods Namespaces and the five
+  # ServiceAccounts every PodIdentityAssociation binds to.
+  #
+  # This path exists because the conversion left a hole. Flux applied prow-namespaces.yaml
+  # directly from flux/ack/cluster/pod-identities/, alongside the chart rather than inside
+  # it, because no chart may own a Namespace - a Helm uninstall or rollback targets the
+  # namespace and cascades to everything in it. So the ack-pod-identities Application, which
+  # points at the chart, never covered these seven objects: they survived only because prune
+  # is disabled on the Flux side, and a fresh bootstrap would not have created them at all.
+  #
+  # Everything targeting prow or test-pods therefore depends on this, not on
+  # ack-pod-identities as the wave derivation originally recorded. With
+  # CreateNamespace=false everywhere, a path that syncs first fails on a missing namespace.
+  # The later waves are left as they are: they were derived against ack-pod-identities and
+  # remain a correct, if conservative, ordering now that this sits ahead of all of them.
+  #
+  # A plain kustomize directory, no tokens, so no values and no helm block.
+  prow-namespaces:
+    path: prow/namespaces
+    targetNamespace: prow
+    wave: 0
+    automated: true
+
+  ##############################################################################
+  # WAVE 0-3: the ACK layer. Order here is the dependsOn chain Flux encodes, which exists
+  # because these paths create the controllers that reconcile each other's CRs - a CR
+  # applied before its controller sits unreconciled with no error to read.
+  ##############################################################################
+
+  ack-capability-role:
+    path: flux/ack/charts/ack-capability-role
+    targetNamespace: ack-system
+    wave: 0
+    values: [accountId, region, stackName]
+    automated: true
+
+  ack-capability:
+    path: flux/ack/charts/ack-capability
+    targetNamespace: ack-system
+    wave: 1
+    values: [accountId, stackName]
+    automated: true
+
+  ack-cluster:
+    path: flux/ack/charts/ack-cluster
+    targetNamespace: ack-system
+    wave: 2
+    values: [accountId, stackName]
+    automated: true
+
+  ack-addons-roles:
+    path: flux/ack/charts/ack-addons-roles
+    targetNamespace: ack-system
+    wave: 2
+    values: [stackName]
+    automated: true
+
+  ack-pod-identity-roles:
+    path: flux/ack/charts/ack-pod-identity-roles
+    targetNamespace: ack-system
+    wave: 2
+    values: [accountId, publishAccountId, region, stackName]
+    automated: true
+
+  ack-prow:
+    path: flux/ack/charts/ack-prow
+    targetNamespace: ack-system
+    wave: 2
+    values: [accountId, prowDomain, stackName]
+    automated: true
+
+  ack-flux:
+    path: flux/ack/charts/ack-flux
+    targetNamespace: ack-system
+    wave: 2
+    values: [ghcrPtcSecretArn]
+    automated: true
+
+  ack-build-infra:
+    path: flux/ack/charts/ack-build-infra
+    targetNamespace: ack-system
+    wave: 2
+    values: [accountId, region, stackName]
+    automated: true
+
+  ack-addons:
+    path: flux/ack/charts/ack-addons
+    targetNamespace: ack-system
+    wave: 3
+    values: [accountId, stackName]
+    automated: true
+
+  # Creates the prow and test-pods namespaces
+  # (flux/ack/cluster/pod-identities/prow-namespaces.yaml), which is why every path
+  # targeting either one sits in a later wave. With CreateNamespace=false everywhere, a
+  # path that syncs first fails on a missing namespace rather than creating it.
+  ack-pod-identities:
+    path: flux/ack/charts/ack-pod-identities
+    targetNamespace: ack-system
+    wave: 3
+    values: [accountId, stackName]
+    automated: true
+
+  ##############################################################################
+  # WAVE 3-5: the Prow layer.
+  ##############################################################################
+
+  prow-build-cluster-connection:
+    # flux-system, not ack-system: the Job writes build-cluster-kubeconfig there and Prow's
+    # crier, deck, sinker and prow-controller-manager mount it from there. Unlike
+    # prow-build-cluster-kubeconfig this path survives Flux (D16), which is why it has an
+    # Application and that one does not.
+    path: flux/prow/charts/prow-build-cluster-connection
+    targetNamespace: flux-system
+    wave: 3
+
+    # The last three exist so the Job can compose the prow-build-cluster-resources
+    # Application, whose destination is the build cluster and which Terraform therefore
+    # must not declare (D13). The Job supplies the one field Terraform cannot know - the
+    # cluster ARN, read from the CR status - and the chart supplies the rest.
+    values: [prowImagesRepoUri, stackName, testInfraOrg, testInfraRepo, testInfraBranch]
+
+    # The content of prow/jobs/test_config.yaml, so the build cluster's test-config
+    # ConfigMap comes from the same file the hub's does. It travels as a value because the
+    # target chart cannot read it: the directory it replaced used a `../../../`
+    # configMapGenerator reference, which only kustomize-controller permits, and Helm's
+    # .Files.Get is chart-rooted. Relocating the file is not an option - prow/jobs/ and
+    # that chart share only the repo root, so "relocating" means duplicating.
+    #
+    # A values string, NOT a parameter: --set would read the file's `.` and `,` as path and
+    # list separators.
+    valuesFromTerraform: true
+
+    # The only paths with selfHeal on are this one and prow-jobs, and here it is
+    # deliberate. The Job is a Helm post-install/post-upgrade hook, which Argo CD maps to
+    # PostSync and runs whenever a sync has work to do - so making live drift a sync
+    # trigger is also what gives the Job a re-run trigger. Verified: deleting one Role and
+    # the Job caused Argo CD to restore the Role and re-run the hook, rebuilding
+    # build-cluster-kubeconfig byte-identically.
+    #
+    # Safe here in a way it is not on the ACK paths: this chart owns only in-cluster RBAC
+    # and a Job. There is no AWS resource behind any of it, so Argo CD reasserting desired
+    # state cannot fight ACK or overwrite someone mid-diagnosis of AWS state.
+    selfHeal: true
+    automated: true
+
+  prow-mirror:
+    # Runs Job/prow-mirror-images, which populates the repo prowImagesRepoUri points at.
+    # Anything that PULLS from that repo depends on this, which is the second edge Flux
+    # omitted - see prow-jobs and prow-plugins.
+    path: flux/prow/charts/prow-mirror
+    targetNamespace: test-pods
+    wave: 4
+    # prowVersion, toolsVersion and prowPatchRevision are deliberately absent: static
+    # git-authored strings, so they live as defaults in the chart's values.yaml rather than
+    # as per-environment parameters Terraform supplies.
+    values: [accountId, region]
+    automated: true
+
+  prow-crds:
+    # One CustomResourceDefinition, cluster-scoped, so targetNamespace is only a default.
+    #
+    # Argo CD can manage it because AmazonEKSArgoCDClusterPolicy grants CRD create, and
+    # bootstrap/argocd-access.tf adds the narrow in-cluster rule for get/update/patch that
+    # the policy withholds for CRDs Argo CD does not own. That exception exists for this
+    # path: scripts/upgrade-prow.sh needs to refresh this CRD.
+    #
+    # THE APPLY MODE FOR THIS PATH IS PINNED ON THE MANIFEST, not here. The ProwJob CRD is
+    # 667 KB and Argo CD applied it CLIENT-side despite ServerSideApply=true at the
+    # Application level, which fails outright on the 262144-byte annotation limit. The fix
+    # is the per-resource argocd.argoproj.io/sync-options annotation on the CRD itself;
+    # Replace=true was tried and did not help, because Replace takes precedence over
+    # ServerSideApply, which is the opposite of what this path needs.
+    path: flux/prow/crds
+    targetNamespace: prow
+    wave: 4
+    automated: true
+
+    # The one ignoreDifferences entry anywhere, and it was earned rather than assumed. The
+    # manifest sets spec.preserveUnknownFields: false, which is the v1 default and
+    # deprecated, so the API server accepts it and drops it - leaving a diff no sync can
+    # ever close. Predicted when the path was wired and deliberately NOT added then, per
+    # the rule in the migration doc: add an exception only for a field Argo CD itself calls
+    # OutOfSync. It did, on the first successful sync, with this as the only difference.
+    ignoreDifferences:
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+        name: prowjobs.prow.k8s.io
+        jsonPointers:
+          - /spec/preserveUnknownFields
+
+  secrets:
+    # Four objects: the CSI driver's ClusterRole and ClusterRoleBinding, and a
+    # SecretProviderClass in each of prow and test-pods. No tokens, so no conversion and no
+    # helm block - Argo CD reads the same kustomize directory Flux reads. targetNamespace is
+    # only a default: two objects are cluster-scoped and the other two carry their own.
+    #
+    # THIS PATH REQUIRED THE WIDEST RBAC GRANT IN THE MIGRATION, authorised explicitly
+    # rather than by convention. Its ClusterRole gives the CSI driver secrets
+    # create/delete/get/list/patch/update/watch cluster-wide, and escalation prevention
+    # means Argo CD must hold all seven to create it - read, write and delete on every
+    # Secret in the cluster. bootstrap/argocd-rbac.tf carries it with the reasoning and the
+    # exit condition. Read that before touching this, and prefer taking the exit.
+    #
+    # Ordering: that grant must be live before this Application first syncs. It is
+    # Terraform's, and Terraform creates the root Application, so the ordering now holds
+    # structurally rather than by hand.
+    path: flux/secrets
+    targetNamespace: prow
+    wave: 4
+    automated: true
+
+  prow-agent-workflows:
+    # Smallest of the three generated paths: one ConfigMap, two tokens, no workloads.
+    #
+    # The chart is IN prow/agent-workflows/, not under flux/prow/charts/ with the others,
+    # because .Files.Get is chart-rooted and that is the only layout where it can read the
+    # generated agent-workflows.yaml from git. Terraform reading it with file() instead
+    # would mean `make prow-gen` had no effect until someone also ran terraform apply.
+    #
+    # The generated file keeps its ${TOKEN} placeholders and the generator is untouched:
+    # stages still on Flux resolve them via postBuild, and emitting Helm actions would
+    # break them on merge and rewrite all seven generated files, since the generator
+    # restamps a timestamp on every run. The chart resolves the two tokens with `replace`
+    # and fails the render if an unrecognised one appears.
+    #
+    # Wave 4 for the namespace only. It renders a ConfigMap that NAMES a mirrored image but
+    # never pulls one, so unlike prow-jobs and prow-plugins it takes no edge on prow-mirror.
+    path: prow/agent-workflows
+    targetNamespace: prow
+    wave: 4
+    values: [prowImagesRepoUri, testInfraOrg]
+    automated: true
+
+  prow-config:
+    # Prow itself: deck, hook, tide, plank, crier, sinker, horologium, statusreconciler,
+    # ghproxy, the Ingress and the config ConfigMap. The highest blast radius here - the
+    # nine Deployments carry immutable spec.selector, so a recreate takes Prow's control
+    # plane down rather than rolling it.
+    #
+    # PARAMETERS ONLY, no values block, which took two changes to earn. The 13 component
+    # image references are composed by the chart from imageMirror, because PROW_VERSION and
+    # PROW_PATCH_REVISION are git-authored and not Terraform's to know. And the ALB
+    # annotations - two of them JSON containing commas that --set would misparse as list
+    # separators - moved into the chart as defaults, with the one per-environment
+    # annotation composed from prow.domain.
+    #
+    # buildCluster.clusterName is deliberately NOT passed. Its only consumer is gated on
+    # buildCluster.server, which nothing sets since the connection Job took over that
+    # ConfigMap (D16), so Terraform never has to compose a string naming the build cluster.
+    path: prow/config
+    targetNamespace: prow
+    wave: 5
+    values: [controllerEcrRegistry, stage, kubernetesOrg, redhatOrg, ecrPublicReaderRoleArn]
+
+    # Chart paths whose value name differs from the key in chartValues. --set reads the
+    # dots as a path, which is what is wanted.
+    valuePaths:
+      imageMirror.accountId: accountId
+      imageMirror.region: region
+      ecrPublicAccountId: publishAccountId
+      github.organisation: testInfraOrg
+      prow.domain: prowDomain
+      prow.presubmitsBucketName: prowLogsBucketName
+      prow.tideStatusReconcilerBucketName: prowLogsBucketName
+    automated: true
+
+  prow-data-plane:
+    # The easy half of the old prow-charts: five Roles and five RoleBindings in test-pods
+    # that let crier, deck, hook, prow-controller-manager and sinker reach test pods.
+    #
+    # ZERO TOKENS and no values. Its HelmRelease values block was eight identical static
+    # strings, which moved into prow/data-plane/values.yaml as chart defaults - the
+    # prow-mirror rule. Argo CD detects Helm from Chart.yaml and uses those defaults, so
+    # this entry emits no helm block at all, which is what lets tool detection fall through
+    # to kustomization.yaml on the paths that need it.
+    path: prow/data-plane
+    targetNamespace: test-pods
+    wave: 5
+    automated: true
+
+  prow-jobs:
+    # Largest of the generated paths. Its templates/ holds 25 generator templates across
+    # four subdirectories, all named in .helmignore. jobs.yaml is ignored too: at 1.9 MB it
+    # is the largest file in the repo and never enters the render. It exceeds the 1 MB
+    # ConfigMap limit, so the substitutor Job clones the repo at runtime, resolves it with
+    # envsubst and gzips the result into job-config - a mechanism independent of the
+    # reconciler, which is why the 11,511 tokens in that file are not migration work.
+    #
+    # The Job's spec.template is immutable, which is what `force: true` on the Flux
+    # Kustomization handled. The chart annotates that Job alone with
+    # `Force=true,Replace=true`. Scoped by annotation rather than set as a syncOption here:
+    # at Application level it would delete and recreate the ConfigMaps and RBAC too, giving
+    # them new uids, which is exactly what the cutover procedure checks against.
+    #
+    # It also reproduces Flux's `$$` unescaping in the chart. Getting that wrong is silent:
+    # jobs.yaml would go unsubstituted, or bash would expand `$$` to its PID and write a
+    # corrupt job-config.
+    #
+    # Wave 5 on two edges Flux omitted: the prow namespace, and the mirrored image the
+    # substitutor Job pulls (${PROW_IMAGES_REPO_URI}:prow-kubectl-0.0.3).
+    path: prow/jobs
+    targetNamespace: prow
+    wave: 5
+    # prowVersion, toolsVersion and prowPatchRevision are deliberately absent, as on
+    # prow-mirror: static git-authored strings, so chart defaults rather than parameters.
+    # Phase 5 deletes flux/prow/version/ and leaves those defaults as the only copy - until
+    # then all three copies must agree.
+    values: [prowImagesRepoUri, testInfraOrg, testInfraRepo, testInfraBranch, accountId, region, controllerEcrRegistry]
+
+    # Load-bearing here rather than a nicety. ttlSecondsAfterFinished deletes the Job 300s
+    # after it finishes, which Argo CD sees as drift; selfHeal recreates it, which re-runs
+    # it and refreshes job-config. That reproduces the old behaviour, where the same ttl
+    # against a 5m Kustomization interval meant Flux recreated it on most reconciles.
+    # Without it the Job runs once and job-config goes stale the next time jobs.yaml
+    # changes - jobs.yaml is not a tracked object, so its content cannot be the trigger.
+    selfHeal: true
+    automated: true
+
+  prow-plugins:
+    # Second of the generated paths, same shape as prow-agent-workflows.
+    #
+    # What is different: its rbac.yaml carries a ClusterRole and ClusterRoleBinding, and
+    # Argo CD could neither create those nor hold cluster-wide what they grant, so
+    # escalation prevention would have refused them. bootstrap/argocd-rbac.tf now grants
+    # both, and that is the one privilege EXPANSION in this migration rather than a
+    # restatement of access Argo CD already had. The alternative - narrowing the plugin's
+    # own ClusterRole to namespaced Roles - is better and still open, but it changes
+    # generated RBAC and the plugin's effective permissions, so it belongs to whoever owns
+    # agent-plugin. Read the block in that file before touching this.
+    #
+    # Wave 5 on the same two omitted edges as prow-jobs: the prow namespace, and the
+    # mirrored image its Deployment pulls (…-prow-images:agent-plugin-0.0.7).
+    path: prow/plugins/deployments
+    targetNamespace: prow
+    wave: 5
+    values: [prowImagesRepoUri, stackName, accountId]
+    automated: true
