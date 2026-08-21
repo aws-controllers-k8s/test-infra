@@ -45,7 +45,7 @@ spec:
   # ConfigMap, and it spans flux-system, ack-system, prow and argocd -
   # the Job reads the CR in one namespace and writes the ConfigMap in another - so the
   # Application's destination namespace is only a default. Applying them needs
-  # flux/argocd/namespaced-rbac.yaml, which must stay in place.
+  # the grantor Role in bootstrap/argocd-rbac.tf, which must stay in place.
   suspend: true
   interval: 60m
   targetNamespace: flux-system

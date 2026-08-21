@@ -104,7 +104,7 @@ subjects:
 # cluster existed, and on destroy it would remove the registration while Applications
 # still referenced it. The Job already reads that CR, so it is the natural place.
 #
-# Argo CD can only apply this Role because flux/argocd/namespaced-rbac.yaml grants the
+# Argo CD can only apply this Role because bootstrap/argocd-rbac.tf grants the
 # capability the same permission in this namespace. argocd is the one namespace the
 # associated access policies leave uncovered - AmazonEKSAdminPolicy excludes it, and
 # AmazonEKSArgoCDPolicy is the capability's own-operation grant. Without that grantor rule

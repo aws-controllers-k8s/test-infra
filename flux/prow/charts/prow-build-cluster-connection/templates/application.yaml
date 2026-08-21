@@ -78,18 +78,20 @@ data:
         # namespaces itself, here or on the hub.
         - CreateNamespace=false
 
-        # NOT CUT OVER YET. automated is absent deliberately: the Application is created in
-        # manual sync so Argo CD computes the diff and applies nothing, while
-        # kustomize-controller still owns the 13 objects from
-        # flux/prow/build-cluster-resources/. Enabling it before that path is removed would
-        # give the objects two reconcilers.
+        # CUT OVER. The prow-build-cluster-resources Kustomization is suspended in git, so
+        # kustomize-controller no longer remote-applies the 13 objects and this Application owns
+        # them alone.
         #
-        # Cutover, once the first manual sync confirms all 13 uids held:
-        #   1. delete flux/prow/build-cluster-resources/ (prune: false is already live on
-        #      its Kustomization, so the live objects survive - D19-P1)
-        #   2. add the block below here, which is drift on this ConfigMap, so the sync that
-        #      picks it up also re-runs the Job that applies it
+        # Note how this change reaches the Application: editing it here is drift on the
+        # build-cluster-resources-application ConfigMap, which is a TRACKED object of this chart, so
+        # Argo CD syncs it, which re-runs the PostSync Job, which applies the updated Application.
+        # That is exactly why the manifest lives in a tracked ConfigMap rather than in the Job's
+        # shell - a chart of nothing but hooks could not have delivered this.
         #
-        # automated:
-        #   prune: false
-        #   selfHeal: false
+        # prune and selfHeal stay false, as everywhere else. prune because Argo CD deleting whatever
+        # its rendered set does not contain is the failure this migration was shaped to avoid, and
+        # selfHeal because these 13 objects have no AWS resource behind them but do sit on a remote
+        # cluster, where reasserting desired state during a diagnosis is unhelpful.
+        automated:
+          prune: false
+          selfHeal: false
