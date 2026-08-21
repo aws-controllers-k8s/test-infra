@@ -48,7 +48,7 @@ fails at pull time. All are cheaper to catch here than in a cluster.
 
 {{- range $name, $app := $root.Values.applications }}
 {{- if kindIs "invalid" $app.wave }}
-  {{- fail (printf "application %q has no wave. Waves are derived from the dependsOn graph, not optional - see docs/argocd-migration.md." $name) }}
+  {{- fail (printf "application %q has no wave. Waves order the rollout and are not optional." $name) }}
 {{- end }}
 {{- $params := concat
       (default (list) $app.values)

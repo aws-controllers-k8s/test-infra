@@ -118,7 +118,7 @@ aws eks describe-capability --cluster-name <cluster> --capability-name argocd --
 
 Flux used to be vendored here as an extracted chart under `charts/` with
 `scripts/pull-flux-chart.sh` to refresh it, because Flux had to upgrade itself from a source it
-could read. Both are gone -- see `docs/argocd-migration.md`.
+could read. Both are gone.
 
 ## Upgrading Prow
 

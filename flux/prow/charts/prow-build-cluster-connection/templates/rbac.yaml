@@ -1,32 +1,17 @@
 # RBAC for the build-cluster-connection Job (job.yaml).
 #
-# The Job reads the build cluster's endpoint, CA and ARN from the ACK Cluster CR's status
-# and does three things with them: assembles the build-cluster-kubeconfig ConfigMap in
-# `prow` that the four components mount, registers the cluster as an Argo CD spoke, and
-# applies the prow-build-cluster-resources Application.
+# The Job reads the build cluster's endpoint, CA and ARN from the ACK Cluster CR's status and
+# does three things: assembles the build-cluster-kubeconfig ConfigMap in `prow` that four
+# Prow components mount, registers the cluster as an Argo CD spoke, and applies the
+# prow-build-cluster-resources Application.
 #
-# NOTHING HERE IS FLUX WIRING, which is worth stating because the chart began life in
-# flux-system and that is easy to misread. Flux's own route to the build cluster was
-# kustomize-controller remote-applying through build-cluster-flux-kubeconfig, a different
-# ConfigMap from a different chart (prow-build-cluster-kubeconfig), and it went with Flux.
-# Of the three things above, two exist only BECAUSE of Argo CD, and the kubeconfig is a
-# Prow requirement under either reconciler.
+# The home namespace is .Release.Namespace, not a literal - Argo CD places this in
+# ack-system, next to the Cluster CR the Job reads. The ack-system, prow and argocd
+# references below stay literal, because those are where the TARGET objects live.
 #
-# The chart previously also wrote a build-cluster-connection ConfigMap in its own
-# namespace, for prow-charts to substitute BUILD_CLUSTER_ENDPOINT / BUILD_CLUSTER_CA from
-# at render time. Argo CD cannot substitute, so the Job assembles the finished kubeconfig
-# instead and that ConfigMap has no reader - `flux/prow.yaml` records the substitution being
-# removed. It and its Role are gone.
-#
-# The home namespace is .Release.Namespace, not a literal: Argo CD places this in
-# ack-system, next to the Cluster CR the Job reads, while environments still on Flux get
-# flux-system from their HelmRelease's targetNamespace. The ack-system, prow and argocd
-# references below stay literal - those are where the TARGET objects live, not where this
-# chart is installed.
-#
-# Least privilege: read the one Cluster CR in ack-system, write one ConfigMap in prow, and
-# in argocd write the registration Secret, patch the AppProject and apply one Application.
-# No AWS/IAM credentials - the values live in the CR status.
+# Least privilege: read the one Cluster CR in ack-system, write one ConfigMap in prow, and in
+# argocd write the registration Secret, patch the AppProject and apply one Application. No
+# AWS credentials - the values come from the CR status.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -85,20 +70,14 @@ subjects:
   name: build-cluster-connection
   namespace: {{ .Release.Namespace }}
 ---
-# Register the build cluster as an Argo CD spoke by writing a labelled cluster Secret in
-# the argocd namespace. Scoped to secrets in argocd only.
+# Register the build cluster as an Argo CD spoke by writing a labelled cluster Secret in the
+# argocd namespace. Scoped to secrets in argocd only. Runtime work rather than Terraform's,
+# because a registration keyed to an ACK-owned cluster would be created before the cluster
+# existed and removed while Applications still referenced it.
 #
-# This has to happen at runtime rather than in Terraform. The build cluster is an ACK
-# Cluster CR, so Terraform owning a registration keyed to it recreates the coupling D13
-# had to unpick: on a fresh bootstrap Terraform would register a destination before the
-# cluster existed, and on destroy it would remove the registration while Applications
-# still referenced it. The Job already reads that CR, so it is the natural place.
-#
-# Argo CD can only apply this Role because bootstrap/argocd-rbac.tf grants the
-# capability the same permission in this namespace. argocd is the one namespace the
-# associated access policies leave uncovered - AmazonEKSAdminPolicy excludes it, and
-# AmazonEKSArgoCDPolicy is the capability's own-operation grant. Without that grantor rule
-# escalation prevention refuses this object.
+# Argo CD can only apply this Role because bootstrap/argocd-rbac.tf grants the capability the
+# same permission here. argocd is the one namespace the associated access policies leave
+# uncovered, so without that grantor rule escalation prevention refuses this object.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -108,23 +87,19 @@ rules:
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "create", "update", "patch"]
-# Append the spoke to the AppProject's destinations. get and patch only: Terraform creates
-# and owns the AppProject, and the Job amends one field. Without the destination an
-# Application targeting the build cluster is rejected outright rather than failing at sync.
+# Append the spoke to the AppProject's destinations. get and patch only: Terraform owns the
+# AppProject and the Job amends one field. Without the destination an Application targeting
+# the build cluster is rejected outright rather than failing at sync.
 - apiGroups: ["argoproj.io"]
   resources: ["appprojects"]
   verbs: ["get", "patch"]
-# Apply the prow-build-cluster-resources Application, whose destination is the build cluster
-# and which Terraform therefore must not declare (D13). Unlike appprojects this needs
-# create: the Job owns the object outright rather than amending one Terraform owns.
+# Apply the prow-build-cluster-resources Application. Needs create, unlike appprojects,
+# because the Job owns that object outright. update as well as patch because `kubectl apply`
+# sends a PATCH to an existing object but falls back to a PUT when it must replace one, and a
+# hook that failed halfway should not need a different verb to recover.
 #
-# update as well as patch because `kubectl apply` sends a PATCH to an existing object but
-# falls back to a PUT when it has to replace one, and a hook that failed halfway should not
-# need a different verb to recover. Matches the get,create,update,patch the secrets and
-# configmaps rules use.
-#
-# Scoped to applications in this namespace only - not applicationsets, not delete. Nothing
-# here can remove an Application, so a misfiring hook cannot take one out.
+# Scoped to applications in this namespace only - not applicationsets, and no delete, so a
+# misfiring hook cannot remove an Application.
 - apiGroups: ["argoproj.io"]
   resources: ["applications"]
   verbs: ["get", "create", "update", "patch"]

@@ -1,26 +1,17 @@
-# Supplied by the Argo CD Application as helm parameters, from Terraform. Left empty rather than
-# defaulted so a missing value fails at render time via `required`.
+# Supplied by the Argo CD Application as helm parameters, from Terraform. Left empty rather
+# than defaulted so a missing value fails at render time via `required`.
 prowImagesRepoUri: ""
 # Used to build the aws-iam-authenticator cluster id in the assembled kubeconfig.
 stackName: ""
 
-# The rest exist so this chart can compose the prow-build-cluster-resources Application
-# (templates/application.yaml). That Application's destination is the build cluster, so
-# Terraform must not declare it (D13) - but everything about it except the cluster ARN is
-# static or Terraform-known, and the ARN is what the Job reads from the CR status.
-#
-# Repo coordinates for the composed Application's source. Terraform already uses the same
-# three for every Application it declares and for the AppProject's sourceRepos; these are
-# the same values arriving by the route a runtime owner can reach.
+# Repo coordinates for the prow-build-cluster-resources Application this chart composes
+# (templates/application.yaml). Everything about that Application except the cluster ARN is
+# static or Terraform-known; the ARN is what the Job reads from the CR status.
 testInfraOrg: ""
 testInfraRepo: ""
 testInfraBranch: ""
 
-# The CONTENT of prow/jobs/test_config.yaml, passed through to the composed Application as
-# a Helm value so the build cluster's test-config ConfigMap is rendered from the same file
-# the hub's is generated from.
-#
-# It has to travel as content rather than a path because the consuming chart cannot read
-# the file: the directory it replaces used a `../../../` configMapGenerator reference,
-# which only kustomize-controller permits, and Helm's .Files.Get is chart-rooted.
+# The CONTENT of prow/jobs/test_config.yaml, so the build cluster's test-config ConfigMap is
+# rendered from the same file the hub's is. Content rather than a path because the consuming
+# chart cannot read the file - Helm's .Files.Get is chart-rooted.
 testConfig: ""
