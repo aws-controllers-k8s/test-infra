@@ -49,6 +49,7 @@ aws_services:
 - eks
 - elasticache
 - elbv2
+- emr
 - emrcontainers
 - emrserverless
 - eventbridge
