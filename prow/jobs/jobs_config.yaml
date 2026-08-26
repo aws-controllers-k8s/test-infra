@@ -54,6 +54,7 @@ aws_services:
 - emrserverless
 - eventbridge
 - firehose
+- fsx
 - globalaccelerator
 - glue
 - iam
