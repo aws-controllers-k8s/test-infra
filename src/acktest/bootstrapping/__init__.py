@@ -169,7 +169,8 @@ class Bootstrappable(abc.ABC):
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
             resource_name = type(resource).__name__
-            for _ in range(self.cleanup_retries):
+            attempts = self.cleanup_retries
+            for attempt in range(attempts):
                 try:
                     # Clean up and add to list of successes
                     logging.info(f"Attempting cleanup {resource_name}")
@@ -177,9 +178,23 @@ class Bootstrappable(abc.ABC):
                     logging.info(f"Successfully cleaned up {resource_name}")
                     break
                 except Exception as ex:
-                    logging.error(f"Exception while cleaning up {resource_name}")
-                    logging.exception(ex)
-                    time.sleep(self.cleanup_interval_sec)
+                    # An attempt that will be retried is expected noise -- AWS
+                    # releases dependencies asynchronously, so the first attempts
+                    # routinely fail. Log it as a warning without a traceback and
+                    # keep the full traceback for the last attempt, so that a real
+                    # cleanup failure stands out instead of being buried in
+                    # tracebacks that resolved themselves.
+                    is_last = attempt == attempts - 1
+                    if is_last:
+                        logging.error(f"Exception while cleaning up {resource_name}")
+                        logging.exception(ex)
+                    else:
+                        logging.warning(
+                            f"Cleanup of {resource_name} failed (attempt "
+                            f"{attempt + 1}/{attempts}), retrying in "
+                            f"{self.cleanup_interval_sec}s: {ex}"
+                        )
+                        time.sleep(self.cleanup_interval_sec)
                     continue
             else:
                 # Hit retry limit
