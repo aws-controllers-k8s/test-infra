@@ -64,6 +64,25 @@ def _describe_enis(enis: List[dict]) -> str:
     return "; ".join(summaries)
 
 
+def _never_created(resource, attr: str) -> bool:
+    """Reports whether a resource's bootstrap failed before setting its output id.
+
+    The framework calls cleanup() on a resource whose bootstrap raised, and that
+    can happen before the create call returns -- leaving the output attribute
+    unset. Dereferencing it then raises AttributeError from inside the
+    bootstrap exception handler, which masks the real failure and skips the
+    cleanup of every resource bootstrapped before it.
+    """
+    value = getattr(resource, attr, None)
+    if value:
+        return False
+    logging.info(
+        f"{type(resource).__name__} has no {attr}; it was never created, "
+        f"nothing to clean up"
+    )
+    return True
+
+
 @contextmanager
 def tolerate_already_deleted(description: str):
     """Swallows the EC2 "does not exist" errors so that a cleanup is idempotent.
@@ -105,7 +124,11 @@ class TransitGateway(Bootstrappable):
     def cleanup(self):
         """Deletes a transit gateway.
         """
+        # Subresources first: they may exist even when this resource does not.
         super().cleanup()
+
+        if _never_created(self, "transit_gateway_id"):
+            return
 
         with tolerate_already_deleted(f"transit gateway {self.transit_gateway_id}"):
             self.ec2_client.delete_transit_gateway(TransitGatewayId=self.transit_gateway_id)
@@ -139,6 +162,9 @@ class InternetGateway(Bootstrappable):
     def cleanup(self):
         """Deletes an internet gateway.
         """
+        if _never_created(self, "internet_gateway_id"):
+            return
+
         vpc = self.ec2_resource.Vpc(self.vpc_id)
 
         with tolerate_already_deleted(f"internet gateway {self.internet_gateway_id} attachment"):
@@ -186,7 +212,11 @@ class RouteTable(Bootstrappable):
     def cleanup(self):
         """Deletes a route table.
         """
+        # Subresources first: they may exist even when this resource does not.
         super().cleanup()
+
+        if _never_created(self, "route_table_id"):
+            return
 
         with tolerate_already_deleted(f"route table {self.route_table_id}"):
             self.ec2_client.delete_route_table(RouteTableId=self.route_table_id)
@@ -244,7 +274,7 @@ class Subnets(Bootstrappable):
         # One drain budget for the whole call, so a subnet whose ENIs never clear
         # cannot add its own timeout on top of every sibling's.
         deadline = time.time() + ENI_DRAIN_TIMEOUT_SEC
-        for subnet in self.subnet_ids:
+        for subnet in (getattr(self, "subnet_ids", None) or []):
             # Wait for the ENIs left behind by test resources (NAT gateways, VPC
             # endpoints, load balancers) to be released. AWS frees them
             # asynchronously, so deleting immediately raises DependencyViolation
@@ -367,10 +397,11 @@ class SecurityGroup(Bootstrappable):
         """Deletes the security group.
         """
         # You must delete the securityGroup before you can delete any of its dependencies
-        with tolerate_already_deleted(f"security group {self.group_id}"):
-            self.ec2_client.delete_security_group(
-                GroupId=self.group_id,
-            )
+        if not _never_created(self, "group_id"):
+            with tolerate_already_deleted(f"security group {self.group_id}"):
+                self.ec2_client.delete_security_group(
+                    GroupId=self.group_id,
+                )
         super().cleanup()
 
 @dataclass
@@ -456,7 +487,11 @@ class VPC(Bootstrappable):
     def cleanup(self):
         """Deletes a VPC.
         """
+        # Subresources first: they may exist even when this resource does not.
         super().cleanup()
+
+        if _never_created(self, "vpc_id"):
+            return
 
         vpc = self.ec2_resource.Vpc(self.vpc_id)
         with tolerate_already_deleted(f"VPC {self.vpc_id}"):
