@@ -36,7 +36,6 @@ aws_services:
 - cloudwatchlogs
 - codeartifact
 - cognitoidentityprovider
-- datazone
 - dms
 - documentdb
 - dsql
