@@ -40,7 +40,7 @@ func validateBooleanFlag(flag string, flagName string) (bool, error) {
 	if flag == "true" || flag == "false" {
 		return flag == "true", nil
 	}
-	return false, fmt.Errorf("invalid value for boolean flag %s: %v. Only accepts true or false", flagName, createPR)
+	return false, fmt.Errorf("invalid value for boolean flag %s: %v. Only accepts true or false", flagName, flag)
 }
 
 func listEcrProwImageDetails(repositoryName string) ([]types.ImageDetail, error) {

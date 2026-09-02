@@ -71,8 +71,12 @@ func buildProwAgentWorkflowImages(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Build/push uses OptImagesConfigPath (resolved ECR URI), but generation
+	// must use the raw config so manifests keep ${PROW_IMAGES_REPO_URI}.
+	generateConfigPath := resolveGenerateConfigPath(OptImagesGenerateConfigPath, OptImagesConfigPath)
+
 	err = generator.GenerateAgentWorkflows(
-		OptImagesConfigPath,
+		generateConfigPath,
 		OptAgentWorkflowsTemplatesPath,
 		OptAgentWorkflowsOutputPath,
 	)
