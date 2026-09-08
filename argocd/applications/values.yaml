@@ -107,7 +107,7 @@ applications:
     path: flux/ack/charts/ack-pod-identity-roles
     targetNamespace: ack-system
     wave: 2
-    values: [accountId, publishAccountId, region, stackName]
+    values: [accountId, publishAccountId, region, stackName, agentE2eAccountId]
     automated: true
 
   ack-prow:

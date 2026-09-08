@@ -53,6 +53,20 @@ variable "publish_account_id" {
   type        = string
 }
 
+variable "agent_e2e_account_id" {
+  description = <<-EOT
+    AWS account ID of the dedicated sandbox that owns the agent-e2e-test-role, which the
+    build-cluster add-resource agent workflow assumes to run e2e against real AWS
+    resources. Distinct from the CI test accounts on purpose.
+
+    Empty (the default) omits the e2e sts:AssumeRole / ssm:GetParameter grants from the
+    build-cluster workflow-runner role entirely, so environments not running agent e2e are
+    unaffected. Set it only where agent e2e is enabled.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "seed_ack_bootstrap_policy" {
   description = <<-EOT
     Seed the ACK capability role with the minimal BootstrapPermissions inline policy.
