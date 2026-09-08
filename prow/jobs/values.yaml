@@ -24,6 +24,6 @@ controllerEcrRegistry: ""
 # prowPatchRevision is a monotonic counter appended to mirrored image tags and must never be
 # reset. It is consumed here as the whole `-ack.<n>` suffix rather than the bare number,
 # because a bare number reaches env[].value as a YAML int and the API server rejects it.
-prowVersion: "v20260702-fff8399c7"
-toolsVersion: "v20260515-778139c32d"
-prowPatchRevision: "1"
+prowVersion: "v20260908-104d452f4"
+toolsVersion: "v20260729-f66136c16c"
+prowPatchRevision: "2"
