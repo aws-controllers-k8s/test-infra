@@ -14,6 +14,6 @@ region: ""
 #
 # PROW_PATCH_REVISION is a monotonic counter appended to mirrored image tags and must
 # never be reset. PROW_VERSION and TOOLS_VERSION move independently but share it.
-prowVersion: "v20260702-fff8399c7"
-toolsVersion: "v20260515-778139c32d"
-prowPatchRevision: "1"
+prowVersion: "v20260908-104d452f4"
+toolsVersion: "v20260729-f66136c16c"
+prowPatchRevision: "2"

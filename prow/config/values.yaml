@@ -88,8 +88,8 @@ imageMirror:
   # render time rather than producing a reference to account "".
   accountId: ""
   region: ""
-  prowVersion: "v20260702-fff8399c7"
-  prowPatchRevision: "1"
+  prowVersion: "v20260908-104d452f4"
+  prowPatchRevision: "2"
 
 # Prow component images. EMPTY MEANS COMPOSED from imageMirror above; set one to override it
 # outright, which is what the Flux HelmRelease does for every component.
