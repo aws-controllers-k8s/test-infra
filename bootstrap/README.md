@@ -44,6 +44,13 @@ aws secretsmanager create-secret \
   --name "ack/prow/api-model-kb" \
   --secret-string "<KNOWLEDGE_BASE_ID>"
 
+# Dedicated GitHub Personal Access Token for the agent workflow. Kept separate from
+# the shared github-pat-token above: the agent runs on the build cluster and its
+# workflow-runner IAM role can read ONLY this secret.
+aws secretsmanager create-secret \
+  --name "ack/prow/agent-github-pat-token" \
+  --secret-string "<AGENT_PAT_TOKEN>"
+
 ```
 
 The `ecr-pullthroughcache/ghcr-fluxcd` secret and its resource policy used to be created here.

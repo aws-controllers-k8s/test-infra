@@ -1,0 +1,38 @@
+# EKS Addons for the build cluster, reconciled by the control-plane ACK EKS
+# controller. clusterRef (not a literal clusterName) because the build cluster's
+# name/ARN is not knowable until ACK creates the Cluster CR named build-cluster;
+# the reference resolves once that CR is synced.
+#
+# The Secrets Store CSI driver is required so agent workflow job pods (cluster:
+# build) can mount their SecretProviderClass and have the dedicated GitHub PAT
+# synced into a Kubernetes Secret. syncSecret.enabled mirrors the control-plane
+# addon (ack-addons chart) so secretObjects produce real Secret objects.
+{{- $stackName := required "stackName is required" .Values.stackName }}
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: Addon
+metadata:
+  name: build-cluster-secrets-store-csi
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  name: aws-secrets-store-csi-driver-provider
+  # Keep aligned with the build cluster's Kubernetes version (currently 1.35).
+  # Verify with:
+  #   aws eks describe-addon-versions \
+  #     --addon-name aws-secrets-store-csi-driver-provider \
+  #     --kubernetes-version 1.35 --region us-west-2 \
+  #     --query 'addons[0].addonVersions[].addonVersion'
+  addonVersion: v3.1.2-eksbuild.1
+  configurationValues: |-
+    {
+      "secrets-store-csi-driver": {
+        "syncSecret": {
+          "enabled": true
+        }
+      }
+    }
