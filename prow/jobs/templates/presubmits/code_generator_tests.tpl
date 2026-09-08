@@ -150,7 +150,7 @@
             memory: "8192Mi"
         env:
         - name: SERVICES
-          value: "{{ range $i, $service := .Config.CodegenPresubmitServices }}{{ if $i }} {{ end }}{{ $service }}{{ end }}"
+          value: "{{ range $i, $service := .Config.AWSServices }}{{ if $i }} {{ end }}{{ $service }}{{ end }}"
         command:
         - "/bin/bash"
         - "-c"
