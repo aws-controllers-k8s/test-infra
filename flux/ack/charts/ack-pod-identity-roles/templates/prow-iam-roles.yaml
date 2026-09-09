@@ -3,6 +3,11 @@
 {{- $publishAccountId := required "publishAccountId is required" .Values.publishAccountId }}
 {{- $region := required "region is required" .Values.region }}
 {{- $stackName := required "stackName is required" .Values.stackName }}
+{{- /* Optional: the dedicated sandbox account whose agent-e2e-test-role the
+       build-cluster agent workflow assumes to run e2e. Empty (the
+       default) omits the e2e assume/SSM grants entirely, so environments that
+       do not run agent e2e are unaffected. */ -}}
+{{- $agentE2eAccountId := .Values.agentE2eAccountId | default "" }}
 ---
 # Deployment Role - used by Prow core components (deck, hook, etc.)
 apiVersion: iam.services.k8s.aws/v1alpha1
@@ -357,6 +362,132 @@ spec:
               "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}",
               "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}/*"
             ]
+          }
+        ]
+      }
+---
+# Build Cluster Workflow Runner Role - used by agent workflow job pods running on the
+# dedicated build cluster (cluster: build) to mount the SecretProviderClass via the
+# Secrets Store CSI driver. Deliberately isolated from the control-plane
+# prow-workflow-runner-role: it can read ONLY the agent-specific GitHub PAT secret
+# (ack/prow/agent-github-pat-token), never the shared prowjob token or any other
+# ack/prow secret. Bound to the build cluster's test-pods/workflow-runner SA by the
+# ack-build-infra pod-identities chart.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: prow-build-workflow-runner-role
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  name: {{ $stackName }}-prow-build-workflow-runner-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          },
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    SecretsAccess: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": [
+              "arn:aws:secretsmanager:{{ $region }}:{{ $accountId }}:secret:ack/prow/agent-github-pat-token-*"
+            ]
+          }
+        ]
+      }
+{{- if $agentE2eAccountId }}
+    AssumeAgentE2ERole: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["sts:AssumeRole", "sts:TagSession"],
+            "Resource": "arn:aws:iam::{{ $agentE2eAccountId }}:role/agent-e2e-test-role"
+          }
+        ]
+      }
+    SSMAgentE2ERole: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ssm:GetParameter"],
+            "Resource": "arn:aws:ssm:{{ $region }}:{{ $accountId }}:parameter/ack/prow/agent-e2e-role"
+          }
+        ]
+      }
+{{- end }}
+    BedrockInvoke: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "bedrock:InvokeModel",
+              "bedrock:InvokeModelWithResponseStream",
+              "bedrock:Converse",
+              "bedrock:ConverseStream"
+            ],
+            "Resource": [
+              "arn:aws:bedrock:*::foundation-model/anthropic.*",
+              "arn:aws:bedrock:*:{{ $accountId }}:inference-profile/*.anthropic.*"
+            ]
+          }
+        ]
+      }
+    S3Logs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:Get*", "s3:List*", "s3:Put*", "s3:DeleteObject"],
+            "Resource": [
+              "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}",
+              "arn:aws:s3:::{{ $stackName }}-prow-logs-{{ $accountId }}/*"
+            ]
+          }
+        ]
+      }
+    # Read-only ECR Public access so prow-job.sh can authenticate `docker login
+    # public.ecr.aws`, raising the pull-rate-limit ceiling for the base images the
+    # e2e controller build pulls. Mirrors the presubmit role's ECRPublicRead.
+    ECRPublicRead: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ecr-public:GetAuthorizationToken",
+              "sts:GetServiceBearerToken",
+              "ecr-public:BatchCheckLayerAvailability",
+              "ecr-public:GetRepositoryPolicy",
+              "ecr-public:DescribeRepositories",
+              "ecr-public:DescribeRegistries",
+              "ecr-public:DescribeImages",
+              "ecr-public:DescribeImageTags",
+              "ecr-public:GetRepositoryCatalogData",
+              "ecr-public:GetRegistryCatalogData"
+            ],
+            "Resource": "*"
           }
         ]
       }

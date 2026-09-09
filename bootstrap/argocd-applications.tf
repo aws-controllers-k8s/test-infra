@@ -35,6 +35,12 @@ locals {
     prowDomain        = var.prow_domain
     prowImagesRepoUri = local.prow_images_repo_uri
 
+    # Sandbox account whose agent-e2e-test-role the build-cluster add-resource agent
+    # assumes for e2e. Already a string (see variable), so it does not trip the
+    # 12-digit-account-id-as-float hazard the chartValues comment warns about. Empty in
+    # environments not running agent e2e, which omits the grant (prow-iam-roles.yaml).
+    agentE2eAccountId = var.agent_e2e_account_id
+
     # Needed by prow-build-cluster-connection: the Application it creates at
     # runtime has to name its own source.
     testInfraOrg    = var.test_infra_org

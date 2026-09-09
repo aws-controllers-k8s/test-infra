@@ -99,7 +99,7 @@ prompt_all_vars() {
   echo "Configure environment variables:" >&2
   echo "" >&2
 
-  local test_infra_branch stage prow_domain kubernetes_org redhat_org controllers publish_account_id
+  local test_infra_branch stage prow_domain kubernetes_org redhat_org controllers publish_account_id agent_e2e_account_id
 
   # Helper to extract existing value from JSON, falling back to provided default
   _default() {
@@ -143,6 +143,9 @@ prompt_all_vars() {
   redhat_org=$(prompt "GitHub org for community-operators-prod fork" "$(_default redhat_org "$default_redhat_org")")
   controllers=$(prompt "ACK controllers for ECR repos (comma-separated)" "$(_default controllers "ecrpublic")")
   publish_account_id=$(prompt "AWS account ID for ECR Public publishing" "$(_default publish_account_id "${account_id}")")
+  # Optional sandbox account whose agent-e2e-test-role the build-cluster add-resource
+  # agent assumes for e2e. Blank (the default) omits the e2e IAM grants entirely.
+  agent_e2e_account_id=$(prompt "AWS account ID for agent e2e sandbox (blank to disable)" "$(_default agent_e2e_account_id "")")
 
   # Build JSON
   jq -n \
@@ -157,6 +160,7 @@ prompt_all_vars() {
     --arg redhat_org "$redhat_org" \
     --arg controllers "$controllers" \
     --arg publish_account_id "$publish_account_id" \
+    --arg agent_e2e_account_id "$agent_e2e_account_id" \
     '{
       region: $region,
       account_id: $account_id,
@@ -168,7 +172,8 @@ prompt_all_vars() {
       kubernetes_org: $kubernetes_org,
       redhat_org: $redhat_org,
       controllers: $controllers,
-      publish_account_id: $publish_account_id
+      publish_account_id: $publish_account_id,
+      agent_e2e_account_id: $agent_e2e_account_id
     }'
 }
 
