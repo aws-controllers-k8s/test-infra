@@ -13,7 +13,11 @@ authors = [
     {name = "Amazon Web Services", email = "aws-controllers-k8s@amazon.com"},
 ]
 dependencies = [
-    "strands-agents>=0.1.3",
+    # The role-based harness uses the Strands multi-agent Graph primitive; the
+    # progress reporter targets the graph streaming event contract stabilized in
+    # strands-agents >= 1.45 (see roles/progress.py).
+    "strands-agents>=1.45",
+    "strands-agents-tools>=0.8",
     "boto3>=1.28.0",
     "gitpython>=3.1.58",
     "pyyaml>=6.0",
@@ -21,9 +25,6 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "rich>=14.0.0",
-    "psutil>=7.0.0",
-    "strands-agents-tools[mem0-memory]>=0.1.3",
-    "mcp>=1.28.1",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +37,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["ack_builder_agent"]
+packages = ["workflows", "roles", "utils", "config"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

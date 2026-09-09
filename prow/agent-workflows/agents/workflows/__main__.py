@@ -12,6 +12,7 @@
 
 import argparse
 import asyncio
+import sys
 from typing import Optional
 from rich.console import Console
 from rich.panel import Panel
@@ -143,6 +144,11 @@ def main():
             model=args.model,
         ))
         display_workflow_result(result)
+        # Exit non-zero on failure so the caller (prow-job.sh, running under
+        # `set -e`) stops before committing/pushing and opening a PR for a
+        # resource that did not pass review + e2e.
+        if not result.success:
+            sys.exit(1)
     else:
         console.print(f"[red]Unknown command: {args.command}[/red]")
         parser.print_help()

@@ -8,427 +8,173 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""ACK Resource Addition Workflow - Agent Orchestrator."""
+"""Add-resource workflow adapter.
 
+This is the stable entry point invoked by `workflows/__main__.py` (and, in the
+container, by `prow-job.sh` via `python -m workflows resource-addition ...`). It
+preserves the historical public API — `ResourceAdditionInput`,
+`ResourceAdditionOutput`, and `create_ack_resource_workflow()` — but the body no
+longer runs the old task-based (Model -> Generator -> Tag) pipeline. It now
+drives the role-based Planner -> Plan-Review -> Implementer -> Review -> E2E
+graph in `roles/` (see roles/orchestrator.py).
+
+Division of labour with the shell wrapper is unchanged: `prow-job.sh` forks and
+clones `<service>-controller`, mounts `ack-dev-skills` via a Prow extra_ref, and
+after this workflow returns it commits the controller checkout and opens the PR.
+This workflow only mutates the local controller tree via the role agents.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
 import os
-import time
-from ack_tag_agent.prompt import ACK_TAG_AGENT_SYSTEM_PROMPT
-from ack_tag_agent.tools import compile_service_controller, read_service_file, write_service_controller_file
-import yaml
-from typing import Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from config.defaults import DEFAULT_MODEL_ID
-from utils.bedrock import create_enhanced_agent
-from utils.settings import settings
-from ack_model_agent.prompt import ACK_MODEL_AGENT_SYSTEM_PROMPT
-from ack_generator_agent.prompts import ACK_GENERATOR_SYSTEM_PROMPT
+from roles import orchestrator
+from roles.config import Config
 
-from ack_model_agent.tools import (
-    save_operations_catalog,
-    save_field_catalog,
-    save_operation_analysis,
-    save_error_catalog,
-    save_resource_characteristics,
-    query_knowledge_base,
-)
-from ack_generator_agent.tools import (
-    add_memory,
-    build_controller_agent,
-    error_lookup,
-    list_all_memories,
-    load_all_analysis_data,
-    read_service_generator_config,
-    save_error_solution,
-    search_codegen_knowledge,
-    search_memories,
-    update_service_generator_config,
-)
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ResourceAdditionInput:
-    """Input for the ACK Resource Addition Workflow."""
+    """Inputs for one add-resource run (unchanged public shape)."""
+
     service: str
     resource: str
     aws_sdk_version: Optional[str] = None
     timeout_minutes: int = 30
     model_id: str = DEFAULT_MODEL_ID
 
-@dataclass  
+
+@dataclass
 class ResourceAdditionOutput:
-    """Output from the ACK Resource Addition Workflow."""
+    """Result of one add-resource run (unchanged public shape).
+
+    `success` reflects the Reviewer's final APPROVE verdict. `build_logs` and
+    `config_changes` carry the Phase 4 completion report so the CLI can render a
+    human-readable summary; they are no longer distinct artifacts.
+    """
+
     success: bool
     service: str
     resource: str
-    build_logs: Optional[str] = None
-    error_message: Optional[str] = None
-    config_changes: Optional[str] = None
+    build_logs: str = ""
+    error_message: str = ""
+    config_changes: str = ""
+    report: str = ""
+
 
 class ACKResourceWorkflow:
-    """ACK Resource Addition Workflow that runs individual agents as separate processes."""
-    
-    def __init__(self):
-        """Initialize the workflow orchestrator."""
-        pass
-    
-    def _load_supported_services(self) -> List[str]:
-        """Load the list of supported AWS services from jobs_config.yaml."""
-        try:
-            # Use JOBS_CONFIG_PATH env var if set (e.g. in ProwJob), otherwise
-            # fall back to the relative path from the source tree.
-            env_path = os.environ.get("JOBS_CONFIG_PATH")
-            if env_path:
-                config_path = Path(env_path)
-            else:
-                config_path = Path(__file__).parent.parent.parent.parent / "jobs" / "jobs_config.yaml"
-            
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-                
-            return config.get('aws_services', [])
-        except Exception as e:
-            print(f"\n\033[93m⚠️  Warning: Could not load supported services list: {e}\033[0m")
-            return []
-    
-    def _validate_service(self, service: str) -> tuple[bool, str]:
-        """Validate that the service is supported in ACK infrastructure."""
-        supported_services = self._load_supported_services()
-        
-        if not supported_services:
-            return False, "Could not load supported services list from jobs_config.yaml"
-        
-        if service.lower() in [s.lower() for s in supported_services]:
-            return True, f"Service '{service}' is supported"
-        else:
-            available_services = ", ".join(sorted(supported_services))
-            return False, f"Service '{service}' is not supported. Available services: {available_services}"
+    """Drives the role-based add-resource graph for a single resource."""
 
-    def _create_model_agent(self, model_id: str):
-        """Create a fresh Model Agent instance."""
-        return create_enhanced_agent(
-            tools=[
-                save_operations_catalog,
-                save_field_catalog,
-                save_operation_analysis,
-                save_error_catalog,
-                save_resource_characteristics,
-                query_knowledge_base,
-            ],
-            system_prompt=ACK_MODEL_AGENT_SYSTEM_PROMPT,
-            model_id=model_id,
-        )
-
-    def _create_generator_agent(self, model_id: str):
-        """Create a fresh Generator Agent instance."""
-        return create_enhanced_agent(
-            tools=[
-                load_all_analysis_data,
-                error_lookup,
-                read_service_generator_config,
-                build_controller_agent,
-                update_service_generator_config,
-                save_error_solution,
-                add_memory,
-                search_memories,
-                list_all_memories,
-                search_codegen_knowledge,
-            ],
-            system_prompt=ACK_GENERATOR_SYSTEM_PROMPT,
-            model_id=model_id,
-        )
-    
-    def _create_tag_agent(self, model_id: str):
-        """Create a fresh Tag Agent instance."""
-        return create_enhanced_agent(
-        tools=[
-            load_all_analysis_data,
-            read_service_generator_config,
-            update_service_generator_config,
-            save_error_solution,
-            search_codegen_knowledge,
-            write_service_controller_file,
-            read_service_file,
-            compile_service_controller,
-            build_controller_agent
-        ],
-        system_prompt=ACK_TAG_AGENT_SYSTEM_PROMPT,
-        model_id=model_id,
-    )
-       
-
-
-
-    def _get_analysis_files_directory(self, service: str, resource: str) -> str:
-        """Get the directory where analysis files are stored."""
-        return os.path.join(settings.model_logs_dir, service, resource)
-
-    def _check_analysis_files_exist(self, service: str, resource: str) -> tuple[bool, list[str]]:
-        """Check if all required analysis files exist in the correct directory."""
-        analysis_dir = self._get_analysis_files_directory(service, resource)
-        analysis_files = [
-            "operations_catalog.json",
-            "field_catalog.json", 
-            "operation_analysis.json",
-            "error_catalog.json",
-            "characteristics.json"
-        ]
-        
-        missing_files = []
-        for file in analysis_files:
-            file_path = os.path.join(analysis_dir, file)
-            if not os.path.exists(file_path):
-                missing_files.append(file_path)
-        
-        return len(missing_files) < 5, missing_files
-
-    async def _run_model_agent(self, service: str, resource: str, model_id: str) -> tuple[bool, str]:
-        """Run the Model Agent to analyze the resource."""
-        print(f"\n\n\033[94m🔍 Step 1: Running Model Agent for {service} {resource}\033[0m\n")
-        exist, _ = self._check_analysis_files_exist(service, resource)
-        if exist:
-            print(f"Model files are already present.")
-            return True, f"Analysis files already exist"
-        
-        try:
-            model_agent = self._create_model_agent(model_id)
-            prompt = f"""Analyze the AWS {service} service {resource} resource following the complete workflow:
-
-1. Execute exactly 2 strategic knowledge base queries
-2. Extract comprehensive AWS resource information  
-3. Create structured data for all 5 analysis files
-4. Save all analysis data using the tools
-
-Focus on creating ONE comprehensive operation_analysis dictionary with ALL operations for {resource}, not individual operation calls.
-
-Service: {service}
-Resource: {resource}"""
-            
-            response = model_agent(prompt)
-            
-            # Check if analysis files were created successfully in the correct directory
-            success, missing_files = self._check_analysis_files_exist(service, resource)
-            
-            if success:
-                analysis_dir = self._get_analysis_files_directory(service, resource)
-                print(f"\n\033[92m✅ Model Agent completed successfully - analysis files created in {analysis_dir}\033[0m\n")
-                return True, str(response)
-            else:
-                print(f"\n\033[91m❌ Model Agent failed - missing analysis files: {missing_files}\033[0m\n")
-                return False, f"Analysis files not created in expected location. Missing: {missing_files}. Response: {response}"
-                
-        except Exception as e:
-            print(f"\n\033[91m❌ Model Agent failed with error: {e}\033[0m\n")
-            return False, str(e)
-
-
-    async def _run_generator_agent(self, service: str, resource: str, model_id: str, aws_sdk_version: Optional[str] = None) -> tuple[bool, str]:
-        """Run the Generator Agent to create configuration and build controller."""
-        print(f"\n\033[93m⚙️  Step 2: Running Generator Agent for {service} {resource}\033[0m\n")
-        
-        try:
-            generator_agent = self._create_generator_agent(model_id)
-            
-            sdk_instruction = ""
-            if aws_sdk_version:
-                sdk_instruction = f' with aws_sdk_version="{aws_sdk_version}"'
-            
-            prompt = f"""Load analysis data for {service} {resource}, read current generator.yaml configuration, generate optimized generator.yaml configuration for the {resource} resource, update the generator.yaml file, and then build the controller using build_controller_agent{sdk_instruction}.
-
-Follow the complete process:
-1. Load analysis data
-2. Read current generator.yaml
-3. Generate new configuration 
-4. Update generator.yaml file
-5. Build controller using build_controller_agent and monitor build
-6. If build fails, fix errors and try building once more
-
-Handle any build errors by fixing the configuration and attempting to build again."""
-            
-            response = generator_agent(prompt)
-            
-            # Check for success indicators in response
-            response_str = str(response)
-            success = (
-                "success:" in response_str.lower() or
-                "build completed successfully" in response_str.lower() or
-                "controller built successfully" in response_str.lower() or
-                "successfully built" in response_str.lower()
-            )
-            
-            if success:
-                print(f"\n\033[92m✅ Generator Agent completed - configuration updated and controller built\033[0m\n")
-                return True, str(response)
-            else:
-                print(f"\n\033[93m⚠️  Generator Agent completed but build may have had issues\033[0m\n")
-                return False, str(response)
-                
-        except Exception as e:
-            print(f"\n\033[91m❌ Generator Agent failed with error: {e}\033[0m\n")
-            return False, str(e)
-
-
-
-    async def _save_results(self, service: str, resource: str, behavior_learned: str, final_message: str, model_id: str) -> bool:
-        """Save workflow results to memory."""
-        print(f"\n\n\033[97m💾 Step 3: Saving results to memory\033[0m\n")
-        
-        try:
-            generator_agent = self._create_generator_agent(model_id)
-            
-            memory_prompt = f"""Save the following workflow results to memory:
-
-Service: {service}
-Resource: {resource}
-Behavior Learned: {behavior_learned}
-Final Status: {final_message}
-
-Use add_memory to store this information for future reference."""
-            
-            response = generator_agent(memory_prompt)
-            print(f"\n\033[92m✅ Results saved to memory\033[0m\n")
-            return True
-            
-        except Exception as e:
-            print(f"\n\033[91m❌ Failed to save results: {e}\033[0m\n")
-            return False
-
-    async def _run_tag_agent(self, service: str, resource: str, model_id: str) -> tuple[bool, str]:
-        """Run the Tag Agent to create custom hooks for resource Tag operations"""
-        print(f"\n\033[93m⚙️  Step 4: Running Tag Agent for {service} {resource}\033[0m\n")
-
-        try:
-            tag_agent = self._create_tag_agent(model_id)
-            prompt = f"Add tag support for the {resource} resource of the {service} service."
-            response = tag_agent(prompt)
-
-            response_str = str(response)
-            success = (
-                "success:" in response_str.lower() or
-                "tag support added successfully" in response_str.lower() or
-                "controller built successfully" in response_str.lower() or
-                "successfully added tag support" in response_str.lower()
-            )
-
-            if success:
-                print(f"\n\033[92m✅ Tag Agent completed - tag support added and controller built\033[0m\n")
-                return True, str(response)
-            else:
-                print(f"\n\033[93m⚠️  Tag Agent completed but adding hooks may have had issues\033[0m\n")
-                return False, str(response)
-            
-        except Exception as e:
-            print(f"\n\033[91m❌ Tag Agent failed with error: {e}\033[0m\n")
-            return False, str(e)
-
-
-
-    
     async def run(self, input_data: ResourceAdditionInput) -> ResourceAdditionOutput:
-        """Execute the complete workflow by running individual agents."""
-        try:
-            print(f"\n\033[95m🚀 Starting ACK Resource Addition Workflow\033[0m")
-            print(f"   Service: {input_data.service}")
-            print(f"   Resource: {input_data.resource}")
-            print(f"   Model: {input_data.model_id}")
-            if input_data.aws_sdk_version:
-                print(f"   AWS SDK: {input_data.aws_sdk_version}")
-            
-            # Step 0: Validate service is supported
-            print(f"\n\033[96m🔍 Validating service '{input_data.service}' is supported...\033[0m")
-            service_valid, validation_message = self._validate_service(input_data.service)
-            
-            if not service_valid:
-                print(f"\n\033[91m❌ Service validation failed\033[0m\n")
-                return ResourceAdditionOutput(
-                    success=False,
-                    service=input_data.service,
-                    resource=input_data.resource,
-                    error_message=f"Service validation failed: {validation_message}",
-                )
-            else:
-                print(f"\n\033[92m✅ {validation_message}\033[0m")
-            
-            # Step 1: Run Model Agent
-            model_success, model_response = await self._run_model_agent(input_data.service, input_data.resource, input_data.model_id)
-            if not model_success:
-                return ResourceAdditionOutput(
-                    success=False,
-                    service=input_data.service,
-                    resource=input_data.resource,
-                    error_message=f"Model Agent failed: {model_response}",
-                )
-            
-            # Step 2: Run Generator Agent
-            generator_success, generator_response = await self._run_generator_agent(
-                input_data.service, 
-                input_data.resource,
-                input_data.model_id,
-                input_data.aws_sdk_version,
-            )
-            
-            if not generator_success:
-                # Save failure results
-                await self._save_results(
-                    input_data.service, 
-                    input_data.resource, 
-                    f"Failed to generate configuration and build controller for {input_data.resource}. Error: {generator_response}",
-                    "Failed",
-                    input_data.model_id,
-                )
-                return ResourceAdditionOutput(
-                    success=False,
-                    service=input_data.service,
-                    resource=input_data.resource,
-                    error_message=f"Generator Agent failed: {generator_response}",
-                )
-            
-            # Step 3: Save success results
-            await self._save_results(
-                input_data.service, 
-                input_data.resource, 
-                f"Successfully generated configuration and built controller for {input_data.resource}. Configuration optimized based on analysis data.",
-                "Success",
-                input_data.model_id,
-            )
+        cfg = self._build_config(input_data)
 
-            # Step 4: Run Tag Agent
-            tag_success, tag_response = await self._run_tag_agent(input_data.service, input_data.resource, input_data.model_id)
-
-            if not tag_success:
-                return ResourceAdditionOutput(
-                    success=False,
-                    service=input_data.service,
-                    resource=input_data.resource,
-                    error_message=f"Tag Agent failed: {tag_response}",
-                )
-            
-            # Final status
-            print(f"\n\033[92m🎉 Workflow completed successfully!\033[0m")
-            print(f"   {input_data.resource} added to {input_data.service} controller")
-            print()
-            
-            return ResourceAdditionOutput(
-                success=generator_success,
-                service=input_data.service,
-                resource=input_data.resource,
-                build_logs=generator_response,
-                config_changes=generator_response if generator_success else None,
-                error_message=None,
-            )
-            
-        except Exception as e:
-            error_msg = f"Workflow execution failed: {str(e)}"
-            print(f"\n\033[91m💥 {error_msg}\033[0m\n")
-            
+        problems = cfg.validate_paths()
+        if problems:
+            msg = "; ".join(problems)
+            logger.error("configuration problems: %s", msg)
             return ResourceAdditionOutput(
                 success=False,
                 service=input_data.service,
                 resource=input_data.resource,
-                error_message=error_msg,
+                error_message=(
+                    "cannot run add-resource — required checkouts are missing: "
+                    f"{msg}. ack-dev-skills is delivered as a Prow extra_ref and "
+                    "code-generator is cloned at startup; verify both are present."
+                ),
             )
+
+        logger.info(
+            "starting role-based add-resource: service=%s resource=%s controller=%s "
+            "codegen=%s skills=%s model=%s e2e=%s",
+            cfg.service, cfg.resource, cfg.controller_dir, cfg.codegen_dir,
+            cfg.skills_dir, cfg.model_id, cfg.run_e2e,
+        )
+
+        # The orchestrator drives the graph via asyncio.run and then runs the
+        # (blocking) E2E subprocess. Run it in a worker thread so its event loop
+        # and subprocess calls never nest inside this already-running loop.
+        rr = await asyncio.to_thread(
+            orchestrator.run, cfg, verbose=True, progress=True
+        )
+
+        report = orchestrator.completion_report(rr)
+        print("\n" + "=" * 72)
+        print(report)
+
+        # Hand the composed PR description to prow-job.sh (it reads $PR_BODY_FILE
+        # for `gh pr create -F`). Only set on a successful run, which is the only
+        # case a PR is opened; a write failure is non-fatal (falls back to the
+        # static body in the shell wrapper).
+        if rr.pr_body:
+            pr_body_file = os.environ.get("PR_BODY_FILE")
+            if pr_body_file:
+                try:
+                    Path(pr_body_file).write_text(rr.pr_body)
+                except OSError as exc:
+                    logger.warning("could not write PR body to %s: %s", pr_body_file, exc)
+
+        # When E2E is enabled it is part of "done": the resource is only complete
+        # if its e2e test actually PASSED. Any other status (FAIL, SKIPPED,
+        # NOT_RUN, ERROR) fails the run so the harness does not open a PR for an
+        # unvalidated resource. When E2E is off, success rests on the Reviewer.
+        e2e_passed = rr.e2e is not None and rr.e2e.status == "PASS"
+        success = rr.approved and (not cfg.run_e2e or e2e_passed)
+
+        problems: list[str] = []
+        if not rr.approved:
+            problems.append(
+                "Reviewer did not APPROVE the implementation "
+                f"(decision: {rr.impl_decision.value if rr.impl_decision else 'none'})."
+            )
+        if cfg.run_e2e and not e2e_passed:
+            status = rr.e2e.status if rr.e2e else "not run"
+            problems.append(
+                f"E2E validation did not pass (status: {status}); a resource is "
+                "not done until its e2e test passes."
+            )
+        error_message = ""
+        if problems:
+            error_message = " ".join(problems) + " See the report for details."
+
+        return ResourceAdditionOutput(
+            success=success,
+            service=cfg.service,
+            resource=cfg.resource,
+            build_logs=rr.impl_summary_text,
+            config_changes=rr.plan_text,
+            error_message=error_message,
+            report=report,
+        )
+
+    def _build_config(self, input_data: ResourceAdditionInput) -> Config:
+        """Resolve paths for the run. All checkouts are provided by the harness:
+
+        - the controller fork by prow-job.sh (resolved from $CONTROLLER_DIR);
+        - code-generator and ack-dev-skills as Prow extra_refs cloned by the
+          clonerefs init container (resolved from $CODEGEN_DIR / $ACK_DEV_SKILLS_DIR,
+          which the agent-plugin sets to the clonerefs paths).
+
+        Nothing is cloned in-process; validate_paths() surfaces any missing tree.
+        """
+        return Config.resolve(
+            service=input_data.service,
+            resource=input_data.resource,
+            model_id=input_data.model_id,
+            aws_sdk_go_version=input_data.aws_sdk_version,
+            # Phase 3 (E2E) runs only when RUN_E2E=true. The agent-plugin sets it
+            # (alongside the privileged/DinD pod) for e2e-enabled workflows; off by
+            # default so non-e2e runs and environments without a kind toolchain skip it.
+            run_e2e=os.environ.get("RUN_E2E", "").lower() == "true",
+        )
 
 
 def create_ack_resource_workflow() -> ACKResourceWorkflow:
-    """Create and return a new ACK Resource Workflow instance."""
-    return ACKResourceWorkflow() 
+    """Factory for the add-resource workflow (stable public entry point)."""
+    return ACKResourceWorkflow()
