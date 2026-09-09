@@ -42,14 +42,16 @@ type Generator interface {
 	) (*k8s.ProwJob, error)
 }
 
-// DefaultGenerator is the standard implementation of the Generator interface
+// DefaultGenerator is the standard implementation of the Generator interface.
+// It holds a WorkflowConfigLoader rather than a pre-parsed map so per-request
+// lookups pick up ConfigMap updates without a pod restart.
 type DefaultGenerator struct {
-	workflows map[string]*Workflow
+	loader *WorkflowConfigLoader
 }
 
-// NewGenerator creates a new ProwJob generator
-func NewGenerator(workflows map[string]*Workflow) Generator {
-	return &DefaultGenerator{workflows: workflows}
+// NewGenerator creates a new ProwJob generator backed by the given loader.
+func NewGenerator(loader *WorkflowConfigLoader) Generator {
+	return &DefaultGenerator{loader: loader}
 }
 
 // CreateWorkflowProwJob creates a ProwJob for a workflow execution
@@ -64,9 +66,12 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 	s3Bucket string,
 ) (*k8s.ProwJob, error) {
 
-	workflow, exists := g.workflows[workflowName]
-	if !exists {
-		return nil, fmt.Errorf("workflow %s not found", workflowName)
+	// Look up the workflow through the loader on every call — this is what
+	// makes the plugin pick up an updated agent-workflow-config ConfigMap
+	// (e.g. a bumped image tag) without a pod restart.
+	workflow, err := g.loader.GetWorkflowByName(workflowName)
+	if err != nil {
+		return nil, err
 	}
 
 	envVars := []v1.EnvVar{
@@ -98,6 +103,13 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			},
 		})
 	}
+
+	// Translate the workflow's declared stable repo dependencies into Prow
+	// extra_refs (cloned by the clonerefs init container) and inject each ref's
+	// checkout path as an env var where requested, so the workflow reads the
+	// exact path the repo is cloned to.
+	extraRefs, refEnvVars := buildExtraRefs(workflow.ExtraRefs)
+	envVars = append(envVars, refEnvVars...)
 
 	// Add arguments as command-line flags
 	workflowArgs := make([]string, 0)
@@ -157,8 +169,15 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 		Spec: k8s.ProwJobSpec{
 			Type:    k8s.PeriodicJob,
 			Agent:   k8s.KubernetesAgent,
-			Cluster: "default",
+			// Run on the dedicated build cluster for workload isolation from the
+			// Prow control plane. "build" is the kubeconfig context alias Prow
+			// registers for the build cluster (see jobs_config.yaml presubmit_cluster).
+			Cluster: "build",
 			Job:     fmt.Sprintf("agent-workflow-%s", workflowName),
+			// Stable repo dependencies (code-generator, runtime, ack-dev-skills,
+			// ...) cloned into the pod by the clonerefs init container. Empty when
+			// the workflow declares no extra_refs.
+			ExtraRefs: extraRefs,
 			// Add decoration config for S3 logs
 			DecorationConfig: &k8s.DecorationConfig{
 				Timeout:     &prowv1.Duration{Duration: timeoutDuration},
@@ -191,21 +210,27 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 						Requests: v1.ResourceList{},
 						Limits:   v1.ResourceList{},
 					},
+					// Mount the SecretProviderClass so the Secrets Store CSI driver
+					// syncs the dedicated agent GitHub PAT (agent-github-pat-token)
+					// into a Kubernetes Secret using this pod's workflow-runner Pod
+					// Identity. GITHUB_TOKEN then reads that Secret via secretKeyRef.
 					VolumeMounts: []v1.VolumeMount{
 						{
-							Name:      "jobs-config",
-							MountPath: "/prow/jobs",
+							Name:      "agent-secrets",
+							MountPath: "/mnt/secrets-store",
 							ReadOnly:  true,
 						},
 					},
 				}},
 				Volumes: []v1.Volume{
 					{
-						Name: "jobs-config",
+						Name: "agent-secrets",
 						VolumeSource: v1.VolumeSource{
-							ConfigMap: &v1.ConfigMapVolumeSource{
-								LocalObjectReference: v1.LocalObjectReference{
-									Name: "jobs-config",
+							CSI: &v1.CSIVolumeSource{
+								Driver:   "secrets-store.csi.k8s.io",
+								ReadOnly: Bool(true),
+								VolumeAttributes: map[string]string{
+									"secretProviderClass": "agent-secrets",
 								},
 							},
 						},
@@ -213,6 +238,12 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 				},
 			},
 		},
+	}
+
+	// For e2e-enabled workflows, provision the pod for kind-in-Docker-in-Docker.
+	// Provision the pod for kind-in-Docker-in-Docker when the workflow opts in.
+	if workflow.E2E {
+		applyE2EPodSettings(prowJob.Spec.PodSpec)
 	}
 
 	// Set resource limits if specified
@@ -241,4 +272,85 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 	}
 
 	return prowJob, nil
+}
+
+// applyE2EPodSettings provisions the pod for kind-in-Docker-in-Docker. It is the
+// inline equivalent of the preset-dind-enabled and preset-kind-volume-mounts presets
+// (prow/config/templates/config-ConfigMap.yaml) plus the privileged securityContext
+// the integration-test jobs set inline. preset-test-config is not mirrored: roles/e2e.py
+// writes its own test_config.yaml. Safe to call on the single-container PodSpec
+// CreateWorkflowProwJob builds.
+func applyE2EPodSettings(podSpec *v1.PodSpec) {
+	if podSpec == nil || len(podSpec.Containers) == 0 {
+		return
+	}
+	c := &podSpec.Containers[0]
+
+	// Privileged is required for dockerd + kind node containers to run.
+	c.SecurityContext = &v1.SecurityContext{Privileged: Bool(true)}
+
+	// preset-dind-enabled: signal DinD to the harness and give dockerd its
+	// storage. docker-root (/var/lib/docker) is load-bearing for a modern
+	// dockerd; docker-graph is the legacy kubekins path, kept for fidelity.
+	c.Env = append(c.Env,
+		v1.EnvVar{Name: "DOCKER_IN_DOCKER_ENABLED", Value: "true"},
+		// Gate the e2e path in the workflow (roles/config.py reads this).
+		v1.EnvVar{Name: "RUN_E2E", Value: "true"},
+	)
+
+	hostPathDir := v1.HostPathDirectory
+	podSpec.Volumes = append(podSpec.Volumes,
+		v1.Volume{Name: "docker-graph", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
+		v1.Volume{Name: "docker-root", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}},
+		// preset-kind-volume-mounts: kind's nodes need the host's kernel modules
+		// and cgroup hierarchy.
+		v1.Volume{Name: "modules", VolumeSource: v1.VolumeSource{HostPath: &v1.HostPathVolumeSource{Path: "/lib/modules", Type: &hostPathDir}}},
+		v1.Volume{Name: "cgroup", VolumeSource: v1.VolumeSource{HostPath: &v1.HostPathVolumeSource{Path: "/sys/fs/cgroup", Type: &hostPathDir}}},
+	)
+	c.VolumeMounts = append(c.VolumeMounts,
+		v1.VolumeMount{Name: "docker-graph", MountPath: "/docker-graph"},
+		v1.VolumeMount{Name: "docker-root", MountPath: "/var/lib/docker"},
+		v1.VolumeMount{Name: "modules", MountPath: "/lib/modules", ReadOnly: true},
+		v1.VolumeMount{Name: "cgroup", MountPath: "/sys/fs/cgroup"},
+	)
+}
+
+// clonerefsSrcRoot is where Prow's clonerefs init container checks out refs
+// under the decorated pod's shared code volume (the upstream default GOPATH src
+// root). Extra-ref checkout paths are computed relative to it.
+const clonerefsSrcRoot = "/home/prow/go/src"
+
+// buildExtraRefs converts a workflow's declared stable repo dependencies into
+// Prow extra_refs and the env vars that expose each ref's checkout path. The
+// checkout path and the ref's PathAlias are derived from the same inputs, so the
+// path the workflow reads cannot drift from where clonerefs clones the repo.
+func buildExtraRefs(refs []ExtraRef) ([]prowv1.Refs, []v1.EnvVar) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	prowRefs := make([]prowv1.Refs, 0, len(refs))
+	envVars := make([]v1.EnvVar, 0, len(refs))
+	for _, r := range refs {
+		baseRef := r.BaseRef
+		if baseRef == "" {
+			baseRef = "main"
+		}
+		pathAlias := r.PathAlias
+		if pathAlias == "" {
+			pathAlias = fmt.Sprintf("github.com/%s/%s", r.Org, r.Repo)
+		}
+		prowRefs = append(prowRefs, prowv1.Refs{
+			Org:       r.Org,
+			Repo:      r.Repo,
+			BaseRef:   baseRef,
+			PathAlias: pathAlias,
+		})
+		if r.Env != "" {
+			envVars = append(envVars, v1.EnvVar{
+				Name:  r.Env,
+				Value: fmt.Sprintf("%s/%s", clonerefsSrcRoot, pathAlias),
+			})
+		}
+	}
+	return prowRefs, envVars
 }

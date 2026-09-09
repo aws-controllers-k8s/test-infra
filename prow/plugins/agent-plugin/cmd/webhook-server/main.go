@@ -107,17 +107,21 @@ func main() {
 		logrus.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	// Load workflow configuration
-	workflowConfig, err := prowjob.LoadWorkflowConfig(o.workflowConfigPath)
+	// Workflow config lives in a mounted ConfigMap and can change while the
+	// plugin is running (e.g. an image-tag bump). Construct a loader that
+	// re-reads the file on mtime change, and prime it once at startup so a
+	// bad path or content fails fast rather than at first webhook.
+	workflowLoader := prowjob.NewWorkflowConfigLoader(o.workflowConfigPath)
+	initial, err := workflowLoader.Get()
 	if err != nil {
 		logrus.Fatalf("Failed to load workflows: %v", err)
 	}
 
-	logrus.Infof("Loaded %d workflows from %s", len(workflowConfig.GetWorkflowsMap()), o.workflowConfigPath)
+	logrus.Infof("Loaded %d workflows from %s", len(initial.GetWorkflowsMap()), o.workflowConfigPath)
 
-	prowJobGenerator := prowjob.NewGenerator(workflowConfig.GetWorkflowsMap())
+	prowJobGenerator := prowjob.NewGenerator(workflowLoader)
 	server, err := webhook.NewServer(
-		workflowConfig,
+		workflowLoader,
 		prowJobGenerator,
 		githubClient,
 		secret.GetTokenGenerator(o.webhookSecretFile),
