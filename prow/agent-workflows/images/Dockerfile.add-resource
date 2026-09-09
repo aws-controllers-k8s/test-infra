@@ -22,14 +22,22 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
-# Install git and dependencies
+# Install git and dependencies. The extra packages (build-essential, jq, kmod,
+# procps, unzip, lsb-release, wget) support the e2e path (Docker-in-Docker + kind).
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     ca-certificates \
     git \
     make \
     gnupg2 \
     uuid-runtime \
     curl \
+    wget \
+    lsb-release \
+    jq \
+    kmod \
+    procps \
+    unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -53,6 +61,43 @@ RUN echo "Installing GitHub cli ..." \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh
 
+# --- e2e (kind-in-DinD) toolchain --------------------------------------
+RUN echo "Installing aws-cli v2 ..." \
+    && curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip \
+    && unzip -q awscliv2.zip \
+    && ./aws/install \
+    && rm -rf awscliv2.zip aws
+
+RUN echo "Installing Kustomize v4.1.2 ..." \
+    && curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v4.1.2/kustomize_v4.1.2_linux_amd64.tar.gz -o kustomize.tar.gz \
+    && tar xzf kustomize.tar.gz -C /usr/bin \
+    && rm kustomize.tar.gz
+
+RUN echo "Installing Kubectl v1.30.8 ..." \
+    && curl -fsSL "https://dl.k8s.io/release/v1.30.8/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
+    && chmod +x /usr/local/bin/kubectl
+
+# Docker CE + buildx for Docker-in-Docker (controller image build, kind node
+# containers, pytest container). Disable cgroupfs_mount in the init script so
+# kind's nodes boot under DinD. Codename derived from the base image, not pinned.
+RUN echo "Installing Docker ..." \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce=5:28.* docker-ce-cli=5:28.* docker-buildx-plugin \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i 's/cgroupfs_mount$/#cgroupfs_mount/' /etc/init.d/docker
+
+# nftables (the Debian default) breaks docker's and kind's networking; force legacy.
+RUN update-alternatives --set iptables  /usr/sbin/iptables-legacy  || true \
+    && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy || true
+
+RUN echo "Installing kind v0.31.0 ..." \
+    && go install "sigs.k8s.io/kind@v0.31.0" \
+    && mv "${GOPATH}/bin/kind" /usr/bin/kind
+
 # Create Go directories with proper permissions
 RUN mkdir -p "${GOPATH}/bin" "${GOPATH}/src" "${GOPATH}/pkg" \
     && chown -R prow:prow /home/prow
@@ -67,8 +112,13 @@ COPY . .
 RUN uv pip install --system . && \
     chown -R prow:prow /app
 
-# Switch to non-root user
-USER prow
+# Run as root (no USER switch): the e2e path starts dockerd
+# (Docker-in-Docker), which requires root. The pod runs privileged for kind, so
+# the in-container non-root distinction buys little. Non-e2e runs are unaffected.
 
-# Default command to run the generator agent
+# dockerd stores images/containers here; the preset-dind-enabled emptyDir mounts
+# over it at runtime.
+VOLUME ["/var/lib/docker"]
+
+# Default command; the ProwJob overrides it with /app/prow-job.sh.
 ENTRYPOINT ["./prow-job.sh"]
