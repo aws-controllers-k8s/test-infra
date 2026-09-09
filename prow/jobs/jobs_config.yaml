@@ -25,14 +25,12 @@ aws_services:
 - athena
 - autoscaling
 - backup
-- batch
 - bedrock
 - bedrockagent
 - bedrockagentcorecontrol
 - cloudfront
 - cloudtrail
 - cloudwatch
-- cloudwatchevents
 - cloudwatchlogs
 - codeartifact
 - cognitoidentityprovider
@@ -54,7 +52,6 @@ aws_services:
 - eventbridge
 - firehose
 - fsx
-- globalaccelerator
 - glue
 - iam
 - kafka
@@ -88,13 +85,11 @@ aws_services:
 - s3vectors
 - sagemaker
 - secretsmanager
-- servicecatalog
 - ses
 - sfn
 - sns
 - sqs
 - ssm
-- transfer
 - wafv2
 
 # List of service that will execute a set of tests for CARM
