@@ -37,7 +37,7 @@ type githubClient interface {
 // Server handles webhook requests
 type Server struct {
 	tokenGenerator   func() []byte
-	workflowConfig   *prowjobpkg.WorkflowConfig
+	workflowConfig   *prowjobpkg.WorkflowConfigLoader
 	prowJobGenerator prowjobpkg.Generator
 	githubClient     githubClient
 	k8sClient        kubernetes.Interface
@@ -49,7 +49,7 @@ type Server struct {
 
 // NewServer creates a new webhook server
 func NewServer(
-	workflowConfig *prowjobpkg.WorkflowConfig,
+	workflowConfig *prowjobpkg.WorkflowConfigLoader,
 	prowJobGenerator prowjobpkg.Generator,
 	githubClient githubClient,
 	tokenGenerator func() []byte,
