@@ -6,11 +6,13 @@
 # account (the ack-pod-identity-roles chart), so we reuse
 # them by ARN — no new roles/ tree here.
 #
-# Only pre-submit-service-account is bound: the build cluster runs pre-submit jobs
-# exclusively (post-submit/periodic/mirror stay on the control-plane `default`
-# cluster), keeping the identity surface minimal for the untrusted PR code here.
-# Its cross-account test-role assume is authorized at the account level, not by
-# anything on the build-cluster side.
+# Two SAs are bound: pre-submit-service-account (untrusted PR code) and
+# workflow-runner (agent workflow jobs, cluster: build). post-submit/periodic/mirror
+# stay on the control-plane `default` cluster, keeping the identity surface minimal.
+# pre-submit's cross-account test-role assume is authorized at the account level, not
+# by anything on the build-cluster side. workflow-runner is bound to a dedicated,
+# tightly scoped role (prow-build-workflow-runner-role) that can read ONLY the
+# agent-specific GitHub PAT secret — see the ack-pod-identity-roles chart.
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -26,3 +28,18 @@ spec:
   namespace: test-pods
   serviceAccount: pre-submit-service-account
   roleARN: arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-prow-presubmit-role
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: prow-build-workflow-runner-pod-identity
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
+spec:
+  clusterRef:
+    from:
+      name: build-cluster
+  namespace: test-pods
+  serviceAccount: workflow-runner
+  roleARN: arn:aws:iam::{{ $accountId }}:role/{{ $stackName }}-prow-build-workflow-runner-role

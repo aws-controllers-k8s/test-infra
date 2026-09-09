@@ -42,7 +42,7 @@ daws() {
     # When static creds exist, skip web identity and AWS config mount to avoid
     # conflicts with pod identity configuration in nested containers
     aws_cli_static_creds_env=""
-    aws_config_mount="-v ~/.aws:/root/.aws:z"
+    aws_config_mount="-v $HOME/.aws:/root/.aws:z"
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
         aws_cli_static_creds_env="--env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN"
         # Clear web identity env to prevent Docker from using pod identity

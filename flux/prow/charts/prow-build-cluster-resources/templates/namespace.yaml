@@ -40,3 +40,14 @@ kind: ServiceAccount
 metadata:
   name: pre-submit-service-account
   namespace: test-pods
+---
+# workflow-runner runs the agent workflow job pods (cluster: build). Like
+# pre-submit-service-account it must exist here so the build-cluster
+# PodIdentityAssociation (ack-build-infra pod-identities) can bind it to its IAM
+# role; the pod also mounts the SecretProviderClass below, which the Secrets Store
+# CSI driver syncs using this SA's Pod Identity credentials.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-runner
+  namespace: test-pods
