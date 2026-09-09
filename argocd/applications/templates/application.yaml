@@ -19,8 +19,8 @@ fails at pull time. All are cheaper to catch here than in a cluster.
 {{- if not $root.Values.repoURL }}
   {{- fail "repoURL is required" }}
 {{- end }}
-{{- if not $root.Values.targetRevision }}
-  {{- fail "targetRevision is required: a blank revision renders a different tree, it does not error" }}
+{{- if not $root.Values.childRevision }}
+  {{- fail "childRevision is required: the resolved SHA from the root Application's $ARGOCD_APP_REVISION parameter. Blank renders a different tree, it does not error." }}
 {{- end }}
 {{- if not (regexMatch "^arn:aws[a-z-]*:eks:" ($root.Values.destinationServer | toString)) }}
   {{- fail (printf "destinationServer must be an EKS cluster ARN, got %q. The capability registers clusters by ARN; a URL does not match the AppProject destination and the Application is REJECTED rather than failing at sync." $root.Values.destinationServer) }}
@@ -69,7 +69,7 @@ spec:
 
   source:
     repoURL: {{ $root.Values.repoURL }}
-    targetRevision: {{ $root.Values.targetRevision }}
+    targetRevision: {{ $root.Values.childRevision }}
     path: {{ $app.path }}
     {{- if $wantsHelm }}
     {{- /*

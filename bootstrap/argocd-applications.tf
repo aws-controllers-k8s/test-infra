@@ -87,11 +87,32 @@ resource "kubernetes_manifest" "argocd_root" {
         path           = "argocd/applications"
 
         helm = {
+          # Children are pinned to the resolved SHA; this object keeps tracking the branch,
+          # because something has to notice new commits. While the children tracked it too, a
+          # commit changing only chart CONTENTS rendered identical child specs, so this
+          # Application never had drift, never synced, and each child synced itself unordered.
+          # Waves are only evaluated inside a sync of this object, so none was ever processed.
+          # Pinned, every commit changes all 19 child specs, so the rollout is always ordered
+          # by wave and a child that will not go Healthy stops everything behind it.
+          #
+          # A PARAMETER, not part of the values blob: build-env interpolation only happens in
+          # helm.parameters. forceString so an all-digit SHA does not arrive as a number.
+          parameters = [
+            {
+              name        = "childRevision"
+              value       = "$ARGOCD_APP_REVISION"
+              forceString = true
+            },
+          ]
           values = yamlencode({
-            # Passed through to every child's source, so all of them read the same
-            # revision this object does. One branch, one tree.
-            project           = kubernetes_manifest.argocd_project.manifest.metadata.name
-            repoURL           = "https://github.com/${var.test_infra_org}/${var.test_infra_repo}"
+            project = kubernetes_manifest.argocd_project.manifest.metadata.name
+            repoURL = "https://github.com/${var.test_infra_org}/${var.test_infra_repo}"
+            # Retained although the chart now reads childRevision instead. Passing both
+            # means this object and the chart can be rolled forward or back in either
+            # order: dropping it would leave a Terraform-first apply feeding the old
+            # chart, which requires it, nothing - and a git-first merge feeding the new
+            # chart, which requires childRevision, nothing. Either way the root's render
+            # fails and every deploy stops.
             targetRevision    = var.test_infra_branch
             destinationServer = aws_eks_cluster.this.arn
             argocdNamespace   = "argocd"
@@ -133,6 +154,25 @@ resource "kubernetes_manifest" "argocd_root" {
     }
   }
 
-  # A child Application whose project does not exist is rejected.
-  depends_on = [kubernetes_manifest.argocd_project]
+  # Terraform owns this object's spec, so it has to win against out-of-band edits. Without
+  # this, an apply that changes a field someone patched by hand fails outright:
+  #
+  #   Error: field manager conflict ... conflict with "kubectl-patch" using
+  #   argoproj.io/v1alpha1: .spec.source.targetRevision
+  #
+  # Hit on staging, where targetRevision had been kubectl-patched to a feature branch, so
+  # the field was owned by kubectl-patch and Terraform could not move it back. The
+  # alternative is that a single manual patch makes this resource permanently
+  # unmanageable, which is worse: this is the object the whole app-of-apps renders from.
+  # Only fields Terraform actually sets are forced; eks-capability keeps the ones it owns.
+  field_manager {
+    force_conflicts = true
+  }
+
+  # A child Application whose project does not exist is rejected. argocd_cm has to be in
+  # place before the opening sync, or the waves do nothing for it - see argocd-config.tf.
+  depends_on = [
+    kubernetes_manifest.argocd_project,
+    kubernetes_config_map_v1.argocd_cm,
+  ]
 }
