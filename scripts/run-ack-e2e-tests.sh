@@ -22,20 +22,30 @@ source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 source "$SCRIPTS_DIR/kind.sh"
 
-# The chart tag matches the controller release, so the newest chart is the newest release.
+# The chart tag is the controller release without its leading "v", so the highest tag in the
+# registry is the newest release. Read over the anonymous OCI API because the ecr-public
+# control plane can only describe repositories in the caller's own registry.
 _chart_version() {
     if [[ -n "${CONTROLLER_CHART_VERSION:-}" ]]; then
         echo "$CONTROLLER_CHART_VERSION"
         return
     fi
-    aws ecr-public describe-image-tags \
-        --repository-name "$AWS_SERVICE-chart" --region us-east-1 \
-        --query 'sort_by(imageTagDetails,&createdAt)[-1].imageTag' --output text
+
+    local repo="aws-controllers-k8s/$AWS_SERVICE-chart"
+    local token
+    token=$(curl -fsS \
+        "https://public.ecr.aws/token/?scope=repository:$repo:pull&service=public.ecr.aws" |
+        jq -r '.token')
+    curl -fsS -H "Authorization: Bearer $token" \
+        "https://public.ecr.aws/v2/$repo/tags/list" | jq -r '.tags[]' |
+        { grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || :; } | sort -V | tail -1
 }
 
-# Writes the environment's credentials as the shared credentials file the charts expect.
-# The session token is included because temporary credentials are rejected without it.
+# Writes the environment's credentials as the shared credentials file the charts expect, with
+# tracing off so that enabling it later cannot copy the secret key into a public CI log. The
+# session token is included because temporary credentials are rejected without it.
 _install_credentials() {
+    { set +x; } 2>/dev/null
     local creds_file
     creds_file=$(mktemp)
     cat <<EOF >"$creds_file"
@@ -53,7 +63,10 @@ EOF
 
 install_released_controller() {
     local chart_version
-    chart_version=$(_chart_version)
+    chart_version=$(_chart_version) || :
+    [[ -z "$chart_version" ]] && {
+        error_msg "Could not resolve a released $AWS_SERVICE-chart version"; return 1
+    } || :
     local region
     region=$(get_aws_region)
 
