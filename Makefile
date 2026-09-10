@@ -17,6 +17,9 @@ kind-test: ## Run functional tests for SERVICE
 kind-helm-test: ## Run the Helm tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-helm-tests.sh
 
+kind-ack-e2e-test: ## Run the ack CLI cluster e2e suite against a released SERVICE controller
+	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-ack-e2e-tests.sh
+
 test-recommended-policy:
 	@AWS_SERVICE=$(AWS_SERVICE) source ./scripts/iam-policy-test-runner.sh && assert_iam_policies
 
