@@ -71,6 +71,8 @@ install_released_controller() {
     region=$(get_aws_region)
 
     info_msg "Installing released $AWS_SERVICE controller chart $chart_version ..."
+    # The test image ships Helm 3.7, which keeps OCI support behind this flag.
+    export HELM_EXPERIMENTAL_OCI=1
     aws ecr-public get-login-password --region us-east-1 |
         helm registry login --username AWS --password-stdin public.ecr.aws 1>/dev/null
 
