@@ -16,10 +16,10 @@
         resources:
           limits:
             cpu: 2
-            memory: "3Gi"
+            memory: "8Gi"
           requests:
             cpu: 1
-            memory: "2Gi"
+            memory: "8Gi"
         command: ["make", "test"]
 
   # CREATES AND DELETES real AWS resources across three services, all free of charge and
@@ -42,10 +42,10 @@
         resources:
           limits:
             cpu: 1
-            memory: "1024Mi"
+            memory: "8Gi"
           requests:
             cpu: 500m
-            memory: "1024Mi"
+            memory: "8Gi"
         env:
         # GetResources is regional, so the tests refuse to guess.
         - name: AWS_REGION
@@ -87,10 +87,10 @@
         resources:
           limits:
             cpu: 4
-            memory: "3072Mi"
+            memory: "8Gi"
           requests:
             cpu: 2
-            memory: "2048Mi"
+            memory: "8Gi"
         env:
         - name: SERVICE
           value: s3
