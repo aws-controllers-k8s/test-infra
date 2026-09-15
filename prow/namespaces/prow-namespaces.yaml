@@ -61,3 +61,22 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
     helm.sh/resource-policy: keep
+---
+# Bound by prow-workflow-runner-pod-identity in the ack-pod-identities chart, which is a
+# HUB association (clusterName: <stack>-cluster, namespace: test-pods). The build cluster
+# has its own workflow-runner SA, created by prow-build-cluster-resources and bound by
+# ack-build-infra - a separate object on a separate cluster. This one is the hub's.
+#
+# It went missing here while the hub association stayed, so the live SA matched nothing in
+# git and prow-namespaces sat permanently OutOfSync with requiresPruning: true. It survived
+# only because prune is never rendered; with prune on, Argo CD would have deleted it and
+# left the association pointing at nothing - Ready, but handing out no credentials, failing
+# only whenever something next used that identity.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-runner
+  namespace: test-pods
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    helm.sh/resource-policy: keep
