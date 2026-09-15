@@ -15,7 +15,12 @@
 project: ""
 
 repoURL: ""
-targetRevision: ""
+
+# The resolved commit SHA every child is pinned to, supplied by the root Application as a
+# helm parameter carrying $ARGOCD_APP_REVISION. Pinning children to a SHA rather than the
+# branch is what makes the root sync on every commit, which is what makes the waves below
+# order anything - see bootstrap/argocd-applications.tf.
+childRevision: ""
 
 # The hub cluster ARN. The capability registers clusters by ARN, not URL; a URL here does
 # not match the AppProject destination and the Application is REJECTED rather than failing
