@@ -176,6 +176,16 @@
   
   - name: update-ack-chart
     decorate: true
+    # Serialized to one at a time via the queue's capacity. update-chart.sh
+    # commits and pushes to the shared aws-controllers-k8s/ack-chart main branch
+    # and pushes a new chart tag, so concurrent runs race: the window between
+    # `git pull --rebase` and `git push` lets one run clobber another's commit,
+    # and two runs computing the same next chart version collide on the tag.
+    # This job is defined once per controller repo but shares a single name, and
+    # every controller release tag triggers it -- a fleet-wide regeneration
+    # releases dozens of controllers at once, so the collision is the normal
+    # case rather than an edge case.
+    job_queue_name: update-ack-chart
     path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394

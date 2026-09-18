@@ -1,6 +1,8 @@
 {{ range $_, $service := .Config.AWSServices }}
   ${TEST_INFRA_ORG}/{{ $service }}-controller:
   - name: {{ $service }}-kind-e2e
+    # Bounded by the controller-e2e queue; see job_queue_capacities.
+    job_queue_name: controller-e2e
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
 {{- end }}
@@ -58,6 +60,8 @@
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
 
   - name: {{ $service }}-release-test
+    # Bounded by the controller-e2e queue; see job_queue_capacities.
+    job_queue_name: controller-e2e
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}
 {{- end }}
