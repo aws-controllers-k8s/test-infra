@@ -176,6 +176,12 @@
   
   - name: update-ack-chart
     decorate: true
+{{- /*
+  Serialized to one run at a time by the queue's capacity of 1; the rationale
+  lives with job_queue_capacities in the Prow config. A Go template comment, so
+  it does not get copied into jobs.yaml once per controller.
+*/}}
+    job_queue_name: update-ack-chart
     path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
     annotations:
       # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394

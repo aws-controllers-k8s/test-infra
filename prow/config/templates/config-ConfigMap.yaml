@@ -61,6 +61,11 @@ data:
         "*": https://{{ .Values.prow.domain }}/view/
       job_queue_capacities:
         olm-bundle-prs: 4
+        # update-ack-chart must not run concurrently: it pushes to the shared
+        # ack-chart main branch and pushes a new chart tag, so parallel runs
+        # clobber each other's commits and collide on the tag. Capacity 1
+        # serializes the dozens of runs a fleet-wide release triggers.
+        update-ack-chart: 1
       # Give EKS Auto Mode enough time to provision nodes for pending pods
       pod_pending_timeout: 15m
       pod_running_timeout: 48h
