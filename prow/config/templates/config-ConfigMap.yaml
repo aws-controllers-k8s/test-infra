@@ -66,20 +66,6 @@ data:
         # clobber each other's commits and collide on the tag. Capacity 1
         # serializes the dozens of runs a fleet-wide release triggers.
         update-ack-chart: 1
-        # Bounds the e2e suites, which request 8 CPU each and dominate demand.
-        # A fleet-wide regeneration opens a PR per controller at once: 74 PRs x
-        # 22.75 CPU of presubmits is ~1684 CPU against the prow-compute
-        # NodePool's 1000 CPU limit, so pods sat Unschedulable
-        # ("Insufficient cpu") until pod_pending_timeout failed them -- 19
-        # spurious failures on the v0.64.0 rollout, none of them real.
-        #
-        # 32 x 8 CPU = 256 CPU. The unqueued light jobs are ~6.75 CPU per PR,
-        # so a 74-PR burst needs ~500 CPU for those; 256 on top leaves headroom
-        # under the 1000 limit. Queued jobs wait as "triggered" instead of
-        # racing into Pending, so a burst gets slower rather than failing.
-        # A single PR needs 2 e2e jobs, far below the cap, so ordinary
-        # development is unaffected; the cap only binds during bursts.
-        controller-e2e: 32
       # Give EKS Auto Mode enough time to provision nodes for pending pods
       pod_pending_timeout: 15m
       pod_running_timeout: 48h
