@@ -90,6 +90,7 @@ aws_services:
 - sns
 - sqs
 - ssm
+- vpclattice
 - wafv2
 
 # List of service that will execute a set of tests for CARM
