@@ -18,6 +18,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from workflows.ack_field_workflow import (
+    FieldAdditionInput,
+    FieldAdditionOutput,
+    create_ack_field_workflow,
+)
 from workflows.ack_resource_workflow import (
     create_ack_resource_workflow,
     ResourceAdditionInput,
@@ -52,14 +57,48 @@ async def run_resource_workflow(service: str, resource: str, aws_sdk_version: Op
     return result
 
 
-def display_workflow_result(result: ResourceAdditionOutput):
+async def run_field_workflow(
+    service: str,
+    resource: str,
+    field: str,
+    aws_sdk_version: Optional[str] = None,
+    model: str = DEFAULT_MODEL_ID,
+) -> FieldAdditionOutput:
+    """Run the ACK field addition workflow."""
+    workflow_input = FieldAdditionInput(
+        service=service,
+        resource=resource,
+        field=field,
+        aws_sdk_version=aws_sdk_version,
+        model_id=model,
+    )
+    workflow = create_ack_field_workflow()
+
+    console.print("[bold green]Starting ACK Field Workflow[/bold green]")
+    console.print(f"Service: {service}")
+    console.print(f"Resource: {resource}")
+    console.print(f"Field: {field}")
+    console.print(f"Model: {model}")
+    if aws_sdk_version:
+        console.print(f"AWS SDK Version: {aws_sdk_version}")
+
+    return await workflow.run(workflow_input)
+
+
+def display_workflow_result(result: ResourceAdditionOutput | FieldAdditionOutput):
     """Display the workflow result in a formatted way."""
+    field_line = f"\nField: {result.field}" if isinstance(result, FieldAdditionOutput) else ""
+    success_status = (
+        "Successfully added field to existing resource"
+        if isinstance(result, FieldAdditionOutput)
+        else "Successfully added resource to controller"
+    )
     if result.success:
         console.print(Panel(
             f"[bold green]Workflow Completed Successfully![/bold green]\n\n"
             f"Service: {result.service}\n"
-            f"Resource: {result.resource}\n"
-            f"Status: Successfully added resource to controller",
+            f"Resource: {result.resource}{field_line}\n"
+            f"Status: {success_status}",
             title="Workflow Success",
             style="green"
         ))
@@ -75,7 +114,7 @@ def display_workflow_result(result: ResourceAdditionOutput):
         console.print(Panel(
             f"[bold red]Workflow Failed[/bold red]\n\n"
             f"Service: {result.service}\n"
-            f"Resource: {result.resource}\n"
+            f"Resource: {result.resource}{field_line}\n"
             f"Error: {result.error_message}",
             title="Workflow Failed", 
             style="red"
@@ -94,6 +133,11 @@ async def list_available_workflows():
         "resource-addition",
         "Add a new resource to an existing ACK service controller",
         "workflows resource-addition --service s3 --resource AccessPoint"
+    )
+    table.add_row(
+        "field-addition",
+        "Add one field to an existing ACK resource",
+        "workflows field-addition --service s3 --resource Bucket --field BucketKeyEnabled"
     )
     
     # Future workflows can be added here
@@ -124,6 +168,21 @@ def main():
     resource_parser.add_argument("--model", default=DEFAULT_MODEL_ID, help="Bedrock model ID")
     resource_parser.add_argument("--aws-sdk-version", default=None, help="AWS SDK Go version (optional, auto-detected if not set)")
     resource_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+
+    field_parser = subparsers.add_parser(
+        "field-addition",
+        help="Add a field to an existing ACK resource",
+    )
+    field_parser.add_argument("--service", required=True, help="AWS service name (e.g. s3, ec2)")
+    field_parser.add_argument("--resource", required=True, help="Existing resource name (e.g. Bucket)")
+    field_parser.add_argument("--field", required=True, help="Field name (e.g. BucketKeyEnabled)")
+    field_parser.add_argument("--model", default=DEFAULT_MODEL_ID, help="Bedrock model ID")
+    field_parser.add_argument(
+        "--aws-sdk-version",
+        default=None,
+        help="AWS SDK Go version (optional, auto-detected if not set)",
+    )
+    field_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()
     
@@ -147,6 +206,17 @@ def main():
         # Exit non-zero on failure so the caller (prow-job.sh, running under
         # `set -e`) stops before committing/pushing and opening a PR for a
         # resource that did not pass review + e2e.
+        if not result.success:
+            sys.exit(1)
+    elif args.command == "field-addition":
+        result = asyncio.run(run_field_workflow(
+            service=args.service,
+            resource=args.resource,
+            field=args.field,
+            aws_sdk_version=args.aws_sdk_version,
+            model=args.model,
+        ))
+        display_workflow_result(result)
         if not result.success:
             sys.exit(1)
     else:

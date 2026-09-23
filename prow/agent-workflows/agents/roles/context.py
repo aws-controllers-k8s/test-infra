@@ -91,6 +91,23 @@ hit it and waste the whole budget. Specifically:
   repo, the code-generator repo, or the resolved SDK module dir).
 - Prefer ripgrep (`rg`) with an explicit path argument over recursive grep."""
 
+_FIELD_PLANNER_FRAME = """You are the ACK Field Planner. Your sole job is to research \
+a single AWS API field and produce a structured implementation plan for adding \
+it to an existing ACK resource. Follow the SOP methodology exactly. Produce the \
+plan document matching the Field Plan Output Schema as your final output.
+
+You must NOT:
+- Write any code
+- Modify any files
+- Create or edit generator.yaml
+- Re-plan the whole resource
+- Make implementation decisions that aren't supported by your research
+
+CONTEXT BUDGET AND SHELL DISCIPLINE: follow the same surgical SDK-reading and \
+scoped-search constraints as the resource planner. Resolve the SDK module with \
+`go list -m` from CONTROLLER_DIR, then inspect only the relevant operation and \
+shape ranges. NEVER scan `/`, `$HOME`, or the whole module cache."""
+
 _IMPLEMENTER_FRAME = """You are the ACK Resource Implementer. You take a structured \
 plan or reviewer feedback and produce working code following ACK conventions. \
 Follow the SOP methodology exactly. Your output is working code that builds \
@@ -139,7 +156,16 @@ def _compose(frame: str, sections: dict[str, str]) -> str:
     return "".join(parts)
 
 
-def planner_system_prompt(ctx: SkillsContext) -> str:
+def planner_system_prompt(ctx: SkillsContext, *, field_addition: bool = False) -> str:
+    if field_addition:
+        return _compose(
+            _FIELD_PLANNER_FRAME,
+            {
+                "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+                "ROLE SOP: FIELD PLANNER": ctx.role("field-planner"),
+                "OUTPUT SCHEMA: FIELD PLAN": ctx.schema("field-plan-output"),
+            },
+        )
     return _compose(
         _PLANNER_FRAME,
         {
@@ -150,18 +176,25 @@ def planner_system_prompt(ctx: SkillsContext) -> str:
     )
 
 
-def implementer_system_prompt(ctx: SkillsContext) -> str:
-    return _compose(
-        _IMPLEMENTER_FRAME,
-        {
-            "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            "ROLE SOP: IMPLEMENTER": ctx.role("implementer"),
-            # The implementer reads plans and consumes review feedback, so give
-            # it both schemas for reference.
-            "INPUT SCHEMA: PLAN": ctx.schema("plan-output"),
-            "INPUT SCHEMA: REVIEW FEEDBACK": ctx.schema("review-output"),
-        },
-    )
+def implementer_system_prompt(ctx: SkillsContext, *, field_addition: bool = False) -> str:
+    sections = {
+        "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+        "ROLE SOP: IMPLEMENTER": ctx.role("implementer"),
+        # The implementer reads plans and consumes review feedback, so give
+        # it both schemas for reference.
+        "INPUT SCHEMA: PLAN": ctx.schema(
+            "field-plan-output" if field_addition else "plan-output"
+        ),
+        "INPUT SCHEMA: REVIEW FEEDBACK": ctx.schema("review-output"),
+    }
+    frame = _IMPLEMENTER_FRAME
+    if field_addition:
+        frame += (
+            "\n\nOPERATING MODE: single-field addition. Apply only the requested "
+            "field to the existing resource and follow the field-addition reference."
+        )
+        sections["REFERENCE: FIELD ADDITION"] = ctx.reference("field-addition")
+    return _compose(frame, sections)
 
 
 _PLAN_REVIEW_MODE = """\
@@ -178,20 +211,27 @@ You are reviewing the Implementer's output against the plan. Execute the full
 implementation-review methodology and checklist from your SOP."""
 
 
-def reviewer_system_prompt(ctx: SkillsContext, *, mode: str = "impl") -> str:
-    """mode in {'plan', 'impl'} — selects plan-review vs implementation-review."""
+def reviewer_system_prompt(
+    ctx: SkillsContext, *, mode: str = "impl", field_addition: bool = False
+) -> str:
+    """Compose plan-review or implementation-review instructions."""
     frame = _REVIEWER_FRAME + (_PLAN_REVIEW_MODE if mode == "plan" else _IMPL_REVIEW_MODE)
-    return _compose(
-        frame,
-        {
-            "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            "ROLE SOP: REVIEWER": ctx.role("reviewer"),
-            "OUTPUT SCHEMA: REVIEW": ctx.schema("review-output"),
-            "REFERENCE: PLAN SCHEMA (what the plan should contain)": ctx.schema(
-                "plan-output"
-            ),
-        },
-    )
+    sections = {
+        "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+        "ROLE SOP: REVIEWER": ctx.role("reviewer"),
+        "OUTPUT SCHEMA: REVIEW": ctx.schema("review-output"),
+        "REFERENCE: PLAN SCHEMA (what the plan should contain)": ctx.schema(
+            "field-plan-output" if field_addition else "plan-output"
+        ),
+    }
+    if field_addition:
+        frame += (
+            "\n\nOPERATING MODE: single-field addition. Verify SDK-version "
+            "sufficiency, Spec/Status classification, mutability, every operation "
+            "rename, reference handling, and that hooks are a last resort."
+        )
+        sections["REFERENCE: FIELD ADDITION"] = ctx.reference("field-addition")
+    return _compose(frame, sections)
 
 
 def for_config(cfg: Config) -> SkillsContext:

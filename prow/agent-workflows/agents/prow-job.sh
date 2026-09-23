@@ -19,6 +19,7 @@ Environment variables:
 # Default values
 SERVICE=""
 RESOURCE=""
+FIELD=""
 # Optional; forwarded to `python -m workflows` only when set so the entrypoint's
 # own defaults (DEFAULT_MODEL_ID, auto-detected SDK version) still apply otherwise.
 MODEL=""
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --resource)
       RESOURCE="$2"
+      shift 2
+      ;;
+    --field)
+      FIELD="$2"
       shift 2
       ;;
     --model)
@@ -65,6 +70,33 @@ if [ -z "$RESOURCE" ]; then
   exit 1
 fi
 
+# These values are supplied by a workflow invocation and are used in repository
+# names, branch names, command arguments, and agent prompts. Keep them to ACK's
+# identifier forms rather than accepting shell metacharacters or path segments.
+if [[ ! "$SERVICE" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "Error: --service must match ^[a-z0-9][a-z0-9-]*$"
+  exit 1
+fi
+if [[ ! "$RESOURCE" =~ ^[A-Za-z][A-Za-z0-9]*$ ]]; then
+  echo "Error: --resource must be an alphanumeric Go-style identifier"
+  exit 1
+fi
+if [ -n "$FIELD" ] && [[ ! "$FIELD" =~ ^[A-Za-z][A-Za-z0-9]*$ ]]; then
+  echo "Error: --field must be an alphanumeric Go-style identifier"
+  exit 1
+fi
+
+WORKFLOW_COMMAND="resource-addition"
+WORKFLOW_LABEL="resource addition"
+LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE"
+COMMIT_MSG="Add $RESOURCE to $SERVICE"
+if [ -n "$FIELD" ]; then
+  WORKFLOW_COMMAND="field-addition"
+  WORKFLOW_LABEL="field addition"
+  LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE-$FIELD"
+  COMMIT_MSG="Add $FIELD field to $RESOURCE"
+fi
+
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
 # Resolve the workflow package dir from this script's own location, NOT $(pwd):
@@ -81,10 +113,9 @@ ORG_REPO=$GITHUB_ORG/$SERVICE-controller
 # scripts/controller-setup.sh) can resolve them as siblings
 REPO_ROOT="$(dirname "${CODEGEN_DIR:-/home/$JOB_USER/go/src/github.com/aws-controllers-k8s/code-generator}")"
 SERVICE_REPO_DIR="$REPO_ROOT/$SERVICE-controller"
-LOCAL_GIT_BRANCH=$SERVICE-add-$RESOURCE
-PR_SOURCE_BRANCH=$LOCAL_GIT_BRANCH
+PR_SOURCE_BRANCH="$LOCAL_GIT_BRANCH"
 
-echo "$SCRIPT_NAME][INFO] Running resource-addition workflow for service: $SERVICE, resource: $RESOURCE"
+echo "$SCRIPT_NAME][INFO] Running $WORKFLOW_LABEL workflow for service: $SERVICE, resource: $RESOURCE${FIELD:+, field: $FIELD}"
 echo "$SCRIPT_NAME][INFO] Target repository: $GITHUB_ORG/$SERVICE-controller"
 
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
@@ -193,11 +224,12 @@ fi
 echo "$SCRIPT_NAME][INFO] Starting workflow"
 # Forward optional args only when provided, so the workflow's own defaults apply
 # otherwise (DEFAULT_MODEL_ID; SDK version auto-detected).
-WORKFLOW_ARGS=(resource-addition --service "$SERVICE" --resource "$RESOURCE")
+WORKFLOW_ARGS=("$WORKFLOW_COMMAND" --service "$SERVICE" --resource "$RESOURCE")
+[ -n "$FIELD" ] && WORKFLOW_ARGS+=(--field "$FIELD")
 [ -n "$MODEL" ] && WORKFLOW_ARGS+=(--model "$MODEL")
 [ -n "$AWS_SDK_VERSION" ] && WORKFLOW_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
 python -m workflows "${WORKFLOW_ARGS[@]}"
-echo "$SCRIPT_NAME][INFO]Resource addition workflow completed successfully"
+echo "$SCRIPT_NAME][INFO] $WORKFLOW_LABEL workflow completed successfully"
 
 cd $SERVICE_REPO_DIR
 
@@ -208,7 +240,6 @@ git checkout -b $LOCAL_GIT_BRANCH >/dev/null
 # Commit changes
 echo "$SCRIPT_NAME][INFO] Committing changes..."
 git add -A  >/dev/null
-COMMIT_MSG="Add $RESOURCE to $SERVICE"
 git commit -am "$COMMIT_MSG" >/dev/null
 
 # Push changes to the forked repository
@@ -230,7 +261,12 @@ echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_S
 if [ -s "$PR_BODY_FILE" ]; then
   PR_BODY_ARGS=(-F "$PR_BODY_FILE")
 else
-  PR_BODY_ARGS=(-b "ACK Agent changes adding $RESOURCE to $SERVICE-controller")
+  if [ -n "$FIELD" ]; then
+    FALLBACK_BODY="ACK Agent changes adding $FIELD to $RESOURCE in $SERVICE-controller"
+  else
+    FALLBACK_BODY="ACK Agent changes adding $RESOURCE to $SERVICE-controller"
+  fi
+  PR_BODY_ARGS=(-b "$FALLBACK_BODY")
 fi
 if ! gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" "${PR_BODY_ARGS[@]}" -B "$PR_TARGET_BRANCH" >/dev/null ; then
   echo ""

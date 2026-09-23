@@ -166,7 +166,7 @@ def build_graph(cfg: Config, agents: AgentSet) -> Graph:
     b.set_max_node_executions(expected + 4)
     b.set_execution_timeout(cfg.extra.get("graph_timeout_s", 3600))
     b.set_node_timeout(cfg.extra.get("node_timeout_s", 1800))
-    b.set_graph_id("ack-add-resource")
+    b.set_graph_id(f"ack-{cfg.workflow_name}")
 
     return b.build()
 

@@ -8,7 +8,7 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Runtime configuration for the role-based add-resource harness.
+"""Runtime configuration for the role-based ACK workflow harness.
 
 All paths and the model id resolve from explicit values, then environment
 variables, then defaults derived from the shared `utils.settings` ACK workspace
@@ -23,7 +23,7 @@ code-generator, mounting ack-dev-skills via Prow refs) before a run.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
 
 from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
@@ -58,13 +58,15 @@ def _first_env(*names: str) -> str | None:
 
 @dataclass
 class Config:
-    """Resolved configuration for one add-resource run."""
+    """Resolved configuration for one add-resource or add-field run."""
 
     service: str
     resource: str
     controller_dir: Path
     codegen_dir: Path
     skills_dir: Path
+    # Set only for add-field. A missing field preserves add-resource behavior.
+    field: str | None = None
     # Default model id for every role. Per-role overrides below fall back to this
     # when unset, so `--model` alone changes all four agents.
     model_id: str = DEFAULT_MODEL_ID
@@ -86,7 +88,7 @@ class Config:
     max_impl_iterations: int = DEFAULT_MAX_IMPL_ITERATIONS
     max_replan_attempts: int = DEFAULT_MAX_REPLAN_ATTEMPTS
     max_e2e_fix_attempts: int = DEFAULT_MAX_E2E_FIX_ATTEMPTS
-    extra: dict = field(default_factory=dict)
+    extra: dict = dataclass_field(default_factory=dict)
 
     @classmethod
     def resolve(
@@ -94,6 +96,7 @@ class Config:
         *,
         service: str,
         resource: str,
+        field: str | None = None,
         controller_dir: str | os.PathLike | None = None,
         codegen_dir: str | os.PathLike | None = None,
         skills_dir: str | os.PathLike | None = None,
@@ -151,6 +154,7 @@ class Config:
         return cls(
             service=service,
             resource=resource,
+            field=field,
             controller_dir=controller,
             codegen_dir=codegen,
             skills_dir=skills,
@@ -185,6 +189,15 @@ class Config:
         if not self.codegen_dir.is_dir():
             problems.append(f"code-generator dir not found: {self.codegen_dir}")
         return problems
+
+    @property
+    def is_field_addition(self) -> bool:
+        """Whether this run adds a field to an existing resource."""
+        return self.field is not None
+
+    @property
+    def workflow_name(self) -> str:
+        return "add-field" if self.is_field_addition else "add-resource"
 
     @property
     def test_infra_dir(self) -> Path:

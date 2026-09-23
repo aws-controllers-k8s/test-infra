@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -36,6 +37,21 @@ from typing import Optional
 from config.defaults import DEFAULT_MODEL_ID
 from roles import orchestrator
 from roles.config import Config
+
+_SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_GO_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
+
+
+def _validate_inputs(input_data: "ResourceAdditionInput") -> list[str]:
+    problems: list[str] = []
+    if not _SERVICE_RE.fullmatch(input_data.service):
+        problems.append("service must match ^[a-z0-9][a-z0-9-]*$")
+    if not _GO_IDENTIFIER_RE.fullmatch(input_data.resource):
+        problems.append("resource must be an alphanumeric Go-style identifier")
+    if input_data.field is not None and not _GO_IDENTIFIER_RE.fullmatch(input_data.field):
+        problems.append("field must be an alphanumeric Go-style identifier")
+    return problems
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +65,9 @@ class ResourceAdditionInput:
     aws_sdk_version: Optional[str] = None
     timeout_minutes: int = 30
     model_id: str = DEFAULT_MODEL_ID
+    # Internal compatibility hook used by ACKFieldWorkflow to reuse this adapter's
+    # validation, graph execution, E2E gating, PR-body writing, and result mapping.
+    field: Optional[str] = None
 
 
 @dataclass
@@ -73,6 +92,15 @@ class ACKResourceWorkflow:
     """Drives the role-based add-resource graph for a single resource."""
 
     async def run(self, input_data: ResourceAdditionInput) -> ResourceAdditionOutput:
+        input_problems = _validate_inputs(input_data)
+        if input_problems:
+            return ResourceAdditionOutput(
+                success=False,
+                service=input_data.service,
+                resource=input_data.resource,
+                error_message="invalid workflow input: " + "; ".join(input_problems),
+            )
+
         cfg = self._build_config(input_data)
 
         problems = cfg.validate_paths()
@@ -84,17 +112,17 @@ class ACKResourceWorkflow:
                 service=input_data.service,
                 resource=input_data.resource,
                 error_message=(
-                    "cannot run add-resource — required checkouts are missing: "
+                    f"cannot run {cfg.workflow_name}: required checkouts are missing: "
                     f"{msg}. ack-dev-skills is delivered as a Prow extra_ref and "
                     "code-generator is cloned at startup; verify both are present."
                 ),
             )
 
         logger.info(
-            "starting role-based add-resource: service=%s resource=%s controller=%s "
+            "starting role-based %s: service=%s resource=%s field=%s controller=%s "
             "codegen=%s skills=%s model=%s e2e=%s",
-            cfg.service, cfg.resource, cfg.controller_dir, cfg.codegen_dir,
-            cfg.skills_dir, cfg.model_id, cfg.run_e2e,
+            cfg.workflow_name, cfg.service, cfg.resource, cfg.field, cfg.controller_dir,
+            cfg.codegen_dir, cfg.skills_dir, cfg.model_id, cfg.run_e2e,
         )
 
         # The orchestrator drives the graph via asyncio.run and then runs the
@@ -166,6 +194,7 @@ class ACKResourceWorkflow:
         return Config.resolve(
             service=input_data.service,
             resource=input_data.resource,
+            field=input_data.field,
             model_id=input_data.model_id,
             aws_sdk_go_version=input_data.aws_sdk_version,
             # Phase 3 (E2E) runs only when RUN_E2E=true. The agent-plugin sets it

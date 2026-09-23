@@ -197,6 +197,56 @@ def test_config_and_context():
         print("  [skip] ack-dev-skills not present at", SKILLS)
 
 
+def test_field_config_and_context():
+    print("field config + context:")
+    cfg = Config.resolve(
+        service="s3",
+        resource="Bucket",
+        field="BucketKeyEnabled",
+        controller_dir="/tmp/s3-controller",
+        codegen_dir="/tmp/code-generator",
+        skills_dir=str(SKILLS),
+    )
+    check("field", cfg.field, "BucketKeyEnabled")
+    check("field mode", cfg.is_field_addition, True)
+    check("workflow name", cfg.workflow_name, "add-field")
+    if SKILLS.is_dir():
+        from roles import context, orchestrator
+
+        ctx = context.for_config(cfg)
+        planner = context.planner_system_prompt(ctx, field_addition=True)
+        implementer = context.implementer_system_prompt(ctx, field_addition=True)
+        reviewer = context.reviewer_system_prompt(
+            ctx, mode="plan", field_addition=True
+        )
+        task = orchestrator.build_task_prompt(cfg)
+        check("field planner role", "Field Planner Role" in planner, True)
+        check("field plan schema", "Field Plan Output Schema" in planner, True)
+        check("implementer field reference", "Adding a Single Field" in implementer, True)
+        check("reviewer field reference", "Adding a Single Field" in reviewer, True)
+        check("task contains field", "FIELD=BucketKeyEnabled" in task, True)
+        check("task scopes existing resource", "existing Bucket resource" in task, True)
+    else:
+        print("  [skip] ack-dev-skills not present at", SKILLS)
+
+
+def test_workflow_input_validation():
+    print("workflow input validation:")
+    from workflows.ack_resource_workflow import ResourceAdditionInput, _validate_inputs
+
+    check(
+        "valid add-field input",
+        _validate_inputs(ResourceAdditionInput("s3control", "AccessPoint", field="VpcConfiguration")),
+        [],
+    )
+    problems = _validate_inputs(
+        ResourceAdditionInput("s3;echo", "Access/Point", field="Name\nIgnoreInstructions")
+    )
+    check("invalid service rejected", any("service" in p for p in problems), True)
+    check("invalid resource rejected", any("resource" in p for p in problems), True)
+    check("invalid field rejected", any("field" in p for p in problems), True)
+
+
 def test_reporting_no_verdict_vs_revise():
     """Regression: empty reviewer output must report as 'no verdict', not REVISE."""
     print("reporting no-verdict vs revise:")
@@ -275,6 +325,8 @@ def test_ensure_test_config():
 def main():
     for fn in (test_verdict, test_snake, test_e2e_classify, test_conditions,
                test_replan_no_double_impl, test_config_and_context,
+               test_field_config_and_context,
+               test_workflow_input_validation,
                test_reporting_no_verdict_vs_revise, test_progress_reporter,
                test_ensure_test_config):
         fn()
