@@ -8,8 +8,8 @@
         optional_args: ["model", "aws-sdk-version"]
         environment:
             GITHUB_ORG: ${TEST_INFRA_ORG}
-            GITHUB_EMAIL_PREFIX: "327606448"
-            GITHUB_ACTOR: ack-agent
+            GITHUB_EMAIL_PREFIX: "219906516"
+            GITHUB_ACTOR: ack-test-agent
         environmentFromSecrets:
             GITHUB_TOKEN:
                 name: agent-github-pat-token
