@@ -16,10 +16,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from config.defaults import DEFAULT_MODEL_ID
-from workflows.ack_resource_workflow import (
-    ACKResourceWorkflow,
-    ResourceAdditionInput,
-)
+from roles.workflow import ADD_FIELD
+from workflows.ack_workflow import ACKWorkflowRunner, WorkflowRequest
 
 
 @dataclass
@@ -49,19 +47,19 @@ class FieldAdditionOutput:
 
 
 class ACKFieldWorkflow:
-    """Runs field-specific prompts through the shared ACK role workflow."""
+    """Public add-field adapter backed by the shared workflow runner."""
 
-    def __init__(self) -> None:
-        self._workflow = ACKResourceWorkflow()
+    def __init__(self, runner: ACKWorkflowRunner | None = None) -> None:
+        self._runner = runner or ACKWorkflowRunner()
 
     async def run(self, input_data: FieldAdditionInput) -> FieldAdditionOutput:
-        result = await self._workflow.run(
-            ResourceAdditionInput(
+        result = await self._runner.run(
+            WorkflowRequest(
+                definition=ADD_FIELD,
                 service=input_data.service,
                 resource=input_data.resource,
                 field=input_data.field,
                 aws_sdk_version=input_data.aws_sdk_version,
-                timeout_minutes=input_data.timeout_minutes,
                 model_id=input_data.model_id,
             )
         )

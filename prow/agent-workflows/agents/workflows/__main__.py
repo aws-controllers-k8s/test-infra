@@ -137,7 +137,8 @@ async def list_available_workflows():
     table.add_row(
         "field-addition",
         "Add one field to an existing ACK resource",
-        "workflows field-addition --service s3 --resource Bucket --field BucketKeyEnabled"
+        "workflows field-addition --service bedrockagentcorecontrol "
+        "--resource AgentRuntime --field targetConfiguration.mcp.connector"
     )
     
     # Future workflows can be added here
@@ -175,7 +176,14 @@ def main():
     )
     field_parser.add_argument("--service", required=True, help="AWS service name (e.g. s3, ec2)")
     field_parser.add_argument("--resource", required=True, help="Existing resource name (e.g. Bucket)")
-    field_parser.add_argument("--field", required=True, help="Field name (e.g. BucketKeyEnabled)")
+    field_parser.add_argument(
+        "--field",
+        required=True,
+        help=(
+            "Field name or dotted nested path "
+            "(e.g. targetConfiguration.mcp.connector)"
+        ),
+    )
     field_parser.add_argument("--model", default=DEFAULT_MODEL_ID, help="Bedrock model ID")
     field_parser.add_argument(
         "--aws-sdk-version",

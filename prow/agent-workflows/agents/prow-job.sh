@@ -59,32 +59,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Validate that service and resource are set
-if [ -z "$SERVICE" ]; then
-  echo "Error: --service argument is required"
-  exit 1
-fi
-
-if [ -z "$RESOURCE" ]; then
-  echo "Error: --resource argument is required"
-  exit 1
-fi
-
-# These values are supplied by a workflow invocation and are used in repository
-# names, branch names, command arguments, and agent prompts. Keep them to ACK's
-# identifier forms rather than accepting shell metacharacters or path segments.
-if [[ ! "$SERVICE" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-  echo "Error: --service must match ^[a-z0-9][a-z0-9-]*$"
-  exit 1
-fi
-if [[ ! "$RESOURCE" =~ ^[A-Za-z][A-Za-z0-9]*$ ]]; then
-  echo "Error: --resource must be an alphanumeric Go-style identifier"
-  exit 1
-fi
-if [ -n "$FIELD" ] && [[ ! "$FIELD" =~ ^[A-Za-z][A-Za-z0-9]*$ ]]; then
-  echo "Error: --field must be an alphanumeric Go-style identifier"
-  exit 1
-fi
+# Resolve the workflow package dir from this script's own location. Validate
+# invocation values in Python before using them in repository paths or Git
+# commands. This keeps one validation implementation for the shell wrapper and
+# workflow adapters.
+WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
+[ -n "$FIELD" ] && VALIDATION_ARGS+=(--field "$FIELD")
+python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"
 
 WORKFLOW_COMMAND="resource-addition"
 WORKFLOW_LABEL="resource addition"
@@ -99,12 +81,8 @@ fi
 
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
-# Resolve the workflow package dir from this script's own location, NOT $(pwd):
-# once the job declares extra_refs, Prow's decoration runs the entrypoint from a
-# clonerefs checkout dir (an extra_ref) rather than the image's /app, so `pwd`
-# would point at code-generator and `python -m workflows` would fail / import the
-# wrong packages.
-WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The workflow directory was resolved before input validation so decorated Prow
+# jobs do not depend on their initial working directory.
 JOB_USER="prow"
 SERVICE_REPO=$SERVICE-controller
 ORG_REPO=$GITHUB_ORG/$SERVICE-controller
@@ -127,7 +105,7 @@ fi
 git config --global user.name "${GITHUB_ACTOR}" >/dev/null
 git config --global user.email "${USER_EMAIL}" >/dev/null
 
-mkdir -p $REPO_ROOT && cd $REPO_ROOT
+mkdir -p "$REPO_ROOT" && cd "$REPO_ROOT"
 
 # Create a fork of the repository
 echo "$SCRIPT_NAME][INFO] forking and cloning $GITHUB_ORG/$SERVICE_REPO... "
@@ -144,7 +122,7 @@ gh repo sync "$GITHUB_ACTOR/$SERVICE_REPO" --branch main --force >/dev/null
 git fetch origin main >/dev/null
 git reset --hard origin/main >/dev/null
 
-cd $WORKFLOW_DIR
+cd "$WORKFLOW_DIR"
 
 # Point the workflow at the forked controller checkout this script later commits
 # and pushes, so edits land in exactly that tree (otherwise CONTROLLER_DIR would
@@ -231,11 +209,11 @@ WORKFLOW_ARGS=("$WORKFLOW_COMMAND" --service "$SERVICE" --resource "$RESOURCE")
 python -m workflows "${WORKFLOW_ARGS[@]}"
 echo "$SCRIPT_NAME][INFO] $WORKFLOW_LABEL workflow completed successfully"
 
-cd $SERVICE_REPO_DIR
+cd "$SERVICE_REPO_DIR"
 
 # Create a new branch
 echo "$SCRIPT_NAME][INFO] Creating a new branch..."
-git checkout -b $LOCAL_GIT_BRANCH >/dev/null
+git checkout -b "$LOCAL_GIT_BRANCH" >/dev/null
 
 # Commit changes
 echo "$SCRIPT_NAME][INFO] Committing changes..."

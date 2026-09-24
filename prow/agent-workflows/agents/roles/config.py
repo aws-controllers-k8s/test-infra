@@ -28,6 +28,8 @@ from pathlib import Path
 
 from config.defaults import DEFAULT_MODEL_ID, DEFAULT_REGION, DEFAULT_TEMPERATURE
 
+from .workflow import ADD_RESOURCE, WorkflowDefinition
+
 # ack-dev-skills is delivered to the workflow pod as a Prow extra_ref, cloned by
 # the clonerefs init container. The generator sets ACK_DEV_SKILLS_DIR to that
 # path; the sibling fallback is for local development next to the controller.
@@ -65,7 +67,8 @@ class Config:
     controller_dir: Path
     codegen_dir: Path
     skills_dir: Path
-    # Set only for add-field. A missing field preserves add-resource behavior.
+    workflow: WorkflowDefinition = ADD_RESOURCE
+    # Populated only when the selected workflow requires a field target.
     field: str | None = None
     # Default model id for every role. Per-role overrides below fall back to this
     # when unset, so `--model` alone changes all four agents.
@@ -96,6 +99,7 @@ class Config:
         *,
         service: str,
         resource: str,
+        workflow: WorkflowDefinition = ADD_RESOURCE,
         field: str | None = None,
         controller_dir: str | os.PathLike | None = None,
         codegen_dir: str | os.PathLike | None = None,
@@ -154,6 +158,7 @@ class Config:
         return cls(
             service=service,
             resource=resource,
+            workflow=workflow,
             field=field,
             controller_dir=controller,
             codegen_dir=codegen,
@@ -191,13 +196,8 @@ class Config:
         return problems
 
     @property
-    def is_field_addition(self) -> bool:
-        """Whether this run adds a field to an existing resource."""
-        return self.field is not None
-
-    @property
     def workflow_name(self) -> str:
-        return "add-field" if self.is_field_addition else "add-resource"
+        return self.workflow.name
 
     @property
     def test_infra_dir(self) -> Path:

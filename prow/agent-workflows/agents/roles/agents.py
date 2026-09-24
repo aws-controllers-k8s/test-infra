@@ -104,29 +104,17 @@ def _role_agent(cfg: Config, *, name: str, model_id: str, system_prompt: str, to
     )
 
 
-def _pr_writer_prompt(cfg: Config) -> str:
-    target = (
-        "a single field on an existing resource"
-        if cfg.is_field_addition
-        else "a new resource"
-    )
-    decisions = (
-        "Spec versus Status placement, mutability, SDK version bump, renames, "
-        "references, late initialization, and custom hooks"
-        if cfg.is_field_addition
-        else "CRUD operation mapping, immutable and ignored/deprecated fields, "
-        "tags handling, custom hooks, and terminal error codes"
-    )
+def _pr_writer_prompt() -> str:
     return (
         "You write concise, reader-facing GitHub pull request descriptions for "
-        f"ACK service-controller changes that add {target}. You are given the "
-        "implementation plan, the implementer's change summary, the reviewer's "
-        "verdict, and the e2e result. Output GitHub-flavored markdown only, with "
-        "no preamble. Structure it as: a 2-3 sentence summary of what was added; "
-        "a '## Key design decisions' bulleted list drawn from the plan ("
-        f"{decisions}) and include only decisions that actually apply; then a "
-        "short '## Testing' line with the e2e result. Be factual and terse; never "
-        "invent details not present in the inputs."
+        "ACK service-controller changes. You are given the implementation plan, "
+        "the implementer's change summary, the reviewer's verdict, and the e2e "
+        "result. Output GitHub-flavored markdown only, with no preamble. "
+        "Structure it as: a 2-3 sentence summary of what was added; a "
+        "'## Key design decisions' bulleted list containing only decisions from "
+        "the plan that actually apply; then a short '## Testing' line with the "
+        "e2e result. Be factual and terse; never invent details not present in "
+        "the inputs."
     )
 
 
@@ -141,11 +129,9 @@ def build_agents(cfg: Config) -> AgentSet:
 
     planner = _role_agent(
         cfg,
-        name="ack-field-planner" if cfg.is_field_addition else "ack-planner",
+        name=cfg.workflow.planner_name,
         model_id=cfg.planner_model,
-        system_prompt=context.planner_system_prompt(
-            ctx, field_addition=cfg.is_field_addition
-        ),
+        system_prompt=context.planner_system_prompt(ctx, cfg.workflow),
         # Planner researches but does not write: read, search, shell, web.
         tools=[file_read, shell, http_request],
     )
@@ -154,9 +140,7 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-implementer",
         model_id=cfg.implementer_model,
-        system_prompt=context.implementer_system_prompt(
-            ctx, field_addition=cfg.is_field_addition
-        ),
+        system_prompt=context.implementer_system_prompt(ctx, cfg.workflow),
         # Implementer is the only writer. file_editor reads + writes + edits.
         tools=[file_editor, shell],
     )
@@ -166,7 +150,9 @@ def build_agents(cfg: Config) -> AgentSet:
         name="ack-plan-reviewer",
         model_id=cfg.reviewer_model,
         system_prompt=context.reviewer_system_prompt(
-            ctx, mode="plan", field_addition=cfg.is_field_addition
+            ctx,
+            cfg.workflow,
+            mode="plan",
         ),
         # Reviewer reads and runs builds/tests but never writes.
         tools=[file_read, shell],
@@ -177,7 +163,9 @@ def build_agents(cfg: Config) -> AgentSet:
         name="ack-impl-reviewer",
         model_id=cfg.reviewer_model,
         system_prompt=context.reviewer_system_prompt(
-            ctx, mode="impl", field_addition=cfg.is_field_addition
+            ctx,
+            cfg.workflow,
+            mode="impl",
         ),
         tools=[file_read, shell],
     )
@@ -187,7 +175,7 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-pr-writer",
         model_id=cfg.reviewer_model,
-        system_prompt=_pr_writer_prompt(cfg),
+        system_prompt=_pr_writer_prompt(),
         tools=[],
     )
 

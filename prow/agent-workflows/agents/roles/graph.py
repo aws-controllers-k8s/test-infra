@@ -8,7 +8,7 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Strands Graph topology + deterministic loop control for add-resource.
+"""Strands Graph topology and deterministic loop control for ACK workflows.
 
 Phases 1, 1.5, and 2 of workflows/add-resource.md run as a Strands Graph:
 

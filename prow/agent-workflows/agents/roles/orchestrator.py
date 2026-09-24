@@ -8,7 +8,7 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Top-level orchestration of the role-based add-resource workflow.
+"""Top-level orchestration of the role-based ACK workflow harness.
 
 Wraps the Strands graph (Phases 1, 1.5, 2) and the E2E phase (Phase 3), then
 produces the Phase 4 completion report. The graph holds the plan/review/impl
@@ -57,35 +57,30 @@ def configure_headless_env(cfg: Config) -> None:
 def build_task_prompt(cfg: Config) -> str:
     """Build the initial, explicitly scoped task handed to every graph node."""
     sdk = cfg.aws_sdk_go_version or "(detect from controller go.mod)"
-    if cfg.is_field_addition:
-        task = (
-            f"Add the {cfg.field} field to the existing {cfg.resource} resource "
-            f"in the {cfg.service} ACK service controller. Do not re-plan or "
-            "restructure the whole resource.\n\n"
-            f"SERVICE={cfg.service}\n"
-            f"RESOURCE={cfg.resource}\n"
-            f"FIELD={cfg.field}\n"
-            f"CONTROLLER_DIR={cfg.controller_dir}\n"
-            f"CODEGEN_DIR={cfg.codegen_dir}\n"
-            f"AWS_SDK_GO_VERSION={sdk}\n\n"
-            "This is a single-field addition. Follow the field-addition reference. "
-            "Extend the resource's existing e2e test instead of creating a new test file. "
-        )
-    else:
-        task = (
-            f"Add the {cfg.resource} resource to the {cfg.service} ACK service controller.\n\n"
-            f"SERVICE={cfg.service}\n"
-            f"RESOURCE={cfg.resource}\n"
-            f"CONTROLLER_DIR={cfg.controller_dir}\n"
-            f"CODEGEN_DIR={cfg.codegen_dir}\n"
-            f"AWS_SDK_GO_VERSION={sdk}\n\n"
-        )
-    return task + (
+    task_parts = [
+        cfg.workflow.task_intro(
+            service=cfg.service,
+            resource=cfg.resource,
+            field=cfg.field,
+        ),
+        cfg.workflow.context_lines(
+            service=cfg.service,
+            resource=cfg.resource,
+            field=cfg.field,
+            controller_dir=str(cfg.controller_dir),
+            codegen_dir=str(cfg.codegen_dir),
+            aws_sdk_go_version=sdk,
+        ),
+    ]
+    if cfg.workflow.role_instruction:
+        task_parts.append(cfg.workflow.role_instruction.strip())
+    task_parts.append(
         "Execute your role for this target. Planner: produce the plan document. "
         "Reviewer: produce a review document whose first line is "
         "'## Decision: APPROVE' or '## Decision: REVISE'. Implementer: apply the "
         "plan (or address the review feedback), build, and summarize your changes."
     )
+    return "\n\n".join(task_parts)
 
 
 @dataclass
@@ -153,7 +148,7 @@ def run(
     verbose: bool = False,
     progress: bool = True,
 ) -> RunResult:
-    """Execute the full add-resource workflow for cfg.
+    """Execute the complete workflow selected by cfg.workflow.
 
     progress=True renders node-level progress (which agent is acting + verdicts);
     verbose=True additionally streams each agent's incremental text.
@@ -235,11 +230,10 @@ def generate_pr_body(cfg: Config, rr: "RunResult", agents: AgentSet) -> str:
     if agents.pr_writer is None:
         return _fallback_pr_body(cfg, rr, e2e_line) + footer
 
-    target = (
-        f"Add the {cfg.field} field to the existing {cfg.resource} resource in "
-        f"the {cfg.service} ACK controller."
-        if cfg.is_field_addition
-        else f"Add the {cfg.resource} resource to the {cfg.service} ACK controller."
+    target = cfg.workflow.task_intro(
+        service=cfg.service,
+        resource=cfg.resource,
+        field=cfg.field,
     )
     prompt = (
         f"{target}\n\n"
@@ -259,11 +253,10 @@ def generate_pr_body(cfg: Config, rr: "RunResult", agents: AgentSet) -> str:
 
 
 def _fallback_pr_body(cfg: Config, rr: "RunResult", e2e_line: str) -> str:
-    summary = (
-        f"Adds the `{cfg.field}` field to the existing `{cfg.resource}` resource "
-        f"in the {cfg.service} ACK controller."
-        if cfg.is_field_addition
-        else f"Adds the `{cfg.resource}` resource to the {cfg.service} ACK controller."
+    summary = cfg.workflow.task_intro(
+        service=cfg.service,
+        resource=cfg.resource,
+        field=cfg.field,
     )
     return (
         f"{summary}\n\n"
@@ -276,10 +269,12 @@ def completion_report(rr: RunResult) -> str:
     """Phase 4: human-readable completion report."""
     cfg = rr.cfg
     lines: list[str] = []
-    title = "Add-Field" if cfg.is_field_addition else "Add-Resource"
-    target = f"{cfg.service}/{cfg.resource}"
-    if cfg.is_field_addition:
-        target += f"/{cfg.field}"
+    title = cfg.workflow.report_title
+    target = cfg.workflow.report_target(
+        service=cfg.service,
+        resource=cfg.resource,
+        field=cfg.field,
+    )
     lines.append(f"# {title} Report: {target}\n")
 
     lines.append("## Result")

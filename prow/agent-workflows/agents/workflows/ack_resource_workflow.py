@@ -26,34 +26,15 @@ This workflow only mutates the local controller tree via the role agents.
 
 from __future__ import annotations
 
-import asyncio
-import logging
-import os
-import re
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional
 
 from config.defaults import DEFAULT_MODEL_ID
-from roles import orchestrator
-from roles.config import Config
-
-_SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-_GO_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
-
-
-def _validate_inputs(input_data: "ResourceAdditionInput") -> list[str]:
-    problems: list[str] = []
-    if not _SERVICE_RE.fullmatch(input_data.service):
-        problems.append("service must match ^[a-z0-9][a-z0-9-]*$")
-    if not _GO_IDENTIFIER_RE.fullmatch(input_data.resource):
-        problems.append("resource must be an alphanumeric Go-style identifier")
-    if input_data.field is not None and not _GO_IDENTIFIER_RE.fullmatch(input_data.field):
-        problems.append("field must be an alphanumeric Go-style identifier")
-    return problems
-
-
-logger = logging.getLogger(__name__)
+from roles.workflow import ADD_RESOURCE
+from workflows.ack_workflow import (
+    ACKWorkflowRunner,
+    WorkflowRequest,
+)
 
 
 @dataclass
@@ -65,9 +46,6 @@ class ResourceAdditionInput:
     aws_sdk_version: Optional[str] = None
     timeout_minutes: int = 30
     model_id: str = DEFAULT_MODEL_ID
-    # Internal compatibility hook used by ACKFieldWorkflow to reuse this adapter's
-    # validation, graph execution, E2E gating, PR-body writing, and result mapping.
-    field: Optional[str] = None
 
 
 @dataclass
@@ -89,118 +67,29 @@ class ResourceAdditionOutput:
 
 
 class ACKResourceWorkflow:
-    """Drives the role-based add-resource graph for a single resource."""
+    """Public add-resource adapter backed by the shared workflow runner."""
+
+    def __init__(self, runner: ACKWorkflowRunner | None = None) -> None:
+        self._runner = runner or ACKWorkflowRunner()
 
     async def run(self, input_data: ResourceAdditionInput) -> ResourceAdditionOutput:
-        input_problems = _validate_inputs(input_data)
-        if input_problems:
-            return ResourceAdditionOutput(
-                success=False,
+        result = await self._runner.run(
+            WorkflowRequest(
+                definition=ADD_RESOURCE,
                 service=input_data.service,
                 resource=input_data.resource,
-                error_message="invalid workflow input: " + "; ".join(input_problems),
+                aws_sdk_version=input_data.aws_sdk_version,
+                model_id=input_data.model_id,
             )
-
-        cfg = self._build_config(input_data)
-
-        problems = cfg.validate_paths()
-        if problems:
-            msg = "; ".join(problems)
-            logger.error("configuration problems: %s", msg)
-            return ResourceAdditionOutput(
-                success=False,
-                service=input_data.service,
-                resource=input_data.resource,
-                error_message=(
-                    f"cannot run {cfg.workflow_name}: required checkouts are missing: "
-                    f"{msg}. ack-dev-skills is delivered as a Prow extra_ref and "
-                    "code-generator is cloned at startup; verify both are present."
-                ),
-            )
-
-        logger.info(
-            "starting role-based %s: service=%s resource=%s field=%s controller=%s "
-            "codegen=%s skills=%s model=%s e2e=%s",
-            cfg.workflow_name, cfg.service, cfg.resource, cfg.field, cfg.controller_dir,
-            cfg.codegen_dir, cfg.skills_dir, cfg.model_id, cfg.run_e2e,
         )
-
-        # The orchestrator drives the graph via asyncio.run and then runs the
-        # (blocking) E2E subprocess. Run it in a worker thread so its event loop
-        # and subprocess calls never nest inside this already-running loop.
-        rr = await asyncio.to_thread(
-            orchestrator.run, cfg, verbose=True, progress=True
-        )
-
-        report = orchestrator.completion_report(rr)
-        print("\n" + "=" * 72)
-        print(report)
-
-        # Hand the composed PR description to prow-job.sh (it reads $PR_BODY_FILE
-        # for `gh pr create -F`). Only set on a successful run, which is the only
-        # case a PR is opened; a write failure is non-fatal (falls back to the
-        # static body in the shell wrapper).
-        if rr.pr_body:
-            pr_body_file = os.environ.get("PR_BODY_FILE")
-            if pr_body_file:
-                try:
-                    Path(pr_body_file).write_text(rr.pr_body)
-                except OSError as exc:
-                    logger.warning("could not write PR body to %s: %s", pr_body_file, exc)
-
-        # When E2E is enabled it is part of "done": the resource is only complete
-        # if its e2e test actually PASSED. Any other status (FAIL, SKIPPED,
-        # NOT_RUN, ERROR) fails the run so the harness does not open a PR for an
-        # unvalidated resource. When E2E is off, success rests on the Reviewer.
-        e2e_passed = rr.e2e is not None and rr.e2e.status == "PASS"
-        success = rr.approved and (not cfg.run_e2e or e2e_passed)
-
-        problems: list[str] = []
-        if not rr.approved:
-            problems.append(
-                "Reviewer did not APPROVE the implementation "
-                f"(decision: {rr.impl_decision.value if rr.impl_decision else 'none'})."
-            )
-        if cfg.run_e2e and not e2e_passed:
-            status = rr.e2e.status if rr.e2e else "not run"
-            problems.append(
-                f"E2E validation did not pass (status: {status}); a resource is "
-                "not done until its e2e test passes."
-            )
-        error_message = ""
-        if problems:
-            error_message = " ".join(problems) + " See the report for details."
-
         return ResourceAdditionOutput(
-            success=success,
-            service=cfg.service,
-            resource=cfg.resource,
-            build_logs=rr.impl_summary_text,
-            config_changes=rr.plan_text,
-            error_message=error_message,
-            report=report,
-        )
-
-    def _build_config(self, input_data: ResourceAdditionInput) -> Config:
-        """Resolve paths for the run. All checkouts are provided by the harness:
-
-        - the controller fork by prow-job.sh (resolved from $CONTROLLER_DIR);
-        - code-generator and ack-dev-skills as Prow extra_refs cloned by the
-          clonerefs init container (resolved from $CODEGEN_DIR / $ACK_DEV_SKILLS_DIR,
-          which the agent-plugin sets to the clonerefs paths).
-
-        Nothing is cloned in-process; validate_paths() surfaces any missing tree.
-        """
-        return Config.resolve(
-            service=input_data.service,
-            resource=input_data.resource,
-            field=input_data.field,
-            model_id=input_data.model_id,
-            aws_sdk_go_version=input_data.aws_sdk_version,
-            # Phase 3 (E2E) runs only when RUN_E2E=true. The agent-plugin sets it
-            # (alongside the privileged/DinD pod) for e2e-enabled workflows; off by
-            # default so non-e2e runs and environments without a kind toolchain skip it.
-            run_e2e=os.environ.get("RUN_E2E", "").lower() == "true",
+            success=result.success,
+            service=result.service,
+            resource=result.resource,
+            build_logs=result.build_logs,
+            error_message=result.error_message,
+            config_changes=result.config_changes,
+            report=result.report,
         )
 
 
