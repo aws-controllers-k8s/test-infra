@@ -25,11 +25,12 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+import shutil as _sh
 import sys
 import tempfile
-import shutil as _sh
 from dataclasses import dataclass, field
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -94,6 +95,25 @@ def check(name, got, want):
     status = "ok" if got == want else "FAIL"
     print(f"  [{status}] {name}: got={got!r} want={want!r}")
     assert got == want, f"{name}: {got!r} != {want!r}"
+
+
+def test_bedrock_sampling_config():
+    """Sampling parameters are omitted unless a caller explicitly opts in."""
+    print("bedrock sampling config:")
+    from utils.bedrock import create_enhanced_bedrock_model
+
+    with patch("utils.bedrock.BedrockModel") as bedrock_model:
+        create_enhanced_bedrock_model(model_id="us.anthropic.claude-opus-5")
+        default_config = bedrock_model.call_args.kwargs
+    check("temperature omitted by default", "temperature" in default_config, False)
+
+    with patch("utils.bedrock.BedrockModel") as bedrock_model:
+        create_enhanced_bedrock_model(
+            model_id="us.anthropic.claude-opus-4-6-v1",
+            temperature=0.2,
+        )
+        explicit_config = bedrock_model.call_args.kwargs
+    check("explicit temperature preserved", explicit_config["temperature"], 0.2)
 
 
 def test_verdict():
@@ -180,13 +200,25 @@ def test_replan_no_double_impl():
 
 def test_config_and_context():
     print("config + context:")
-    cfg = Config.resolve(
-        service="backup", resource="BackupVault",
-        controller_dir="/tmp/backup-controller",
-        codegen_dir="/tmp/code-generator",
-        skills_dir=str(SKILLS),
-    )
+    with patch.dict(os.environ, {"AGENT_TEMPERATURE": ""}):
+        cfg = Config.resolve(
+            service="backup",
+            resource="BackupVault",
+            controller_dir="/tmp/backup-controller",
+            codegen_dir="/tmp/code-generator",
+            skills_dir=str(SKILLS),
+        )
     check("service", cfg.service, "backup")
+    check("default temperature omitted", cfg.temperature, None)
+    with patch.dict(os.environ, {"AGENT_TEMPERATURE": "0.3"}):
+        temperature_cfg = Config.resolve(
+            service="backup",
+            resource="BackupVault",
+            controller_dir="/tmp/backup-controller",
+            codegen_dir="/tmp/code-generator",
+            skills_dir=str(SKILLS),
+        )
+    check("temperature environment opt-in", temperature_cfg.temperature, 0.3)
     check("test_infra name", cfg.test_infra_dir.name, "test-infra")
     check("test_infra sibling of controller", cfg.test_infra_dir.parent, cfg.controller_dir.parent)
     if SKILLS.is_dir():
@@ -420,7 +452,8 @@ def test_ensure_test_config():
 
 
 def main():
-    for fn in (test_verdict, test_snake, test_e2e_classify, test_conditions,
+    for fn in (test_bedrock_sampling_config,
+               test_verdict, test_snake, test_e2e_classify, test_conditions,
                test_replan_no_double_impl, test_config_and_context,
                test_field_config_and_context,
                test_workflow_input_validation,

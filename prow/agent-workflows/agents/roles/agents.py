@@ -91,7 +91,7 @@ def _role_agent(cfg: Config, *, name: str, model_id: str, system_prompt: str, to
     model = create_enhanced_bedrock_model(
         model_id=model_id,
         region_name=cfg.region,
-        temperature=cfg.temperature if cfg.temperature is not None else 0.2,
+        temperature=cfg.temperature,
         max_tokens=cfg.max_tokens,
     )
     return Agent(

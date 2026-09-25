@@ -76,8 +76,9 @@ class Config:
     planner_model_id: str | None = None
     implementer_model_id: str | None = None
     reviewer_model_id: str | None = None
-    # Sampling temperature. The shared Bedrock factory sends this to the model;
-    # set to None only for a model that rejects the parameter.
+    # Sampling temperature. Omitted by default for compatibility with models
+    # that reject non-default sampling parameters; AGENT_TEMPERATURE remains an
+    # explicit opt-in for models that support it.
     temperature: float | None = DEFAULT_TEMPERATURE
     max_tokens: int = DEFAULT_MAX_TOKENS
     region: str = DEFAULT_REGION
