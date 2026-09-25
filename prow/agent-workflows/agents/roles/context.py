@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
+from .workflow import WorkflowDefinition
 
 
 def _read(path: Path) -> str:
@@ -48,8 +49,8 @@ class SkillsContext:
         """name in {plan-output, review-output}."""
         return _read(self.root / "roles" / "schemas" / f"{name}.md")
 
-    def workflow(self) -> str:
-        return _read(self.root / "workflows" / "add-resource.md")
+    def workflow(self, name: str) -> str:
+        return _read(self.root / "workflows" / f"{name}.md")
 
     def reference(self, name: str) -> str:
         """Shared reference doc, e.g. 'generator-yaml-reference'."""
@@ -90,6 +91,23 @@ hit it and waste the whole budget. Specifically:
   are inspecting. Scope every grep/find to a known directory (the controller
   repo, the code-generator repo, or the resolved SDK module dir).
 - Prefer ripgrep (`rg`) with an explicit path argument over recursive grep."""
+
+_FIELD_PLANNER_FRAME = """You are the ACK Field Planner. Your sole job is to research \
+a single AWS API field and produce a structured implementation plan for adding \
+it to an existing ACK resource. Follow the SOP methodology exactly. Produce the \
+plan document matching the Field Plan Output Schema as your final output.
+
+You must NOT:
+- Write any code
+- Modify any files
+- Create or edit generator.yaml
+- Re-plan the whole resource
+- Make implementation decisions that aren't supported by your research
+
+CONTEXT BUDGET AND SHELL DISCIPLINE: follow the same surgical SDK-reading and \
+scoped-search constraints as the resource planner. Resolve the SDK module with \
+`go list -m` from CONTROLLER_DIR, then inspect only the relevant operation and \
+shape ranges. NEVER scan `/`, `$HOME`, or the whole module cache."""
 
 _IMPLEMENTER_FRAME = """You are the ACK Resource Implementer. You take a structured \
 plan or reviewer feedback and produce working code following ACK conventions. \
@@ -139,29 +157,55 @@ def _compose(frame: str, sections: dict[str, str]) -> str:
     return "".join(parts)
 
 
-def planner_system_prompt(ctx: SkillsContext) -> str:
+_PLANNER_FRAMES = {
+    "planner": _PLANNER_FRAME,
+    "field-planner": _FIELD_PLANNER_FRAME,
+}
+
+
+def _reference_sections(
+    ctx: SkillsContext,
+    definition: WorkflowDefinition,
+) -> dict[str, str]:
+    return {
+        f"REFERENCE: {name.replace('-', ' ').upper()}": ctx.reference(name)
+        for name in definition.references
+    }
+
+
+def planner_system_prompt(
+    ctx: SkillsContext,
+    definition: WorkflowDefinition,
+) -> str:
+    role_label = definition.planner_role.replace("-", " ").upper()
+    schema_label = definition.plan_schema.replace("-", " ").upper()
     return _compose(
-        _PLANNER_FRAME,
+        _PLANNER_FRAMES[definition.planner_role],
         {
             "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            "ROLE SOP: PLANNER": ctx.role("planner"),
-            "OUTPUT SCHEMA: PLAN": ctx.schema("plan-output"),
+            f"ROLE SOP: {role_label}": ctx.role(definition.planner_role),
+            f"OUTPUT SCHEMA: {schema_label}": ctx.schema(definition.plan_schema),
         },
     )
 
 
-def implementer_system_prompt(ctx: SkillsContext) -> str:
-    return _compose(
-        _IMPLEMENTER_FRAME,
-        {
-            "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            "ROLE SOP: IMPLEMENTER": ctx.role("implementer"),
-            # The implementer reads plans and consumes review feedback, so give
-            # it both schemas for reference.
-            "INPUT SCHEMA: PLAN": ctx.schema("plan-output"),
-            "INPUT SCHEMA: REVIEW FEEDBACK": ctx.schema("review-output"),
-        },
-    )
+def implementer_system_prompt(
+    ctx: SkillsContext,
+    definition: WorkflowDefinition,
+) -> str:
+    sections = {
+        "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+        "ROLE SOP: IMPLEMENTER": ctx.role("implementer"),
+        # The implementer reads plans and consumes review feedback, so give
+        # it both schemas for reference.
+        "INPUT SCHEMA: PLAN": ctx.schema(definition.plan_schema),
+        "INPUT SCHEMA: REVIEW FEEDBACK": ctx.schema("review-output"),
+    }
+    sections.update(_reference_sections(ctx, definition))
+    frame = _IMPLEMENTER_FRAME
+    if definition.role_instruction:
+        frame += "\n\n" + definition.role_instruction
+    return _compose(frame, sections)
 
 
 _PLAN_REVIEW_MODE = """\
@@ -178,20 +222,25 @@ You are reviewing the Implementer's output against the plan. Execute the full
 implementation-review methodology and checklist from your SOP."""
 
 
-def reviewer_system_prompt(ctx: SkillsContext, *, mode: str = "impl") -> str:
-    """mode in {'plan', 'impl'} — selects plan-review vs implementation-review."""
-    frame = _REVIEWER_FRAME + (_PLAN_REVIEW_MODE if mode == "plan" else _IMPL_REVIEW_MODE)
-    return _compose(
-        frame,
-        {
-            "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            "ROLE SOP: REVIEWER": ctx.role("reviewer"),
-            "OUTPUT SCHEMA: REVIEW": ctx.schema("review-output"),
-            "REFERENCE: PLAN SCHEMA (what the plan should contain)": ctx.schema(
-                "plan-output"
-            ),
-        },
-    )
+def reviewer_system_prompt(
+    ctx: SkillsContext,
+    definition: WorkflowDefinition,
+    *,
+    mode: str = "impl",
+) -> str:
+    """Compose plan-review or implementation-review instructions."""
+    review_mode = _PLAN_REVIEW_MODE if mode == "plan" else _IMPL_REVIEW_MODE
+    sections = {
+        "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+        "ROLE SOP: REVIEWER": ctx.role("reviewer"),
+        "OUTPUT SCHEMA: REVIEW": ctx.schema("review-output"),
+        "REFERENCE: PLAN SCHEMA (what the plan should contain)": ctx.schema(definition.plan_schema),
+    }
+    sections.update(_reference_sections(ctx, definition))
+    frame = _REVIEWER_FRAME + review_mode
+    if definition.role_instruction:
+        frame += "\n\n" + definition.role_instruction
+    return _compose(frame, sections)
 
 
 def for_config(cfg: Config) -> SkillsContext:
