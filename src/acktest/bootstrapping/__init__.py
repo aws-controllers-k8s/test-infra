@@ -140,9 +140,24 @@ class Bootstrappable(abc.ABC):
                 except Exception as ex:
                     logging.error(f"Exception while bootstrapping {resource_name}")
                     logging.exception(ex)
-                    # Clean up any dependencies the first attempt made
+                    # Clean up any dependencies the first attempt made.
+                    #
+                    # This runs inside an exception handler, so anything it raises
+                    # replaces the bootstrap error and escapes the retry loop
+                    # entirely -- which also skips the _cleanup_resources call
+                    # below, abandoning every resource bootstrapped so far. A
+                    # partially bootstrapped resource is exactly the case most
+                    # likely to raise here (its output attributes may be unset),
+                    # so a failure to clean up must never mask the real error or
+                    # cost us the cleanup of everything else.
                     logging.info(f"Cleaning up dependencies created by {resource_name}")
-                    resource.cleanup()
+                    try:
+                        resource.cleanup()
+                    except Exception as cleanup_ex:
+                        logging.warning(
+                            f"Cleanup of partially bootstrapped {resource_name} "
+                            f"failed, continuing: {cleanup_ex}"
+                        )
                     logging.info(f"Retrying bootstrapping {resource_name}")
                     time.sleep(self.bootstrap_interval_sec)
                     continue
@@ -169,7 +184,8 @@ class Bootstrappable(abc.ABC):
         # (with the most dependencies) are the first to be deleted
         for resource in reversed(list(resources)):
             resource_name = type(resource).__name__
-            for _ in range(self.cleanup_retries):
+            attempts = self.cleanup_retries
+            for attempt in range(attempts):
                 try:
                     # Clean up and add to list of successes
                     logging.info(f"Attempting cleanup {resource_name}")
@@ -177,9 +193,23 @@ class Bootstrappable(abc.ABC):
                     logging.info(f"Successfully cleaned up {resource_name}")
                     break
                 except Exception as ex:
-                    logging.error(f"Exception while cleaning up {resource_name}")
-                    logging.exception(ex)
-                    time.sleep(self.cleanup_interval_sec)
+                    # An attempt that will be retried is expected noise -- AWS
+                    # releases dependencies asynchronously, so the first attempts
+                    # routinely fail. Log it as a warning without a traceback and
+                    # keep the full traceback for the last attempt, so that a real
+                    # cleanup failure stands out instead of being buried in
+                    # tracebacks that resolved themselves.
+                    is_last = attempt == attempts - 1
+                    if is_last:
+                        logging.error(f"Exception while cleaning up {resource_name}")
+                        logging.exception(ex)
+                    else:
+                        logging.warning(
+                            f"Cleanup of {resource_name} failed (attempt "
+                            f"{attempt + 1}/{attempts}), retrying in "
+                            f"{self.cleanup_interval_sec}s: {ex}"
+                        )
+                        time.sleep(self.cleanup_interval_sec)
                     continue
             else:
                 # Hit retry limit
