@@ -65,33 +65,35 @@ spec:
       - authenticator
       - controllerManager
       - scheduler
-  # Fields below carry the value EKS already reports for this cluster. They are
-  # declared not to change anything but to stop a permanent reconcile failure.
+  # Carries the value EKS already reports, so it changes nothing about the cluster.
+  # It is here to stop a permanent reconcile failure.
   #
-  # DescribeCluster returns these three whether or not the CR sets them. ACK's
-  # generated delta uses HasNilDifference, so "absent in spec" vs "present in
-  # AWS" is a difference forever. customUpdate then picks the matching branch and
-  # builds its UpdateClusterConfig from the DESIRED side, which is nil, so the
-  # request goes out carrying only the cluster name and EKS rejects it:
+  # DescribeCluster returns deletionProtection whether or not the CR sets it, and
+  # ACK's generated delta uses HasNilDifference, so "absent in spec" vs "false in
+  # AWS" is a difference on every pass. customUpdate reaches its deletionProtection
+  # branch and builds UpdateClusterConfig from the DESIRED side, which is nil.
+  # A nil pointer is simply omitted, so the request goes out carrying nothing but
+  # the cluster name and EKS rejects it:
   #
   #   InvalidParameterException: The type for cluster update was not provided.
   #
-  # That leaves the CR ACK.ResourceSynced=True but Ready=False, and it retries
-  # every ~17 minutes indefinitely (first seen 2026-09-28T16:54:48Z). The
-  # late_initialize directives in the controller's generator.yaml exist to adopt
-  # exactly these server defaults, but they cannot run here: the runtime calls
-  # updateResource before lateInitializeResource and returns early on error, so
-  # the failing update blocks its own cure.
+  # That left the CR ACK.ResourceSynced=True but Ready=False from
+  # 2026-09-28T16:54:48Z onward. The late_initialize directive on this field exists
+  # to adopt exactly that server default, but it cannot run: the runtime calls
+  # updateResource before lateInitializeResource and returns early on error, so the
+  # failing update blocks its own cure.
   #
-  # Keep each value equal to what `aws eks describe-cluster` reports. A value
-  # that MATCHES clears the delta and issues no API call; a value that DIFFERS
-  # issues a real control-plane update.
+  # DO NOT ALSO DECLARE upgradePolicy OR controlPlaneScalingConfig. DescribeCluster
+  # reports both (EXTENDED, standard) while the CR omits them, so they look like the
+  # same bug -- but they are not in the delta. Their update helpers dereference
+  # spec.upgradePolicy.supportType and spec.controlPlaneScalingConfig.tier with no
+  # nil guard, so a nil desired side would crash the controller rather than produce
+  # the error above. eks-controller v1.23.1 is what runs here, and it is not
+  # crashing, which is how we know those branches are never reached. Declaring them
+  # would make `latest` nil and `desired` set, creating a NEW permanent delta that
+  # SUCCEEDS every reconcile -- trading a stuck error for endless real
+  # UpdateClusterConfig calls against the control plane.
+  #
+  # Keep the value equal to what `aws eks describe-cluster` reports. Matching clears
+  # the delta and issues no API call; differing issues a real control-plane update.
   deletionProtection: false
-  controlPlaneScalingConfig:
-    tier: standard
-  # Records the support type EKS has already applied, so this is a no-op today.
-  # It is still a policy pin: once the cluster runs a Kubernetes version inside
-  # the standard support window, this line keeps asserting EXTENDED rather than
-  # following EKS back to STANDARD. Revisit it on cluster version upgrades.
-  upgradePolicy:
-    supportType: EXTENDED
