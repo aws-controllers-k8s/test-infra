@@ -451,6 +451,20 @@ def test_ensure_test_config():
         _sh.rmtree(tmp)
 
 
+def test_workflow_timeout_budget():
+    """Generated workflows must outlive graph and E2E static budgets."""
+    print("workflow timeout budget:")
+    manifest = yaml.safe_load(
+        (_PKG_ROOT.parent / "agent-workflows.yaml").read_text()
+    )
+    for workflow_name in ("add-resource", "add-field"):
+        check(
+            f"{workflow_name} outer timeout",
+            manifest["workflows"][workflow_name]["timeout"],
+            "5h",
+        )
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -458,8 +472,10 @@ def main():
                test_field_config_and_context,
                test_workflow_input_validation,
                test_workflow_adapters,
-               test_reporting_no_verdict_vs_revise, test_progress_reporter,
-               test_ensure_test_config):
+               test_reporting_no_verdict_vs_revise,
+               test_progress_reporter,
+               test_ensure_test_config,
+               test_workflow_timeout_budget):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

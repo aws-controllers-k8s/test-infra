@@ -8,6 +8,7 @@ Usage:
   $(basename "$0")
 
 Environment variables:
+  WORKFLOW_NAME:       Selected workflow name (add-resource or add-field).
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
   GITHUB_TOKEN:        Personal Access Token for '$GITHUB_ACTOR'
   GITHUB_ORG:          Name of the GitHub organization.
@@ -59,25 +60,42 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve the workflow package dir from this script's own location. Validate
-# invocation values in Python before using them in repository paths or Git
-# commands. This keeps one validation implementation for the shell wrapper and
-# workflow adapters.
+# Resolve the workflow package dir from this script's own location. Dispatch from
+# the workflow selected by the plugin instead of inferring it from optional data.
 WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
-[ -n "$FIELD" ] && VALIDATION_ARGS+=(--field "$FIELD")
-python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"
+case "${WORKFLOW_NAME:-}" in
+  add-resource)
+    if [ -n "$FIELD" ]; then
+      echo "$SCRIPT_NAME][ERROR] --field is not supported by add-resource" >&2
+      exit 2
+    fi
+    WORKFLOW_COMMAND="resource-addition"
+    WORKFLOW_LABEL="resource addition"
+    LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE"
+    COMMIT_MSG="Add $RESOURCE to $SERVICE"
+    ;;
+  add-field)
+    if [ -z "$FIELD" ]; then
+      echo "$SCRIPT_NAME][ERROR] --field is required by add-field" >&2
+      exit 2
+    fi
+    VALIDATION_ARGS+=(--field "$FIELD" --require-field)
+    WORKFLOW_COMMAND="field-addition"
+    WORKFLOW_LABEL="field addition"
+    LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE-$FIELD"
+    COMMIT_MSG="Add $FIELD field to $RESOURCE"
+    ;;
+  *)
+    echo "$SCRIPT_NAME][ERROR] unsupported WORKFLOW_NAME: ${WORKFLOW_NAME:-<unset>}" >&2
+    exit 2
+    ;;
+esac
 
-WORKFLOW_COMMAND="resource-addition"
-WORKFLOW_LABEL="resource addition"
-LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE"
-COMMIT_MSG="Add $RESOURCE to $SERVICE"
-if [ -n "$FIELD" ]; then
-  WORKFLOW_COMMAND="field-addition"
-  WORKFLOW_LABEL="field addition"
-  LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE-$FIELD"
-  COMMIT_MSG="Add $FIELD field to $RESOURCE"
-fi
+# Validate invocation values before using them in repository paths or Git
+# commands. This keeps one structural-validation implementation for the shell
+# wrapper and workflow adapters.
+python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"
 
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}

@@ -125,7 +125,11 @@ You may ONLY edit:
 - templates/hooks/
 - test/e2e/
 - sdk/resource/<resource-name>/hooks.go
-- sdk/resource/<resource-name>/custom_*.go"""
+- sdk/resource/<resource-name>/custom_*.go
+- Only when the approved plan requires an SDK version bump:
+  - apis/<version>/ack-generate-metadata.yaml
+  - go.mod
+  - go.sum"""
 
 _REVIEWER_FRAME = """You are the ACK Resource Reviewer. You inspect the \
 Implementer's work (or, in plan-review mode, the plan) against the plan and ACK \

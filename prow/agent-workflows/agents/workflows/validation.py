@@ -58,12 +58,14 @@ def main() -> int:
     parser.add_argument("--service", required=True)
     parser.add_argument("--resource", required=True)
     parser.add_argument("--field")
+    parser.add_argument("--require-field", action="store_true")
     args = parser.parse_args()
 
     problems = validate_inputs(
         service=args.service,
         resource=args.resource,
         field=args.field,
+        require_field=args.require_field,
     )
     if problems:
         parser.error("; ".join(problems))
