@@ -65,35 +65,68 @@ spec:
       - authenticator
       - controllerManager
       - scheduler
-  # Carries the value EKS already reports, so it changes nothing about the cluster.
-  # It is here to stop a permanent reconcile failure.
+  # Everything below carries the value EKS already reports, so none of it changes the
+  # cluster. It is here to stop a permanent reconcile failure.
   #
-  # DescribeCluster returns deletionProtection whether or not the CR sets it, and
-  # ACK's generated delta uses HasNilDifference, so "absent in spec" vs "false in
-  # AWS" is a difference on every pass. customUpdate reaches its deletionProtection
-  # branch and builds UpdateClusterConfig from the DESIRED side, which is nil.
-  # A nil pointer is simply omitted, so the request goes out carrying nothing but
-  # the cluster name and EKS rejects it:
+  # DescribeCluster returns these fields whether or not the CR sets them, and ACK's
+  # generated delta uses HasNilDifference, so "absent in spec" vs "present in AWS" is
+  # a difference on every pass. customUpdate then reaches a branch that builds its
+  # UpdateClusterConfig from the DESIRED side, which is nil, so the request goes out
+  # carrying nothing but the cluster name and EKS rejects it:
   #
   #   InvalidParameterException: The type for cluster update was not provided.
   #
   # That left the CR ACK.ResourceSynced=True but Ready=False from
-  # 2026-09-28T16:54:48Z onward. The late_initialize directive on this field exists
-  # to adopt exactly that server default, but it cannot run: the runtime calls
-  # updateResource before lateInitializeResource and returns early on error, so the
-  # failing update blocks its own cure.
+  # 2026-09-28T16:54:48Z onward, retrying on backoff forever. late_initialize is
+  # declared on these fields to adopt exactly these server defaults, but it cannot
+  # run: the runtime calls updateResource before lateInitializeResource and returns
+  # early on error, so the failing update blocks its own cure.
+  #
+  # The operative branch is updateComponentConfig -- the three kube*Config fields.
+  # Measured, not guessed: running the controller's own newResourceDelta (v1.23.1,
+  # the version the capability runs) against this live CR and a live DescribeCluster
+  # gives five differences, and replaying customUpdate's branch order shows
+  # updateComponentConfig is the first one that issues an API call. Declaring the
+  # three configs takes the delta to two (tags, controlPlaneEgressMode) and leaves
+  # NO branch firing, so customUpdate returns success, Sync finally reaches
+  # lateInitializeResource, and controlPlaneEgressMode is adopted there.
+  #
+  # deletionProtection was added first, on a wrong reading of the same symptom; it
+  # is a real difference and harmless to declare, but it was never the branch that
+  # fired. Kept because it is correct and matches AWS.
   #
   # DO NOT ALSO DECLARE upgradePolicy OR controlPlaneScalingConfig. DescribeCluster
   # reports both (EXTENDED, standard) while the CR omits them, so they look like the
-  # same bug -- but they are not in the delta. Their update helpers dereference
+  # same bug -- but the delta probe shows DifferentAt is FALSE for both, so they are
+  # not in the delta at all. Their update helpers also dereference
   # spec.upgradePolicy.supportType and spec.controlPlaneScalingConfig.tier with no
-  # nil guard, so a nil desired side would crash the controller rather than produce
-  # the error above. eks-controller v1.23.1 is what runs here, and it is not
-  # crashing, which is how we know those branches are never reached. Declaring them
-  # would make `latest` nil and `desired` set, creating a NEW permanent delta that
-  # SUCCEEDS every reconcile -- trading a stuck error for endless real
-  # UpdateClusterConfig calls against the control plane.
+  # nil guard. Declaring them would set `desired` against a nil `latest`, creating a
+  # NEW permanent delta that SUCCEEDS every reconcile -- trading a stuck error for
+  # endless real UpdateClusterConfig calls against the control plane.
   #
-  # Keep the value equal to what `aws eks describe-cluster` reports. Matching clears
-  # the delta and issues no API call; differing issues a real control-plane update.
+  # Keep every value equal to what DescribeCluster reports. Matching clears the delta
+  # and issues no API call; differing issues a real control-plane update. Read them
+  # with an SDK new enough to know the fields -- aws-cli 2.33 omits the kube*Config
+  # trio from its output model entirely, which makes them look absent when they are
+  # not. The upstream fix is a customPreCompare adoption in eks-controller (the
+  # pattern PR #255 uses for the Auto Mode fields), after which all of this can go.
   deletionProtection: false
+  kubeAPIServerConfig:
+    eventTTL: 60m
+    serviceNodePortRange:
+      minPort: 30000
+      maxPort: 32767
+  kubeSchedulerConfig:
+    nodeResourcesFit:
+      scoringStrategy:
+        type: LeastAllocated
+        resources:
+        - name: cpu
+          weight: 1
+        - name: memory
+          weight: 1
+  kubeControllerManagerConfig:
+    horizontalPodAutoscalerControllerConfig:
+      horizontalPodAutoscalerSyncPeriod: 15s
+    podGCControllerConfig:
+      terminatedPodGCThreshold: 12500
