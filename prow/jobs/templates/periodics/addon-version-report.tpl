@@ -12,6 +12,8 @@
     base_ref: ${TEST_INFRA_BRANCH}
     workdir: true
     path_alias: github.com/aws-controllers-k8s/test-infra
+  labels:
+    preset-stack-name: "true"
   agent: kubernetes
   spec:
     serviceAccountName: periodic-service-account
@@ -31,15 +33,12 @@
           - |
             set -Eeuo pipefail
 
-            # Injected into every decorated job pod by default_decoration_configs in
-            # prow/config/templates/config-ConfigMap.yaml, from Terraform's region. No
-            # default: a fallback would silently report on the wrong region.
+            # Both come from Prow, not from envsubst: AWS_REGION from
+            # default_decoration_configs and STACK_NAME from the preset-stack-name preset
+            # above, each sourced from Terraform in prow/config. Neither has a default --
+            # one would silently report on the wrong region or the wrong stack.
             : "${AWS_REGION:?not set -- expected from Prow job decoration}"
-
-            # Literal, not ${STACK_NAME}: only the tokens in the envsubst allow-list in
-            # templates/job-config-job.yaml.tpl are resolved, and an unlisted one reaches
-            # bash as a literal that expands to empty.
-            STACK_NAME="ack-test-infra-prod"
+            : "${STACK_NAME:?not set -- expected from the preset-stack-name preset}"
 
             # The clusters and addons this stack declares Addon CRs for, in
             # flux/ack/charts/{ack-addons,ack-build-infra}. Edited alongside those charts.
