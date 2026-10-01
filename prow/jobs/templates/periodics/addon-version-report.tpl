@@ -39,39 +39,42 @@
             # in flux/ack/charts/{ack-addons,ack-build-infra}. Keep in step with those charts.
             ADDONS=("aws-secrets-store-csi-driver-provider")
 
-            # Clusters are discovered rather than named. The cluster name is not available
-            # here: envsubst only substitutes TEST_INFRA_ORG/REPO/BRANCH, the image repo
-            # and a few version vars, so a ${PROW_CLUSTER_NAME}-style placeholder would
-            # reach the container as a literal. Discovery also keeps the template
-            # stage-agnostic and notices a cluster nobody remembered to add.
-            # Assign in two steps rather than `mapfile < <(aws ...)`. A command that fails
-            # inside process substitution does not trip `set -e`, so the API error would
-            # be silently indistinguishable from "this account has no clusters" -- the
-            # exact silent failure this job exists to avoid.
-            if ! clusters_raw=$(aws eks list-clusters --region "$REGION" \
-                                  --query 'clusters[]' --output text 2>&1); then
-              echo "FATAL: aws eks list-clusters failed: ${clusters_raw}" >&2
-              exit 1
-            fi
-            mapfile -t CLUSTERS < <(printf '%s\n' "$clusters_raw" | tr '\t' '\n' | sed '/^$/d' | sort)
-
-            if [[ ${#CLUSTERS[@]} -eq 0 ]]; then
-              echo "FATAL: no EKS clusters visible in ${REGION}" >&2
-              exit 1
-            fi
+            # The clusters to report on, named literally. These are the two clusters whose
+            # Addon CRs this repo declares -- ack-addons/templates/addons.yaml for the
+            # control plane and ack-build-infra/templates/addons.yaml for the build cluster
+            # -- so this list and those charts are edited together.
+            #
+            # Literal rather than substituted: no ${TOKEN} here is resolved unless it is in
+            # the envsubst allow-list in templates/job-config-job.yaml.tpl, and putting one
+            # there means threading a value through Terraform's chart values, the Argo CD
+            # Application, and the prow-jobs chart -- four files and a `terraform apply` to
+            # carry two strings that only change if the stack is renamed.
+            #
+            # Literal rather than discovered with eks:ListClusters, too. Discovery lists the
+            # ACCOUNT, not this stack, so it returns clusters Prow does not own, and from
+            # inside the job "I may not describe it" and "it is not ours" look identical:
+            # the report would either go quiet about a cluster it should cover or go red
+            # about one it should not.
+            CLUSTERS=(
+              "ack-test-infra-prod-cluster"
+              "ack-test-infra-prod-build-cluster"
+            )
 
             behind=0
-            skipped=0
+            unreadable=0
             printf '%-36s %-40s %-22s %-22s %s\n' CLUSTER ADDON INSTALLED DEFAULT STATUS
 
             for cluster in "${CLUSTERS[@]}"; do
-              # The IAM policy scopes DescribeCluster to this stack's clusters, so an
-              # unrelated cluster in the account is denied. Warn and continue rather than
-              # failing the report -- but warn loudly, so it is never silent.
+              # Every cluster here was named on purpose, so a failure is a real fault --
+              # renamed, deleted, or a policy that no longer covers it -- not the expected
+              # "not ours" of a discovered list. Keep going so the other clusters are still
+              # reported, then exit non-zero at the end: a report that silently covers one of
+              # two clusters is the failure this job exists to catch. This is also what
+              # catches the list above going stale against a renamed cluster.
               if ! k8s=$(aws eks describe-cluster --region "$REGION" --name "$cluster" \
-                           --query 'cluster.version' --output text 2>/dev/null); then
-                echo "WARN: cannot describe cluster ${cluster}; skipping" >&2
-                skipped=$((skipped + 1))
+                           --query 'cluster.version' --output text 2>&1); then
+                echo "ERROR: cannot describe cluster ${cluster}: ${k8s}" >&2
+                unreadable=$((unreadable + 1))
                 continue
               fi
 
@@ -107,10 +110,16 @@
             done
 
             echo
-            echo "clusters skipped (not readable): ${skipped}"
+            echo "clusters reported: $(( ${#CLUSTERS[@]} - unreadable )) of ${#CLUSTERS[@]}"
             echo "addons behind the default version: ${behind}"
             echo
             echo "This job reports only. Nothing was changed."
-            # Exits 0 even when something is behind: a red periodic for an expected
-            # condition trains people to ignore it.
+
+            # Red only for an incomplete report. Being behind is an expected condition and a
+            # red periodic for one trains people to ignore it; a report missing a cluster it
+            # was told to cover is not expected and must not pass quietly.
+            if [[ $unreadable -gt 0 ]]; then
+              echo "FAILED: ${unreadable} of ${#CLUSTERS[@]} named clusters could not be read." >&2
+              exit 1
+            fi
             exit 0
