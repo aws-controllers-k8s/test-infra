@@ -31,7 +31,10 @@
           - |
             set -Eeuo pipefail
 
-            REGION="${AWS_REGION:-us-west-2}"
+            # Injected into every decorated job pod by default_decoration_configs in
+            # prow/config/templates/config-ConfigMap.yaml, from Terraform's region. No
+            # default: a fallback would silently report on the wrong region.
+            : "${AWS_REGION:?not set -- expected from Prow job decoration}"
 
             # Literal, not ${STACK_NAME}: only the tokens in the envsubst allow-list in
             # templates/job-config-job.yaml.tpl are resolved, and an unlisted one reaches
@@ -50,7 +53,7 @@
             for cluster in "${CLUSTERS[@]}"; do
               # Named on purpose, so a failure is a real fault, not the expected denial of a
               # discovered list. Report the rest, then fail at the end.
-              if ! k8s=$(aws eks describe-cluster --region "$REGION" --name "$cluster" \
+              if ! k8s=$(aws eks describe-cluster --region "$AWS_REGION" --name "$cluster" \
                            --query 'cluster.version' --output text 2>&1); then
                 echo "ERROR: cannot describe cluster ${cluster}: ${k8s}" >&2
                 unreadable=$((unreadable + 1))
@@ -58,7 +61,7 @@
               fi
 
               for addon in "${ADDONS[@]}"; do
-                installed=$(aws eks describe-addon --region "$REGION" \
+                installed=$(aws eks describe-addon --region "$AWS_REGION" \
                               --cluster-name "$cluster" --addon-name "$addon" \
                               --query 'addon.addonVersion' --output text 2>/dev/null \
                               || echo "NOT_INSTALLED")
@@ -71,7 +74,7 @@
 
                 # defaultVersion, not the newest available: the two diverge, and the
                 # default is the version AWS has vetted for that Kubernetes release.
-                default=$(aws eks describe-addon-versions --region "$REGION" \
+                default=$(aws eks describe-addon-versions --region "$AWS_REGION" \
                             --addon-name "$addon" --kubernetes-version "$k8s" \
                             --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]' \
                             --output text)
