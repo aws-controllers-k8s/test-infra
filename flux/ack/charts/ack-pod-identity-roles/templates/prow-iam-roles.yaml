@@ -310,6 +310,34 @@ spec:
           }
         ]
       }
+    # Read-only EKS access for the addon-version-report periodic, which compares the
+    # installed version of each managed addon against the default version EKS offers for
+    # that cluster's Kubernetes version.
+    #
+    # DescribeAddonVersions is a catalog call with no resource to scope to, so it takes
+    # "*" -- that is the only form EKS accepts for it. The other two are scoped to this
+    # stack's two clusters and their addons.
+    EKSAddonVersionRead: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["eks:DescribeAddonVersions", "eks:ListClusters"],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["eks:DescribeCluster", "eks:DescribeAddon", "eks:ListAddons"],
+            "Resource": [
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-cluster",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-build-cluster",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:addon/{{ $stackName }}-cluster/*/*",
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:addon/{{ $stackName }}-build-cluster/*/*"
+            ]
+          }
+        ]
+      }
 ---
 # Workflow Runner Role - used by agent workflow job pods in test-pods
 # to mount the SecretProviderClass via the Secrets Store CSI driver.
