@@ -310,17 +310,11 @@ spec:
           }
         ]
       }
-    # Read-only EKS access for the addon-version-report periodic, which compares the
-    # installed version of each managed addon against the default version EKS offers for
-    # that cluster's Kubernetes version.
+    # Read-only EKS access for the addon-version-report periodic.
     #
-    # DescribeAddonVersions is a catalog call with no resource to scope to, so it takes
-    # "*" -- that is the only form EKS accepts for it. The other two are scoped to this
-    # stack's two clusters and their addons.
-    #
-    # No eks:ListClusters: the job is given the cluster names it must cover
-    # (PROW_CLUSTER_NAMES, composed in bootstrap/argocd-applications.tf) rather than
-    # discovering them, so it never needs to read the account's cluster inventory.
+    # DescribeAddonVersions is a catalog call with no resource to scope to, so "*" is the
+    # only form EKS accepts. The rest are scoped to this stack's two clusters. No
+    # eks:ListClusters -- the job names its clusters rather than discovering them.
     EKSAddonVersionRead: |
       {
         "Version": "2012-10-17",
