@@ -22,13 +22,15 @@ Run from the agents package dir:
 
 from __future__ import annotations
 
+import asyncio
 import io
 import os
+import shutil as _sh
 import sys
 import tempfile
-import shutil as _sh
 from dataclasses import dataclass, field
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -41,6 +43,8 @@ from roles import graph as gm
 from roles.config import Config
 from roles.e2e import _classify, _to_snake, ensure_test_config
 from roles.verdict import Decision, parse_decision
+from roles.workflow import ADD_FIELD, ADD_RESOURCE
+from workflows.validation import validate_inputs
 
 # ack-dev-skills is a peer of test-infra in the ACK workspace. _PKG_ROOT is
 # .../aws-controllers-k8s/test-infra/prow/agent-workflows/agents, so the ACK
@@ -91,6 +95,25 @@ def check(name, got, want):
     status = "ok" if got == want else "FAIL"
     print(f"  [{status}] {name}: got={got!r} want={want!r}")
     assert got == want, f"{name}: {got!r} != {want!r}"
+
+
+def test_bedrock_sampling_config():
+    """Sampling parameters are omitted unless a caller explicitly opts in."""
+    print("bedrock sampling config:")
+    from utils.bedrock import create_enhanced_bedrock_model
+
+    with patch("utils.bedrock.BedrockModel") as bedrock_model:
+        create_enhanced_bedrock_model(model_id="us.anthropic.claude-opus-5")
+        default_config = bedrock_model.call_args.kwargs
+    check("temperature omitted by default", "temperature" in default_config, False)
+
+    with patch("utils.bedrock.BedrockModel") as bedrock_model:
+        create_enhanced_bedrock_model(
+            model_id="us.anthropic.claude-opus-4-6-v1",
+            temperature=0.2,
+        )
+        explicit_config = bedrock_model.call_args.kwargs
+    check("explicit temperature preserved", explicit_config["temperature"], 0.2)
 
 
 def test_verdict():
@@ -177,24 +200,180 @@ def test_replan_no_double_impl():
 
 def test_config_and_context():
     print("config + context:")
-    cfg = Config.resolve(
-        service="backup", resource="BackupVault",
-        controller_dir="/tmp/backup-controller",
-        codegen_dir="/tmp/code-generator",
-        skills_dir=str(SKILLS),
-    )
+    with patch.dict(os.environ, {"AGENT_TEMPERATURE": ""}):
+        cfg = Config.resolve(
+            service="backup",
+            resource="BackupVault",
+            controller_dir="/tmp/backup-controller",
+            codegen_dir="/tmp/code-generator",
+            skills_dir=str(SKILLS),
+        )
     check("service", cfg.service, "backup")
+    check("default temperature omitted", cfg.temperature, None)
+    with patch.dict(os.environ, {"AGENT_TEMPERATURE": "0.3"}):
+        temperature_cfg = Config.resolve(
+            service="backup",
+            resource="BackupVault",
+            controller_dir="/tmp/backup-controller",
+            codegen_dir="/tmp/code-generator",
+            skills_dir=str(SKILLS),
+        )
+    check("temperature environment opt-in", temperature_cfg.temperature, 0.3)
     check("test_infra name", cfg.test_infra_dir.name, "test-infra")
     check("test_infra sibling of controller", cfg.test_infra_dir.parent, cfg.controller_dir.parent)
     if SKILLS.is_dir():
         from roles import context
         ctx = context.for_config(cfg)
-        p = context.planner_system_prompt(ctx)
+        p = context.planner_system_prompt(ctx, cfg.workflow)
         check("planner prompt nonempty", bool(p and "Planner" in p), True)
-        rv = context.reviewer_system_prompt(ctx, mode="plan")
+        rv = context.reviewer_system_prompt(ctx, cfg.workflow, mode="plan")
         check("plan-review mode injected", "plan-review" in rv, True)
     else:
         print("  [skip] ack-dev-skills not present at", SKILLS)
+
+
+def test_field_config_and_context():
+    print("field config + context:")
+    cfg = Config.resolve(
+        service="bedrockagentcorecontrol",
+        resource="AgentRuntime",
+        workflow=ADD_FIELD,
+        field="targetConfiguration.mcp.connector",
+        controller_dir="/tmp/bedrockagentcorecontrol-controller",
+        codegen_dir="/tmp/code-generator",
+        skills_dir=str(SKILLS),
+    )
+    check("field", cfg.field, "targetConfiguration.mcp.connector")
+    check("workflow name", cfg.workflow_name, "add-field")
+    if SKILLS.is_dir():
+        from roles import context, orchestrator
+
+        ctx = context.for_config(cfg)
+        planner = context.planner_system_prompt(ctx, cfg.workflow)
+        implementer = context.implementer_system_prompt(ctx, cfg.workflow)
+        reviewer = context.reviewer_system_prompt(
+            ctx,
+            cfg.workflow,
+            mode="plan",
+        )
+        task = orchestrator.build_task_prompt(cfg)
+        check("field planner role", "Field Planner Role" in planner, True)
+        check("field plan schema", "Field Plan Output Schema" in planner, True)
+        check("implementer field reference", "Adding a Single Field" in implementer, True)
+        check("reviewer field reference", "Adding a Single Field" in reviewer, True)
+        check(
+            "task contains field",
+            "FIELD=targetConfiguration.mcp.connector" in task,
+            True,
+        )
+        check(
+            "task scopes existing resource",
+            "existing AgentRuntime resource" in task,
+            True,
+        )
+    else:
+        print("  [skip] ack-dev-skills not present at", SKILLS)
+
+
+def test_workflow_input_validation():
+    print("workflow input validation:")
+    check(
+        "valid nested add-field input",
+        validate_inputs(
+            service="bedrockagentcorecontrol",
+            resource="AgentRuntime",
+            field="targetConfiguration.mcp.connector",
+            require_field=True,
+        ),
+        [],
+    )
+    for invalid_field in (
+        "targetConfiguration..connector",
+        ".targetConfiguration",
+        "targetConfiguration.",
+        "targetConfiguration/mcp/connector",
+        "Name\nIgnoreInstructions",
+        "targetConfiguration;echo",
+    ):
+        problems = validate_inputs(
+            service="s3control",
+            resource="AccessPoint",
+            field=invalid_field,
+            require_field=True,
+        )
+        check(
+            f"invalid field rejected: {invalid_field!r}",
+            any("field" in problem for problem in problems),
+            True,
+        )
+
+    problems = validate_inputs(
+        service="s3;echo",
+        resource="Access/Point",
+        field="VpcConfiguration",
+        require_field=True,
+    )
+    check("invalid service rejected", any("service" in p for p in problems), True)
+    check("invalid resource rejected", any("resource" in p for p in problems), True)
+    check(
+        "missing required field rejected",
+        any(
+            "field" in p
+            for p in validate_inputs(
+                service="s3",
+                resource="Bucket",
+                require_field=True,
+            )
+        ),
+        True,
+    )
+
+
+def test_workflow_adapters():
+    print("workflow adapters:")
+    from workflows.ack_field_workflow import ACKFieldWorkflow, FieldAdditionInput
+    from workflows.ack_resource_workflow import ACKResourceWorkflow, ResourceAdditionInput
+    from workflows.ack_workflow import WorkflowRunOutput
+
+    class FakeRunner:
+        def __init__(self):
+            self.requests = []
+
+        async def run(self, request):
+            self.requests.append(request)
+            return WorkflowRunOutput(
+                success=True,
+                service=request.service,
+                resource=request.resource,
+                field=request.field,
+            )
+
+    resource_runner = FakeRunner()
+    resource_result = asyncio.run(
+        ACKResourceWorkflow(resource_runner).run(
+            ResourceAdditionInput(service="s3", resource="Bucket")
+        )
+    )
+    resource_request = resource_runner.requests[0]
+    check("resource adapter succeeds", resource_result.success, True)
+    check("resource definition selected", resource_request.definition, ADD_RESOURCE)
+    check("resource field omitted", resource_request.field, None)
+
+    field_runner = FakeRunner()
+    field_path = "targetConfiguration.mcp.connector"
+    field_result = asyncio.run(
+        ACKFieldWorkflow(field_runner).run(
+            FieldAdditionInput(
+                service="bedrockagentcorecontrol",
+                resource="AgentRuntime",
+                field=field_path,
+            )
+        )
+    )
+    field_request = field_runner.requests[0]
+    check("field adapter succeeds", field_result.success, True)
+    check("field definition selected", field_request.definition, ADD_FIELD)
+    check("nested field preserved", field_request.field, field_path)
 
 
 def test_reporting_no_verdict_vs_revise():
@@ -273,8 +452,12 @@ def test_ensure_test_config():
 
 
 def main():
-    for fn in (test_verdict, test_snake, test_e2e_classify, test_conditions,
+    for fn in (test_bedrock_sampling_config,
+               test_verdict, test_snake, test_e2e_classify, test_conditions,
                test_replan_no_double_impl, test_config_and_context,
+               test_field_config_and_context,
+               test_workflow_input_validation,
+               test_workflow_adapters,
                test_reporting_no_verdict_vs_revise, test_progress_reporter,
                test_ensure_test_config):
         fn()

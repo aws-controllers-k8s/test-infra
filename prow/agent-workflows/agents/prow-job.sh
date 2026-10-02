@@ -19,6 +19,7 @@ Environment variables:
 # Default values
 SERVICE=""
 RESOURCE=""
+FIELD=""
 # Optional; forwarded to `python -m workflows` only when set so the entrypoint's
 # own defaults (DEFAULT_MODEL_ID, auto-detected SDK version) still apply otherwise.
 MODEL=""
@@ -39,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       RESOURCE="$2"
       shift 2
       ;;
+    --field)
+      FIELD="$2"
+      shift 2
+      ;;
     --model)
       MODEL="$2"
       shift 2
@@ -54,25 +59,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Validate that service and resource are set
-if [ -z "$SERVICE" ]; then
-  echo "Error: --service argument is required"
-  exit 1
-fi
+# Resolve the workflow package dir from this script's own location. Validate
+# invocation values in Python before using them in repository paths or Git
+# commands. This keeps one validation implementation for the shell wrapper and
+# workflow adapters.
+WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
+[ -n "$FIELD" ] && VALIDATION_ARGS+=(--field "$FIELD")
+python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"
 
-if [ -z "$RESOURCE" ]; then
-  echo "Error: --resource argument is required"
-  exit 1
+WORKFLOW_COMMAND="resource-addition"
+WORKFLOW_LABEL="resource addition"
+LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE"
+COMMIT_MSG="Add $RESOURCE to $SERVICE"
+if [ -n "$FIELD" ]; then
+  WORKFLOW_COMMAND="field-addition"
+  WORKFLOW_LABEL="field addition"
+  LOCAL_GIT_BRANCH="$SERVICE-add-$RESOURCE-$FIELD"
+  COMMIT_MSG="Add $FIELD field to $RESOURCE"
 fi
 
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
-# Resolve the workflow package dir from this script's own location, NOT $(pwd):
-# once the job declares extra_refs, Prow's decoration runs the entrypoint from a
-# clonerefs checkout dir (an extra_ref) rather than the image's /app, so `pwd`
-# would point at code-generator and `python -m workflows` would fail / import the
-# wrong packages.
-WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The workflow directory was resolved before input validation so decorated Prow
+# jobs do not depend on their initial working directory.
 JOB_USER="prow"
 SERVICE_REPO=$SERVICE-controller
 ORG_REPO=$GITHUB_ORG/$SERVICE-controller
@@ -81,10 +91,9 @@ ORG_REPO=$GITHUB_ORG/$SERVICE-controller
 # scripts/controller-setup.sh) can resolve them as siblings
 REPO_ROOT="$(dirname "${CODEGEN_DIR:-/home/$JOB_USER/go/src/github.com/aws-controllers-k8s/code-generator}")"
 SERVICE_REPO_DIR="$REPO_ROOT/$SERVICE-controller"
-LOCAL_GIT_BRANCH=$SERVICE-add-$RESOURCE
-PR_SOURCE_BRANCH=$LOCAL_GIT_BRANCH
+PR_SOURCE_BRANCH="$LOCAL_GIT_BRANCH"
 
-echo "$SCRIPT_NAME][INFO] Running resource-addition workflow for service: $SERVICE, resource: $RESOURCE"
+echo "$SCRIPT_NAME][INFO] Running $WORKFLOW_LABEL workflow for service: $SERVICE, resource: $RESOURCE${FIELD:+, field: $FIELD}"
 echo "$SCRIPT_NAME][INFO] Target repository: $GITHUB_ORG/$SERVICE-controller"
 
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
@@ -96,7 +105,7 @@ fi
 git config --global user.name "${GITHUB_ACTOR}" >/dev/null
 git config --global user.email "${USER_EMAIL}" >/dev/null
 
-mkdir -p $REPO_ROOT && cd $REPO_ROOT
+mkdir -p "$REPO_ROOT" && cd "$REPO_ROOT"
 
 # Create a fork of the repository
 echo "$SCRIPT_NAME][INFO] forking and cloning $GITHUB_ORG/$SERVICE_REPO... "
@@ -113,7 +122,7 @@ gh repo sync "$GITHUB_ACTOR/$SERVICE_REPO" --branch main --force >/dev/null
 git fetch origin main >/dev/null
 git reset --hard origin/main >/dev/null
 
-cd $WORKFLOW_DIR
+cd "$WORKFLOW_DIR"
 
 # Point the workflow at the forked controller checkout this script later commits
 # and pushes, so edits land in exactly that tree (otherwise CONTROLLER_DIR would
@@ -193,22 +202,22 @@ fi
 echo "$SCRIPT_NAME][INFO] Starting workflow"
 # Forward optional args only when provided, so the workflow's own defaults apply
 # otherwise (DEFAULT_MODEL_ID; SDK version auto-detected).
-WORKFLOW_ARGS=(resource-addition --service "$SERVICE" --resource "$RESOURCE")
+WORKFLOW_ARGS=("$WORKFLOW_COMMAND" --service "$SERVICE" --resource "$RESOURCE")
+[ -n "$FIELD" ] && WORKFLOW_ARGS+=(--field "$FIELD")
 [ -n "$MODEL" ] && WORKFLOW_ARGS+=(--model "$MODEL")
 [ -n "$AWS_SDK_VERSION" ] && WORKFLOW_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
 python -m workflows "${WORKFLOW_ARGS[@]}"
-echo "$SCRIPT_NAME][INFO]Resource addition workflow completed successfully"
+echo "$SCRIPT_NAME][INFO] $WORKFLOW_LABEL workflow completed successfully"
 
-cd $SERVICE_REPO_DIR
+cd "$SERVICE_REPO_DIR"
 
 # Create a new branch
 echo "$SCRIPT_NAME][INFO] Creating a new branch..."
-git checkout -b $LOCAL_GIT_BRANCH >/dev/null
+git checkout -b "$LOCAL_GIT_BRANCH" >/dev/null
 
 # Commit changes
 echo "$SCRIPT_NAME][INFO] Committing changes..."
 git add -A  >/dev/null
-COMMIT_MSG="Add $RESOURCE to $SERVICE"
 git commit -am "$COMMIT_MSG" >/dev/null
 
 # Push changes to the forked repository
@@ -230,7 +239,12 @@ echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_S
 if [ -s "$PR_BODY_FILE" ]; then
   PR_BODY_ARGS=(-F "$PR_BODY_FILE")
 else
-  PR_BODY_ARGS=(-b "ACK Agent changes adding $RESOURCE to $SERVICE-controller")
+  if [ -n "$FIELD" ]; then
+    FALLBACK_BODY="ACK Agent changes adding $FIELD to $RESOURCE in $SERVICE-controller"
+  else
+    FALLBACK_BODY="ACK Agent changes adding $RESOURCE to $SERVICE-controller"
+  fi
+  PR_BODY_ARGS=(-b "$FALLBACK_BODY")
 fi
 if ! gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" "${PR_BODY_ARGS[@]}" -B "$PR_TARGET_BRANCH" >/dev/null ; then
   echo ""

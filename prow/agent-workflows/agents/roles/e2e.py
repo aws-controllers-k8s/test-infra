@@ -8,7 +8,7 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Phase 3: E2E testing via test-infra (workflows/add-resource.md Phase 3).
+"""Phase 3: E2E testing via test-infra.
 
 Runs `make kind-test SERVICE=<service>` from the test-infra directory, classifies
 the outcome (PASS / FAIL / SKIPPED), and applies the workflow's rules:
@@ -203,10 +203,13 @@ def _run_make_kind_test(cfg: Config, artifacts: Path) -> subprocess.CompletedPro
 
 
 def _fix_prompt(cfg: Config, status: str, output_tail: str, artifacts: Path) -> str:
+    workflow_scope = (
+        f" {cfg.workflow.role_instruction}" if cfg.workflow.role_instruction else ""
+    )
     if status == "SKIPPED":
         return (
             f"The e2e test for {cfg.resource} in the {cfg.service} controller was "
-            "SKIPPED. Skipped tests are NOT acceptable — a test that skips due to "
+            f"SKIPPED.{workflow_scope} Skipped tests are NOT acceptable — a test that skips due to "
             "missing environment variables or unmet preconditions was written in a "
             "way that cannot execute in the test harness. Rewrite the test to use "
             "the bootstrap system (service_bootstrap.py / bootstrap_resources.py) or "
@@ -215,7 +218,8 @@ def _fix_prompt(cfg: Config, status: str, output_tail: str, artifacts: Path) -> 
             f"Test output (tail):\n{output_tail}"
         )
     return (
-        f"The e2e test for {cfg.resource} in the {cfg.service} controller FAILED. "
+        f"The e2e test for {cfg.resource} in the {cfg.service} controller FAILED."
+        f"{workflow_scope} "
         f"Read the controller logs in {artifacts}/ and the test output below, "
         "diagnose the root cause, and fix it (generator.yaml, hooks, or the test "
         "itself — never generated files). Then report what you changed.\n\n"
