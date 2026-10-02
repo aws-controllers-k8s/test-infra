@@ -90,6 +90,7 @@ aws_services:
 - sns
 - sqs
 - ssm
+- transfer
 - vpclattice
 - wafv2
 
