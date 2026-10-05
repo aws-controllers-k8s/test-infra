@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.30.3
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/aws/aws-sdk-go-v2/service/ecrpublic v1.25.3
+	github.com/gertd/go-pluralize v0.1.1
 	github.com/google/go-github/v63 v63.0.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.8.4

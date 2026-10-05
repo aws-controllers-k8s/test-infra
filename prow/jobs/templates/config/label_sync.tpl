@@ -155,6 +155,17 @@ default:
       target: both
       addedBy: label
 
+    # AWS API change detector labels
+    - color: 0e8a16
+      description: >-
+        Marks an issue as filed and owned by the AWS API change detector. Applied
+        only by the detector; the daily job finds its own issues by this label, so
+        removing or hand-applying it will make the job lose track or overwrite the
+        issue.
+      name: ack/api-change-detected
+      target: issues
+      addedBy: robots
+
     # Release labels
     - color: 0e8a16
       description: Indicates this PR should trigger a minor version release on merge.
