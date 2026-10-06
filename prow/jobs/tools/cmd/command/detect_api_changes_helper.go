@@ -558,50 +558,11 @@ func isDenylistedOp(opID string) bool {
 	return false
 }
 
-// namesIgnoredResource reports whether an operation name mentions a resource in
-// ignore.resource_names (e.g. s3's AbortMultipartUpload and MultipartUpload).
-//
-// It is a substring test because unclassified operations carry no resource
-// name. A match does not count when the operation also names a longer known
-// resource containing the ignored one (ec2 ignores `Ipam` but reports
-// IpamInternetRegistryAssociation). known holds the lowercased names of every
-// CRD kind and reported resource; nil means none.
-func namesIgnoredResource(opID string, ignoredResourceNames []string, known map[string]string) bool {
-	return ignoredNameIn(opID, ignoredResourceNames, known) != ""
-}
-
-// ignoredNameIn returns the ignored resource name an operation concerns, by
-// namesIgnoredResource's rule, or "" when it concerns none.
-func ignoredNameIn(opID string, ignoredResourceNames []string, known map[string]string) string {
-	lowered := strings.ToLower(opID)
-	for _, ignored := range ignoredResourceNames {
-		if ignored == "" {
-			continue
-		}
-		low := strings.ToLower(ignored)
-		if !strings.Contains(lowered, low) {
-			continue
-		}
-		longer := false
-		for name := range known {
-			if len(name) > len(low) && strings.Contains(name, low) && strings.Contains(lowered, name) {
-				longer = true
-				break
-			}
-		}
-		if !longer {
-			return ignored
-		}
-	}
-	return ""
-}
-
 // findNewResources reports resources codegen would generate a CRD for today but
 // the controller does not have. It mirrors codegen's rule, so this is the set of
 // CRDs a regeneration would add.
 func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Finding {
 	declared := in.Config.ResourceNames()
-	ignored := in.Config.Ignore.ResourceNames
 
 	// NewSincePin is decided per resource, not per operation: an `operations:`
 	// override can imply one resource through several Create operations.
@@ -611,6 +572,9 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 	var findings []Finding
 	seen := map[string]bool{}
 	for _, opID := range latest.OperationNames() {
+		if in.Config.ignoresOperation(opID) {
+			continue
+		}
 		opTypes, resName := in.ClassifyOpWithOverrides(opID, declared)
 
 		// OpTypeCreate only: code-generator builds CRDs from opMap[OpTypeCreate]
@@ -619,7 +583,7 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 		if !opTypes.Has(OpTypeCreate) {
 			continue
 		}
-		if seen[resName] || slices.Contains(ignored, resName) || in.HasCRD(resName) {
+		if seen[resName] || in.Config.ignoresResource(resName) || in.HasCRD(resName) {
 			continue
 		}
 		seen[resName] = true
@@ -648,12 +612,12 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 }
 
 // operationsByResource maps each lowercased resource name to the operations that
-// classify onto it, excluding Tag operations and ignore.operations.
+// classify onto it, excluding Tag operations and ignored ones.
 func operationsByResource(m *SmithyModel, in *ControllerInputs) map[string][]string {
 	declared := in.Config.ResourceNames()
 	out := map[string][]string{}
 	for _, opID := range m.OperationNames() {
-		if isDenylistedOp(opID) || slices.Contains(in.Config.Ignore.Operations, opID) {
+		if isDenylistedOp(opID) || in.ignoresOp(opID) {
 			continue
 		}
 		if opTypes, resName := in.ClassifyOpWithOverrides(opID, declared); !opTypes.Has(OpTypeUnknown) {
@@ -702,7 +666,11 @@ func createResourceNames(
 ) map[string]bool {
 	out := map[string]bool{}
 	for _, opID := range m.OperationNames() {
-		if opTypes, resName := in.ClassifyOpWithOverrides(opID, declared); opTypes.Has(OpTypeCreate) {
+		if in.Config.ignoresOperation(opID) {
+			continue
+		}
+		if opTypes, resName := in.ClassifyOpWithOverrides(opID, declared); opTypes.Has(OpTypeCreate) &&
+			!in.Config.ignoresResource(resName) {
 			out[resName] = true
 		}
 	}
@@ -736,12 +704,18 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 		if used[opID] || isDenylistedOp(opID) {
 			continue
 		}
-		if slices.Contains(in.Config.Ignore.Operations, opID) {
+		_, inBaseline := baseline.Operation(opID)
+		// Listed when new, so a deliberate ignore is distinguishable from a miss.
+		if reason := in.ignoredOpReason(opID); reason != "" {
+			if !inBaseline {
+				findings = append(findings, Finding{
+					Class: ClassDroppedOperation, Subject: opID, Detail: reason, NewSincePin: true,
+				})
+			}
 			continue
 		}
 
 		opTypes, resName := in.ClassifyOpWithOverrides(opID, declared)
-		_, inBaseline := baseline.Operation(opID)
 		canonicalKind, hasCRD := in.CanonicalKind(resName)
 		_, knownResource := resources[strings.ToLower(resName)]
 
@@ -842,7 +816,7 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 		}
 		// Nor is one nothing can read, directly or through a broader resource: a
 		// controller could not recover its state after a restart.
-		reads := genericReads(latest, name, opIDs)
+		reads := slices.DeleteFunc(genericReads(latest, name, opIDs), in.ignoresOp)
 		if !slices.ContainsFunc(append(slices.Clone(allOps), reads...), func(opID string) bool {
 			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
 			return isReadOp(opTypes, opID)
@@ -926,7 +900,7 @@ func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, k
 			continue
 		}
 		if exposedInCRD(in, kind, path) ||
-			declinedShapeAncestor(path, latestMembers, in.Config.Ignore.ShapeNames) {
+			in.Config.ignoresMember(latest, opID, op.Output, true, path, latestMembers) {
 			continue
 		}
 		f := Finding{
@@ -1029,9 +1003,15 @@ func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID stri
 		return nil
 	}
 	readable := returnedNames(m, in, kind, opID)
+	op, _ := m.Operation(opID)
+	var members map[string]MemberInfo
+	if op.Input != nil {
+		members = m.WalkMembers(op.Input.Target, maxWalkDepth)
+	}
 	var out []Finding
 	for member := range requestMembers(m, opID) {
-		if slices.Contains(requestPlumbingMembers, member) {
+		if slices.Contains(requestPlumbingMembers, member) ||
+			in.Config.ignoresMember(m, opID, op.Input, false, member, members) {
 			continue
 		}
 		stem := identifierRE.ReplaceAllString(member, "")
@@ -1057,11 +1037,7 @@ func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID stri
 // Top level only: a field read back from inside a list needs custom reconciliation.
 func returnedNames(m *SmithyModel, in *ControllerInputs, kind, opID string) map[string]bool {
 	names := map[string]bool{}
-	ops := []string{opID}
-	for op := range in.UsedOps[kindToResourceDir(kind)] {
-		ops = append(ops, op)
-	}
-	for _, op := range ops {
+	for _, op := range append([]string{opID}, in.calledOps(kind)...) {
 		shape, ok := m.Operation(op)
 		if !ok || shape.Output == nil {
 			continue
@@ -1097,60 +1073,6 @@ func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
 	return fields[strings.Join(segments, ".")]
 }
 
-// declinedFieldPath reports whether a member path, or an ancestor of it, is in
-// ignore.field_paths.
-//
-// Entries are shape-qualified as codegen reads them: a shape name, then a member
-// path inside it (`CreateCapacityReservationInput.DryRun`). So each segment of
-// awsPath is matched against its containing shape. The root answers to
-// `<Operation>Input`/`<Operation>Output` as well as its Smithy shape name.
-func declinedFieldPath(
-	m *SmithyModel,
-	rootNames []string,
-	awsPath string,
-	members map[string]MemberInfo,
-	declined []string,
-) bool {
-	segments := strings.Split(awsPath, ".")
-	for i := range segments {
-		containers := rootNames
-		if i > 0 {
-			parent, ok := members[strings.Join(segments[:i], ".")]
-			if !ok {
-				continue
-			}
-			containers = []string{shapeShortName(elementShape(m, parent.Target))}
-		}
-		rest := strings.ToLower(strings.Join(segments[i:], "."))
-		for _, entry := range declined {
-			shape, path, ok := strings.Cut(strings.ToLower(entry), ".")
-			if !ok || path == "" {
-				continue
-			}
-			if !slices.ContainsFunc(containers, func(c string) bool { return strings.EqualFold(c, shape) }) {
-				continue
-			}
-			if rest == path || strings.HasPrefix(rest, path+".") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// fieldRootNames returns every name a field_paths entry may use for the root of an
-// operation's request or response.
-func fieldRootNames(opName string, ref *SmithyMemberRef, isOutput bool) []string {
-	names := []string{opName + "Input"}
-	if isOutput {
-		names = []string{opName + "Output"}
-	}
-	if ref != nil {
-		names = append(names, shapeShortName(ref.Target))
-	}
-	return names
-}
-
 // elementShape resolves a list, however deeply nested, to its element shape.
 func elementShape(m *SmithyModel, shapeID string) string {
 	for range maxWalkDepth {
@@ -1161,44 +1083,6 @@ func elementShape(m *SmithyModel, shapeID string) string {
 		shapeID = shape.Member.Target
 	}
 	return shapeID
-}
-
-// declinedShapeName reports whether a member's target shape is in
-// ignore.shape_names, which applies wherever the shape is referenced.
-// targetShapeID is an absolute Smithy ID; only its short name is compared.
-func declinedShapeName(targetShapeID string, declined []string) bool {
-	if targetShapeID == "" {
-		return false
-	}
-	short := shapeShortName(targetShapeID)
-	for _, name := range declined {
-		if name != "" && strings.EqualFold(name, short) {
-			return true
-		}
-	}
-	return false
-}
-
-// declinedShapeAncestor reports whether a member path, or any of the paths it
-// hangs from, targets a declined shape. Codegen emits nothing beneath a declined
-// member, but its children have their own, undeclined targets. WalkMembers
-// records every intermediate path, so each prefix is looked up directly.
-func declinedShapeAncestor(
-	path string,
-	members map[string]MemberInfo,
-	declined []string,
-) bool {
-	if len(declined) == 0 {
-		return false
-	}
-	segments := strings.Split(path, ".")
-	for i := 1; i <= len(segments); i++ {
-		prefix := strings.Join(segments[:i], ".")
-		if mi, ok := members[prefix]; ok && declinedShapeName(mi.Target, declined) {
-			return true
-		}
-	}
-	return false
 }
 
 // sourcedAsCRDField reports whether a member is exposed under another name because
@@ -1245,18 +1129,12 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 	declared := in.Config.ResourceNames()
 
 	for kind := range in.CRDFields {
-		ops := in.UsedOps[kindToResourceDir(kind)]
-		if len(ops) == 0 {
+		opNames := in.calledOps(kind)
+		if len(opNames) == 0 {
 			continue
 		}
 		opsByPath := map[string][]string{}
 		rolesByPath := map[string]*fieldRoles{}
-
-		opNames := make([]string, 0, len(ops))
-		for op := range ops {
-			opNames = append(opNames, op)
-		}
-		sort.Strings(opNames)
 
 		for _, opName := range opNames {
 			latestOp, ok := latest.Operation(opName)
@@ -1295,7 +1173,6 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 				if side.isOutput {
 					wrapper = outputWrapper(latest, in, opName, side.latestRef)
 				}
-				rootNames := fieldRootNames(opName, side.latestRef, side.isOutput)
 
 				for _, path := range paths {
 					if _, existed := baselineMembers[path]; existed {
@@ -1325,10 +1202,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					}
 					// Absent from the CRD is not missing if generator.yaml or a
 					// codegen convention surfaces or declines the member.
-					if declinedFieldPath(latest, rootNames, path, latestMembers, in.Config.Ignore.FieldPaths) {
-						continue
-					}
-					if declinedShapeAncestor(path, latestMembers, in.Config.Ignore.ShapeNames) {
+					if in.Config.ignoresMember(latest, opName, side.latestRef, side.isOutput, path, latestMembers) {
 						continue
 					}
 					if sourcedAsCRDField(in, kind, opName, path) {

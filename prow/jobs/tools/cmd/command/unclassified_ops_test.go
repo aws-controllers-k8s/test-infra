@@ -158,8 +158,12 @@ func TestFindNewOperationsHonoursIgnoredResourcesBeforePlacing(t *testing.T) {
 	}
 	got := findNewOperations(latest, baseline, in)
 	assert.Empty(t, reportable(got))
-	assert.Equal(t, []Finding{{Class: ClassDroppedOperation, Subject: "AbortSession",
-		Detail: "concerns `Session`, which generator.yaml ignores", NewSincePin: true}}, got)
+	assert.ElementsMatch(t, []Finding{
+		{Class: ClassDroppedOperation, Subject: "AbortSession",
+			Detail: "concerns `Session`, which generator.yaml ignores", NewSincePin: true},
+		{Class: ClassDroppedOperation, Subject: "CreateSession",
+			Detail: "concerns `Session`, which generator.yaml ignores", NewSincePin: true},
+	}, got)
 }
 
 func TestFindNewOperationsCollapsesPossibleResources(t *testing.T) {

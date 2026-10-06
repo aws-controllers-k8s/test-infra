@@ -91,10 +91,7 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		if !isFieldCandidate(f.Class) {
 			continue
 		}
-		ops := append(f.evidenceOps(), newOps[f.Kind]...)
-		for op := range in.UsedOps[kindToResourceDir(f.Kind)] {
-			ops = append(ops, op)
-		}
+		ops := append(append(f.evidenceOps(), newOps[f.Kind]...), in.calledOps(f.Kind)...)
 		slices.Sort(ops)
 		var setBy, readBy, returnedBy []string
 		for _, opID := range slices.Compact(ops) {
@@ -269,7 +266,7 @@ func pairChangeLists(latest *SmithyModel, in *ControllerInputs, findings []Findi
 			field.Detail = fmt.Sprintf("custom reconciliation: %s changes it only through the change list `%s`, "+
 				"so diffing and updating it needs custom code", quoteOps(updaters), list.Subject)
 			ops := append(append(field.evidenceOps(), list.evidenceOps()...), updaters...)
-			desired, observed := entryMembers(latest, ops, field.Subject, list.Subject)
+			desired, observed := entryMembers(latest, in.Config, ops, field.Subject, list.Subject)
 			if len(observed) > 0 {
 				field.Detail += fmt.Sprintf("; Spec needs a normalized entry shape holding %s, "+
 					"with the observed-only members listed under Status", quoteOps(desired))
@@ -297,8 +294,10 @@ type entryMember struct {
 
 // entryMembers splits the members directly under field in the responses of opIDs
 // into those some request sends — under field itself or inside the change list —
-// and those only ever returned.
-func entryMembers(m *SmithyModel, opIDs []string, field, changeList string) (desired []string, observed []entryMember) {
+// and those only ever returned. Returned members generator.yaml ignores are left out.
+func entryMembers(
+	m *SmithyModel, cfg *generatorConfig, opIDs []string, field, changeList string,
+) (desired []string, observed []entryMember) {
 	under := func(p, parent string) bool {
 		prefix := p[:max(strings.LastIndex(p, "."), 0)]
 		return prefix == parent || strings.HasSuffix(prefix, "."+parent)
@@ -318,7 +317,11 @@ func entryMembers(m *SmithyModel, opIDs []string, field, changeList string) (des
 			}
 		}
 		if op.Output != nil {
-			for p := range m.WalkMembers(op.Output.Target, maxWalkDepth) {
+			members := m.WalkMembers(op.Output.Target, maxWalkDepth)
+			for p := range members {
+				if cfg.ignoresMember(m, opID, op.Output, true, p, members) {
+					continue
+				}
 				if name := lastSegment(p); under(p, field) && !slices.Contains(returned[name], opID) {
 					returned[name] = append(returned[name], opID)
 				}
@@ -541,11 +544,8 @@ func customSourcedSibling(latest *SmithyModel, in *ControllerInputs, f Finding) 
 // `S3ObjectStorageMode` on UpdateFunctionCode).
 func createOnly(latest *SmithyModel, in *ControllerInputs, declared []string, newOps []string, f Finding) bool {
 	created := false
-	ops := append([]string{}, newOps...)
-	for op := range in.UsedOps[kindToResourceDir(f.Kind)] {
-		ops = append(ops, op)
-	}
-	for _, opID := range append(ops, f.evidenceOps()...) {
+	ops := append(append(slices.Clone(newOps), in.calledOps(f.Kind)...), f.evidenceOps()...)
+	for _, opID := range ops {
 		if !requestCarriesName(latest, opID, lastSegment(f.Subject)) {
 			continue
 		}
