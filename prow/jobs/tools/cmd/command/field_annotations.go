@@ -86,7 +86,7 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		}
 	}
 
-	roles := newRoleIndex(latest)
+	roles := newRoleIndex(latest, in.Config)
 	for i := range findings {
 		f := &findings[i]
 		if !isFieldCandidate(f.Class) {
@@ -129,13 +129,15 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 
 // roleIndex answers where an operation's request or response carries a field,
 // caching each shape walk since every field is checked against every used operation.
+// Members generator.yaml ignores are left out: codegen never sets or reads them.
 type roleIndex struct {
 	m     *SmithyModel
+	cfg   *generatorConfig
 	walks map[string]map[string]MemberInfo
 }
 
-func newRoleIndex(m *SmithyModel) *roleIndex {
-	return &roleIndex{m: m, walks: map[string]map[string]MemberInfo{}}
+func newRoleIndex(m *SmithyModel, cfg *generatorConfig) *roleIndex {
+	return &roleIndex{m: m, cfg: cfg, walks: map[string]map[string]MemberInfo{}}
 }
 
 // find reports whether an operation's request (or response) carries field, and
@@ -174,7 +176,8 @@ func (r *roleIndex) findSDKPath(opID string, output bool, paths []string) (strin
 	return "", false
 }
 
-// walk returns, cached, the members of an operation's request or response.
+// walk returns, cached, the non-ignored members of an operation's request or
+// response.
 func (r *roleIndex) walk(opID string, output bool) map[string]MemberInfo {
 	key := opID + "/in"
 	if output {
@@ -189,7 +192,12 @@ func (r *roleIndex) walk(opID string, output bool) map[string]MemberInfo {
 				ref = op.Output
 			}
 			if ref != nil {
-				walk = r.m.WalkMembers(ref.Target, maxWalkDepth)
+				all := r.m.WalkMembers(ref.Target, maxWalkDepth)
+				for p, info := range all {
+					if !r.cfg.ignoresMember(r.m, opID, ref, output, p, all) {
+						walk[p] = info
+					}
+				}
 			}
 		}
 		r.walks[key] = walk
@@ -592,7 +600,7 @@ func createOnly(latest *SmithyModel, in *ControllerInputs, declared []string, ne
 	created := false
 	ops := append(append(slices.Clone(newOps), in.calledOps(f.Kind)...), f.evidenceOps()...)
 	for _, opID := range ops {
-		if !requestCarriesName(latest, opID, lastSegment(f.Subject)) {
+		if !requestCarriesField(latest, in, opID, f) {
 			continue
 		}
 		// Every role counts: an operation_type: [Create, Update] operation is also
@@ -605,15 +613,24 @@ func createOnly(latest *SmithyModel, in *ControllerInputs, declared []string, ne
 	return created
 }
 
-// requestCarriesName reports whether an operation's request has a member whose own
-// name is name, at any depth.
-func requestCarriesName(m *SmithyModel, opID, name string) bool {
+// requestCarriesField reports whether an operation's request has f at any depth:
+// at one of f's SDK paths for it, or at a member whose last segment, renamed as
+// that operation renames it, is f's (an Update's `ThingMode` renamed to `Mode`).
+func requestCarriesField(m *SmithyModel, in *ControllerInputs, opID string, f Finding) bool {
 	op, ok := m.Operation(opID)
 	if !ok || op.Input == nil {
 		return false
 	}
-	for path := range m.WalkMembers(op.Input.Target, maxWalkDepth) {
-		if lastSegment(path) == name {
+	members := m.WalkMembers(op.Input.Target, maxWalkDepth)
+	for _, path := range f.sdkPaths(opID) {
+		if _, ok := members[path]; ok {
+			return true
+		}
+	}
+	name := lastSegment(f.Subject)
+	for path := range members {
+		segments := in.Config.renamedPath(f.Kind, opID, strings.Split(path, "."))
+		if segments[len(segments)-1] == name {
 			return true
 		}
 	}

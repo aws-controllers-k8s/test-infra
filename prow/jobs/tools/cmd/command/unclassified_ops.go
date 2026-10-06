@@ -95,6 +95,12 @@ func placeUnknownOp(
 	prefix, verb, rest := m[1], m[2], m[3]
 	request := requestMembers(model, opID)
 	identifiers := identifierMembers(request)
+	// A member named for a known resource identifies it too: s3's bare `Bucket`.
+	for member := range request {
+		if _, ok := resources[strings.ToLower(member)]; ok && !slices.Contains(identifiers, member) {
+			identifiers = append(identifiers, member)
+		}
+	}
 
 	if slices.Contains(queryVerbs, verb) || (prefix != "" && slices.Contains(readVerbs, verb)) {
 		return placeDrop, dropQuery
@@ -246,6 +252,29 @@ func resourceNamedBy(identifiers []string, resources map[string]string) string {
 			continue
 		}
 		if found != "" && found != name {
+			return ""
+		}
+		found = name
+	}
+	return found
+}
+
+// requiredOwner returns the one known resource every required request member
+// identifies, by an identifier or by its bare name (s3's `Bucket`), or "". It
+// tells s3's GetObjectLockConfiguration (requires Bucket) from GetObjectAcl
+// (Bucket and Key), which name substrings cannot.
+func requiredOwner(model *SmithyModel, opID string, resources map[string]string) string {
+	op, ok := model.Operation(opID)
+	if !ok || op.Input == nil {
+		return ""
+	}
+	found := ""
+	for member, ref := range model.Shapes[op.Input.Target].Members {
+		if _, required := ref.Traits["smithy.api#required"]; !required {
+			continue
+		}
+		name, ok := resources[strings.ToLower(identifierRE.ReplaceAllString(member, ""))]
+		if !ok || (found != "" && found != name) {
 			return ""
 		}
 		found = name

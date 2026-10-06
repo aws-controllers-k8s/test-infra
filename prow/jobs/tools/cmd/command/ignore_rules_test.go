@@ -327,3 +327,42 @@ func TestEntryMembersHonoursIgnores(t *testing.T) {
 	}
 	assert.Equal(t, []string{"RegionName", "ReplicaStatus"}, names)
 }
+
+func TestDeclinedFieldPathThroughListElementName(t *testing.T) {
+	// cloudfront's Origins.Items is a list of Origin; its generator.yaml names the
+	// element shape in some entries and not in others, and codegen takes both.
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#CreateDistribution": {"type": "operation", "input": {"target": "demo#CreateDistributionRequest"}},
+		"demo#CreateDistributionRequest": {"type": "structure", "members": {
+			"DistributionConfig": {"target": "demo#DistributionConfig"}}},
+		"demo#DistributionConfig": {"type": "structure", "members": {"Origins": {"target": "demo#Origins"}}},
+		"demo#Origins": {"type": "structure", "members": {
+			"Quantity": {"target": "smithy.api#Integer"}, "Items": {"target": "demo#OriginList"}}},
+		"demo#OriginList": {"type": "list", "member": {"target": "demo#Origin"}},
+		"demo#Origin": {"type": "structure", "members": {
+			"Id": {"target": "smithy.api#String"}, "CustomHeaders": {"target": "demo#CustomHeaders"}}},
+		"demo#CustomHeaders": {"type": "structure", "members": {
+			"Quantity": {"target": "smithy.api#Integer"}, "Items": {"target": "smithy.api#String"}}}
+	}}`))
+	require.NoError(t, err)
+	shape, _ := m.Operation("CreateDistribution")
+	members := m.WalkMembers(shape.Input.Target, maxWalkDepth)
+	declined := func(path string, entries ...string) bool {
+		require.Contains(t, members, path)
+		return declinedFieldPath(m, fieldRootNames("CreateDistribution", shape.Input, false), path, members, entries)
+	}
+
+	withElement := "CreateDistributionInput.DistributionConfig.Origins.Items.Origin.CustomHeaders.Quantity"
+	assert.Equal(t, "CreateDistributionInput.DistributionConfig.Origins.Items.CustomHeaders.Quantity",
+		canonicalFieldPath(m, withElement))
+	assert.True(t, declined("DistributionConfig.Origins.Items.CustomHeaders.Quantity", withElement))
+	assert.True(t, declined("DistributionConfig.Origins.Items.CustomHeaders.Quantity",
+		"CreateDistributionInput.DistributionConfig.Origins.Items.CustomHeaders.Quantity"))
+	assert.False(t, declined("DistributionConfig.Origins.Items.CustomHeaders.Items", withElement))
+	assert.False(t, declined("DistributionConfig.Origins.Quantity", withElement))
+
+	// An entry the model cannot resolve is matched as written.
+	assert.Equal(t, "Unknown.A.B", canonicalFieldPath(m, "Unknown.A.B"))
+	assert.Equal(t, "CreateDistributionInput.Nope.Quantity",
+		canonicalFieldPath(m, "CreateDistributionInput.Nope.Quantity"))
+}

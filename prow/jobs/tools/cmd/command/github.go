@@ -579,6 +579,7 @@ func refetchManagedIssue(
 	ctx context.Context,
 	client *github.Client,
 	owner, repo, service string,
+	knownServices map[string]bool,
 	listed *github.Issue,
 ) (*github.Issue, error) {
 	number := listed.GetNumber()
@@ -601,8 +602,12 @@ func refetchManagedIssue(
 	if !issueHasLabel(fresh, apiChangeLabel) {
 		problems = append(problems, "it no longer carries "+apiChangeLabel)
 	}
-	if !issueHasLabel(fresh, "service/"+service) {
-		problems = append(problems, "it no longer carries service/"+service)
+	// The listing's exact-one rule, not mere presence: a second known service
+	// label added since would make the next run disown the issue.
+	if got, err := serviceFromLabels(fresh, knownServices); err != nil {
+		problems = append(problems, err.Error())
+	} else if got != service {
+		problems = append(problems, "it now carries service/"+got+", not service/"+service)
 	}
 	if !fingerprintedOnly(fresh) {
 		problems = append(problems, "its fingerprint is no longer readable")
@@ -612,6 +617,65 @@ func refetchManagedIssue(
 			owner, repo, number, strings.Join(problems, "; "))
 	}
 	return fresh, nil
+}
+
+// findUnlabelledIssue returns the token account's open issue that carries
+// fingerprint but not apiChangeLabel, or nil. The listing cannot see such an
+// issue, so without this a create whose labels were dropped is repeated by every
+// retry. `author:@me` is the account the listing's `author:` names.
+func findUnlabelledIssue(
+	ctx context.Context,
+	client *github.Client,
+	owner, repo, fingerprint string,
+) (*github.Issue, error) {
+	var found *github.Issue
+	err := searchIssuePages(ctx, client, owner, repo,
+		fmt.Sprintf("repo:%s/%s is:issue is:open author:@me -label:%s %s",
+			owner, repo, apiChangeLabel, fingerprint),
+		"asc",
+		func(int) error { return nil },
+		func(issue *github.Issue) {
+			// Re-checked locally, since search matches tokens and its index lags.
+			if found == nil && issue.GetState() == "open" && !issue.IsPullRequest() &&
+				!issueHasLabel(issue, apiChangeLabel) && parseFingerprint(issue.GetBody()) == fingerprint {
+				found = issue
+			}
+		})
+	if err != nil {
+		return nil, fmt.Errorf("unable to check %s/%s for an unlabelled issue before filing: %w",
+			owner, repo, err)
+	}
+	return found, nil
+}
+
+// labelGithubIssue adds labels to an existing issue. A 4xx refusal, or a response
+// still lacking apiChangeLabel, wraps errCannotLabelIssues: the token cannot
+// label, so the caller must abort rather than file anything.
+func labelGithubIssue(
+	ctx context.Context,
+	client *github.Client,
+	owner, repo string,
+	number int,
+	labels []string,
+) error {
+	got, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, number, labels)
+	if err != nil {
+		var rateLimit *github.RateLimitError
+		var abuse *github.AbuseRateLimitError
+		if createDefinitelyRejected(err) && !errors.As(err, &rateLimit) && !errors.As(err, &abuse) {
+			return fmt.Errorf("%w: GitHub refused to label issue %s/%s#%d: %w",
+				errCannotLabelIssues, owner, repo, number, err)
+		}
+		return fmt.Errorf("unable to label issue %s/%s#%d: %w", owner, repo, number, err)
+	}
+	for _, label := range got {
+		if label.GetName() == apiChangeLabel {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: issue %s/%s#%d still lacks it after labelling; "+
+		"the token's account probably lacks push access to %s/%s",
+		errCannotLabelIssues, owner, repo, number, owner, repo)
 }
 
 // issueHasLabel reports whether an issue carries a label.

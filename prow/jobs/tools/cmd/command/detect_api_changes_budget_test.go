@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-github/v63/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +28,7 @@ func TestReconcileIssueFilesNothingForOperationsAlone(t *testing.T) {
 	// Operation-only releases neither file an issue nor use a cap slot. The nil client
 	// panics on any request.
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
-		"v1.41.5", "v1.44.0", operationFindings(), nil, nil, 1, 0, false)
+		"v1.41.5", "v1.44.0", operationFindings(), nil, nil, testKnownServices("demo"), 1, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUnchanged, outcome)
 }
@@ -36,7 +37,7 @@ func TestReconcileIssueOperationsAloneLeaveAnOpenIssueStale(t *testing.T) {
 	// An open issue left with only operation findings is reported stale and not written.
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
-		"v1.41.5", "v1.44.0", operationFindings(), issueFor(42, filed), nil, 10, 0, false)
+		"v1.41.5", "v1.44.0", operationFindings(), issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueStaleOpenIssue, outcome)
 }
@@ -51,7 +52,7 @@ func TestFingerprintIgnoresOperations(t *testing.T) {
 	assert.Equal(t, closed, got)
 
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
-		"v1.41.5", "v1.44.0", withOp, nil, map[string]bool{closed: true}, 10, 0, false)
+		"v1.41.5", "v1.44.0", withOp, nil, map[string]bool{closed: true}, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueSuppressedByClosed, outcome)
 }
@@ -64,7 +65,8 @@ func TestReconcileIssueNewOperationRewordsSilently(t *testing.T) {
 		Finding{Kind: "Widget", Class: ClassNewOperation, Subject: "TagWidget", NewSincePin: true})
 
 	var patched bool
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	listed := map[string]*github.Issue{"demo": issueFor(42, filed)}
+	client := newTestGitHubClient(t, serveListedIssues(t, listed, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42" {
 			patched = true
 			fmt.Fprint(w, `{}`)
@@ -72,10 +74,10 @@ func TestReconcileIssueNewOperationRewordsSilently(t *testing.T) {
 		}
 		t.Errorf("only a silent PATCH expected, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", withOp, issueFor(42, filed), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", withOp, issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.True(t, patched)
@@ -100,7 +102,7 @@ func TestFingerprintIgnoresOperationEvidence(t *testing.T) {
 	assert.Equal(t, closed, got)
 
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
-		"v1.41.5", "v1.44.0", withDescribeGizmo(), nil, map[string]bool{closed: true}, 10, 0, false)
+		"v1.41.5", "v1.44.0", withDescribeGizmo(), nil, map[string]bool{closed: true}, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueSuppressedByClosed, outcome)
 }
@@ -110,7 +112,8 @@ func TestReconcileIssueEvidenceGrowthRewordsSilently(t *testing.T) {
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 
 	var patchedBody string
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	listed := map[string]*github.Issue{"demo": issueFor(42, filed)}
+	client := newTestGitHubClient(t, serveListedIssues(t, listed, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42" {
 			var payload struct{ Body string }
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
@@ -120,10 +123,10 @@ func TestReconcileIssueEvidenceGrowthRewordsSilently(t *testing.T) {
 		}
 		t.Errorf("only a silent PATCH expected, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", withDescribeGizmo(), issueFor(42, filed), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", withDescribeGizmo(), issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.Contains(t, patchedBody, "DescribeGizmo")

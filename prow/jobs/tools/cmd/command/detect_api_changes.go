@@ -317,6 +317,13 @@ func reconcileServices(
 		}
 	}()
 
+	// The same set listAPIChangeIssues attributed against, for the revalidation
+	// before each PATCH.
+	knownServices := make(map[string]bool, len(services))
+	for _, service := range services {
+		knownServices[service] = true
+	}
+
 	for _, service := range services {
 		// Checked here, not only in requests: analysis scans the controller checkout
 		// before its first request, so a cancelled run would otherwise keep going.
@@ -328,6 +335,17 @@ func reconcileServices(
 		}
 		attempted++
 		findings, baselineVersion, latestVersion, analyzeErr := analyze(ctx, service)
+		// Checked again here: a cancel during the last service's analysis would
+		// otherwise reach the final return as success. Nothing is written for it.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			cutShort = ctxErr
+			if analyzeErr != nil {
+				log.Printf("ERROR %s: %s", service, analyzeErr)
+			}
+			return analysisFailures, writeFailures, skippedAtCap,
+				fmt.Errorf("run cut short while analysing %s, %d of %d services not attempted: %w",
+					service, len(services)-attempted, len(services), ctxErr)
+		}
 		if analyzeErr != nil {
 			log.Printf("ERROR %s: %s", service, analyzeErr)
 			analysisFailures = append(analysisFailures, service)
@@ -356,10 +374,11 @@ func reconcileServices(
 
 		// Re-read the issue just before merging into it: the listed copy can be
 		// minutes old, and a maintainer edit since then would be overwritten. The
-		// stale-issue path writes nothing, so it skips the GET.
+		// stale-issue path (not eligible, even with operation findings) writes
+		// nothing, so it skips the GET.
 		existing := existingByService[service]
-		if existing != nil && reported > 0 {
-			fresh, refetchErr := refetchManagedIssue(ctx, client, owner, repo, service, existing)
+		if existing != nil && eligible {
+			fresh, refetchErr := refetchManagedIssue(ctx, client, owner, repo, service, knownServices, existing)
 			if refetchErr != nil {
 				log.Printf("ERROR %s: %s", service, refetchErr)
 				writeFailures = append(writeFailures, service)
@@ -379,8 +398,11 @@ func reconcileServices(
 			// region spliced into the existing body for a refresh.
 			preview, previewKind := body, "new"
 			if existing != nil {
-				// A body with no mergeable region gets the region alone.
-				if merged, mergeErr := replaceGeneratedRegion(existing.GetBody(), body); mergeErr != nil {
+				// Rendered into what the existing outside text leaves, as reconcileIssue
+				// does. A body with no mergeable region gets the region alone.
+				region, _ := renderIssueRegion(service, baselineVersion, latestVersion, findings,
+					githubMaxIssueBody-bytesOutsideRegion(existing.GetBody()))
+				if merged, mergeErr := replaceGeneratedRegion(existing.GetBody(), region); mergeErr != nil {
 					previewKind = "unmergeable (region only)"
 				} else {
 					preview, previewKind = merged, "refreshed"
@@ -400,7 +422,7 @@ func reconcileServices(
 		outcome, reconcileErr := reconcileIssue(
 			ctx, client, owner, repo,
 			service, baselineVersion, latestVersion, findings,
-			existing, closedFingerprints[service],
+			existing, closedFingerprints[service], knownServices,
 			maxOpen, openCount, dryRun,
 		)
 		if reconcileErr != nil {
@@ -438,6 +460,15 @@ func reconcileServices(
 			} else {
 				log.Printf("%s: issue updated", service)
 			}
+		case issueRelabelled:
+			// The orphan was not in the listing, so it takes a cap slot now.
+			openCount++
+			updated++
+			if dryRun {
+				log.Printf("%s: would label the unlabelled issue an earlier run filed", service)
+			} else {
+				log.Printf("%s: labelled the unlabelled issue an earlier run filed", service)
+			}
 		case issueSkippedAtCap:
 			log.Printf("%s: SKIPPED, open-issue cap of %d reached; %d findings not filed",
 				service, maxOpen, reported)
@@ -462,6 +493,12 @@ func reconcileServices(
 		}
 	}
 
+	// A cancel during the last service's writes must not read as a clean run.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		cutShort = ctxErr
+		return analysisFailures, writeFailures, skippedAtCap,
+			fmt.Errorf("run cut short during the last service: %w", ctxErr)
+	}
 	return analysisFailures, writeFailures, skippedAtCap, nil
 }
 

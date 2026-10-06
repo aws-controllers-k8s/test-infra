@@ -523,3 +523,80 @@ func TestReadStatusCandidatesDropGeneratedHistory(t *testing.T) {
 	require.Len(t, syslog, 1)
 	assert.Equal(t, ClassStatusField, syslog[0].Class)
 }
+
+// TestSetterFieldCandidatesUseOwnOperationRenames: CreateWidget's RawMode -> Mode
+// rename does not reach the new setter, which sends RawMode as a field the CRD
+// lacks; GetWidget's Colour -> Color rename is how the setter's Color reads back.
+func TestSetterFieldCandidatesUseOwnOperationRenames(t *testing.T) {
+	m := responsesModel(t,
+		map[string][]string{
+			"PutWidgetMode": {"WidgetId", "RawMode", "Color"},
+			"CreateWidget":  {"RawMode"},
+			"GetWidget":     {"WidgetId"},
+		},
+		map[string][]string{"GetWidget": {"RawMode", "Colour"}})
+	in := &ControllerInputs{
+		Config: &generatorConfig{Resources: map[string]resourceConfig{
+			"Widget": {Renames: resourceRenames{Operations: map[string]operationRenames{
+				"CreateWidget": {InputFields: map[string]string{"RawMode": "Mode"}},
+				"GetWidget":    {OutputFields: map[string]string{"Colour": "Color"}},
+			}}},
+		}},
+		CRDFields: map[string]map[string]bool{"Widget": {"mode": true}},
+		UsedOps:   map[string]map[string]bool{"widget": {"CreateWidget": true, "GetWidget": true}},
+	}
+	got := setterFieldCandidates(m, in, "Widget", "PutWidgetMode", OpTypes{OpTypeUnknown}, nil)
+	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
+	assert.Equal(t, []Finding{
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetMode"},
+		{Kind: "Widget", Class: ClassSpecField, Subject: "RawMode", NewSincePin: true, Evidence: "PutWidgetMode"},
+	}, got)
+
+	// The setter's own rename applies to it.
+	in.Config.Resources["Widget"].Renames.Operations["PutWidgetMode"] =
+		operationRenames{InputFields: map[string]string{"Color": "Hue"}}
+	got = setterFieldCandidates(m, in, "Widget", "PutWidgetMode", OpTypes{OpTypeUnknown}, nil)
+	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
+	assert.Equal(t, []Finding{
+		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Hue", NewSincePin: true, Evidence: "PutWidgetMode",
+			SDKPaths: "PutWidgetMode=Color"},
+		{Kind: "Widget", Class: ClassSpecField, Subject: "RawMode", NewSincePin: true, Evidence: "PutWidgetMode"},
+	}, got, "Hue is not what GetWidget returns")
+}
+
+func TestIgnoredNameYieldsToRequestEvidence(t *testing.T) {
+	// s3 ignores `Object`. GetObjectLockConfiguration requires only Bucket, so it
+	// reads Bucket state; GetObjectAcl also requires Key, so it is an Object's.
+	required := `{"traits": {"smithy.api#required": {}}, "target": "smithy.api#String"}`
+	model := func(latest bool) *SmithyModel {
+		ops := ""
+		if latest {
+			ops = `
+			"s3#GetObjectLockConfiguration": {"type": "operation", "input": {"target": "s3#GetObjectLockConfigurationRequest"}},
+			"s3#GetObjectLockConfigurationRequest": {"type": "structure", "members": {
+				"Bucket": ` + required + `, "ExpectedBucketOwner": {"target": "smithy.api#String"}}},
+			"s3#GetObjectAcl": {"type": "operation", "input": {"target": "s3#GetObjectAclRequest"}},
+			"s3#GetObjectAclRequest": {"type": "structure", "members": {
+				"Bucket": ` + required + `, "Key": ` + required + `, "VersionId": {"target": "smithy.api#String"}}},`
+		}
+		m, err := LoadSmithyModel([]byte(`{"shapes": {` + ops + `
+			"s3#CreateBucket": {"type": "operation", "input": {"target": "s3#CreateBucketRequest"}},
+			"s3#CreateBucketRequest": {"type": "structure", "members": {"Bucket": ` + required + `}}
+		}}`))
+		require.NoError(t, err)
+		return m
+	}
+	in := &ControllerInputs{
+		Config:       &generatorConfig{Ignore: ignoreConfig{ResourceNames: []string{"Object"}}},
+		CRDFields:    map[string]map[string]bool{"Bucket": {}},
+		UsedOps:      map[string]map[string]bool{"bucket": {"CreateBucket": true}},
+		kindsByLower: map[string]string{"bucket": "Bucket"},
+	}
+
+	got := findNewOperations(model(true), model(false), in)
+	assert.Contains(t, got, Finding{Kind: "Bucket", Class: ClassNewOperation, Subject: "GetObjectLockConfiguration",
+		NewSincePin: true, Detail: "read: its response could back Status fields"})
+	assert.Contains(t, got, Finding{Class: ClassDroppedOperation, Subject: "GetObjectAcl",
+		Detail: "concerns `Object`, which generator.yaml ignores", NewSincePin: true})
+	assert.Equal(t, []string{"GetObjectLockConfiguration"}, subjects(got, ClassNewOperation))
+}

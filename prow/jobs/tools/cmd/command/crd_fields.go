@@ -58,21 +58,21 @@ func (p *crdProps) UnmarshalYAML(node *yaml.Node) error {
 	return node.Decode((*plain)(p))
 }
 
-// readCRDFields returns, per resource kind, the set of field paths the
-// controller's CRDs expose. Paths are dotted and lowercased; spec and status
-// are merged, since a field in either is already surfaced. A missing
-// config/crd/bases directory yields an empty map, not an error.
-func readCRDFields(controllerPath string) (map[string]map[string]bool, error) {
+// readCRDFields returns, per resource kind, the dotted, lowercased field paths
+// of the controller's CRDs, with Spec and Status apart: a Status field does not
+// make the same name settable. Every kind has a spec entry, possibly empty. A
+// missing config/crd/bases directory yields empty maps, not an error.
+func readCRDFields(controllerPath string) (spec, status map[string]map[string]bool, err error) {
+	spec, status = map[string]map[string]bool{}, map[string]map[string]bool{}
 	dir := filepath.Join(controllerPath, "config", "crd", "bases")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]map[string]bool{}, nil
+			return spec, status, nil
 		}
-		return nil, fmt.Errorf("unable to read %s: %s", dir, err)
+		return nil, nil, fmt.Errorf("unable to read %s: %s", dir, err)
 	}
 
-	out := map[string]map[string]bool{}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
@@ -83,12 +83,12 @@ func readCRDFields(controllerPath string) (map[string]map[string]bool, error) {
 		path := filepath.Join(dir, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read %s: %s", path, err)
+			return nil, nil, fmt.Errorf("unable to read %s: %s", path, err)
 		}
 
 		var doc crdDoc
 		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return nil, fmt.Errorf("unable to unmarshal %s: %s", path, err)
+			return nil, nil, fmt.Errorf("unable to unmarshal %s: %s", path, err)
 		}
 		kind := doc.Spec.Names.Kind
 		if kind == "" || len(doc.Spec.Versions) == 0 {
@@ -98,20 +98,19 @@ func readCRDFields(controllerPath string) (map[string]map[string]bool, error) {
 		// Only versions[0] is read; every ACK CRD currently has one version.
 		// Merge rather than overwrite if two files declare the same kind: a
 		// union can only over-suppress, which is the safer failure.
-		fields, ok := out[kind]
-		if !ok {
-			fields = map[string]bool{}
-			out[kind] = fields
-		}
-
 		root := doc.Spec.Versions[0].Schema.OpenAPIV3Schema
-		for _, section := range []string{"spec", "status"} {
+		for section, out := range map[string]map[string]map[string]bool{"spec": spec, "status": status} {
+			fields, ok := out[kind]
+			if !ok {
+				fields = map[string]bool{}
+				out[kind] = fields
+			}
 			if node, ok := root.Properties[section]; ok {
 				flattenCRDProps(node, "", fields)
 			}
 		}
 	}
-	return out, nil
+	return spec, status, nil
 }
 
 // flattenCRDProps adds every property path under node to fields. Array items

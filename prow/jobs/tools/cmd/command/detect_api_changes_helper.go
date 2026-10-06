@@ -801,8 +801,11 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 			// The ignored-resource substring test must stay inside this arm. Run
 			// before classification it would hide real findings whenever an
 			// ignored name is a substring of a managed one (ec2 ignores `Route`
-			// but manages `RouteTable`).
-			if ignored := ignoredNameIn(opID, in.Config.Ignore.ResourceNames, resources); ignored != "" {
+			// but manages `RouteTable`). A request that identifies only another
+			// resource outweighs the name: s3 ignores `Object`, yet
+			// GetObjectLockConfiguration reads Bucket state.
+			if ignored := ignoredNameIn(opID, in.Config.Ignore.ResourceNames, resources); ignored != "" &&
+				requiredOwner(latest, opID, resources) == "" {
 				// Listed when new, so a deliberate ignore is distinguishable
 				// from a miss.
 				if !inBaseline {
@@ -985,7 +988,7 @@ func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, k
 		if strings.EqualFold(path, "NextToken") || hasNewAncestor(path, latestMembers, baselineMembers) {
 			continue
 		}
-		if exposedInCRD(in, kind, path) ||
+		if exposedInCRD(in, kind, path, true) ||
 			in.Config.ignoresMember(latest, opID, op.Output, true, path, latestMembers) {
 			continue
 		}
@@ -1108,12 +1111,18 @@ func setterFieldCandidates(
 		if strings.EqualFold(stem, kind) {
 			continue
 		}
-		if exposedInCRD(in, kind, member) {
+		// Only this operation's renames apply: another's rename of the same
+		// member does not reach this request.
+		field := in.Config.renamedPath(kind, opID, []string{member})[0]
+		if exposedAt(in, kind, field, false) {
 			continue
 		}
-		f := Finding{Kind: kind, Class: ClassSpecField, Subject: member, NewSincePin: true, Evidence: opID}
+		f := Finding{Kind: kind, Class: ClassSpecField, Subject: field, NewSincePin: true, Evidence: opID}
+		if field != member {
+			f.SDKPaths = opID + "=" + member
+		}
 		// needsWork gives a lifecycle field its reason.
-		if !readable[strings.ToLower(member)] {
+		if !readable[strings.ToLower(field)] {
 			f.Class = ClassLifecycleField
 		}
 		out = append(out, f)
@@ -1122,16 +1131,17 @@ func setterFieldCandidates(
 }
 
 // returnedNames returns the lowercased top-level members of the responses of the
-// read operations among ops, looking through a response wrapper or a member that
-// stands for the resource (DescribeFirewall's `Firewall`). Top level only: a field
-// read back from inside a list needs custom reconciliation.
+// read operations among ops, each as its read renames it, looking through a
+// response wrapper or a member that stands for the resource (DescribeFirewall's
+// `Firewall`). Top level only: a field read back from inside a list needs custom
+// reconciliation.
 func returnedNames(m *SmithyModel, in *ControllerInputs, kind string, ops []string) map[string]bool {
 	names := map[string]bool{}
 	var declared []string
 	if in.Config != nil {
 		declared = in.Config.ResourceNames()
 	}
-	roles := newRoleIndex(m)
+	roles := newRoleIndex(m, in.Config)
 	for _, op := range ops {
 		// A Create/Update echo, or the setter's own response, is not observed on
 		// the next reconciliation.
@@ -1143,7 +1153,8 @@ func returnedNames(m *SmithyModel, in *ControllerInputs, kind string, ops []stri
 			continue
 		}
 		wrapper := outputWrapper(m, in, op, shape.Output)
-		walk := m.WalkMembers(shape.Output.Target, maxWalkDepth)
+		// An ignored member is never read back, so it cannot make a setter Spec.
+		walk := roles.walk(op, true)
 		for path := range walk {
 			// Case-insensitive, as codegen matches output_wrapper_field_path
 			// (emrcontainers' `VirtualCluster` names member `virtualCluster`).
@@ -1155,7 +1166,8 @@ func returnedNames(m *SmithyModel, in *ControllerInputs, kind string, ops []stri
 				path = rest
 			}
 			if !strings.Contains(path, ".") {
-				names[strings.ToLower(path)] = true
+				// As the CRD names it for this read, to match a setter's field.
+				names[strings.ToLower(in.Config.renamedPath(kind, op, []string{path})[0])] = true
 			}
 		}
 	}
@@ -1170,14 +1182,14 @@ func kindToResourceDir(kind string) string {
 
 // exposedInCRD reports whether an AWS member path is surfaced by a resource's CRD
 // as spelled or as any one operation's renames spell it. For a member of a known
-// operation, crdFieldPath and exposedAt are exact.
-func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
-	if exposedAt(in, kind, awsPath) {
+// operation, crdFieldPath and exposedAt are exact. output is as for exposedAt.
+func exposedInCRD(in *ControllerInputs, kind, awsPath string, output bool) bool {
+	if exposedAt(in, kind, awsPath, output) {
 		return true
 	}
 	segments := strings.Split(awsPath, ".")
 	for _, opName := range in.Config.renamedOps(kind) {
-		if exposedAt(in, kind, strings.Join(in.Config.renamedPath(kind, opName, segments), ".")) {
+		if exposedAt(in, kind, strings.Join(in.Config.renamedPath(kind, opName, segments), "."), output) {
 			return true
 		}
 	}
@@ -1185,9 +1197,11 @@ func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
 }
 
 // exposedAt reports whether a resource's CRD has a field at a CRD path, compared
-// case-insensitively.
-func exposedAt(in *ControllerInputs, kind, crdPath string) bool {
-	return in.CRDFields[kind][strings.ToLower(crdPath)]
+// case-insensitively. A settable candidate must be in Spec; an output-only one
+// may be in either, as codegen leaves out of Status what Spec already has.
+func exposedAt(in *ControllerInputs, kind, crdPath string, output bool) bool {
+	path := strings.ToLower(crdPath)
+	return in.CRDFields[kind][path] || (output && in.CRDStatusFields[kind][path])
 }
 
 // elementShape resolves a list or map, however deeply nested, to its element or
@@ -1211,27 +1225,40 @@ func elementShape(m *SmithyModel, shapeID string) string {
 // generator.yaml's `resources.<Kind>.fields.<Name>.from` sources a field from it.
 // The declared path matches exactly or as a prefix, covering its children.
 func sourcedAsCRDField(in *ControllerInputs, kind, opName, path string) bool {
-	res, ok := in.Config.resource(kind)
-	if !ok {
-		return false
+	_, _, ok := sourcedField(in, kind, opName, path)
+	return ok
+}
+
+// sourcedField returns the generator.yaml field a `from:` entry sources path into,
+// and path's suffix below the declared path ("" for the declared member itself).
+func sourcedField(in *ControllerInputs, kind, opName, path string) (field, suffix string, ok bool) {
+	res, found := in.Config.resource(kind)
+	if !found {
+		return "", "", false
 	}
-	for _, field := range res.Fields {
-		if field.From == nil {
-			continue
-		}
-		if !strings.EqualFold(field.From.Operation, opName) {
+	names := make([]string, 0, len(res.Fields))
+	for name := range res.Fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	lowered := strings.ToLower(path)
+	for _, name := range names {
+		from := res.Fields[name].From
+		if from == nil || !strings.EqualFold(from.Operation, opName) {
 			continue
 		}
 		// `..` steps into a list element (applicationautoscaling's
 		// `ScalingPolicies..CreationTime`); member walks see lists transparently.
-		declared := strings.ToLower(strings.ReplaceAll(field.From.Path, "..", "."))
-		lowered := strings.ToLower(path)
-		if declared != "" &&
-			(lowered == declared || strings.HasPrefix(lowered, declared+".")) {
-			return true
+		declared := strings.ToLower(strings.ReplaceAll(from.Path, "..", "."))
+		switch {
+		case declared == "":
+		case lowered == declared:
+			return name, "", true
+		case strings.HasPrefix(lowered, declared+"."):
+			return name, path[len(declared)+1:], true
 		}
 	}
-	return false
+	return "", "", false
 }
 
 // isACKManagedARN reports whether a member is the resource ARN that ack-generate
@@ -1302,9 +1329,10 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 				paging := paginationMembers(latest, opName, servicePaging, side.isOutput)
 
 				for _, path := range paths {
-					if _, existed := baselineMembers[path]; existed {
-						continue
-					}
+					// A baseline member is not new, but its role still counts for a
+					// field new elsewhere: a read already returning it makes a newly
+					// settable field Spec.
+					_, existed := baselineMembers[path]
 					if slices.Contains(paging, path) {
 						continue
 					}
@@ -1317,10 +1345,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					}
 					// A child of a new field belongs to that field's finding,
 					// and shares its suppressions.
-					if hasNewAncestor(path, latestMembers, baselineMembers) {
-						continue
-					}
-					if exposedAt(in, kind, crdPath) {
+					if !existed && hasNewAncestor(path, latestMembers, baselineMembers) {
 						continue
 					}
 					if underDeclinedParent(latest, in, kind, opName, side.latestRef, side.isOutput,
@@ -1332,8 +1357,16 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					if in.Config.ignoresMember(latest, opName, side.latestRef, side.isOutput, path, latestMembers) {
 						continue
 					}
-					if sourcedAsCRDField(in, kind, opName, path) {
-						continue
+					// A new member below a sourced field is keyed under that field, so
+					// the source operation's role joins the other operations' roles.
+					sourcedSpec := false
+					if field, suffix, ok := sourcedField(in, kind, opName, path); ok {
+						if suffix == "" {
+							continue
+						}
+						crdPath = field + "." + suffix
+						res, _ := in.Config.resource(kind)
+						sourcedSpec = !res.Fields[field].IsReadOnly
 					}
 					// Output only: codegen maps a response ARN to status, but a
 					// request member named `Arn` is a real field.
@@ -1344,22 +1377,31 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					// wrappers (`Table.X`, `TableDescription.X`) or renames is one
 					// finding.
 					key := crdPath
+					if rolesByPath[key] == nil {
+						rolesByPath[key] = &fieldRoles{}
+					}
+					rolesByPath[key].add(opTypes, opName, side.isOutput)
+					rolesByPath[key].sourcedSpec = rolesByPath[key].sourcedSpec || sourcedSpec
+					if existed {
+						continue
+					}
 					if !slices.Contains(opsByPath[key], opName) {
 						opsByPath[key] = append(opsByPath[key], opName)
 					}
 					if path != key {
 						sdkPaths[key] = append(sdkPaths[key], opName+"="+path)
 					}
-					if rolesByPath[key] == nil {
-						rolesByPath[key] = &fieldRoles{}
-					}
-					rolesByPath[key].add(opTypes, opName, side.isOutput)
 				}
 			}
 		}
 
 		for path, opNames := range opsByPath {
 			class := rolesByPath[path].class()
+			// Checked once classed, since the class decides the section: Status
+			// already holding a name does not make it settable.
+			if exposedAt(in, kind, path, class == ClassStatusField) {
+				continue
+			}
 			detail := ""
 			if class == ClassDroppedField {
 				detail = dropReadOption
@@ -1398,6 +1440,9 @@ type fieldRoles struct {
 	// readOutput is output from a read, which the controller observes on every
 	// reconciliation.
 	readOutput bool
+	// sourcedSpec is a member below a Spec `from:` field, whose type codegen
+	// generates from the source member's shape.
+	sourcedSpec bool
 }
 
 // add records one side of one operation. An operation with several types
@@ -1423,14 +1468,14 @@ func (r *fieldRoles) add(opTypes OpTypes, opID string, isOutput bool) {
 	}
 }
 
-// class says what kind of candidate the field is: Spec if sent at Create, or sent
-// at Update and returned by a read (an Update's own response does not count, as
-// the controller cannot reconcile what it never reads back); Status if only
-// returned; Lifecycle if only sent on Update or Delete; dropped if only on a read
-// request.
+// class says what kind of candidate the field is: Spec if below a Spec `from:`
+// field, sent at Create, or sent at Update and returned by a read (an Update's
+// own response does not count, as the controller cannot reconcile what it never
+// reads back); Status if only returned; Lifecycle if only sent on Update or
+// Delete; dropped if only on a read request.
 func (r *fieldRoles) class() FindingClass {
 	switch {
-	case r.createInput || (r.updateInput && r.readOutput):
+	case r.sourcedSpec || r.createInput || (r.updateInput && r.readOutput):
 		return ClassSpecField
 	case r.updateInput:
 		return ClassLifecycleField
@@ -1640,7 +1685,7 @@ func crdFieldPath(
 	// An output wrapper the CRD models as a field stays in the path (s3's
 	// objectLockConfiguration, which hooks read), unless the CRD also has the
 	// unwrapped member, as acm's certificate PEM beside options does.
-	if isOutput && rel != path && exposedInCRD(in, kind, wrapper) && !exposedAt(in, kind, segments[0]) {
+	if isOutput && rel != path && exposedInCRD(in, kind, wrapper, true) && !exposedAt(in, kind, segments[0], true) {
 		return path, true
 	}
 	return strings.Join(segments, "."), true
@@ -1679,7 +1724,7 @@ func underDeclinedParent(
 			return false
 		}
 		crdPath, ok := crdFieldPath(m, in, kind, opName, ref, isOutput, ancestor)
-		return !(ok && exposedAt(in, kind, crdPath)) &&
+		return !(ok && exposedAt(in, kind, crdPath, isOutput)) &&
 			!sourcedAsCRDField(in, kind, opName, ancestor)
 	}
 	return false
@@ -1848,15 +1893,31 @@ func replaceGeneratedRegion(existingBody, newRegion string) (string, error) {
 const githubMaxIssueBody = 65536
 
 // comparedVersionsRE reads back the versions issueFooter wrote.
-var comparedVersionsRE = regexp.MustCompile(`\nCompared aws-sdk-go-v2 (\S+) -> (\S+)\n`)
+var comparedVersionsRE = regexp.MustCompile(`\nCompared aws-sdk-go-v2 (\S+) -> (\S+)\r?\n`)
 
-// parseComparedVersions returns the versions an issue's footer names.
+// parseComparedVersions returns the versions an issue's footer names. Only one
+// line inside the unique generated region counts, so a maintainer's note quoting
+// it cannot be mistaken for the footer.
 func parseComparedVersions(body string) (baseline, latest string, ok bool) {
-	m := comparedVersionsRE.FindStringSubmatch(body)
-	if m == nil {
+	start, end, shape := generatedRegion(body)
+	if shape != regionUnique {
 		return "", "", false
 	}
-	return m[1], m[2], true
+	m := comparedVersionsRE.FindAllStringSubmatch(body[start:end], -1)
+	if len(m) != 1 {
+		return "", "", false
+	}
+	return m[0][1], m[0][2], true
+}
+
+// bytesOutsideRegion is how much of body lies outside its generated region, so
+// a refresh can render the region into what is left of GitHub's limit.
+func bytesOutsideRegion(body string) int {
+	start, end, shape := generatedRegion(body)
+	if shape != regionUnique {
+		return 0
+	}
+	return len(body) - (end - start)
 }
 
 // issueFooter ends every generated region: the comparison line, then the
@@ -1875,10 +1936,11 @@ func issueFooter(baselineVersion, latestVersion, fingerprint string) string {
 // If the fixed parts alone exceed the limit nothing fits; that needs ~32KB
 // version strings, which SDK tags never are.
 func issueBodyBudget(
+	limit int,
 	baselineVersion, latestVersion, fingerprint string,
 	resourceBlocks, findingCount int,
 ) int {
-	return githubMaxIssueBody - 1 -
+	return limit - 1 -
 		len(issueFooter(baselineVersion, latestVersion, fingerprint)) -
 		len(overflowSummary(resourceBlocks, findingCount)) -
 		len(generatedRegionEnd) - len("\n")
@@ -1943,6 +2005,16 @@ func renderIssueBody(
 	service, baselineVersion, latestVersion string,
 	findings []Finding,
 ) (string, string) {
+	return renderIssueRegion(service, baselineVersion, latestVersion, findings, githubMaxIssueBody)
+}
+
+// renderIssueRegion is renderIssueBody capped at limit bytes, for a refresh whose
+// region must share GitHub's limit with the maintainer text around it.
+func renderIssueRegion(
+	service, baselineVersion, latestVersion string,
+	findings []Finding,
+	limit int,
+) (string, string) {
 	findings = dedupeFindings(findings)
 	// The appendix (pre-existing and dropped findings) is measured here to size
 	// its reserve, then rendered after the findings.
@@ -1978,7 +2050,7 @@ func renderIssueBody(
 
 	// The findings hold back at most maxAppendixReserve for the appendix, which
 	// gets whatever they leave and truncates itself to fit.
-	budget := issueBodyBudget(baselineVersion, latestVersion, fingerprint,
+	budget := issueBodyBudget(limit, baselineVersion, latestVersion, fingerprint,
 		resourceBlocks, len(findings))
 	findingsBudget := budget - appendixReserve
 
@@ -2494,6 +2566,9 @@ const (
 	// current findings. Nothing is written, but the caller logs it because the
 	// issue holds a cap slot.
 	issueStaleOpenIssue issueOutcome = 6
+	// issueRelabelled means an open issue this tool filed earlier, whose labels
+	// GitHub dropped, was found and labelled instead of filing a second one.
+	issueRelabelled issueOutcome = 7
 )
 
 // String names an outcome for the log. Unlike FindingClass.String, these names
@@ -2514,6 +2589,8 @@ func (o issueOutcome) String() string {
 		return "skipped-at-cap"
 	case issueStaleOpenIssue:
 		return "stale-open-issue"
+	case issueRelabelled:
+		return "relabelled"
 	}
 	return fmt.Sprintf("unnamed-outcome-%d", int(o))
 }
@@ -2529,16 +2606,20 @@ func (o issueOutcome) String() string {
 // matching finding set is not re-filed: closing is how a maintainer dismisses it.
 // A new change yields a new fingerprint and still files.
 //
+// knownServices is the run's service set, for the exact-one service label check
+// repeated before every PATCH.
+//
 // maxOpen is the cap on open issues, which must be positive, and gates creation
 // only. openCount is owned by the caller, which must increment it on every
-// issueCreated and on errors wrapping errIssueCreateIndeterminate.
+// issueCreated and issueRelabelled and on errors wrapping
+// errIssueCreateIndeterminate.
 //
 // Every error return carries issueOutcomeNone. An error wrapping
 // errCannotLabelIssues must abort the whole run.
 //
-// dryRun suppresses only the three GitHub writes; every decision still runs. A dry
-// run cannot show whether the token can label issues or whether writes would
-// succeed.
+// dryRun suppresses only the GitHub writes (create, label, comment, edit); every
+// decision still runs. A dry run cannot show whether the token can label issues
+// or whether writes would succeed.
 func reconcileIssue(
 	ctx context.Context,
 	client *github.Client,
@@ -2547,6 +2628,7 @@ func reconcileIssue(
 	findings []Finding,
 	existing *github.Issue,
 	closedFingerprints map[string]bool,
+	knownServices map[string]bool,
 	maxOpen int,
 	openCount int,
 	dryRun bool,
@@ -2598,6 +2680,21 @@ func reconcileIssue(
 			fmt.Sprintf("service/%s", service),
 			defaultProwAutoGenLabel,
 		}
+		// A create whose labels GitHub dropped leaves an issue the listing cannot
+		// see. Find it first, so a Prow retry labels it (or aborts) instead of
+		// filing a second one.
+		orphan, err := findUnlabelledIssue(ctx, client, owner, repo, want)
+		if err != nil {
+			return issueOutcomeNone, err
+		}
+		if orphan != nil {
+			if !dryRun {
+				if err := labelGithubIssue(ctx, client, owner, repo, orphan.GetNumber(), labels); err != nil {
+					return issueOutcomeNone, err
+				}
+			}
+			return issueRelabelled, nil
+		}
 		if !dryRun {
 			if _, err := createGithubIssueWithClient(ctx, client, owner, repo, title, body, labels); err != nil {
 				// The issue may still have been filed: the label check runs after
@@ -2614,13 +2711,26 @@ func reconcileIssue(
 	// details), so rewrite the body silently, without a comment. The comparison
 	// re-renders at the versions the issue already names, so a new SDK release
 	// alone does not rewrite every open issue.
+	// A refresh renders into what the text outside the region leaves of GitHub's
+	// limit, so a long maintainer note truncates the report instead of failing.
+	render := func(current string) string {
+		region, _ := renderIssueRegion(service, baselineVersion, latestVersion, findings,
+			githubMaxIssueBody-bytesOutsideRegion(current))
+		return region
+	}
+
 	if parseFingerprint(existing.GetBody()) == want {
+		// A body whose region cannot be located is refused, not read as unchanged.
+		if _, err := replaceGeneratedRegion(existing.GetBody(), ""); err != nil {
+			return issueOutcomeNone, fmt.Errorf("not rewording issue %s/%s#%d: %w",
+				owner, repo, number, err)
+		}
 		oldBaseline, oldLatest, ok := parseComparedVersions(existing.GetBody())
 		if !ok {
 			return issueUnchanged, nil
 		}
-		asFiled, _ := renderIssueBody(service, oldBaseline, oldLatest, findings)
-		// A body whose region cannot be located is refused, not read as unchanged.
+		asFiled, _ := renderIssueRegion(service, oldBaseline, oldLatest, findings,
+			githubMaxIssueBody-bytesOutsideRegion(existing.GetBody()))
 		reread, err := replaceGeneratedRegion(existing.GetBody(), asFiled)
 		if err != nil {
 			return issueOutcomeNone, fmt.Errorf("not rewording issue %s/%s#%d: %w",
@@ -2629,7 +2739,7 @@ func reconcileIssue(
 		if reread == existing.GetBody() {
 			return issueUnchanged, nil
 		}
-		merged, err := replaceGeneratedRegion(existing.GetBody(), body)
+		merged, err := replaceGeneratedRegion(existing.GetBody(), render(existing.GetBody()))
 		if err != nil {
 			return issueOutcomeNone, fmt.Errorf("not rewording issue %s/%s#%d: %w",
 				owner, repo, number, err)
@@ -2640,6 +2750,15 @@ func reconcileIssue(
 				owner, repo, number, len(merged), githubMaxIssueBody)
 		}
 		if !dryRun {
+			merged, current, err := remergeBeforePatch(ctx, client, owner, repo, service,
+				knownServices, existing, render, want)
+			if err != nil {
+				return issueOutcomeNone, fmt.Errorf("not rewording issue %s/%s#%d: %w",
+					owner, repo, number, err)
+			}
+			if current {
+				return issueUnchanged, nil
+			}
 			if err := updateGithubIssueBody(ctx, client, owner, repo, number, merged); err != nil {
 				return issueOutcomeNone, err
 			}
@@ -2652,7 +2771,7 @@ func reconcileIssue(
 	// markers would otherwise get a comment every run for a refresh that never
 	// lands. There is no fallback to replacing the whole body, which would delete
 	// the maintainer's text.
-	merged, err := replaceGeneratedRegion(existing.GetBody(), body)
+	merged, err := replaceGeneratedRegion(existing.GetBody(), render(existing.GetBody()))
 	if err != nil {
 		return issueOutcomeNone, fmt.Errorf("not refreshing issue %s/%s#%d: %w",
 			owner, repo, number, err)
@@ -2682,52 +2801,52 @@ func reconcileIssue(
 			return issueOutcomeNone, err
 		}
 
-		// GitHub has no conditional PATCH, so re-read and re-merge right before it:
-		// a maintainer's edit or close during the comment would otherwise be
-		// overwritten, and a closed issue left carrying want would suppress it.
-		merged, err = remergeAfterComment(ctx, client, owner, repo, service, existing, body, want)
+		merged, current, err := remergeBeforePatch(ctx, client, owner, repo, service,
+			knownServices, existing, render, want)
 		if err != nil {
-			return issueOutcomeNone, err
+			return issueOutcomeNone, fmt.Errorf("commented on issue %s/%s#%d but left its body as is: %w",
+				owner, repo, number, err)
 		}
-		if err := updateGithubIssueBody(ctx, client, owner, repo, number, merged); err != nil {
-			return issueOutcomeNone, err
+		if !current {
+			if err := updateGithubIssueBody(ctx, client, owner, repo, number, merged); err != nil {
+				return issueOutcomeNone, err
+			}
 		}
 	}
 	return issueUpdated, nil
 }
 
-// remergeAfterComment re-reads the issue reconcileIssue has just commented on and
-// merges region into its current body. It refuses, so the PATCH is skipped, if the
-// issue no longer passes refetchManagedIssue or its fingerprint was changed by
-// someone other than this tool.
-func remergeAfterComment(
+// remergeBeforePatch re-reads the issue and merges a region rendered for its
+// current body. GitHub has no conditional PATCH, so this runs right before every
+// one: a maintainer's edit or close since the last read would otherwise be lost.
+// It refuses if the issue no longer passes refetchManagedIssue or its fingerprint
+// was changed by someone other than this tool. current reports that the issue
+// already holds merged, so the PATCH can be skipped.
+func remergeBeforePatch(
 	ctx context.Context,
 	client *github.Client,
 	owner, repo, service string,
+	knownServices map[string]bool,
 	existing *github.Issue,
-	region, want string,
-) (string, error) {
-	number := existing.GetNumber()
-	fresh, err := refetchManagedIssue(ctx, client, owner, repo, service, existing)
+	render func(currentBody string) string,
+	want string,
+) (merged string, current bool, err error) {
+	fresh, err := refetchManagedIssue(ctx, client, owner, repo, service, knownServices, existing)
 	if err != nil {
-		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: %w",
-			owner, repo, number, err)
+		return "", false, err
 	}
 	if got := parseFingerprint(fresh.GetBody()); got != parseFingerprint(existing.GetBody()) && got != want {
-		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: "+
-			"its fingerprint was edited during the refresh", owner, repo, number)
+		return "", false, errors.New("its fingerprint was edited during the refresh")
 	}
-	merged, err := replaceGeneratedRegion(fresh.GetBody(), region)
+	merged, err = replaceGeneratedRegion(fresh.GetBody(), render(fresh.GetBody()))
 	if err != nil {
-		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: %w",
-			owner, repo, number, err)
+		return "", false, err
 	}
 	if len(merged) > githubMaxIssueBody {
-		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: "+
-			"the refreshed body would be %d bytes, over GitHub's %d-byte limit",
-			owner, repo, number, len(merged), githubMaxIssueBody)
+		return "", false, fmt.Errorf("the refreshed body would be %d bytes, over GitHub's %d-byte limit",
+			len(merged), githubMaxIssueBody)
 	}
-	return merged, nil
+	return merged, merged == fresh.GetBody(), nil
 }
 
 // getAPINotificationServices reads api_notification_services from

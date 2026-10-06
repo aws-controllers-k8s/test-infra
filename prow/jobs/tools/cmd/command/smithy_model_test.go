@@ -169,6 +169,40 @@ func TestSmithyModel_WalkMembersFlattensMapValues(t *testing.T) {
 	assert.NotContains(t, m.WalkMembers("fw#FirewallStatus", 1), "SyncStates.NatGatewayAttachments")
 }
 
+// A wafv2-shaped model: a nine-segment path below a recursive Statement.
+func TestSmithyModel_WalkMembersReachesDeepPathsAndStopsCycles(t *testing.T) {
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"waf#GetWebACLResponse": {"type": "structure", "members": {"WebACL": {"target": "waf#WebACL"}}},
+		"waf#WebACL": {"type": "structure", "members": {"Rules": {"target": "waf#Rules"}}},
+		"waf#Rules": {"type": "list", "member": {"target": "waf#Rule"}},
+		"waf#Rule": {"type": "structure", "members": {"Statement": {"target": "waf#Statement"}}},
+		"waf#Statement": {"type": "structure", "members": {
+			"AndStatement": {"target": "waf#AndStatement"},
+			"ManagedRuleGroupStatement": {"target": "waf#ManagedRuleGroupStatement"}}},
+		"waf#AndStatement": {"type": "structure", "members": {"Statements": {"target": "waf#Statements"}}},
+		"waf#Statements": {"type": "list", "member": {"target": "waf#Statement"}},
+		"waf#ManagedRuleGroupStatement": {"type": "structure", "members": {
+			"ScopeDownStatement": {"target": "waf#Statement"},
+			"RuleActionOverrides": {"target": "waf#RuleActionOverrides"}}},
+		"waf#RuleActionOverrides": {"type": "list", "member": {"target": "waf#RuleActionOverride"}},
+		"waf#RuleActionOverride": {"type": "structure", "members": {"ActionToUse": {"target": "waf#RuleAction"}}},
+		"waf#RuleAction": {"type": "structure", "members": {"Monetize": {"target": "waf#Monetize"}}},
+		"waf#Monetize": {"type": "structure", "members": {"Pricing": {"target": "waf#Pricing"}}},
+		"waf#Pricing": {"type": "structure", "members": {"PriceMultiplier": {"target": "smithy.api#Integer"}}}
+	}}`))
+	require.NoError(t, err)
+
+	got := m.WalkMembers("waf#GetWebACLResponse", maxWalkDepth)
+
+	assert.Contains(t, got, "WebACL.Rules.Statement.ManagedRuleGroupStatement.RuleActionOverrides."+
+		"ActionToUse.Monetize.Pricing.PriceMultiplier")
+	// Statement is recorded where it recurs but not re-entered on its own branch.
+	assert.Contains(t, got, "WebACL.Rules.Statement.AndStatement.Statements")
+	assert.Contains(t, got, "WebACL.Rules.Statement.ManagedRuleGroupStatement.ScopeDownStatement")
+	assert.NotContains(t, got, "WebACL.Rules.Statement.AndStatement.Statements.AndStatement")
+	assert.NotContains(t, got, "WebACL.Rules.Statement.ManagedRuleGroupStatement.ScopeDownStatement.AndStatement")
+}
+
 func TestElementShapeUnwrapsMapValues(t *testing.T) {
 	m := mapModel(t, true)
 	assert.Equal(t, "fw#SyncState", elementShape(m, "fw#SyncStates"))

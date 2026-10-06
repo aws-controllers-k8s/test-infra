@@ -10,21 +10,20 @@ import (
 )
 
 func TestReadCRDFields(t *testing.T) {
-	got, err := readCRDFields(fakeControllerPath)
+	got, status, err := readCRDFields(fakeControllerPath)
 	require.NoError(t, err)
 
 	require.Contains(t, got, "Widget")
 	widget := got["Widget"]
 
-	// Spec and status fields are merged into one set, lowercased, with array
-	// item properties flattened at the array's own path.
+	// Spec fields, lowercased, with array item properties flattened at the
+	// array's own path.
 	for _, want := range []string{
 		"name",
 		"config",
 		"config.size",
 		"rules",
 		"rules.prefix",
-		"widgetid",
 		// The literal CRD spelling, codegen's Go-keyword escape.
 		"rules.type_",
 		// And the un-suffixed spelling, which lookups from the AWS member name `Type` use.
@@ -35,6 +34,10 @@ func TestReadCRDFields(t *testing.T) {
 
 	assert.False(t, widget["nosuchfield"])
 	assert.NotContains(t, got, "Gadget")
+
+	// Status is kept apart: a status field is not a settable one.
+	assert.False(t, widget["widgetid"])
+	assert.Equal(t, map[string]bool{"widgetid": true}, status["Widget"])
 }
 
 func TestReadCRDFieldsNoVersions(t *testing.T) {
@@ -53,7 +56,7 @@ spec:
   versions: []
 `), 0o644))
 
-	got, err := readCRDFields(root)
+	got, _, err := readCRDFields(root)
 	require.NoError(t, err, "an empty versions list must not error")
 	assert.NotContains(t, got, "Widget", "a kind with no schema contributes nothing")
 }
@@ -90,10 +93,11 @@ spec:
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "b_bad.yaml"),
 		[]byte("\t- this: is not: valid yaml\n"), 0o644))
 
-	got, err := readCRDFields(root)
+	got, status, err := readCRDFields(root)
 	require.Error(t, err, "a malformed CRD must fail the controller")
 	assert.Contains(t, err.Error(), "b_bad.yaml", "the error must name the file")
 	assert.Nil(t, got, "no partial field set may escape")
+	assert.Nil(t, status, "no partial field set may escape")
 }
 
 func TestReadCRDFieldsFlattensMapValues(t *testing.T) {
@@ -134,8 +138,9 @@ spec:
                 additionalProperties: true
 `), 0o644))
 
-	got, err := readCRDFields(root)
+	spec, got, err := readCRDFields(root)
 	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{}, spec["Firewall"], "a status-only kind still has a spec entry")
 	fw := got["Firewall"]
 	for _, want := range []string{"syncstates", "syncstates.attachment", "syncstates.attachment.subnetid", "labels"} {
 		assert.True(t, fw[want], "expected field path %q", want)
@@ -144,7 +149,54 @@ spec:
 }
 
 func TestReadCRDFieldsNoDir(t *testing.T) {
-	got, err := readCRDFields("../../../testdata/does-not-exist")
+	got, status, err := readCRDFields("../../../testdata/does-not-exist")
 	require.NoError(t, err)
 	assert.Empty(t, got)
+	assert.Empty(t, status)
+}
+
+// sectionModel has a Widget whose Create request and read response gain Mode, and
+// whose read response alone gains Phase; UpdateWidgetMode is a new setter.
+func sectionModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	input, output, ops := `"Name": {"target": "smithy.api#String"}`, `"Name": {"target": "smithy.api#String"}`, ""
+	if latest {
+		input += `, "Mode": {"target": "smithy.api#String"}`
+		output += `, "Mode": {"target": "smithy.api#String"}, "Phase": {"target": "smithy.api#String"}`
+		ops = `"demo#UpdateWidgetMode": {"type": "operation", "input": {"target": "demo#UpdateWidgetModeIn"}},
+			"demo#UpdateWidgetModeIn": {"type": "structure", "members": {
+				"WidgetId": {"target": "smithy.api#String"}, "Mode": {"target": "smithy.api#String"}}},`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {` + ops + `
+		"demo#CreateWidget": {"type": "operation", "input": {"target": "demo#CreateWidgetIn"}},
+		"demo#CreateWidgetIn": {"type": "structure", "members": {` + input + `}},
+		"demo#GetWidget": {"type": "operation", "output": {"target": "demo#GetWidgetOut"}},
+		"demo#GetWidgetOut": {"type": "structure", "members": {"Widget": {"target": "demo#Widget"}}},
+		"demo#Widget": {"type": "structure", "members": {` + output + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestStatusFieldDoesNotHideSettableField(t *testing.T) {
+	// status.mode and status.phase exist; spec.mode does not.
+	in := &ControllerInputs{
+		Config:          &generatorConfig{},
+		CRDFields:       map[string]map[string]bool{"Widget": {"name": true}},
+		CRDStatusFields: map[string]map[string]bool{"Widget": {"mode": true, "phase": true}},
+		UsedOps:         map[string]map[string]bool{"widget": {"CreateWidget": true, "GetWidget": true}},
+	}
+	latest, baseline := sectionModel(t, true), sectionModel(t, false)
+
+	got := findAddedFields(latest, baseline, in)
+	assert.Equal(t, []string{"Mode"}, subjects(got, ClassSpecField), "a newly settable field is not in Spec")
+	assert.Empty(t, subjects(got, ClassStatusField), "an output-only field Status has is exposed")
+
+	got = setterFieldCandidates(latest, in, "Widget", "UpdateWidgetMode", OpTypes{OpTypeUpdate}, nil)
+	assert.Equal(t, []string{"Mode"}, subjects(got, ClassSpecField))
+
+	// A Spec field covers output-only candidates too: codegen leaves it out of Status.
+	in.CRDFields["Widget"]["mode"], in.CRDFields["Widget"]["phase"] = true, true
+	in.CRDStatusFields = nil
+	assert.Empty(t, findAddedFields(latest, baseline, in))
 }

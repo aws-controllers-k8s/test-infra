@@ -303,18 +303,23 @@ func TestExposedInCRD(t *testing.T) {
 	require.NoError(t, err)
 
 	// Direct case-insensitive match against the CRD.
-	assert.True(t, exposedInCRD(in, "Widget", "Name"))
-	assert.True(t, exposedInCRD(in, "Widget", "Config.Size"))
-	assert.True(t, exposedInCRD(in, "Widget", "Rules.Prefix"))
-	assert.True(t, exposedInCRD(in, "Widget", "WidgetID"))
+	assert.True(t, exposedInCRD(in, "Widget", "Name", false))
+	assert.True(t, exposedInCRD(in, "Widget", "Config.Size", false))
+	assert.True(t, exposedInCRD(in, "Widget", "Rules.Prefix", false))
+
+	// A Status field covers an output-only candidate, not a settable one; a
+	// Spec field covers both.
+	assert.True(t, exposedInCRD(in, "Widget", "WidgetID", true))
+	assert.False(t, exposedInCRD(in, "Widget", "WidgetID", false))
+	assert.True(t, exposedInCRD(in, "Widget", "Name", true))
 
 	// Renamed: generator.yaml maps WidgetName -> Name, and the CRD has "name".
-	assert.True(t, exposedInCRD(in, "Widget", "WidgetName"))
+	assert.True(t, exposedInCRD(in, "Widget", "WidgetName", false))
 
-	assert.False(t, exposedInCRD(in, "Widget", "Description"))
-	assert.False(t, exposedInCRD(in, "Widget", "Config.Color"))
+	assert.False(t, exposedInCRD(in, "Widget", "Description", true))
+	assert.False(t, exposedInCRD(in, "Widget", "Config.Color", true))
 
-	assert.False(t, exposedInCRD(in, "Gizmo", "Name"))
+	assert.False(t, exposedInCRD(in, "Gizmo", "Name", true))
 }
 
 // declinedFieldModel has s3's CreateBucket and PutBucketVersioning shapes, plus an
@@ -491,6 +496,82 @@ func TestSourcedAsCRDField(t *testing.T) {
 			Operation: "DescribeScalingPolicies", Path: "ScalingPolicies..CreationTime"}},
 	}}
 	assert.True(t, sourcedAsCRDField(in, "ScalingPolicy", "DescribeScalingPolicies", "ScalingPolicies.CreationTime"))
+}
+
+// sourcedModel has s3's PutObjectLockConfiguration/GetObjectLockConfiguration and
+// elbv2's RegisterTargets/DeregisterTargets; latest adds DefaultEventHold and
+// QuicServerId.
+func sourcedModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	retention, target := `"Days": {"target": "smithy.api#Integer"}`, `"Id": {"target": "smithy.api#String"}`
+	if latest {
+		retention += `, "DefaultEventHold": {"target": "smithy.api#Boolean"}`
+		target += `, "QuicServerId": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#PutLock": {"type": "operation", "input": {"target": "demo#PutLockIn"}},
+		"demo#PutLockIn": {"type": "structure", "members": {
+			"Bucket": {"target": "smithy.api#String"}, "ObjectLockConfiguration": {"target": "demo#Lock"}}},
+		"demo#GetLock": {"type": "operation", "output": {"target": "demo#GetLockOut"}},
+		"demo#GetLockOut": {"type": "structure", "members": {"ObjectLockConfiguration": {"target": "demo#Lock"}}},
+		"demo#Lock": {"type": "structure", "members": {"Rule": {"target": "demo#Rule"}}},
+		"demo#Rule": {"type": "structure", "members": {"DefaultRetention": {"target": "demo#Retention"}}},
+		"demo#Retention": {"type": "structure", "members": {` + retention + `}},
+		"demo#RegisterTargets": {"type": "operation", "input": {"target": "demo#TargetsIn"}},
+		"demo#DeregisterTargets": {"type": "operation", "input": {"target": "demo#TargetsIn"}},
+		"demo#TargetsIn": {"type": "structure", "members": {
+			"TargetGroupArn": {"target": "smithy.api#String"}, "Targets": {"target": "demo#TargetList"}}},
+		"demo#TargetList": {"type": "list", "member": {"target": "demo#Target"}},
+		"demo#Target": {"type": "structure", "members": {` + target + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+// TestFindAddedFieldsKeysSourcedDescendantsUnderTheirField: a new member below a
+// `from:` field is that Spec field's member, whatever else carries it.
+func TestFindAddedFieldsKeysSourcedDescendantsUnderTheirField(t *testing.T) {
+	in := &ControllerInputs{
+		Config: &generatorConfig{Resources: map[string]resourceConfig{
+			"Bucket": {Fields: map[string]resourceFieldConfig{
+				"ObjectLockConfiguration": {From: &resourceFieldFrom{Operation: "PutLock", Path: "ObjectLockConfiguration"}},
+			}},
+			"TargetGroup": {Fields: map[string]resourceFieldConfig{
+				"Members": {From: &resourceFieldFrom{Operation: "RegisterTargets", Path: "Targets"}},
+			}},
+		}},
+		CRDFields: map[string]map[string]bool{
+			"Bucket": {
+				"objectlockconfiguration":                            true,
+				"objectlockconfiguration.rule":                       true,
+				"objectlockconfiguration.rule.defaultretention":      true,
+				"objectlockconfiguration.rule.defaultretention.days": true,
+			},
+			"TargetGroup": {"members": true, "members.id": true},
+		},
+		UsedOps: map[string]map[string]bool{
+			"bucket":      {"GetLock": true, "PutLock": true},
+			"targetgroup": {"DeregisterTargets": true, "RegisterTargets": true},
+		},
+	}
+
+	got := findAddedFields(sourcedModel(t, true), sourcedModel(t, false), in)
+	assert.Equal(t, []Finding{
+		{Kind: "Bucket", Class: ClassSpecField, NewSincePin: true,
+			Subject: "ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold", Evidence: "GetLock,PutLock"},
+		// Keyed by the configured field's name. DeregisterTargets' Targets is not
+		// in the CRD, so its QuicServerId is declined.
+		{Kind: "TargetGroup", Class: ClassSpecField, NewSincePin: true,
+			Subject: "Members.QuicServerId", Evidence: "RegisterTargets",
+			SDKPaths: "RegisterTargets=Targets.QuicServerId"},
+	}, got, "the source operation's role counts, not only the read-back")
+
+	// A read-only `from:` field is in Status, so only the operations' roles count.
+	in.Config.Resources["TargetGroup"].Fields["Members"] = resourceFieldConfig{
+		IsReadOnly: true, From: &resourceFieldFrom{Operation: "RegisterTargets", Path: "Targets"}}
+	got = findAddedFields(sourcedModel(t, true), sourcedModel(t, false), in)
+	require.Len(t, got, 2)
+	assert.Equal(t, ClassLifecycleField, got[1].Class)
 }
 
 func TestIsACKManagedARN(t *testing.T) {
@@ -887,6 +968,69 @@ func TestFindAddedFieldsGroupsByCRDPath(t *testing.T) {
 	}, got, "one CRD field, however each operation spells it")
 }
 
+// readBackModel: GetThing already returns Mode; only UpdateThing's request gains
+// it, when latest.
+func readBackModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	update := `"Name": {"target": "smithy.api#String"}`
+	if latest {
+		update += `, "Mode": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#GetThing": {"type": "operation", "output": {"target": "demo#GetOut"}},
+		"demo#GetOut": {"type": "structure", "members": {"Thing": {"target": "demo#Thing"}}},
+		"demo#UpdateThing": {"type": "operation", "input": {"target": "demo#UpdateIn"}},
+		"demo#UpdateIn": {"type": "structure", "members": {` + update + `}},
+		"demo#Thing": {"type": "structure", "members": {
+			"Name": {"target": "smithy.api#String"}, "Mode": {"target": "smithy.api#String"}}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestFindAddedFieldsCountsPreexistingReadBack(t *testing.T) {
+	in := &ControllerInputs{
+		Config:    &generatorConfig{},
+		CRDFields: map[string]map[string]bool{"Thing": {"name": true}},
+		UsedOps:   map[string]map[string]bool{"thing": {"GetThing": true, "UpdateThing": true}},
+	}
+
+	got := findAddedFields(readBackModel(t, true), readBackModel(t, false), in)
+	assert.Equal(t, []Finding{
+		{Kind: "Thing", Class: ClassSpecField, NewSincePin: true, Subject: "Mode", Evidence: "UpdateThing"},
+	}, got, "GetThing already reading Mode back makes the newly settable field Spec")
+
+	// An ignored read-back is not one: codegen never reads it.
+	in.Config.Ignore.FieldPaths = []string{"GetThingOutput.Thing.Mode"}
+	got = findAddedFields(readBackModel(t, true), readBackModel(t, false), in)
+	require.Len(t, got, 1)
+	assert.Equal(t, ClassLifecycleField, got[0].Class)
+}
+
+func TestRoleScansHonourIgnoredMembers(t *testing.T) {
+	m := readBackModel(t, true)
+	ignoring := &ControllerInputs{
+		Config: &generatorConfig{Ignore: ignoreConfig{FieldPaths: []string{"GetThingOutput.Thing.Mode"}}},
+	}
+	plain := &ControllerInputs{Config: &generatorConfig{}}
+
+	assert.True(t, returnedNames(m, plain, "Thing", []string{"GetThing"})["mode"])
+	assert.False(t, returnedNames(m, ignoring, "Thing", []string{"GetThing"})["mode"],
+		"an ignored response member is not read back")
+	assert.True(t, returnedNames(m, ignoring, "Thing", []string{"GetThing"})["name"])
+
+	finding := func() []Finding {
+		return []Finding{{Kind: "Thing", Class: ClassLifecycleField, Subject: "Mode",
+			NewSincePin: true, Evidence: "UpdateThing"}}
+	}
+	ignoring.UsedOps = map[string]map[string]bool{"thing": {"GetThing": true, "UpdateThing": true}}
+	plain.UsedOps = ignoring.UsedOps
+	assert.Equal(t, "GetThing", annotateFields(m, plain, finding())[0].ReadBy)
+	got := annotateFields(m, ignoring, finding())[0]
+	assert.Empty(t, got.ReadBy, "an ignored response member is not guidance")
+	assert.Equal(t, "UpdateThing", got.SetBy)
+}
+
 func TestConfigLookupsIgnoreKindCase(t *testing.T) {
 	// ec2's VPCEndpoint CRD is configured under generator.yaml's VpcEndpoint.
 	in := &ControllerInputs{
@@ -903,7 +1047,7 @@ func TestConfigLookupsIgnoreKindCase(t *testing.T) {
 		CRDFields: map[string]map[string]bool{"VPCEndpoint": {"vpcid": true, "policy": true}},
 	}
 
-	assert.True(t, exposedInCRD(in, "VPCEndpoint", "VpcId"))
+	assert.True(t, exposedInCRD(in, "VPCEndpoint", "VpcId", false))
 	assert.True(t, sourcedAsCRDField(in, "VPCEndpoint", "ModifyVpcEndpoint", "PolicyDocument"))
 }
 
@@ -1226,7 +1370,7 @@ func TestRenderIssueBodyTruncatesInsideOneOversizedResource(t *testing.T) {
 	assert.Equal(t, fingerprint, parseFingerprint(body))
 	// At least half the budget must be used; bailing out early is the bug. The
 	// budget is computed because it depends on the footer.
-	budget := issueBodyBudget("v1.41.5", "v1.44.0", fingerprint, 1, len(findings))
+	budget := issueBodyBudget(githubMaxIssueBody, "v1.41.5", "v1.44.0", fingerprint, 1, len(findings))
 	assert.Greater(t, len(body), budget/2)
 	// No resource was dropped here, only entries inside one that rendered, so the
 	// summary must not report a resource count at all.
@@ -1457,7 +1601,7 @@ func TestReconcileIssueCreatesWhenAbsent(t *testing.T) {
 	}))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueCreated, outcome)
 	assert.True(t, created)
@@ -1479,7 +1623,7 @@ func TestReconcileIssueNoopWhenFingerprintMatches(t *testing.T) {
 	// A different baseline version must not trigger an update, because the
 	// fingerprint covers findings only.
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.42.0", "v1.45.0", sampleFindings(), issueFor(42, body), nil, 10, 0, false)
+		"demo", "v1.42.0", "v1.45.0", sampleFindings(), issueFor(42, body), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUnchanged, outcome)
 }
@@ -1505,7 +1649,7 @@ func TestReconcileIssueUpdatesWhenFingerprintDiffers(t *testing.T) {
 	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 
@@ -1544,7 +1688,7 @@ func TestReconcileIssueFailedPatchReportsNoOutcome(t *testing.T) {
 	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	assert.Equal(t, issueOutcomeNone, outcome)
 	assert.Equal(t, []string{"comment", "patch"}, calls)
@@ -1565,7 +1709,7 @@ func TestReconcileIssueRefusesAnOversizedMergedBody(t *testing.T) {
 	existingBody := region + "\n\n" + strings.Repeat("x", githubMaxIssueBody)
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, existingBody), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, existingBody), nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "over GitHub's")
 	assert.Equal(t, issueOutcomeNone, outcome)
@@ -1580,7 +1724,7 @@ func TestReconcileIssueCapBlocksCreationOnly(t *testing.T) {
 	}))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, 10, 10, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 10, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueSkippedAtCap, outcome)
 }
@@ -1604,7 +1748,7 @@ func TestReconcileIssueCapStillAllowsUpdates(t *testing.T) {
 	// At the cap, but the issue already exists — updating does not grow the
 	// count, so it must proceed.
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, 10, 10, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, testKnownServices("demo"), 10, 10, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.True(t, patched)
@@ -1617,7 +1761,7 @@ func TestReconcileIssueNoFindings(t *testing.T) {
 	}))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", nil, nil, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", nil, nil, nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUnchanged, outcome)
 }
@@ -1632,7 +1776,7 @@ func TestReconcileIssueNoFindingsButAnOpenIssue(t *testing.T) {
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", nil, issueFor(42, "a report with no current findings"),
-		nil, 10, 0, false)
+		nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueStaleOpenIssue, outcome)
 }
@@ -1653,7 +1797,7 @@ func TestReconcileIssueUpdatePreservesMaintainerText(t *testing.T) {
 	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, existingBody), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, existingBody), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.Contains(t, patchedBody, "intentionally unsupported")
@@ -1679,7 +1823,7 @@ func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
 	}))
 
 	outcome, err := reconcileIssue(context.Background(), dayOne, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), existing, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), existing, nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	// No outcome at all, so a caller cannot record a decision that did not happen.
 	assert.Equal(t, issueOutcomeNone, outcome)
@@ -1694,7 +1838,7 @@ func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
 
 	// Same issue, unchanged because day 1 never wrote to it.
 	outcome, err = reconcileIssue(context.Background(), dayTwo, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), existing, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), existing, nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.Equal(t, []string{
@@ -1711,7 +1855,7 @@ func TestReconcileIssueCreateWithoutTheOwnershipLabelAborts(t *testing.T) {
 	}))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	assert.Equal(t, issueOutcomeNone, outcome)
 	assert.True(t, errors.Is(err, errCannotLabelIssues),
@@ -1729,7 +1873,7 @@ func TestReconcileIssueRejectsANonPositiveCap(t *testing.T) {
 
 	for _, maxOpen := range []int{0, -1} {
 		outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-			"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, maxOpen, 100000, false)
+			"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), maxOpen, 100000, false)
 		require.Error(t, err, "maxOpen=%d", maxOpen)
 		assert.Equal(t, issueOutcomeNone, outcome)
 		assert.Contains(t, err.Error(), "must be positive")
@@ -1738,7 +1882,7 @@ func TestReconcileIssueRejectsANonPositiveCap(t *testing.T) {
 	// Refused even with nothing to file, so the misconfiguration surfaces on the
 	// first service rather than on whichever one happens to have findings.
 	_, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", nil, nil, nil, 0, 0, false)
+		"demo", "v1.41.5", "v1.44.0", nil, nil, nil, testKnownServices("demo"), 0, 0, false)
 	require.Error(t, err)
 }
 
@@ -1753,7 +1897,7 @@ func TestReconcileIssueSuppressedByAClosedIssue(t *testing.T) {
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil,
-		map[string]bool{want: true}, 10, 0, false)
+		map[string]bool{want: true}, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueSuppressedByClosed, outcome)
 }
@@ -1771,7 +1915,7 @@ func TestReconcileIssueOpenIssueBeatsAClosedFingerprint(t *testing.T) {
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()),
-		map[string]bool{want: true}, 10, 0, false)
+		map[string]bool{want: true}, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.True(t, patched)
@@ -1786,6 +1930,7 @@ func TestIssueOutcomeString(t *testing.T) {
 	assert.Equal(t, "updated", issueUpdated.String())
 	assert.Equal(t, "skipped-at-cap", issueSkippedAtCap.String())
 	assert.Equal(t, "stale-open-issue", issueStaleOpenIssue.String())
+	assert.Equal(t, "relabelled", issueRelabelled.String())
 
 	// A member added without a case here still logs something traceable rather than
 	// an empty string.
@@ -1797,7 +1942,7 @@ func TestIssueOutcomeValuesAreDistinct(t *testing.T) {
 	seen := map[issueOutcome]bool{}
 	for _, o := range []issueOutcome{
 		issueOutcomeNone, issueSuppressedByClosed, issueUnchanged,
-		issueCreated, issueUpdated, issueSkippedAtCap, issueStaleOpenIssue,
+		issueCreated, issueUpdated, issueSkippedAtCap, issueStaleOpenIssue, issueRelabelled,
 	} {
 		assert.False(t, seen[o], "%d is used by two outcomes", int(o))
 		seen[o] = true
@@ -2158,7 +2303,7 @@ func TestReconcileIssueFilesNothingForDroppedOperationsAlone(t *testing.T) {
 	// A service whose only change is a new Start* operation has nothing to report.
 	// A nil client panics on any request, which is the assertion that none is made.
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
-		"v1.41.5", "v1.44.0", droppedFindings(), nil, nil, 1, 0, false)
+		"v1.41.5", "v1.44.0", droppedFindings(), nil, nil, testKnownServices("demo"), 1, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUnchanged, outcome)
 }
@@ -2522,7 +2667,7 @@ func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
 	}))
 	for _, maxOpen := range []int{0, -1} {
 		outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-			"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, maxOpen, 0, true)
+			"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), maxOpen, 0, true)
 		require.Error(t, err, "maxOpen=%d under dry-run", maxOpen)
 		assert.Equal(t, issueOutcomeNone, outcome)
 		assert.Contains(t, err.Error(), "must be positive")
@@ -2697,7 +2842,8 @@ func TestReconcileIssueRewordsSilentlyWhenOnlyTheTextChanged(t *testing.T) {
 	findings[0].Detail, findings[0].Work = createOnlyDetail, workCreateOnly
 
 	var patched bool
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	listed := map[string]*github.Issue{"demo": issueFor(42, filed)}
+	client := newTestGitHubClient(t, serveListedIssues(t, listed, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42" {
 			patched = true
 			fmt.Fprint(w, `{}`)
@@ -2705,10 +2851,10 @@ func TestReconcileIssueRewordsSilentlyWhenOnlyTheTextChanged(t *testing.T) {
 		}
 		t.Errorf("only a silent PATCH expected, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.42.0", "v1.45.0", findings, issueFor(42, filed), nil, 10, 0, false)
+		"demo", "v1.42.0", "v1.45.0", findings, issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.True(t, patched)
@@ -2726,7 +2872,7 @@ func TestReconcileIssueRefusesAMalformedRegion(t *testing.T) {
 	// Refresh: a different finding set.
 	damaged := strings.Replace(staleIssueBody(), generatedRegionEnd, "", 1) + note
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, damaged), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, damaged), nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errUnmanageableRegion)
 	assert.Equal(t, issueOutcomeNone, outcome)
@@ -2735,7 +2881,7 @@ func TestReconcileIssueRefusesAMalformedRegion(t *testing.T) {
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	damaged = strings.Replace(filed, generatedRegionEnd, "", 1) + note
 	outcome, err = reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, damaged), nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, damaged), nil, testKnownServices("demo"), 10, 0, false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errUnmanageableRegion)
 	assert.Equal(t, issueOutcomeNone, outcome)
@@ -2887,7 +3033,7 @@ func refreshAfterComment(t *testing.T, edit func(*github.Issue)) ([]string, stri
 		}
 	}))
 	_, err := reconcileIssue(context.Background(), client, "o", "community",
-		"demo", "v1.41.5", "v1.44.0", sampleFindings(), listed, nil, 10, 0, false)
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), listed, nil, testKnownServices("demo"), 10, 0, false)
 	return calls, patchedBody, err
 }
 
@@ -2940,9 +3086,21 @@ func TestReconcileServicesStopsOnceTheContextIsDone(t *testing.T) {
 	_, _, _, err := reconcileServices(ctx, nil, "o", "community",
 		[]string{"svc1", "svc2", "svc3"}, nil, nil, 10, 0, analyze, false, "")
 	require.ErrorIs(t, err, context.Canceled)
-	assert.ErrorContains(t, err, "run cut short before svc2, 2 of 3 services not attempted")
+	assert.ErrorContains(t, err, "run cut short while analysing svc1, 2 of 3 services not attempted")
 	assert.Equal(t, []string{"svc1"}, analyzed)
 	assert.Contains(t, logged.String(), "1 of 3 services (run cut short: context canceled): ")
+
+	// Cancelled while analysing the last service: there is no next iteration to
+	// notice, so the run must still fail rather than return nil.
+	logged.Reset()
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	analyzed = nil
+	_, _, _, err = reconcileServices(ctx, nil, "o", "community",
+		[]string{"svc1"}, nil, nil, 10, 0, analyze, false, "")
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, []string{"svc1"}, analyzed)
+	assert.Contains(t, logged.String(), "1 of 1 services (run cut short: context canceled): ")
 
 	// Already cancelled: nothing is analyzed.
 	analyzed = nil
@@ -2950,4 +3108,253 @@ func TestReconcileServicesStopsOnceTheContextIsDone(t *testing.T) {
 		[]string{"svc1"}, nil, nil, 10, 0, analyze, false, "")
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Empty(t, analyzed)
+}
+
+// orphanSearchHandler serves findUnlabelledIssue's search with page and records
+// every other request in calls, answering it with respond.
+func orphanSearchHandler(t *testing.T, page string, calls *[]string, respond http.HandlerFunc) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isUnlabelledIssueSearch(r) {
+			fmt.Fprint(w, page)
+			return
+		}
+		*calls = append(*calls, r.Method+" "+r.URL.Path)
+		respond(w, r)
+	})
+}
+
+// orphanPage is a search page holding one open, unlabelled issue with body.
+func orphanPage(body string) string {
+	return fmt.Sprintf(`{"total_count": 1, "incomplete_results": false, "items": [
+		{"number": 7, "state": "open", "body": %q, "labels": []}]}`, body)
+}
+
+func TestReconcileIssueLabelsAnUnlabelledIssueInsteadOfFilingAnother(t *testing.T) {
+	// A retry after GitHub dropped the labels must find the orphan and label it,
+	// not file a second issue the listing cannot see either.
+	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	var calls []string
+	var sentLabels []string
+	client := newRawTestGitHubClient(t, orphanSearchHandler(t, orphanPage(filed), &calls,
+		func(w http.ResponseWriter, r *http.Request) {
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&sentLabels))
+			fmt.Fprintf(w, `[{"name": %q}, {"name": "service/demo"}]`, apiChangeLabel)
+		}))
+
+	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueRelabelled, outcome)
+	assert.Equal(t, []string{"POST /repos/o/community/issues/7/labels"}, calls, "no second create")
+	assert.Contains(t, sentLabels, apiChangeLabel)
+	assert.Contains(t, sentLabels, "service/demo")
+}
+
+func TestReconcileIssueAbortsWhenAnUnlabelledIssueCannotBeLabelled(t *testing.T) {
+	// The token still cannot label: abort with errCannotLabelIssues and file nothing.
+	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	for name, respond := range map[string]http.HandlerFunc{
+		"refused": func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message": "Must have push access"}`)
+		},
+		"silently dropped": func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `[]`)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls []string
+			client := newRawTestGitHubClient(t, orphanSearchHandler(t, orphanPage(filed), &calls, respond))
+			outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+				"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 0, false)
+			require.ErrorIs(t, err, errCannotLabelIssues)
+			assert.Equal(t, issueOutcomeNone, outcome)
+			assert.Equal(t, []string{"POST /repos/o/community/issues/7/labels"}, calls, "no second create")
+		})
+	}
+}
+
+func TestReconcileIssueFilesWhenTheSearchHitIsNotTheOrphan(t *testing.T) {
+	// Search matches tokens, so hits are re-checked locally: another fingerprint,
+	// or an issue that has the label, does not block the create.
+	other, _ := renderIssueBody("demo", "v1.40.0", "v1.41.5", sampleFindings()[:1])
+	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	page := fmt.Sprintf(`{"total_count": 2, "incomplete_results": false, "items": [
+		{"number": 7, "state": "open", "body": %q, "labels": []},
+		{"number": 8, "state": "open", "body": %q, "labels": [{"name": %q}]}]}`, other, filed, apiChangeLabel)
+	var calls []string
+	client := newRawTestGitHubClient(t, orphanSearchHandler(t, page, &calls, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"number": 9, "labels": [{"name": %q}]}`, apiChangeLabel)
+	}))
+
+	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), nil, nil, testKnownServices("demo"), 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueCreated, outcome)
+	assert.Equal(t, []string{"POST /repos/o/community/issues"}, calls)
+}
+
+func TestReconcileServicesCountsARelabelledIssueAgainstTheCap(t *testing.T) {
+	// The orphan was missing from the listing, so labelling it takes a cap slot.
+	svc1Body, svc1FP := renderIssueBody("svc1", "v1.41.5", "v1.44.0", sampleFindings())
+	var calls []string
+	client := newRawTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isUnlabelledIssueSearch(r) {
+			// Only svc1 has an orphan.
+			if strings.Contains(r.URL.Query().Get("q"), svc1FP) {
+				fmt.Fprint(w, orphanPage(svc1Body))
+			} else {
+				fmt.Fprint(w, emptySearchPage)
+			}
+			return
+		}
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		fmt.Fprintf(w, `[{"name": %q}]`, apiChangeLabel)
+	}))
+	analyze := func(_ context.Context, service string) ([]Finding, string, string, error) {
+		return sampleFindings(), "v1.41.5", "v1.44.0", nil
+	}
+
+	_, writeFailures, skipped, err := reconcileServices(context.Background(), client, "o", "community",
+		[]string{"svc1", "svc2"}, nil, nil, 1, 0, analyze, false, "")
+	require.NoError(t, err)
+	assert.Empty(t, writeFailures)
+	assert.Equal(t, []string{"svc2"}, skipped)
+	assert.Equal(t, []string{"POST /repos/o/community/issues/7/labels"}, calls)
+}
+
+func TestReconcileIssueRewordRevalidatesBeforePatching(t *testing.T) {
+	// The same-fingerprint rewrite re-reads the issue right before its PATCH, like
+	// the refresh path: a maintainer note added since the listing survives, and a
+	// close since then stops the write.
+	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	withOp := append(sampleFindings(),
+		Finding{Kind: "Widget", Class: ClassNewOperation, Subject: "TagWidget", NewSincePin: true})
+	noted := filed + "\nmaintainer note added after the listing\n"
+
+	t.Run("keeps an edit made since the listing", func(t *testing.T) {
+		var patchedBody string
+		client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, noted)},
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var payload struct{ Body string }
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+				patchedBody = payload.Body
+				fmt.Fprint(w, `{}`)
+			})))
+		outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+			"demo", "v1.41.5", "v1.44.0", withOp, issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
+		require.NoError(t, err)
+		assert.Equal(t, issueUpdated, outcome)
+		assert.Contains(t, patchedBody, "maintainer note added after the listing")
+		assert.Contains(t, patchedBody, "TagWidget")
+	})
+
+	t.Run("refuses an issue closed since the listing", func(t *testing.T) {
+		client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Errorf("a closed issue must not be patched, got %s %s", r.Method, r.URL.Path)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			closed := issueFor(42, filed)
+			closed.State = github.String("closed")
+			closed.Labels = []*github.Label{{Name: github.String(apiChangeLabel)}, {Name: github.String("service/demo")}}
+			require.NoError(t, json.NewEncoder(w).Encode(closed))
+		}))
+		outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+			"demo", "v1.41.5", "v1.44.0", withOp, issueFor(42, filed), nil, testKnownServices("demo"), 10, 0, false)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "not rewording")
+		assert.Equal(t, issueOutcomeNone, outcome)
+	})
+}
+
+func TestParseComparedVersionsReadsOnlyTheGeneratedRegion(t *testing.T) {
+	region, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	quote := "\nCompared aws-sdk-go-v2 v0.0.1 -> v0.0.2\n"
+
+	baseline, latest, ok := parseComparedVersions(quote + region + quote)
+	require.True(t, ok)
+	assert.Equal(t, "v1.41.5", baseline, "a maintainer's quote outside the region is not the footer")
+	assert.Equal(t, "v1.44.0", latest)
+
+	_, _, ok = parseComparedVersions(quote)
+	assert.False(t, ok, "no region, no footer")
+
+	twice := strings.Replace(region, generatedRegionEnd, strings.TrimPrefix(quote, "\n")+generatedRegionEnd, 1)
+	_, _, ok = parseComparedVersions(twice)
+	assert.False(t, ok, "two comparison lines in the region are ambiguous")
+
+	_, _, ok = parseComparedVersions(strings.ReplaceAll(region, "\n", "\r\n"))
+	assert.True(t, ok, "a body saved from the web UI is CRLF")
+}
+
+func TestReconcileIssueIgnoresAQuotedFooterOutsideTheRegion(t *testing.T) {
+	// A quoted comparison line above the region used to be read as the footer, so
+	// every run re-rendered at the wrong versions and PATCHed silently.
+	region, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	body := "Last triaged against\nCompared aws-sdk-go-v2 v0.0.1 -> v0.0.2\n\n" + region
+	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("an up-to-date issue must not be written, got %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.42.0", "v1.45.0", sampleFindings(), issueFor(42, body), nil, testKnownServices("demo"), 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueUnchanged, outcome)
+}
+
+func TestReconcileIssueRefreshTruncatesToFitTextOutsideTheRegion(t *testing.T) {
+	// The region is rendered into what the text outside it leaves, measured on the
+	// final GET, so a long maintainer note truncates the report instead of failing.
+	var findings []Finding
+	for i := 0; i < 300; i++ {
+		findings = append(findings, Finding{Kind: "Widget", Class: ClassSpecField,
+			Subject: fmt.Sprintf("Field%03d", i), NewSincePin: true, Evidence: "CreateWidget"})
+	}
+	full, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", findings)
+	stale := staleIssueBody()
+	note := "\n" + strings.Repeat("x", githubMaxIssueBody-len(full)+2000) + "\n"
+	require.Greater(t, len(note)+len(full), githubMaxIssueBody, "the untruncated report must not fit")
+
+	var patchedBody string
+	// The listed copy has no note; it appears only on the final GET.
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, stale+note)},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPatch {
+				var payload struct{ Body string }
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+				patchedBody = payload.Body
+			}
+			fmt.Fprint(w, `{}`)
+		})))
+
+	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.41.5", "v1.44.0", findings, issueFor(42, stale), nil, testKnownServices("demo"), 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueUpdated, outcome)
+	assert.LessOrEqual(t, len(patchedBody), githubMaxIssueBody)
+	assert.Contains(t, patchedBody, note, "the maintainer text is kept whole")
+	assert.Contains(t, patchedBody, "omitted to keep this issue body within GitHub's size limit")
+	assert.Equal(t, fingerprintFindings("demo", actionable(findings)), parseFingerprint(patchedBody))
+}
+
+func TestReconcileServicesSkipsTheRefetchForAStaleIssue(t *testing.T) {
+	// Operation findings alone leave an open issue stale, which writes nothing, so
+	// a failed GET must not turn it into a write failure.
+	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("a stale issue needs no request, got %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	analyze := func(_ context.Context, service string) ([]Finding, string, string, error) {
+		return operationFindings(), "v1.41.5", "v1.44.0", nil
+	}
+	existing := map[string]*github.Issue{"svc1": issueFor(42, staleIssueBody())}
+
+	_, writeFailures, _, err := reconcileServices(context.Background(), client, "o", "community",
+		[]string{"svc1"}, existing, nil, 10, 1, analyze, false, "")
+	require.NoError(t, err)
+	assert.Empty(t, writeFailures)
 }

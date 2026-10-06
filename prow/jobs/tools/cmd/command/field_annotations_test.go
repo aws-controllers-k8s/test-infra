@@ -403,3 +403,25 @@ func TestCanSetExcludesReadsAndDeletes(t *testing.T) {
 	assert.False(t, canSet(OpTypes{OpTypeList}, "ListWidgets"))
 	assert.False(t, canSet(OpTypes{OpTypeDelete}, "DeleteWidget"))
 }
+
+// TestCreateOnlyFollowsRenames: UpdateThing sends Mode as ThingMode, renamed to
+// Mode, so Mode is mutable though only Create has a member named `Mode`.
+func TestCreateOnlyFollowsRenames(t *testing.T) {
+	m := thingModel(t, true)
+	in := &ControllerInputs{
+		Config: &generatorConfig{Resources: map[string]resourceConfig{
+			"Thing": {Renames: resourceRenames{Operations: map[string]operationRenames{
+				"UpdateThing": {InputFields: map[string]string{"ThingMode": "Mode"}},
+			}}},
+		}},
+		UsedOps: map[string]map[string]bool{"thing": {"CreateThing": true, "UpdateThing": true}},
+	}
+	f := Finding{Kind: "Thing", Class: ClassSpecField, Subject: "Mode", NewSincePin: true, Evidence: "CreateThing"}
+	assert.False(t, createOnly(m, in, nil, nil, f), "renamed on UpdateThing")
+
+	in.Config = &generatorConfig{}
+	assert.True(t, createOnly(m, in, nil, nil, f), "without the rename, ThingMode is another field")
+
+	f.SDKPaths = "UpdateThing=ThingMode"
+	assert.False(t, createOnly(m, in, nil, nil, f), "a recorded SDK path on UpdateThing")
+}

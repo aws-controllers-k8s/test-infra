@@ -78,6 +78,8 @@ type resourceConfig struct {
 
 type resourceFieldConfig struct {
 	From *resourceFieldFrom `yaml:"from"`
+	// IsReadOnly puts the field in Status; otherwise a `from:` field is in Spec.
+	IsReadOnly bool `yaml:"is_read_only"`
 }
 
 type resourceFieldFrom struct {

@@ -112,9 +112,10 @@ func docTrait(traits map[string]json.RawMessage) string {
 	return doc
 }
 
-// maxWalkDepth bounds the member walk; it is well past anything ACK surfaces in
-// a CRD.
-const maxWalkDepth = 6
+// maxWalkDepth is only a backstop: the per-branch cycle guard already ends every
+// walk. CRDs nest deeper than six (wafv2's Rules.Statement... reaches nine), and
+// the deepest AWS models (quicksight) reach sixteen.
+const maxWalkDepth = 32
 
 // MemberInfo describes one member reached by WalkMembers.
 type MemberInfo struct {

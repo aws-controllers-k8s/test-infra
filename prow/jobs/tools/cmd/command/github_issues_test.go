@@ -15,8 +15,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestGitHubClient returns a client whose requests are served by handler.
+// newTestGitHubClient returns a client whose requests are served by handler,
+// except the pre-create search for an unlabelled issue, which finds none. Tests
+// of that search use newRawTestGitHubClient.
 func newTestGitHubClient(t *testing.T, handler http.Handler) *github.Client {
+	t.Helper()
+	return newRawTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isUnlabelledIssueSearch(r) {
+			fmt.Fprint(w, emptySearchPage)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+}
+
+// isUnlabelledIssueSearch reports whether r is findUnlabelledIssue's search.
+func isUnlabelledIssueSearch(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == "/search/issues" &&
+		strings.Contains(r.URL.Query().Get("q"), "author:@me -label:"+apiChangeLabel)
+}
+
+// newRawTestGitHubClient returns a client whose every request is served by handler.
+func newRawTestGitHubClient(t *testing.T, handler http.Handler) *github.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
@@ -599,7 +619,40 @@ func TestRefetchManagedIssueReportsAFailedRead(t *testing.T) {
 		fmt.Fprint(w, `{"message": "Not Found"}`)
 	}))
 	listed := &github.Issue{Number: github.Int(42), User: &github.User{Login: github.String("ack-bot")}}
-	_, err := refetchManagedIssue(context.Background(), client, "o", "community", "s3", listed)
+	_, err := refetchManagedIssue(context.Background(), client, "o", "community", "s3", testKnownServices("s3"), listed)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "#42")
+}
+
+func TestRefetchManagedIssueRequiresExactlyOneKnownServiceLabel(t *testing.T) {
+	// The listing's exact-one rule: a second known service label added since the
+	// listing would make the next run disown the issue, so no PATCH. An unknown one
+	// such as service/s3control is fine.
+	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
+	serve := func(labels ...string) *github.Client {
+		return newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			issue := github.Issue{Number: github.Int(42), State: github.String("open"), Body: github.String(body),
+				User: &github.User{Login: github.String("ack-bot")}}
+			for _, name := range append([]string{apiChangeLabel}, labels...) {
+				issue.Labels = append(issue.Labels, &github.Label{Name: github.String(name)})
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(issue))
+		}))
+	}
+	listed := &github.Issue{Number: github.Int(42), User: &github.User{Login: github.String("ack-bot")}}
+	known := testKnownServices("s3", "ec2")
+
+	_, err := refetchManagedIssue(context.Background(), serve("service/s3", "service/s3control"),
+		"o", "community", "s3", known, listed)
+	require.NoError(t, err)
+
+	_, err = refetchManagedIssue(context.Background(), serve("service/s3", "service/ec2"),
+		"o", "community", "s3", known, listed)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "several service/ labels")
+
+	_, err = refetchManagedIssue(context.Background(), serve("service/ec2"),
+		"o", "community", "s3", known, listed)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "service/ec2, not service/s3")
 }

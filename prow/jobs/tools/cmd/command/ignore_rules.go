@@ -145,6 +145,11 @@ func declinedFieldPath(
 	members map[string]MemberInfo,
 	declined []string,
 ) bool {
+	canonical := make([]string, len(declined))
+	for i, entry := range declined {
+		canonical[i] = canonicalFieldPath(m, entry)
+	}
+	declined = canonical
 	segments := strings.Split(awsPath, ".")
 	for i := range segments {
 		containers := rootNames
@@ -170,6 +175,84 @@ func declinedFieldPath(
 		}
 	}
 	return false
+}
+
+// canonicalFieldPath spells a field_paths entry as WalkMembers paths are spelled.
+// Codegen's fieldpath lets a segment name the list element (or any) shape just
+// reached, so CloudFront's `Origins.Items.Origin.CustomHeaders` is the walk's
+// `Origins.Items.CustomHeaders`. An entry that does not resolve is kept as is.
+func canonicalFieldPath(m *SmithyModel, entry string) string {
+	segments := strings.Split(entry, ".")
+	if m == nil || len(segments) < 3 {
+		return entry
+	}
+	shapeID := fieldRootShape(m, segments[0])
+	out := []string{segments[0]}
+	// The last segment is the member codegen deletes; only its parents are walked.
+	for _, segment := range segments[1 : len(segments)-1] {
+		next, isMember := fieldPathStep(m, shapeID, segment)
+		if next == "" {
+			return entry
+		}
+		if isMember {
+			out = append(out, segment)
+		}
+		shapeID = next
+	}
+	return strings.Join(append(out, segments[len(segments)-1]), ".")
+}
+
+// fieldPathStep resolves one entry segment from shapeID as codegen's
+// memberShapeRef does: a segment naming the current shape stays on it, lists and
+// maps are looked through, and structure members match case-insensitively.
+// isMember is false for a shape-name segment; next is "" when nothing matches.
+func fieldPathStep(m *SmithyModel, shapeID, segment string) (next string, isMember bool) {
+	for range maxWalkDepth {
+		if shapeID == "" || shapeShortName(shapeID) == segment {
+			return shapeID, false
+		}
+		shape := m.Shapes[shapeID]
+		switch {
+		case shape.Type == "list" && shape.Member != nil:
+			shapeID = shape.Member.Target
+		case shape.Type == "map" && shape.Value != nil:
+			shapeID = shape.Value.Target
+		case shape.Type == "structure" || shape.Type == "union":
+			for name, ref := range shape.Members {
+				if strings.EqualFold(name, segment) {
+					return ref.Target, true
+				}
+			}
+			return "", false
+		default:
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// fieldRootShape returns the shape a field_paths entry's first segment names:
+// codegen's `<Operation>Input`/`<Operation>Output`, or a shape's own name.
+func fieldRootShape(m *SmithyModel, name string) string {
+	if opName, ok := strings.CutSuffix(name, "Input"); ok {
+		if op, ok := m.Operation(opName); ok && op.Input != nil {
+			return op.Input.Target
+		}
+	}
+	if opName, ok := strings.CutSuffix(name, "Output"); ok {
+		if op, ok := m.Operation(opName); ok && op.Output != nil {
+			return op.Output.Target
+		}
+	}
+	// Every shape of an AWS model shares the operations' namespace.
+	for _, opID := range m.opsByName {
+		id := opID[:strings.LastIndex(opID, "#")+1] + name
+		if _, ok := m.Shapes[id]; ok {
+			return id
+		}
+		break
+	}
+	return ""
 }
 
 // fieldRootNames returns every name a field_paths entry may use for the root of an

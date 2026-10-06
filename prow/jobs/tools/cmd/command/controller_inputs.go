@@ -41,8 +41,10 @@ type ControllerInputs struct {
 	// Config is the generator.yaml subset.
 	Config *generatorConfig
 	// CRDFields maps resource kind to the set of lowercased dotted field
-	// paths its CRD exposes.
+	// paths its CRD's Spec exposes. It has an entry for every kind.
 	CRDFields map[string]map[string]bool
+	// CRDStatusFields is CRDFields for the CRD's Status.
+	CRDStatusFields map[string]map[string]bool
 	// UsedOps maps normalizeResourceKey of a resource package directory name to
 	// the SDK operations that package invokes. Keys and CRD kinds don't line up
 	// one-to-one: some controllers have a pkg/resource/tags helper with no CRD,
@@ -67,7 +69,7 @@ func ReadControllerInputs(root, service string) (*ControllerInputs, error) {
 	if err != nil {
 		return nil, err
 	}
-	crdFields, err := readCRDFields(controllerPath)
+	crdFields, crdStatusFields, err := readCRDFields(controllerPath)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +107,7 @@ func ReadControllerInputs(root, service string) (*ControllerInputs, error) {
 		PackageName:         packageName,
 		Config:              cfg,
 		CRDFields:           crdFields,
+		CRDStatusFields:     crdStatusFields,
 		UsedOps:             usedOps,
 		kindsByLower:        kindsByLower,
 	}, nil
