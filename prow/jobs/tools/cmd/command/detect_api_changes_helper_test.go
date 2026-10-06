@@ -59,11 +59,8 @@ func TestNewestSemverRefNoUsableTags(t *testing.T) {
 }
 
 func TestNewestSemverRefHandlesVPrefix(t *testing.T) {
-	// aquasecurity/go-version's regex is anchored with no `v?` tolerance, so
-	// the prefix must be stripped before comparison. Without that, every real
-	// aws-sdk-go-v2 tag is unparseable and this returns an error instead of a
-	// version. The returned value must keep the prefix, since callers build
-	// model URLs from it.
+	// go-version rejects a leading "v", so it is stripped to compare but kept
+	// in the result: callers build model URLs from it.
 	got, err := newestSemverRef([]string{
 		"refs/tags/v1.9.0",
 		"refs/tags/v1.41.5",
@@ -77,10 +74,8 @@ func TestNewestSemverRefHandlesVPrefix(t *testing.T) {
 }
 
 func TestRefsAtPrefixDepth(t *testing.T) {
-	// Real shapes from aws/aws-sdk-go-v2: the s3 service module is tagged
-	// `service/s3/vX.Y.Z`, but nested sub-modules like
-	// `service/s3/internal/configtesting/vX.Y.Z` match the same textual prefix.
-	// Only the single-segment remainder is a real service version.
+	// Nested sub-modules (service/s3/internal/configtesting/vX) share the prefix;
+	// only a single-segment remainder is a service version.
 	got := refsAtPrefixDepth([]string{
 		"refs/tags/service/s3/v1.113.4",
 		"refs/tags/service/s3/internal/configtesting/v0.1.0",
@@ -90,8 +85,7 @@ func TestRefsAtPrefixDepth(t *testing.T) {
 	assert.Equal(t, []string{"refs/tags/service/s3/v1.113.4"}, got,
 		"nested sub-module tags must be discarded")
 
-	// The core series: a hypothetical non-version tag beginning with v must not
-	// survive either.
+	// A non-version tag beginning with v is dropped too.
 	got = refsAtPrefixDepth([]string{
 		"refs/tags/v1.41.5",
 		"refs/tags/v1.47.1",
@@ -120,12 +114,8 @@ func (f failingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("network disabled in tests")
 }
 
-// withNoNetwork points modelHTTPClient at a transport that fails and errors the
-// test on any attempt, restoring the original afterwards.
-//
-// Without this a cache-path bug does not fail the test, it silently reaches
-// raw.githubusercontent.com — which is how an earlier revision of this test kept
-// "passing" while making a live network call. Fail closed, not open.
+// withNoNetwork makes any HTTP attempt fail the test, so a cache-path bug
+// cannot silently fall through to a live fetch.
 func withNoNetwork(t *testing.T) {
 	t.Helper()
 	original := modelHTTPClient
@@ -153,11 +143,8 @@ func TestFetchModelUsesCache(t *testing.T) {
 }
 
 func TestHTTPGet(t *testing.T) {
-	// httpGet takes a plain URL, so unlike fetchModel it is testable without
-	// changing production code — the model URL templates hardcode
-	// raw.githubusercontent.com, so fetchModel's fetch path has no seam. This
-	// covers the two branches that matter for an unattended job: a successful
-	// body read, and the non-200 error naming both URL and status.
+	// httpGet is tested directly because fetchModel's URLs are hardcoded. Covers a
+	// successful read and the non-200 error naming URL and status.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/missing.json" {
 			w.WriteHeader(http.StatusNotFound)
@@ -203,9 +190,8 @@ func TestFindNewResources(t *testing.T) {
 	assert.True(t, got[0].NewSincePin)
 }
 
-// TestFindNewResourcesMultiRoleOperation is route53's ChangeResourceRecordSets
-// shape: one operation declared operation_type: [Create, Delete] both creates and
-// deletes the resource, so it is not transient.
+// TestFindNewResourcesMultiRoleOperation: an operation that both creates and
+// deletes the resource (route53's ChangeResourceRecordSets) is not transient.
 func TestFindNewResourcesMultiRoleOperation(t *testing.T) {
 	m := opsModel(t, map[string][]string{"ChangeGadgetSettings": {"GadgetName"}})
 	baseline := opsModel(t, map[string][]string{"ListThings": {"ThingName"}})
@@ -227,21 +213,14 @@ func TestFindNewOperations(t *testing.T) {
 
 	got := findNewOperations(latest, baseline, in)
 
-	// ListWidgets classifies (List, singularised to Widget) and the fake
-	// controller never calls it. PutWidgetPolicy and ResetWidget do not
-	// classify, so placeUnknownOp places them: PutWidgetPolicy is a sub-object of
-	// Widget by name, and ResetWidget names Widget exactly. Nothing is left
-	// unclassified.
+	// ListWidgets classifies but is uncalled; PutWidgetPolicy and ResetWidget do
+	// not classify and are placed on Widget by name.
 	assert.Equal(t, []string{"ListWidgets", "PutWidgetPolicy", "ResetWidget"}, subjects(got, ClassNewOperation))
 	assert.Empty(t, subjects(got, ClassUnknownOperation))
 
-	// TagResource is denylisted. PutWidgetTagging is in ignore.operations.
-	// AbortSession: "Abort" is an unrecognised verb, and its name mentions
-	// `Session`, which the fixture's ignore.resource_names declines. This is the
-	// only case that exercises namesIgnoredResource *through* findNewOperations —
-	// CreateSession is excluded for an unrelated reason (no CRD) — so it is
-	// checked against every reportable finding: placeUnknownOp would otherwise
-	// happily put it somewhere. It is still listed, as dropped, with the reason.
+	// TagResource is denylisted, PutWidgetTagging ignored. AbortSession is the only
+	// case reaching namesIgnoredResource through findNewOperations, so it is checked
+	// against every reportable finding; it is still listed as dropped.
 	all := make([]string, 0, len(got))
 	for _, f := range reportable(got) {
 		all = append(all, f.Subject)
@@ -261,11 +240,8 @@ func TestFindNewOperations(t *testing.T) {
 }
 
 func TestFindNewOperationsSkipsOperationsPredatingThePin(t *testing.T) {
-	// The same model on both sides, so every operation predates the pin.
-	// ListWidgets is still uncalled on a resource with a CRD, which is exactly
-	// what the live sns run reported for ListTopics and friends: years-old
-	// operations ACK declines by design, filed as an issue nobody can close by
-	// regenerating. Only an operation new since the pin is news.
+	// Same model on both sides: operations older than the pin are not news, even
+	// when uncalled (as sns's ListTopics was).
 	latest := loadTestModel(t, "smithy_latest.json")
 	in, err := ReadControllerInputs("../../../testdata", "fake")
 	require.NoError(t, err)
@@ -276,10 +252,8 @@ func TestFindNewOperationsSkipsOperationsPredatingThePin(t *testing.T) {
 }
 
 func TestNamesIgnoredResource(t *testing.T) {
-	// s3's real ignore.resource_names. Every one of these operations would
-	// otherwise sit in the unclassified bucket on every run forever, because
-	// their verbs are unrecognised so they classify to OpTypeUnknown and carry
-	// no usable resource name to filter on.
+	// s3's real ignore.resource_names. These ops classify to OpTypeUnknown, so this
+	// filter is all that keeps them out of the unclassified bucket.
 	ignored := []string{
 		"Object", "MultipartUpload", "Session",
 		"BucketMetadataTableConfiguration", "BucketMetadataConfiguration",
@@ -332,17 +306,14 @@ func TestExposedInCRD(t *testing.T) {
 	assert.True(t, exposedInCRD(in, "Widget", "Name"))
 	assert.True(t, exposedInCRD(in, "Widget", "Config.Size"))
 	assert.True(t, exposedInCRD(in, "Widget", "Rules.Prefix"))
-	// Status field.
 	assert.True(t, exposedInCRD(in, "Widget", "WidgetID"))
 
 	// Renamed: generator.yaml maps WidgetName -> Name, and the CRD has "name".
 	assert.True(t, exposedInCRD(in, "Widget", "WidgetName"))
 
-	// Genuinely absent.
 	assert.False(t, exposedInCRD(in, "Widget", "Description"))
 	assert.False(t, exposedInCRD(in, "Widget", "Config.Color"))
 
-	// Unknown kind.
 	assert.False(t, exposedInCRD(in, "Gizmo", "Name"))
 }
 
@@ -436,9 +407,7 @@ func TestDeclinedFieldPath(t *testing.T) {
 }
 
 func TestDeclinedShapeName(t *testing.T) {
-	// s3 declares BlockedEncryptionTypes, and the real member's target is the
-	// absolute ID com.amazonaws.s3#BlockedEncryptionTypes — only the short name
-	// is compared.
+	// Only the short name of the target ID (com.amazonaws.s3#...) is compared.
 	declined := []string{"BlockedEncryptionTypes", "Ignored"}
 
 	assert.True(t, declinedShapeName("com.amazonaws.s3#BlockedEncryptionTypes", declined))
@@ -450,10 +419,8 @@ func TestDeclinedShapeName(t *testing.T) {
 }
 
 func TestDeclinedShapeAncestor(t *testing.T) {
-	// Mirrors the real s3 case. Declining BlockedEncryptionTypes must also
-	// remove what hangs beneath it, even though the child's own target
-	// (EncryptionTypeList) is a different, undeclined shape. A self-only check
-	// let that child through on the real delta.
+	// Declining a shape also declines what hangs beneath it, even when the child's
+	// own target shape is not declined (the real s3 case).
 	members := map[string]MemberInfo{
 		"ServerSideEncryptionConfiguration": {
 			Target: "com.amazonaws.s3#ServerSideEncryptionConfiguration",
@@ -516,7 +483,6 @@ func TestSourcedAsCRDField(t *testing.T) {
 	assert.False(t, sourcedAsCRDField(in, "Bucket", "GetBucketAbac", "AbacStatus"))
 	// A different path on the declared operation is not covered either.
 	assert.False(t, sourcedAsCRDField(in, "Bucket", "PutBucketAbac", "ChecksumAlgorithm"))
-	// Unknown kind.
 	assert.False(t, sourcedAsCRDField(in, "Gizmo", "PutBucketAbac", "AbacStatus"))
 }
 
@@ -535,10 +501,8 @@ func TestIsACKManagedARN(t *testing.T) {
 	assert.False(t, isACKManagedARN("Bucket", "SourceArnOwner"))
 }
 
-// wrapperModel builds a model whose responses wrap the resource the way iam's and
-// s3's do. withNewField adds SourceRoleTemplate to Role and DefaultEventHold to
-// DefaultRetention, the two members that appeared live between v1.32.6/v1.41.5
-// and v1.47.1.
+// wrapperModel builds responses that wrap the resource as iam's and s3's do.
+// withNewField adds Role.SourceRoleTemplate and DefaultRetention.DefaultEventHold.
 func wrapperModel(t *testing.T, withNewField bool) *SmithyModel {
 	t.Helper()
 	role := `"RoleName": {"target": "smithy.api#String"}`
@@ -603,10 +567,9 @@ func TestFindAddedFieldsFollowsCodegenOutputUnwrapping(t *testing.T) {
 		},
 	}
 
-	// One finding per new field per resource: children of a new field (TemplateArn,
-	// DefaultEventHold.Days) are part of it, and the operations it appeared in are
-	// the Evidence rather than one finding each. Only returned, Bucket's and
-	// Group's are Status candidates; Role's is also sent on CreateRole, so Spec.
+	// One finding per new field per resource; children and extra operations go in
+	// Evidence. Returned-only fields are Status candidates; Role's is also sent on
+	// CreateRole, so Spec.
 	got := findAddedFields(wrapperModel(t, true), wrapperModel(t, false), in)
 	assert.Equal(t, []Finding{
 		{Kind: "Bucket", Class: ClassStatusField, NewSincePin: true,
@@ -638,10 +601,9 @@ func TestOutputWrapper(t *testing.T) {
 		"a single non-structure member is not a wrapper")
 }
 
-// inputWrapperModel has backup's CreateBackupPlan shape: the plan's fields sit
-// under a BackupPlan request member, beside request members codegen leaves out
-// of Spec. withNewField adds a member inside the wrapper, one inside an existing
-// field under it, and one outside it.
+// inputWrapperModel has backup's CreateBackupPlan shape, with the plan's fields
+// under a BackupPlan request member. withNewField adds a member inside the
+// wrapper, one inside an existing field under it, and one outside it.
 func inputWrapperModel(t *testing.T, withNewField bool) *SmithyModel {
 	t.Helper()
 	request := `"BackupPlan": {"target": "demo#BackupPlanInput"},
@@ -722,27 +684,10 @@ func TestFindAddedFields(t *testing.T) {
 
 	got := findAddedFields(latest, baseline, in)
 
-	// This asserts the whole suppression chain end-to-end, not just that the
-	// producer runs. Every mechanism has a member in the fixture that only it
-	// can suppress, because five of the six defects fixed in this task were
-	// "mechanism X exists but is not wired into findAddedFields" — a failure the
-	// per-predicate unit tests below cannot catch.
-	//
-	// Reported:
-	//   Config.Color   new, nested, absent from the CRD
-	//   Description    new, absent from the CRD
-	//   WidgetArn      new on the *input* shape; the ARN convention applies only
-	//                  to responses, so this must survive
-	// Suppressed:
-	//   WidgetName     renames -> Name, which the CRD exposes
-	//   DeclinedField  ignore.field_paths
-	//   IgnoredThing   ignore.shape_names, via its target shape `Ignored`
-	//   IgnoredThing.Inner  descendant of a declined shape
-	//   SourcedMember  resources.Widget.fields.Sourced.from
-	//   WidgetArn      on the *output* shape, ACK's status-ARN wiring
-	//
-	// Config.Nested.Color is absent for an unrelated reason: the cycle guard
-	// stops the walk descending into the self-referential WidgetConfig shape.
+	// End-to-end: each suppression mechanism has a member only it can suppress.
+	// Reported: Config.Color, Description, input-side WidgetArn. Suppressed:
+	// WidgetName (rename), DeclinedField, IgnoredThing(.Inner), SourcedMember,
+	// output-side WidgetArn. The cycle guard stops Config.Nested.Color.
 	assert.Equal(t, []string{
 		"Config.Color",
 		"Description",
@@ -771,8 +716,8 @@ func sampleFindings() []Finding {
 	return []Finding{
 		{Kind: "Gizmo", Class: ClassNewResource, Subject: "Gizmo", Detail: "implied by `CreateGizmo`",
 			NewSincePin: true, Evidence: "CreateGizmo,DeleteGizmo"},
-		// As the producers emit them: no Detail, and NewSincePin always true, which
-		// the renderer must not annotate on these classes.
+		// As producers emit them: no Detail and NewSincePin true, which the renderer
+		// must not annotate for these classes.
 		{Kind: "Widget", Class: ClassNewOperation, Subject: "PutWidgetPolicy", NewSincePin: true},
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Description", NewSincePin: true, Evidence: "CreateWidget"},
 		{Class: ClassUnknownOperation, Subject: "ResetWidget", NewSincePin: true},
@@ -790,8 +735,7 @@ func TestFingerprintStability(t *testing.T) {
 	reordered[0], reordered[3] = reordered[3], reordered[0]
 	assert.Equal(t, a, fingerprintFindings("demo", reordered))
 
-	// A different Detail must not change it either — details carry version
-	// strings and other prose.
+	// Nor must a different Detail, which carries version strings and prose.
 	detailChanged := sampleFindings()
 	detailChanged[0].Detail = "completely different prose"
 	assert.Equal(t, a, fingerprintFindings("demo", detailChanged))
@@ -808,10 +752,7 @@ func TestFingerprintStability(t *testing.T) {
 }
 
 // TestFingerprintFormatLock pins the digest layout. Fingerprints live in open
-// GitHub issue bodies indefinitely, so this constant is a wire format: if this
-// test fails, either the layout changed deliberately — update the constant and
-// accept that every open issue will be recreated once — or something changed it
-// by accident.
+// issue bodies, so a change recreates every open issue once; make it on purpose.
 func TestFingerprintFormatLock(t *testing.T) {
 	assert.Equal(t,
 		"6a33b980472badea0ddd5fc5ec52c1631722aedb28eb0076e953069a149ffaf2",
@@ -874,8 +815,7 @@ func TestFindingClassString(t *testing.T) {
 }
 
 func TestRenderIssueBody(t *testing.T) {
-	// An exact body, not a Contains chain: this pins section ordering, bullet
-	// text, the footer, and the region markers that bound the whole lot together.
+	// Exact body: pins section order, bullet text, footer and region markers.
 	want := "<!-- ack-api-change-begin -->\n" +
 		"AWS SDK releases since v1.41.5, the version the `demo` controller builds against, add " +
 		"resources and fields the controller does not represent. These are candidate additions for " +
@@ -948,8 +888,8 @@ func TestRenderIssueBodyRespectsGitHubLimit(t *testing.T) {
 	// A truncated body must still be worth reading.
 	assert.Contains(t, body, "## Resource: ")
 	assert.Contains(t, body, "### Spec field candidates")
-	// Whole resources were dropped here, so the summary names both counts. The
-	// wording is pinned because this is the only test that reaches this branch.
+	// Whole resources were dropped, so both counts appear. Only this test reaches
+	// this branch.
 	assert.Contains(t, body, "further resource(s) and")
 	assert.Contains(t, body, "finding(s) omitted")
 	// The footer and the marker must survive truncation — the marker is the
@@ -960,10 +900,8 @@ func TestRenderIssueBodyRespectsGitHubLimit(t *testing.T) {
 }
 
 func TestRenderIssueBodyTruncatesInsideOneOversizedResource(t *testing.T) {
-	// Every finding under a single Kind: the whole body is one block, so
-	// skipping blocks wholesale would yield an issue with no findings in it —
-	// and because the fingerprint covers the full set, Task 14 would report
-	// issueUnchanged and never refresh it.
+	// One Kind for every finding: skipping whole blocks would leave an empty issue
+	// whose fingerprint never changes, so it would never be refreshed.
 	var findings []Finding
 	for i := 0; i < 20000; i++ {
 		findings = append(findings, Finding{
@@ -982,9 +920,8 @@ func TestRenderIssueBodyTruncatesInsideOneOversizedResource(t *testing.T) {
 	assert.Contains(t, body, "SomeReasonablyLongFieldPath0")
 	assert.Contains(t, body, "omitted")
 	assert.Equal(t, fingerprint, parseFingerprint(body))
-	// Half the budget or better should be used — a body that bails out early is
-	// the bug this test exists to catch. The budget is asked for rather than
-	// hardcoded because it is derived from the footer these versions produce.
+	// At least half the budget must be used; bailing out early is the bug. The
+	// budget is computed because it depends on the footer.
 	budget := issueBodyBudget("v1.41.5", "v1.44.0", fingerprint, 1, len(findings))
 	assert.Greater(t, len(body), budget/2)
 	// No resource was dropped here, only entries inside one that rendered, so the
@@ -1027,11 +964,8 @@ func TestParseFingerprint(t *testing.T) {
 }
 
 func TestParseFingerprintReadsTheLiveRegion(t *testing.T) {
-	// renderIssueBody's region starts at byte 0, so the first region is the live
-	// one and anything below it is human text. A maintainer quoting another
-	// service's complete report — markers and all — must not redirect the read;
-	// under last-region selection it did, and the next edit then overwrote the
-	// quote with this service's report.
+	// The first region is the live one. A quoted copy of another service's report
+	// below it must not redirect the read.
 	live, liveFP := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	quoted, quotedFP := renderIssueBody("ec2", "v1.41.5", "v1.44.0", sampleFindings())
 	require.NotEqual(t, liveFP, quotedFP, "the two regions must be distinguishable")
@@ -1039,20 +973,16 @@ func TestParseFingerprintReadsTheLiveRegion(t *testing.T) {
 	body := live + "\n\nQuoting the ec2 issue for comparison:\n\n" + quoted
 	assert.Equal(t, liveFP, parseFingerprint(body))
 
-	// A bare marker line outside the region is not the live one either, wherever it
-	// sits. These two pass under both selection rules, so they are kept as
-	// regression cover rather than as the discriminator.
+	// A bare marker outside the region is not live either. Regression cover only:
+	// these pass under both selection rules.
 	stale := "<!-- ack-api-change-fingerprint: " + strings.Repeat("0", 64) + " -->\n"
 	assert.Equal(t, liveFP, parseFingerprint(stale+live))
 	assert.Equal(t, liveFP, parseFingerprint(live+"\nQuoting #7:\n\n"+stale))
 }
 
 func TestParseFingerprintReadsAFingerprintlessRegionAsHumanText(t *testing.T) {
-	// A maintainer explaining what the bot emits appends a complete but empty
-	// region — the marker pair in a fenced code block. Under last-region selection
-	// parseFingerprint read that region, returned "", and listAPIChangeIssues then
-	// skipped the issue: a duplicate got filed and the orphan never counted against
-	// the cap.
+	// A maintainer's empty example region (in a code fence) must not be read as
+	// live, or the issue looks unowned and a duplicate is filed.
 	live, liveFP := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	empty := "\n\nFor reference, the bot wraps its report like this:\n\n```\n" +
 		generatedRegionBegin + "\n...\n" + generatedRegionEnd + "\n```\n"
@@ -1062,19 +992,14 @@ func TestParseFingerprintReadsAFingerprintlessRegionAsHumanText(t *testing.T) {
 }
 
 func TestParseFingerprintIgnoresAStrayBeginMarker(t *testing.T) {
-	// A trailing bare begin marker used to make the whole body look regionless.
-	// parseFingerprint survived that on its whole-body fallback, which is exactly
-	// what made the matching replaceGeneratedRegion failure silent: the issue stayed
-	// attributed, so the wipe fired the next time the findings changed.
+	// A trailing bare begin marker must not make the body look regionless.
 	live, liveFP := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	assert.Equal(t, liveFP,
 		parseFingerprint(live+"\n> Note: intentional.\n\n"+generatedRegionBegin+"\n"))
 }
 
 func TestParseFingerprintToleratesCRLF(t *testing.T) {
-	// GitHub stores a web-UI-edited body with CRLF line endings. The region markers
-	// go through the same normalisation as the fingerprint line, so both the region
-	// lookup and the marker match have to survive it.
+	// Web-UI edits store CRLF; region lookup and marker match must survive it.
 	body, fingerprint := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	crlf := strings.ReplaceAll(body, "\n", "\r\n")
 	require.NotEmpty(t, fingerprint)
@@ -1091,10 +1016,8 @@ func TestParseFingerprintRejectsInlineMarker(t *testing.T) {
 }
 
 func TestReplaceGeneratedRegionKeepsHumanText(t *testing.T) {
-	// The ownership checks establish that the detector filed the issue, not that
-	// nobody has edited it since. A whole-body PATCH silently deleted a
-	// maintainer's "this divergence is intentional" note — and the accompanying
-	// comment notified every subscriber of the loss.
+	// Only the generated region is rewritten; a whole-body PATCH would delete
+	// maintainer notes.
 	region, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	note := "\n> Note: `CreateGizmo` is intentionally unsupported.\n"
 	existing := "Filed by the detector.\n\n" + region + note
@@ -1123,10 +1046,8 @@ func TestReplaceGeneratedRegionKeepsHumanText(t *testing.T) {
 }
 
 func TestReplaceGeneratedRegionRefusesMalformedOrAmbiguousBodies(t *testing.T) {
-	// Every shape here used to be resolved somehow — the first begin and the first end
-	// after it, or a whole-body replacement when that found nothing — and each
-	// resolution either rewrote text outside the bot's report or deleted it. A refusal
-	// is loud and leaves the issue as it was; a guess is silent and destructive.
+	// Each ambiguous shape is refused rather than guessed at: a guess rewrites or
+	// deletes text outside the bot's report.
 	live, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	quoted, _ := renderIssueBody("ec2", "v1.41.5", "v1.44.0", sampleFindings())
 	note := "\n> Note: `CreateGizmo` is intentionally unsupported.\n"
@@ -1135,7 +1056,7 @@ func TestReplaceGeneratedRegionRefusesMalformedOrAmbiguousBodies(t *testing.T) {
 	noEnd := strings.Replace(live, generatedRegionEnd, "", 1)
 
 	for name, body := range map[string]string{
-		// No markers at all: once the legacy fallback, which replaced the body whole.
+		// No markers at all (the legacy format).
 		"no markers":       "an older generated body\n" + note,
 		"only a begin":     generatedRegionBegin + "\nno end marker\n" + note,
 		"end marker gone":  noEnd + note,
@@ -1165,9 +1086,8 @@ func TestParseFingerprintStillAttributesAMalformedBody(t *testing.T) {
 	assert.Equal(t, liveFP, parseFingerprint(noEnd))
 }
 
-// issueFor builds the shape listAPIChangeIssues hands to reconcileIssue: an open
-// issue the bot filed. Its labels are not set here; serveListedIssues adds them to
-// the copy the refetch reads, since only the refetch checks them.
+// issueFor builds an open bot-filed issue as listAPIChangeIssues returns it.
+// serveListedIssues adds the labels, since only the refetch checks them.
 func issueFor(number int, body string) *github.Issue {
 	return &github.Issue{
 		Number: github.Int(number),
@@ -1177,10 +1097,8 @@ func issueFor(number int, body string) *github.Issue {
 	}
 }
 
-// staleIssueBody is a real generated region for a different finding set from
-// sampleFindings(), so reconcileIssue takes the refresh path into it. A bare string
-// like "stale body" no longer works: it has no region, and replaceGeneratedRegion
-// refuses a body without one rather than replacing it whole.
+// staleIssueBody is a generated region for a different finding set from
+// sampleFindings(), so reconcileIssue takes the refresh path.
 func staleIssueBody() string {
 	body, _ := renderIssueBody("demo", "v1.40.0", "v1.41.5", sampleFindings()[:1])
 	return body
@@ -1225,10 +1143,8 @@ func TestReconcileIssueCreatesWhenAbsent(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 		sentLabels = payload.Labels
 		created = true
-		// Echo the labels back, the way the real API does on success.
-		// createGithubIssueWithClient refuses an issue that came back without
-		// apiChangeLabel, so a bare `{"number": 1}` here would trip that guard
-		// instead of exercising the creation path it protects.
+		// Echo the labels back as the real API does; createGithubIssueWithClient
+		// refuses an issue returned without apiChangeLabel.
 		filed := github.Issue{Number: github.Int(1)}
 		for _, name := range payload.Labels {
 			filed.Labels = append(filed.Labels, &github.Label{Name: github.String(name)})
@@ -1242,9 +1158,8 @@ func TestReconcileIssueCreatesWhenAbsent(t *testing.T) {
 	assert.Equal(t, issueCreated, outcome)
 	assert.True(t, created)
 
-	// Both labels matter. Without apiChangeLabel the next run's listing cannot
-	// see this issue and files a duplicate every day; kind/api-change is what
-	// humans filter by.
+	// Without apiChangeLabel the next run cannot find this issue and files a
+	// duplicate; kind/api-change is what humans filter by.
 	assert.Contains(t, sentLabels, apiChangeLabel)
 	assert.Contains(t, sentLabels, "kind/api-change")
 	assert.Contains(t, sentLabels, "service/demo")
@@ -1290,18 +1205,12 @@ func TestReconcileIssueUpdatesWhenFingerprintDiffers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 
-	// The order is asserted, not just the pair. The PATCH writes the new
-	// fingerprint, which is also the done-marker, so commenting afterwards means a
-	// failed comment is never retried — see
-	// TestReconcileIssueFailedCommentLeavesTheFingerprintStale.
+	// Comment before PATCH: the PATCH writes the fingerprint, so a failed comment
+	// is retried (see TestReconcileIssueFailedCommentLeavesTheFingerprintStale).
 	assert.Equal(t, []string{"comment", "patch"}, calls)
 
-	// The comment text is asserted because reverting it to the old wording left the
-	// whole suite green. It is the only message that notifies humans, on a public
-	// repo, so both halves of the fix are pinned: the service and both versions must
-	// be there, and the old "New AWS API changes detected" must not be — that claimed
-	// a direction the fingerprint cannot know, and was a false alarm every time
-	// findings had in fact been *resolved*.
+	// The comment notifies humans on a public repo: it names the service and both
+	// versions, and must not claim new changes, since findings may have been resolved.
 	assert.Contains(t, commentBody, "`demo`")
 	assert.Contains(t, commentBody, "v1.41.5")
 	assert.Contains(t, commentBody, "v1.44.0")
@@ -1312,12 +1221,8 @@ func TestReconcileIssueUpdatesWhenFingerprintDiffers(t *testing.T) {
 }
 
 func TestReconcileIssueFailedPatchReportsNoOutcome(t *testing.T) {
-	// The comment lands, then the PATCH fails. GitHub has been written to and the
-	// function still failed, so the outcome must be no-decision: a caller drives
-	// bookkeeping off the outcome, and issueUpdated here would record a refresh that
-	// never happened while subscribers had already been notified. Mutating this return
-	// to issueUpdated previously passed the whole suite — this is the one path that can
-	// have already written before failing, so nothing else holds the contract.
+	// Comment posted, then the PATCH fails: the outcome must be no-decision, or the
+	// caller records a refresh that never happened.
 	var calls []string
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -1342,21 +1247,16 @@ func TestReconcileIssueFailedPatchReportsNoOutcome(t *testing.T) {
 }
 
 func TestReconcileIssueRefusesAnOversizedMergedBody(t *testing.T) {
-	// A merged body over the limit 422s every run, so the fingerprint never advances
-	// and the update path retries daily — notifying every time, since the comment
-	// precedes the PATCH. Probed: five consecutive PATCH failures, five comments. It
-	// must fail before the comment, not after.
+	// An oversized merged body 422s every run and would re-notify daily, so it must
+	// fail before the comment.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a body that cannot be PATCHed must not notify first, got %s %s",
 			r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 
-	// The existing body needs a real generated region, not just prose plus a big note:
-	// replaceGeneratedRegion refuses a body with no region, which would fail this for
-	// the wrong reason. The overflow only
-	// exists when there is a region to keep text *around* — which is exactly the case
-	// renderIssueBody's own budget cannot see.
+	// Needs a real region, which replaceGeneratedRegion requires. The overflow
+	// comes from text kept around the region, which renderIssueBody cannot see.
 	region, _ := renderIssueBody("demo", "v1.40.0", "v1.41.5", sampleFindings()[:1])
 	existingBody := region + "\n\n" + strings.Repeat("x", githubMaxIssueBody)
 
@@ -1383,8 +1283,7 @@ func TestReconcileIssueCapBlocksCreationOnly(t *testing.T) {
 
 func TestReconcileIssueCapStillAllowsUpdates(t *testing.T) {
 	var patched bool
-	// Strict about unexpected requests, as its four siblings are: a creation at the
-	// cap would otherwise be served a bland `{}` here and pass.
+	// Strict about unexpected requests, so a create at the cap cannot pass.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42":
@@ -1420,11 +1319,8 @@ func TestReconcileIssueNoFindings(t *testing.T) {
 }
 
 func TestReconcileIssueNoFindingsButAnOpenIssue(t *testing.T) {
-	// A controller that has caught up. Declining to write is the deliberate choice —
-	// an unattended job must not retract a report off the absence of evidence, since
-	// a detector bug or an empty model fetch looks exactly like this — but the open
-	// issue then asserts changes that no longer exist and holds a cap slot, so the
-	// outcome has to be distinguishable from a service with simply nothing to say.
+	// No findings but an open issue: nothing is written (a detector bug looks the
+	// same), but the outcome must be distinct because the issue holds a cap slot.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("no findings must mean no API calls, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1438,10 +1334,7 @@ func TestReconcileIssueNoFindingsButAnOpenIssue(t *testing.T) {
 }
 
 func TestReconcileIssueUpdatePreservesMaintainerText(t *testing.T) {
-	// Proven necessary by mutation: with this untested, replacing
-	// replaceGeneratedRegion's output with the raw rendered body passed the whole
-	// suite, which is the regression that silently deletes a maintainer's notes and
-	// then comments announcing it.
+	// Guards that a refresh preserves text outside the generated region.
 	region, _ := renderIssueBody("demo", "v1.40.0", "v1.41.5", sampleFindings()[:1])
 	existingBody := region + "\n\n`CreateBucketMetadataTableConfiguration` is intentionally unsupported.\n"
 
@@ -1466,11 +1359,8 @@ func TestReconcileIssueUpdatePreservesMaintainerText(t *testing.T) {
 }
 
 func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
-	// The Critical this ordering exists for. Day 1's comment fails; because the body
-	// has not been patched, the fingerprint is still the old one, so day 2 sees a
-	// mismatch and retries. With the PATCH first, day 2 matched and returned
-	// issueUnchanged with zero requests — the notification lost for ever after one
-	// transient 403, on a job nobody watches.
+	// A failed comment leaves the old fingerprint, so the next run retries. With the
+	// PATCH first, one transient error would lose the notification.
 	existing := issueFor(42, staleIssueBody())
 
 	var dayOneCalls []string
@@ -1510,12 +1400,8 @@ func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
 }
 
 func TestReconcileIssueCreateWithoutTheOwnershipLabelAborts(t *testing.T) {
-	// GitHub drops the labels on creation when the token's account lacks push
-	// access, and the check for that runs after the POST — so an issue now exists on
-	// the public repo. Reporting issueUnchanged here asserted the opposite of what
-	// happened, and the error had to be prose a caller could only match on by
-	// substring, so the ordinary log-and-continue loop filed one invisible orphan per
-	// service per day.
+	// Labels dropped on create (token lacks push access) leave an orphan issue. The
+	// error must wrap errCannotLabelIssues and name it, so the caller can abort.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"number": 7, "labels": []}`)
 	}))
@@ -1530,10 +1416,8 @@ func TestReconcileIssueCreateWithoutTheOwnershipLabelAborts(t *testing.T) {
 }
 
 func TestReconcileIssueRejectsANonPositiveCap(t *testing.T) {
-	// A cap of 0 used to mean "unlimited", so a flag defaulting to 0 or a caller
-	// forgetting to pass one removed the only brake on a writer to a public repo
-	// across ~74 services. Fail closed instead; an absent cap is set deliberately
-	// large.
+	// A cap of 0 is refused rather than meaning unlimited: it is the only brake on
+	// writes to a public repo.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a bad cap must be refused before any request, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1590,9 +1474,7 @@ func TestReconcileIssueOpenIssueBeatsAClosedFingerprint(t *testing.T) {
 }
 
 func TestIssueOutcomeString(t *testing.T) {
-	// The job's only output is a log, so `outcome=4` is not something a reader can
-	// act on. Every member is covered, the zero value included: that is the one a
-	// caller sees alongside an error.
+	// Outcomes are logged, so each needs a readable name, the zero value included.
 	assert.Equal(t, "no-decision", issueOutcomeNone.String())
 	assert.Equal(t, "suppressed-by-closed-issue", issueSuppressedByClosed.String())
 	assert.Equal(t, "unchanged", issueUnchanged.String())
@@ -1607,10 +1489,7 @@ func TestIssueOutcomeString(t *testing.T) {
 }
 
 func TestIssueOutcomeValuesAreDistinct(t *testing.T) {
-	// The values used to be spread over two const blocks continuing one another's
-	// iota by hand, where adding a member to the first block aliased two decisions
-	// with nothing for the compiler to object to. They are literals now; this pins
-	// that nothing collides regardless.
+	// Outcome values must not collide.
 	seen := map[issueOutcome]bool{}
 	for _, o := range []issueOutcome{
 		issueOutcomeNone, issueSuppressedByClosed, issueUnchanged,
@@ -1626,18 +1505,15 @@ func TestIssueOutcomeValuesAreDistinct(t *testing.T) {
 func TestGetAPINotificationConfig(t *testing.T) {
 	services, configuredCap, err := getAPINotificationServices("../../../jobs_config.yaml")
 	require.NoError(t, err)
-	// Membership and order, not just non-nil: the order of this list decides which
-	// services win when the cap allows fewer issues than there are candidates, so it
-	// is load-bearing rather than incidental.
+	// Order matters: it decides which services win when the cap binds.
 	assert.Equal(t, []string{"s3"}, services)
 	// Returned only so the command can warn when the flag disagrees with it.
 	assert.Equal(t, 1, configuredCap)
 }
 
 func TestGetAPINotificationConfigRejectsUnusableConfigs(t *testing.T) {
-	// Every case here aborts a run before any GitHub request, and every one of them is
-	// reachable from a hand-edited jobs_config.yaml handed to the job through extra_refs
-	// or the jobs-config ConfigMap — `make prow-gen` is not on that path.
+	// Each case aborts before any GitHub request. All are reachable from a
+	// hand-edited jobs_config.yaml, since `make prow-gen` is not on that path.
 	dir := t.TempDir()
 	write := func(name, content string) string {
 		path := filepath.Join(dir, name)
@@ -1738,23 +1614,13 @@ func TestReconcileServicesAbortsWhenIssuesCannotBeLabelled(t *testing.T) {
 	assert.ErrorIs(t, err, errCannotLabelIssues)
 	assert.Equal(t, 1, creates, "the run must stop at the first service, not file an orphan per service")
 
-	// The tally must say how far the run got. Reporting the whole list against all-zero
-	// counts reads as a run that did nothing rather than one that stopped.
+	// The tally must say the run stopped early, not read as a run that did nothing.
 	assert.Contains(t, logged.String(), "1 of 3 services (run stopped early)")
 }
 
-// captureLog redirects the standard logger into a buffer for one test.
-//
-// Needed because this job's output *is* its log: nobody watches it run, and an
-// outcome it decides but never prints is indistinguishable from one it never reached.
-// So for reconcileServices a log line is the observable behaviour, not a side effect —
-// issueStaleOpenIssue in particular writes nothing and returns nothing, and the line
-// is the whole point of the outcome existing.
-//
-// The writer is saved and restored like the flags and the prefix, rather than restored to
-// os.Stderr: hardcoding the destination means an inner capture's cleanup silently
-// redirects an outer or nested one to stderr, and the outer test then asserts against a
-// buffer nothing is written to any more.
+// captureLog redirects the standard logger into a buffer for one test. The log
+// is this job's only output, so log lines are the behaviour under test. The
+// previous writer is restored, not os.Stderr, so nested captures work.
 func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -1770,8 +1636,8 @@ func captureLog(t *testing.T) *bytes.Buffer {
 }
 
 func TestReconcileServicesCountsIssuesItCreates(t *testing.T) {
-	// reconcileIssue never mutates openCount, so without the caller's increment every
-	// service in one run creates past the cap. This is the only possible detector.
+	// reconcileIssue never mutates openCount; only the caller's increment keeps
+	// later services under the cap.
 	logged := captureLog(t)
 	var creates int
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1788,19 +1654,16 @@ func TestReconcileServicesCountsIssuesItCreates(t *testing.T) {
 	assert.Equal(t, 2, creates, "the cap must stop the third create")
 	assert.Equal(t, []string{"svc3"}, skipped)
 
-	// The closing tally is the highest-value line in the log of a job nobody watches,
-	// and it is the only place the per-outcome counts appear at all. The buckets sum to
-	// the 3 services attempted, which is the property that makes the line trustworthy.
+	// The tally is the only place per-outcome counts appear; its buckets must sum
+	// to the services attempted.
 	assert.Contains(t, logged.String(),
 		"3 services: 2 created, 0 updated, 0 unchanged, 0 stale, 0 suppressed, "+
 			"1 skipped at cap, 0 analysis failures, 0 write failures, 0 aborted")
 }
 
 func TestReconcileServicesReportsAStaleOpenIssue(t *testing.T) {
-	// A service with no findings but an open issue must not be short-circuited before
-	// reconcileIssue: that made issueStaleOpenIssue unreachable and its cap slot leak
-	// silently, logging "no changes" — byte-identical to a service that never had
-	// anything to report — while every other service was refused at a cap of 1.
+	// No findings but an open issue must still reach reconcileIssue, or
+	// issueStaleOpenIssue is unreachable and its cap slot leaks silently.
 	logged := captureLog(t)
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a stale open issue must not be written to, got %s %s", r.Method, r.URL.Path)
@@ -1819,9 +1682,7 @@ func TestReconcileServicesReportsAStaleOpenIssue(t *testing.T) {
 	assert.Empty(t, writeFailures)
 	assert.Empty(t, skipped)
 
-	// Nothing is written and nothing is returned, so the log line is the entire output
-	// of this outcome — assert it, or the case is dead again the moment somebody
-	// reinstates the short-circuit.
+	// This outcome's only output is the log line.
 	assert.Contains(t, logged.String(), "svc1: open issue has no current findings")
 	assert.Contains(t, logged.String(), "holding a cap slot")
 	assert.NotContains(t, logged.String(), "svc1: no changes")
@@ -2018,18 +1879,12 @@ func TestReconcileServicesTreatsDroppedOperationsAloneAsNoChanges(t *testing.T) 
 }
 
 func TestRunErrorReportsEveryReasonAtOnce(t *testing.T) {
-	// Prow surfaces one error as the job's failure reason and it is the last line of the
-	// log, so a run where the cap binds *and* controllers fail — the normal state of a
-	// rollout — must not report only the cap. Nor may the abort swallow the failures
-	// collected before it.
+	// Prow shows one error as the failure reason, so it must carry every reason: a
+	// binding cap must not hide controller failures, nor an abort earlier ones.
 	assert.NoError(t, runError(nil, 1, nil, nil, nil, false))
 
-	// Pinned whole rather than reason by reason, because the order is itself the finding:
-	// Prow's deck truncates the failure description, the cap reason is red by design every
-	// day of a rollout, and it used to come first and spend the visible prefix on the one
-	// reason that is expected. Failures first, cap last, and its remediation advice last of
-	// all. Every reason stays asserted — pinning all of them is what makes deleting any one
-	// of them fail here.
+	// Pinned whole because order matters: deck truncates the description, so
+	// failures come first and the expected cap reason and its advice last.
 	err := runError(nil, 1, []string{"svc1"}, []string{"svc2"}, []string{"svc3"}, false)
 	require.Error(t, err)
 	assert.Equal(t,
@@ -2073,12 +1928,8 @@ func TestRunErrorReportsEveryReasonAtOnce(t *testing.T) {
 }
 
 func TestReconcileServicesSummaryReportsEveryAbortPosition(t *testing.T) {
-	// The summary inferred "did we stop early?" from attempted < len(services), but
-	// attempted is already incremented for the aborting service — so an abort on the *last*
-	// service reported full scope, omitted that the run stopped, and said "0 write
-	// failures", while an orphaned unlabelled issue had just been filed on the public
-	// community repo. The aborting service also landed in no bucket at all, leaving the
-	// tally one short of the services attempted.
+	// An abort on any service, including the last, must report that the run
+	// stopped and count the aborting service in a bucket.
 	for _, abortAt := range []int{1, 2, 3} {
 		t.Run(fmt.Sprintf("abort on service %d of 3", abortAt), func(t *testing.T) {
 			logged := captureLog(t)
@@ -2101,9 +1952,8 @@ func TestReconcileServicesSummaryReportsEveryAbortPosition(t *testing.T) {
 			require.ErrorIs(t, err, errCannotLabelIssues)
 			assert.Equal(t, abortAt, creates, "the run must stop at the aborting service")
 
-			// Two assertions in one line: the scope names how far the run got, and the
-			// buckets — abortAt-1 created plus the one aborted — sum to the services
-			// attempted, on the first, middle and last position alike.
+			// The scope names how far the run got, and the buckets (abortAt-1 created plus
+			// one aborted) sum to the services attempted.
 			assert.Contains(t, logged.String(), fmt.Sprintf(
 				"%d of 3 services (run stopped early): %d created, 0 updated, 0 unchanged, "+
 					"0 stale, 0 suppressed, 0 skipped at cap, 0 analysis failures, "+
@@ -2114,12 +1964,8 @@ func TestReconcileServicesSummaryReportsEveryAbortPosition(t *testing.T) {
 }
 
 func TestLatestVersionCacheMemoisesFailures(t *testing.T) {
-	// The likeliest persistent failure of this listing is a rate-limit or
-	// secondary-rate-limit 403, and issuing 73 more listings after the first one has
-	// established the series cannot be read is actively counterproductive — it restores the
-	// whole request cost the cache exists to remove, in the one case where request budget
-	// matters most. Caching the error is not caching a wrong answer: no version is invented,
-	// and each service still records its own analysis failure.
+	// A failed listing (likely a rate-limit 403) is cached per series, so it is not
+	// repeated for every service. Each service still records its own failure.
 	var listings int
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		listings++
@@ -2139,15 +1985,9 @@ func TestLatestVersionCacheMemoisesFailures(t *testing.T) {
 }
 
 func TestDetectAPIChangesRejectsNonPositiveCap(t *testing.T) {
-	// The guard exists so one config typo costs one message instead of a full run of
-	// analysis followed by N misleading per-service errors. It survived mutation until
-	// this test existed.
-	//
-	// captureLog even though nothing here reads the log: detectAPIChanges' first
-	// statement is log.SetPrefix, so without this the prefix leaks into every test that
-	// runs after this one. Nothing asserts on it today only because every log assertion
-	// in this package is an unanchored Contains — an anchored one would fail depending
-	// on test order, which -shuffle=on varies.
+	// A config typo must fail once, up front, not after a full analysis.
+	// captureLog because detectAPIChanges sets the log prefix, which would otherwise
+	// leak into later tests.
 	_ = captureLog(t)
 
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
@@ -2159,31 +1999,24 @@ func TestDetectAPIChangesRejectsNonPositiveCap(t *testing.T) {
 }
 
 func TestDetectAPIChangesWarnsWhenTheCapDisagreesWithTheConfig(t *testing.T) {
-	// Flag and config are both 1 today, so the drift is invisible; when a maintainer raises
-	// api_notification_max_open_issues — the only one of the two values a human edits — the
-	// job keeps filing under the flag's cap and logs "cap of 1 reached" against a config
-	// that says otherwise, with no diagnostic.
+	// A maintainer may raise api_notification_max_open_issues without the flag;
+	// the mismatch must be logged.
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
 		OptJobsConfigPath, OptMaxOpenIssues)
 	OptJobsConfigPath, OptMaxOpenIssues = "../../../jobs_config.yaml", 5
-	// Cleared so that a machine which happens to have a token in its environment cannot
-	// carry this run past newGithubClientFromEnv and into api.github.com.
+	// Cleared so a token in the environment cannot reach api.github.com.
 	t.Setenv("GITHUB_TOKEN", "")
 
 	logged := captureLog(t)
-	// The warning is logged before the client is built, so what comes back is the
-	// missing-token error. That is deliberate and irrelevant to the assertion below — do not
-	// "fix" it into a NoError, which would require a real GitHub call.
+	// The warning precedes client creation, so the missing-token error is expected.
 	require.Error(t, detectAPIChanges(nil, nil))
 
 	assert.Contains(t, logged.String(),
 		"WARNING --max-open-issues is 5 but api_notification_max_open_issues is 1")
 }
 
-// lastTallyLine returns the last closing-tally line in a captured log, which is the
-// line reconcileServices defers. Matched on " services: " because that separator is
-// common to both modes' wording, and returning the *last* match is what makes this
-// usable in a test that captures two runs into one buffer.
+// lastTallyLine returns the last closing-tally line in a captured log, so a
+// test can capture two runs in one buffer.
 func lastTallyLine(logged string) string {
 	last := ""
 	for _, line := range strings.Split(logged, "\n") {
@@ -2194,9 +2027,8 @@ func lastTallyLine(logged string) string {
 	return last
 }
 
-// tallyNumbers extracts every integer from a tally line, in order. The two modes word
-// the buckets differently — "1 created" against "1 would create" — so the numbers are
-// the only part of the line on which the two can be compared.
+// tallyNumbers extracts the integers from a tally line, the only part that is
+// comparable across live and dry-run wording.
 func tallyNumbers(line string) []int {
 	var out []int
 	for i := 0; i < len(line); {
@@ -2222,8 +2054,7 @@ func dryRunAnalyzer(findingsFor map[string][]Finding) serviceAnalyzer {
 }
 
 func TestReconcileServicesDryRunMakesNoWrites(t *testing.T) {
-	// The whole contract. A dry run that writes is worse than no dry run, because
-	// somebody will trust it before pointing the job at a public repo.
+	// A dry run must make no writes.
 	existing := map[string]*github.Issue{
 		"svc2": issueFor(42, staleIssueBody()),
 		"svc3": issueFor(43, "whatever"),
@@ -2248,15 +2079,9 @@ func TestReconcileServicesDryRunMakesNoWrites(t *testing.T) {
 	assert.Empty(t, skipped)
 }
 
-// dryRunEveryOutcomeFixture is one service per issueOutcome, plus the two the loop
-// decides without reaching reconcileIssue at all. Every invariant that makes a preview
-// worth reading is a decision *some* service in here depends on, which is the point: a
-// fixture reaching only create, update, stale and cap lets four of them be gated on
-// dryRun without a test noticing.
-//
-// The order is load-bearing. svccreate comes first so that it takes the single cap slot,
-// which is what leaves svccapped to be refused; reversing them would still tally 1
-// created and 1 skipped and would stop testing that the cap binds in run order.
+// dryRunEveryOutcomeFixture has one service per issueOutcome plus the two the
+// loop decides before reconcileIssue. Order matters: svccreate comes first so
+// it takes the single cap slot and svccapped is refused.
 func dryRunEveryOutcomeFixture() (
 	services []string,
 	existing map[string]*github.Issue,
@@ -2268,18 +2093,12 @@ func dryRunEveryOutcomeFixture() (
 		"svcnothing", "svcsuppressed", "svcoversized", "svccapped",
 	}
 
-	// The body reconcileIssue would render for svcunchanged, used as that service's
-	// existing issue body so the *embedded* fingerprint matches. Recomputing
-	// fingerprintFindings here instead would not do: renderIssueBody dedupes before
-	// hashing. Get this wrong and the service lands in `update`, the pinned tally
-	// changes, and the fingerprint-comparison mutation survives again.
+	// Rendered rather than hashed with fingerprintFindings, because renderIssueBody
+	// dedupes before hashing; otherwise svcunchanged lands in update.
 	unchangedBody, _ := renderIssueBody("svcunchanged", "v1.41.5", "v1.44.0", sampleFindings())
 
-	// A real generated region plus a maintainer note too large to merge back. It needs
-	// the region: replaceGeneratedRegion refuses a body without one, which would land
-	// the service in writeFailures for the wrong reason. A different
-	// finding subset, so the region's fingerprint does not match and the run reaches
-	// the size guard rather than short-circuiting to unchanged.
+	// A real region (replaceGeneratedRegion requires one) for a different finding
+	// subset, plus a note too large to merge, so the run reaches the size guard.
 	oversizedRegion, _ := renderIssueBody("svcoversized", "v1.40.0", "v1.41.5", sampleFindings()[:1])
 	oversizedBody := oversizedRegion + "\n\n" + strings.Repeat("x", githubMaxIssueBody)
 
@@ -2309,9 +2128,7 @@ func dryRunEveryOutcomeFixture() (
 }
 
 func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
-	// A preview that disagrees with the real run is misinformation. Run both over
-	// identical inputs, across every outcome the reconcile can reach, and compare
-	// everything the summary and the caller are built from.
+	// A dry run must reach the same decisions as a live run over the same inputs.
 	services, existing, closed, analyze := dryRunEveryOutcomeFixture()
 
 	liveClient := newTestGitHubClient(t, serveListedIssues(t, existing, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2328,8 +2145,7 @@ func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	})))
 
-	// Cap of 1: svccreate takes the slot, svccapped is refused. The cap must bind
-	// identically in both modes, which it only does if every decision ahead of it does.
+	// Cap of 1: svccreate takes the slot and svccapped is refused, in both modes.
 	liveLog := captureLog(t)
 	liveAnalysis, liveWrites, liveSkipped, liveErr := reconcileServices(
 		context.Background(), liveClient, "o", "community",
@@ -2345,24 +2161,17 @@ func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
 	require.NoError(t, liveErr)
 	require.NoError(t, dryErr)
 
-	// All three returned slices, not just the cap one. writeFailures is where the
-	// oversized-merge guard lands, so gating that guard — or replaceGeneratedRegion,
-	// which is what makes the merged body oversized in the first place — on dryRun
-	// shows up here and nowhere else.
+	// All three slices: writeFailures is the only place the oversized-merge guard
+	// shows up.
 	assert.Equal(t, liveSkipped, drySkipped, "the cap must bind identically")
 	assert.Equal(t, liveWrites, dryWrites, "the oversize guard must fire identically")
 	assert.Equal(t, liveAnalysis, dryAnalysis)
 	assert.Equal(t, []string{"svccapped"}, liveSkipped)
 	assert.Equal(t, []string{"svcoversized"}, liveWrites)
 
-	// Pinned against the decisions this fixture implies, and not only against each
-	// other. Comparing the two tallies alone is vacuous the moment either line goes
-	// missing — two empty lines are equal, and two empty number slices are equal —
-	// and a dry run that reaches no decisions at all is exactly the regression this
-	// test exists for. 8 services: svccreate created, svcupdate refreshed,
-	// svcunchanged and svcnothing unchanged, svcstale stale, svcsuppressed
-	// suppressed, svccapped refused at the cap, svcoversized a write failure. The
-	// buckets sum to the 8 attempted.
+	// Pinned to expected values, since two missing tallies would compare equal. 8
+	// services: created, refreshed, 2 unchanged, stale, suppressed, capped, and a
+	// write failure.
 	require.NotEmpty(t, liveSummary, "no tally line in the live log")
 	require.NotEmpty(t, drySummary, "no tally line in the dry-run log")
 	assert.Equal(t, []int{8, 1, 1, 2, 1, 1, 1, 0, 1, 0}, tallyNumbers(liveSummary))
@@ -2370,10 +2179,8 @@ func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
 	// numbers rather than the prose.
 	assert.Equal(t, tallyNumbers(liveSummary), tallyNumbers(drySummary))
 
-	// The wording, asserted on the tally line itself rather than on the whole log:
-	// dryRunCaveat also begins "DRY RUN ", so a whole-log Contains for that prefix
-	// passes even with the prefix stripped from the tally — it cannot fail, and the
-	// tally is the line somebody quotes.
+	// Checked on the tally line: dryRunCaveat also starts with "DRY RUN ", so a
+	// whole-log check could not fail.
 	assert.Contains(t, drySummary, "DRY RUN ")
 	assert.Contains(t, drySummary, "1 would create")
 	assert.Contains(t, drySummary, "1 would update")
@@ -2390,12 +2197,8 @@ func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
 	assert.Contains(t, liveLog.String(), "svccreate: issue created")
 	assert.Contains(t, liveLog.String(), "svcupdate: issue updated")
 
-	// The fixture is only worth its pinned tally if each service really takes the branch
-	// it is named for, and the tally alone cannot show that: svcunchanged landing in
-	// `update` and svcnothing landing in `unchanged` would move one number between two
-	// buckets that the same total still adds up for. These lines are also the only
-	// evidence for the four outcomes that write nothing at all. Asserted against both
-	// logs, since none of these five is worded differently by mode.
+	// Each service must take the branch it is named for; the tally alone cannot
+	// show one moving between buckets. Same wording in both modes.
 	for _, log := range []string{liveLog.String(), dryLog.String()} {
 		assert.Contains(t, log, "svcunchanged: issue already up to date")
 		assert.Contains(t, log, "svcstale: open issue has no current findings")
@@ -2407,11 +2210,8 @@ func TestReconcileServicesDryRunReachesTheSameDecisions(t *testing.T) {
 }
 
 func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
-	// The cap rejection is a decision, so a preview must reach the same verdict a real
-	// run would: gating it on dryRun makes `--max-open-issues 0 --dry-run` report a
-	// clean preview of a configuration a real run refuses outright. Guarded in two
-	// places, and both are mutable independently — detectAPIChanges rejects it before
-	// any analysis, reconcileIssue rejects it per service — so both are asserted.
+	// A non-positive cap is rejected in dry-run too, both in detectAPIChanges and
+	// per service in reconcileIssue.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a bad cap must be refused before any request, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -2424,9 +2224,7 @@ func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
 		assert.Contains(t, err.Error(), "must be positive")
 	}
 
-	// See TestDetectAPIChangesRejectsNonPositiveCap for why the log is captured even
-	// though nothing here reads it: detectAPIChanges' first statement sets the logger's
-	// prefix, which would otherwise leak into every test running after this one.
+	// Captured so detectAPIChanges' log prefix does not leak into later tests.
 	_ = captureLog(t)
 	defer func(p string, c int, d bool) { OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = p, c, d }(
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun)
@@ -2436,13 +2234,9 @@ func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
 }
 
 func TestDetectAPIChangesRejectsAnOutputDirWithoutDryRun(t *testing.T) {
-	// Silently ignoring the flag is the failure: somebody passes only
-	// --dry-run-output-dir to preview, the job files issues on the public community
-	// repo for real, and no files appear — so they conclude the detector found
-	// nothing. The guard survived mutation until this test existed.
-	//
-	// captureLog for the reason TestDetectAPIChangesRejectsNonPositiveCap gives: the
-	// command sets a log prefix before doing anything else.
+	// --dry-run-output-dir without --dry-run must be rejected, or a would-be
+	// preview writes to the public repo. captureLog: see
+	// TestDetectAPIChangesRejectsNonPositiveCap.
 	_ = captureLog(t)
 	defer func(p string, c int, d bool, o string) {
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun, OptDryRunOutputDir = p, c, d, o
@@ -2453,10 +2247,8 @@ func TestDetectAPIChangesRejectsAnOutputDirWithoutDryRun(t *testing.T) {
 	err := detectAPIChanges(nil, nil)
 	require.ErrorContains(t, err, "--dry-run-output-dir is only meaningful with --dry-run")
 
-	// With --dry-run it is accepted, so the guard is about the combination and not
-	// about the flag. The run gets as far as newGithubClientFromEnv and stops there for
-	// want of a token — which is the point: it is past the guard. GITHUB_TOKEN is
-	// cleared so a machine that happens to have one cannot carry this to api.github.com.
+	// With --dry-run it passes the guard and stops at the missing token.
+	// GITHUB_TOKEN is cleared so this cannot reach api.github.com.
 	t.Setenv("GITHUB_TOKEN", "")
 	OptDryRun = true
 	err = detectAPIChanges(nil, nil)
@@ -2465,12 +2257,8 @@ func TestDetectAPIChangesRejectsAnOutputDirWithoutDryRun(t *testing.T) {
 }
 
 func TestReconcileServicesDryRunWritesBodiesForReview(t *testing.T) {
-	// The reason to have a preview at all: read the issue body before a bot posts it.
-	// Both paths, because they post different bytes — a create posts the rendered body,
-	// a refresh posts that region spliced back into the existing issue. Covering only
-	// the create left the file wrong for every refresh: measured at 729 bytes in the
-	// file against 797 PATCHed, with the maintainer's note missing from the file. An
-	// operator reading that would conclude the refresh was about to delete the note.
+	// The preview file must hold the bytes that would be posted: the rendered body
+	// on create, and the merged body (region plus maintainer text) on refresh.
 	dir := t.TempDir()
 	logged := captureLog(t)
 
@@ -2507,9 +2295,7 @@ func TestReconcileServicesDryRunWritesBodiesForReview(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, merged, string(refreshed),
 		"a refresh posts the region spliced into the existing body")
-	// Stated separately, because the equality above would also hold if
-	// replaceGeneratedRegion itself ever stopped preserving human text. This is the
-	// thing an operator reads the file for.
+	// Checked separately in case replaceGeneratedRegion stops preserving human text.
 	assert.Contains(t, string(refreshed), maintainerNote,
 		"the preview must show the maintainer's note the refresh preserves")
 	assert.Greater(t, len(refreshed), len(region),
@@ -2527,12 +2313,9 @@ func TestReconcileServicesDryRunWritesBodiesForReview(t *testing.T) {
 }
 
 func TestReconcileServicesDryRunPreviewsAnOversizedRefresh(t *testing.T) {
-	// The oversized merge is the case a preview matters most for, and the one a
-	// region-only file misled worst: the file looked comfortably small while the body
-	// that would actually be PATCHed was over GitHub's limit, so a reader concluded the
-	// refresh was safe. The service still fails the run — the refresh genuinely cannot
-	// land — but the file must show the merged body that could not be posted, which is
-	// why it is written before reconcileIssue decides rather than after.
+	// For an oversized merge the file shows the merged body that could not be
+	// posted, so it is written before reconcileIssue decides. The service still
+	// fails the run.
 	dir := t.TempDir()
 
 	oldRegion, _ := renderIssueBody("svcoversized", "v1.40.0", "v1.41.5", sampleFindings()[:1])
@@ -2569,12 +2352,9 @@ func TestDryRunDoesNotFailTheRunAtTheCap(t *testing.T) {
 	assert.ErrorContains(t, runError(nil, 1, []string{"svc2"}, nil, nil, false), "cap")
 }
 
-// TestDryRunStatesWhatItCannotCheck pins the two caveats, which are limits of the
-// feature rather than pleasantries: errCannotLabelIssues is raised inside
-// createGithubIssueWithClient *after* the POST, by re-reading the created issue, so a
-// dry run cannot reach that check at all, and a clean preview is therefore no
-// evidence the token can label. Left unsaid, a green dry run reads as a rehearsal of
-// a real one.
+// TestDryRunStatesWhatItCannotCheck: the dry-run caveats are logged once per
+// run, and not in live mode. Label permission is checked only after a real POST,
+// so a clean dry run does not prove the token can label.
 func TestDryRunStatesWhatItCannotCheck(t *testing.T) {
 	logged := captureLog(t)
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2606,8 +2386,8 @@ func TestDryRunStatesWhatItCannotCheck(t *testing.T) {
 }
 
 func TestReconcileIssueRewordsSilentlyWhenOnlyTheTextChanged(t *testing.T) {
-	// Observed live: annotations a reviewer asked for never reached the open ec2
-	// issue, because its finding set — all the fingerprint covers — was unchanged.
+	// Text-only changes (e.g. new annotations) must reach the open issue even when
+	// the finding set, and so the fingerprint, is unchanged.
 	findings := sampleFindings()
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", findings)
 	findings[0].Detail = "create-only: no operation changes it after creation, so it is immutable"
@@ -2631,9 +2411,8 @@ func TestReconcileIssueRewordsSilentlyWhenOnlyTheTextChanged(t *testing.T) {
 }
 
 func TestReconcileIssueRefusesAMalformedRegion(t *testing.T) {
-	// A generated region whose end marker was edited away used to fall through to a
-	// whole-body PATCH, deleting the maintainer's note and then commenting about it.
-	// It must now fail before any request, on both the refresh and the reword path.
+	// A region with its end marker removed must fail before any request, on both
+	// the refresh and the reword path.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("a malformed body must not be written to, got %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -2659,9 +2438,8 @@ func TestReconcileIssueRefusesAMalformedRegion(t *testing.T) {
 }
 
 func TestReconcileServicesMergesIntoTheIssueAsItIsNow(t *testing.T) {
-	// The listing runs before the first service is analysed, minutes before the
-	// PATCH. A maintainer note added in between was missing from the listed body, so
-	// the merge built from it overwrote the note.
+	// A note added after the listing must survive: the merge uses the issue as it
+	// is at write time.
 	const lateNote = "Added by a maintainer while the run was analysing models."
 	listed := map[string]*github.Issue{"demo": issueFor(42, staleIssueBody())}
 	current := map[string]*github.Issue{"demo": issueFor(42, staleIssueBody()+"\n"+lateNote+"\n")}
@@ -2728,8 +2506,8 @@ func TestReconcileServicesRevalidatesTheIssueBeforeRefreshing(t *testing.T) {
 }
 
 func TestReconcileServicesCountsAnIndeterminateCreateAgainstTheCap(t *testing.T) {
-	// GitHub can commit a create and still lose the response. Not counting it let
-	// every later service create past the cap, once per lost response.
+	// A create whose response is lost may still have been committed, so it counts
+	// toward the cap.
 	var creates int
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		creates++

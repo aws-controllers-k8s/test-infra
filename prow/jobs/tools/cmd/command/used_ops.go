@@ -21,31 +21,15 @@ import (
 	"strings"
 )
 
-// sdkOpCallRE matches the two shapes a generated or hand-written ACK resource
-// manager uses to name an SDK operation: an input struct literal
-// (`svcsdk.CreateWidgetInput{`) and a client call (`rm.sdkapi.CreateWidget(`).
-// Taking the union catches operations invoked from custom hooks, which is
-// where the majority of calls live for resources like s3's Bucket.
-// Known limitation: neither alternative is anchored to a token boundary, since
-// RE2 has no lookbehind. So `mocksdkapi.CreateWidget(` would match as a
-// substring, as would a call-shaped string literal or comment. Surveyed across
-// ec2, sagemaker, rds, acm, iam, fsx, route53, s3files, and prometheusservice:
-// zero occurrences. If that changes, reject a match whose preceding byte is an
-// identifier character rather than trying to express it in the pattern.
+// sdkOpCallRE matches an SDK input literal (`svcsdk.CreateWidgetInput{`) or
+// client call (`rm.sdkapi.CreateWidget(`), so calls from custom hooks count too.
+// It is not anchored to a token boundary (RE2 has no lookbehind), so
+// `mocksdkapi.X(` would also match; no controller has such code today.
 var sdkOpCallRE = regexp.MustCompile(`svcsdk\.([A-Z][A-Za-z0-9]*)Input\{|sdkapi\.([A-Z][A-Za-z0-9]*)\(`)
 
 // scanUsedOps returns the set of AWS SDK operations each resource package
-// invokes, keyed by normalizeResourceKey of the package directory name.
-//
-// Keys are normalized rather than raw because ACK generates those directories in
-// snake_case (pkg/resource/dhcp_options) while CRD kinds are PascalCase with
-// uppercased acronyms (DHCPOptions). Lookups come from the kind side, so both
-// sides must pass through the same normalization — see normalizeResourceKey.
-//
-// This is a heuristic. A missed operation causes it to be reported as unmapped
-// (noise); a spurious match causes shapes to be walked that ACK does not use.
-// It is isolated here so it is the only thing to revisit if generated code
-// changes shape.
+// invokes, keyed by normalizeResourceKey of the package directory name. It is a
+// regex heuristic, so revisit it if generated code changes shape.
 func scanUsedOps(controllerPath string) (map[string]map[string]bool, error) {
 	root := filepath.Join(controllerPath, "pkg", "resource")
 	entries, err := os.ReadDir(root)
@@ -69,12 +53,8 @@ func scanUsedOps(controllerPath string) (map[string]map[string]bool, error) {
 
 		ops := map[string]bool{}
 		for _, file := range files {
-			// Skip tests. A controller's own tests mock SDK calls, so an
-			// operation named only in a _test.go would register as "used" —
-			// and a spuriously used operation is the damaging direction: we
-			// would walk shapes ACK never touches and manufacture false
-			// "added field" findings. Production SDK calls never live in
-			// _test.go, so this costs nothing.
+			// Skip tests: mocked SDK calls would mark unused operations as used
+			// and produce false field findings.
 			if strings.HasSuffix(file.Name(), "_test.go") {
 				continue
 			}
@@ -103,23 +83,9 @@ func scanUsedOps(controllerPath string) (map[string]map[string]bool, error) {
 }
 
 // normalizeResourceKey reduces a resource kind or a resource package directory
-// name to a common key, by stripping underscores and lowercasing.
-//
-// This exists because the two spellings do not line up any other way. ACK
-// generates resource packages in snake_case while CRD kinds are PascalCase with
-// uppercased acronyms, so ec2 ships kind `DHCPOptions` in
-// `pkg/resource/dhcp_options`, and `TransitGatewayVPCAttachment` in
-// `pkg/resource/transit_gateway_vpc_attachment`. Naively lowercasing the kind
-// yields `dhcpoptions`, which matches no directory — that would silently leave
-// 17 of ec2's 20 resources with an empty operation set, so no field findings
-// at all for them.
-//
-// Stripping underscores from both sides sidesteps acronym-aware case
-// conversion entirely. Verified against every controller on disk: this maps
-// 277 of 279 CRD kinds onto a real resource package. The two that do not match
-// are prometheusservice's `AnomalyDetector` and `QueryLoggingConfiguration`,
-// which ship CRDs with no resource package at all — those legitimately have no
-// operations to walk.
+// name to a common key by stripping underscores and lowercasing, so kind
+// `DHCPOptions` matches `pkg/resource/dhcp_options` without acronym-aware case
+// conversion.
 func normalizeResourceKey(s string) string {
 	return strings.ToLower(strings.ReplaceAll(s, "_", ""))
 }

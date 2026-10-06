@@ -23,9 +23,8 @@ func operationFindings() []Finding {
 }
 
 func TestReconcileIssueFilesNothingForOperationsAlone(t *testing.T) {
-	// Operations are supporting evidence, so a release adding only operations must
-	// neither file an issue nor consume a cap slot. A nil client panics on any
-	// request, which is the assertion that none is made.
+	// Operation-only releases neither file an issue nor use a cap slot. The nil client
+	// panics on any request.
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
 		"v1.41.5", "v1.44.0", operationFindings(), nil, nil, 1, 0, false)
 	require.NoError(t, err)
@@ -33,9 +32,7 @@ func TestReconcileIssueFilesNothingForOperationsAlone(t *testing.T) {
 }
 
 func TestReconcileIssueOperationsAloneLeaveAnOpenIssueStale(t *testing.T) {
-	// An open issue whose resource and field findings have gone, leaving only
-	// operations, is treated like one whose findings have gone entirely: nothing is
-	// written, and the caller is told it is stale.
+	// An open issue left with only operation findings is reported stale and not written.
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
 		"v1.41.5", "v1.44.0", operationFindings(), issueFor(42, filed), nil, 10, 0, false)
@@ -123,11 +120,9 @@ func TestRenderIssueBodyBoundsAnOversizedDroppedAppendix(t *testing.T) {
 		append(sampleFindings(), dropped...))
 
 	assert.Less(t, len(body), githubMaxIssueBody)
-	// The findings still render in full: the appendix is what gets cut.
 	assert.Contains(t, body, "## Resource: Gizmo")
 	assert.Contains(t, body, "- `Description` — `CreateWidget`")
 	assert.Contains(t, body, "- `ResetWidget`")
-	// And the appendix is cut visibly, with its details element closed.
 	assert.Contains(t, body, "<summary>2000 new operations not reported, each with the reason</summary>")
 	assert.Regexp(t, `- _and \d+ more_\n\n</details>\n\n---\n`, body)
 	assert.Equal(t, plainFingerprint, fingerprint)

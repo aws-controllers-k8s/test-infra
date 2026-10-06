@@ -56,9 +56,7 @@ func TestSmithyModel_WalkMembers(t *testing.T) {
 	}
 	sort.Strings(paths)
 
-	// Config.Nested is recorded as a member, but the walk does not descend
-	// into it: its target is WidgetConfig, which is already on the current
-	// branch. That is the cycle guard working.
+	// Config.Nested is recorded but not descended into: WidgetConfig is already on the branch.
 	assert.Equal(t, []string{
 		"Config",
 		"Config.Nested",
@@ -101,11 +99,8 @@ func TestSmithyModel_WalkMembersFlattensLists(t *testing.T) {
 	}
 	sort.Strings(paths)
 
-	// Rules.Tier appears, but its enum's permitted values (STANDARD, ARCHIVE)
-	// must NOT. A Smithy enum carries a members map just like a structure, so an
-	// unguarded walk reports every allowed value as a field — on the real s3
-	// model that was ~40% of producer 3's output, one entry per AWS region under
-	// LocationConstraint. An enum-typed member is a plain string in the CRD.
+	// Rules.Tier appears but its enum values (STANDARD, ARCHIVE) must not: Smithy enums have a
+	// members map like structures, and on the s3 model that produced one field per region.
 	assert.Equal(t, []string{
 		"BucketName",
 		"Rules",

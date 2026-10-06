@@ -82,17 +82,10 @@ func loadConfig(configPath string) (*JobsConfig, error) {
 
 // validateJobsConfig rejects configurations that would generate broken jobs.
 //
-// TODO: CodegenPresubmitServices, RuntimePresubmitServices and
-// ACKTestPresubmitServices carry the identical implicit invariant and are
-// unguarded: each is ranged over to emit `extra_refs` pointing at a
-// `{{ $service }}-controller` repo, so a typo in any of them generates a job
-// targeting a repo that does not exist. Extend this hook to cover them rather
-// than adding a parallel validator.
+// TODO: also validate the *PresubmitServices lists, which emit extra_refs to
+// `<service>-controller` repos and so break on a typo.
 func validateJobsConfig(config *JobsConfig) error {
-	// loadConfig declares `var config *JobsConfig` and yaml.Unmarshal leaves it
-	// nil for a document that parses to nothing — an empty file, a comment-only
-	// file, or an explicit `null`. This is now the first dereference, so say so
-	// here rather than panicking further down.
+	// yaml.Unmarshal leaves config nil for an empty or comment-only document.
 	if config == nil {
 		return fmt.Errorf("jobs_config.yaml parsed to nothing; it is empty or contains only comments")
 	}
@@ -105,9 +98,7 @@ func validateJobsConfig(config *JobsConfig) error {
 		return err
 	}
 
-	// Zero is not treated as "unlimited": defaulting to no protection would
-	// mean anyone adding services without considering the cap silently loses
-	// it, which defeats the point of having one.
+	// Zero is not "unlimited", so the cap cannot be lost by omission.
 	if config.APINotificationMaxOpenIssues <= 0 {
 		return fmt.Errorf(
 			"api_notification_max_open_issues must be greater than zero when " +
@@ -115,18 +106,9 @@ func validateJobsConfig(config *JobsConfig) error {
 		)
 	}
 
-	// A cap above the notified-list length is a typo, not a policy: the run files at
-	// most one issue per notified service, so the issues *this run would file* can
-	// never reach it. It is reachable only by duplicate or stale issues, which is not
-	// a limit anyone sets deliberately — and the cap is the only thing bounding how
-	// much a bad first run writes to a public repo. Someone who genuinely wants no cap
-	// should say so by shortening api_notification_services, not by picking a big
-	// number.
-	//
-	// Strictly greater, not >=, for that same reason read the other way: openCount
-	// counts every open issue this detector owns repo-wide — duplicates for one
-	// service, and stale ones for services since removed from the list — so a cap
-	// equal to the list length is genuinely reachable and does bind.
+	// A run files at most one issue per service, so a cap above the list length
+	// can never bind and is a typo. A cap equal to it is allowed: the open count
+	// also includes duplicate and stale issues, so it can still be reached.
 	if config.APINotificationMaxOpenIssues > len(config.APINotificationServices) {
 		return fmt.Errorf(
 			"api_notification_max_open_issues is %d, which cannot bind: only %d service(s) "+
@@ -136,30 +118,13 @@ func validateJobsConfig(config *JobsConfig) error {
 	return nil
 }
 
-// ValidateAPINotificationServices checks the service list the API change detector will
-// act on. Exported because generation-time validation does not guard the path that
-// matters: the running job reads jobs_config.yaml itself, through extra_refs or the
-// jobs-config ConfigMap, so `make prow-gen` is not on the path at all — and
-// createGithubIssueWithClient's post-create check verifies only the ownership label,
-// never `service/<svc>`. Unvalidated, a service outside aws_services files a real issue
-// in a public repo carrying a label that exists in no config file.
-//
-// Deliberately narrower than validateJobsConfig: it omits the cap, because the cap is
-// already enforced at the point of use by reconcileIssue and because the running job
-// takes its cap from a flag rather than from this file. Validating a field the command
-// does not read would fail runs over a discrepancy that cannot affect them.
+// ValidateAPINotificationServices checks the service list the API change detector
+// acts on. It is exported because the running job reads jobs_config.yaml directly,
+// bypassing `make prow-gen`. It omits the cap check: the job takes its cap from a
+// flag and enforces it in reconcileIssue.
 func ValidateAPINotificationServices(services, awsServices []string) error {
-	// The issues this job files are labelled service/<svc>, and those labels are
-	// only generated for entries in aws_services. A service outside that list also
-	// has no controller pinned by this repo whose aws-sdk-go-v2 version and generated
-	// code the job could diff. The message deliberately does not claim the controller
-	// does not exist — the ACK org has more controllers than this list has entries —
-	// only that this repo has none to diff. Either way the fix is to onboard the
-	// service here, not to hand-create the label.
-	//
-	// This one check also rejects empty entries, case mismatches ("S3") and untrimmed
-	// whitespace (" s3 ") for free, since none of those appear in aws_services; kept
-	// that way deliberately rather than adding separate checks for each.
+	// Only aws_services entries have a service/<svc> label and a pinned
+	// controller to diff. This also rejects empty, miscased and untrimmed entries.
 	for _, service := range services {
 		if !contains(awsServices, service) {
 			return fmt.Errorf(

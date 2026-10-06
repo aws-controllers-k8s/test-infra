@@ -30,9 +30,7 @@ func TestReadGeneratorConfig(t *testing.T) {
 	assert.Equal(t, "CreateWidget", sourced.From.Operation)
 	assert.Equal(t, "SourcedMember", sourced.From.Path)
 
-	// `operation_type` is a sequence and `resource_name` a scalar in the
-	// fixture; stringArray must accept both spellings, because real
-	// generator.yaml files use each.
+	// Real generator.yaml files use both scalar and sequence forms; stringArray accepts both.
 	override, ok := cfg.Operations["ChangeGadgetSettings"]
 	require.True(t, ok)
 	assert.Equal(t, stringArray{"Create", "Delete"}, override.OperationType)
@@ -43,8 +41,7 @@ func TestReadGeneratorConfig(t *testing.T) {
 
 	assert.ElementsMatch(t, []string{"Widget", "Gadget"}, cfg.ResourceNames())
 
-	// Renames are collapsed per resource across operations and across
-	// input/output fields, because ACK keeps them consistent per resource.
+	// Renames are merged per resource across operations and input/output fields.
 	assert.Equal(t, map[string]string{
 		"WidgetName": "Name",
 		"WidgetArn":  "ARN",
@@ -73,8 +70,7 @@ operations:
 }
 
 func TestGeneratorConfigResourceIgnoresCase(t *testing.T) {
-	// ec2's real spellings: generator.yaml is keyed by the name inferred from the
-	// AWS operation, while callers hold the CRD kind with its acronyms uppercased.
+	// ec2's real spellings: generator.yaml keys use the inferred name, callers hold the CRD kind.
 	dhcp := resourceConfig{}
 	dhcp.UpdateOperation.CustomMethodName = "customUpdate"
 	cfg := &generatorConfig{Resources: map[string]resourceConfig{

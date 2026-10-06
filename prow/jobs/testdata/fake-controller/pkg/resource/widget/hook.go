@@ -1,7 +1,6 @@
 package widget
 
-// Testdata only, never compiled — same as widget/sdk.go. The undefined symbols
-// below are intentional.
+// Testdata, never compiled; undefined symbols are intentional.
 
 func syncTags() {
 	input := &svcsdk.PutWidgetTaggingInput{}

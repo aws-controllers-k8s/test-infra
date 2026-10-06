@@ -20,24 +20,10 @@ import (
 	"strings"
 )
 
-// Placing operations whose verb ClassifyOp does not recognise.
-//
-// ClassifyOp is a port of code-generator's naming rules, which only know the
-// CRUD verbs, so `PutAccessPointScope`, `AcceptDelegationRequest` and
-// `StartFlowCapture` all come back OpTypeUnknown. Reported as one undifferentiated
-// "unclassified" list, measured across 71 controllers that was 78 operations in 21
-// services, most of them either redundant or nothing ACK could ever model. The
-// rules here place each one where a maintainer would look for it, or drop it, and
-// were checked one by one against the real models of those 21 services:
-//
-//	 6  configure an existing CRD   PutAccessPointScope -> AccessPoint
-//	24  act on a resource the same report already lists as new
-//	15  manage a resource that has no Create verb  PutAsset, RegisterCapability
-//	33  dropped: actions, queries, account-level settings, end-user operations
-//	 0  left unclassified
-//
-// Anything the rules cannot place still lands in the unclassified section, so a
-// miss is visible rather than silent.
+// Placing operations whose verb ClassifyOp does not recognise (it only knows
+// CRUD verbs), e.g. PutAccessPointScope or StartFlowCapture. Each is attached to
+// a resource, flagged as a possible resource, or dropped; anything no rule
+// places stays in the unclassified section so a miss is visible.
 
 // opPlacement is where placeUnknownOp puts an operation.
 type opPlacement int
@@ -45,9 +31,8 @@ type opPlacement int
 const (
 	// placeUnclassified: no rule applies; report it for a human to place.
 	placeUnclassified opPlacement = iota
-	// placeDrop: ACK can do nothing with it. The name returned with it is the
-	// reason, one of the drop* constants, and the issue lists it under a
-	// collapsed "dropped" block so a wrong drop is visible without being noise.
+	// placeDrop: ACK can do nothing with it. The returned name is a drop*
+	// reason, shown in a collapsed "dropped" block of the issue.
 	placeDrop
 	// placeOnResource: an operation on the named resource, existing or new.
 	placeOnResource
@@ -66,9 +51,7 @@ const (
 )
 
 var (
-	// Verbs that run something once or read data. ACK reconciles declared
-	// state, and none of these has any: StartFlowCapture, TerminateSession,
-	// ValidateSecurityGroupQuotasForInterface, AcquireRole, SendDelegationToken.
+	// Verbs that run something once, so have no desired state to reconcile.
 	actionVerbs = []string{
 		"Acquire", "Cancel", "Execute", "Insight", "Invoke", "Preview", "Publish",
 		"Rollback", "Send", "Simulate", "Start", "Stop", "Terminate", "Test", "Validate",
@@ -87,35 +70,18 @@ var (
 )
 
 // placeUnknownOp decides where an OpTypeUnknown operation belongs. resources maps
-// the lowercased name of every resource the report knows about — existing CRD
-// kinds and resources findNewResources reports — to its spelling, and existing
-// says which of those already have a CRD.
+// lowercased names of existing and new resources to their spelling; existing
+// marks those with a CRD. Rule order matters:
 //
-// The rules run in order, and the order is load-bearing:
-//
-//  1. Queries and Admin* operations are dropped first: SearchAgents names the
-//     new Agent resource, but a search is still not part of its lifecycle.
-//  2. A name that is exactly a known resource places the operation on it —
-//     AcceptDelegationRequest on the new DelegationRequest. An action verb is
-//     kept only against a new resource, where Stop<Job> is often the delete
-//     operation of a job resource someone is about to add; against an existing
-//     CRD it is just an action (AcquireRole is not a Role operation).
-//  3. Remaining action verbs are dropped.
-//  4. A name with CRUD siblings of its own (GetAccessPointScope,
-//     DeleteAccessPointScope) is a resource in its own right. If its name starts
-//     with a known resource *and* the request carries that resource's read
-//     identifiers, it configures that resource — the s3 PutBucketX pattern.
-//     Requiring the identifiers is what keeps AcceptTransitGatewayClientVpnAttachment
-//     off TransitGateway: the attachment is addressed by its own ID. Failing that,
-//     a single resource named by a request field claims it (PutSyslogConfiguration's
-//     logGroupIdentifier); with no identifier at all it is an account-level
-//     setting and dropped; otherwise it is a possible new resource.
-//  5. Without siblings, a single resource named by a request field claims it
-//     (AssociateAvailabilityZones' FirewallArn); failing that, a name that starts
-//     with a known resource is a sub-object of it. The request wins because it is
-//     what the operation acts on: EnableApplicationStatusCheckSuppression takes
-//     InstanceIds, so it belongs to Instance, not ApplicationStatusCheck.
-//  6. No identifier in the request at all means an account-level setting.
+//  1. Queries and Admin* operations are dropped.
+//  2. A name that is a known resource places it there; an action verb only
+//     against a new resource (Stop<Job> may be its delete).
+//  3. Other action verbs are dropped.
+//  4. A name with its own CRUD siblings goes to a prefixing resource whose read
+//     identifiers the request carries, else a resource the request names, else
+//     is account-level (no identifiers) or a possible new resource.
+//  5. Otherwise a resource the request names, or else a prefixing resource.
+//  6. No identifiers at all means an account-level setting.
 func placeUnknownOp(
 	opID string,
 	model *SmithyModel,
@@ -167,9 +133,8 @@ func placeUnknownOp(
 		return placePossibleResource, own
 	}
 
-	// A resource the request names beats one the operation's name starts with:
-	// EnableApplicationStatusCheckSuppression takes InstanceIds, so it suppresses
-	// checks on instances, whatever its name says.
+	// A resource the request names beats one the name starts with
+	// (EnableApplicationStatusCheckSuppression takes InstanceIds).
 	named := resourceNamedBy(identifiers, resources)
 	if parent := longestPrefixResource(rest, resources); parent != "" && (named == "" || named == parent) {
 		return placeOnResource, parent
@@ -220,12 +185,8 @@ func ownResource(model *SmithyModel, targets []string) string {
 
 // parentResource returns the longest known resource whose name prefixes own and
 // whose read operation's request members all appear in request — that is, the
-// operation addresses the parent, not a resource of its own.
-//
-// A parent with no single-read operation cannot be checked that way, so its name
-// is trusted: ec2's IpamRoutingPolicyRegistration is only ever listed, scoped by
-// the association it belongs to, and GetIpamRoutingPolicyRegistrationDeltas is
-// still its operation even though the request names only that association.
+// operation addresses the parent, not a resource of its own. A parent with no
+// single-read operation is matched on name alone.
 func parentResource(model *SmithyModel, own string, request map[string]bool, resources map[string]string) string {
 	for _, name := range prefixResources(own, resources) {
 		readOne := readOneMembers(model, name)

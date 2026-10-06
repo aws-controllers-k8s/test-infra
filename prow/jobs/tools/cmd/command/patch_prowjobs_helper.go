@@ -230,12 +230,8 @@ func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig, imagesDi
 		if postfix == "build-prow-images" ||
 			postfix == "upgrade-go-version" ||
 			postfix == "scan-controllers-cve" ||
-			// Same reason as the three above: Dockerfile.detect-api-changes does
-			// COPY . . and builds ./prow/jobs/tools/cmd, so it needs go.mod, which is
-			// not in ./prow/jobs/images. Its builder stage is structurally identical
-			// to Dockerfile.scan-controllers-cve's. Without this the image build
-			// fails and the periodic ImagePullBackOffs with nothing in this repo
-			// explaining why.
+			// Like the three above, Dockerfile.detect-api-changes builds
+			// ./prow/jobs/tools/cmd and needs the repo root's go.mod.
 			postfix == "detect-api-changes" {
 			context = "."
 		}

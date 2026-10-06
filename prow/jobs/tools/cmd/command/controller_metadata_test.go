@@ -35,11 +35,7 @@ func writeMetadataFixture(t *testing.T, body string) string {
 }
 
 func TestReadGenerateMetadataServiceVersionOnly(t *testing.T) {
-	// This is the shape every per-service-pinned controller actually has: a
-	// service pin and NO core pin. All eight of them (acm, athena,
-	// bedrockagentcorecontrol, cloudwatch, cloudwatchlogs, eks, lambdacore,
-	// lambdamicrovms) omit aws_sdk_go_version entirely, so requiring it would
-	// hard-fail on each one every run.
+	// Per-service-pinned controllers omit aws_sdk_go_version; it must not be required.
 	root := writeMetadataFixture(t, `api_version: v1alpha1
 aws_service_sdk_version: v1.95.1
 `)
@@ -51,9 +47,7 @@ aws_service_sdk_version: v1.95.1
 }
 
 func TestReadGenerateMetadataCoreVersionOnly(t *testing.T) {
-	// The majority shape: 68 of the 76 controllers have a core pin and no
-	// per-service pin. The committed fixture carries both keys, which no real
-	// controller does, so without this the dominant case goes untested.
+	// The common shape: a core pin and no per-service pin.
 	root := writeMetadataFixture(t, `api_version: v1alpha1
 aws_sdk_go_version: v1.41.5
 `)

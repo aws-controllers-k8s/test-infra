@@ -28,9 +28,7 @@ func TestHasCRDIgnoresCase(t *testing.T) {
 	in, err := ReadControllerInputs("../../../testdata", "fake")
 	require.NoError(t, err)
 
-	// The fixture ships kind "Widget". All three spellings must match, the
-	// way "VpcEndpoint" from an AWS operation name must match ACK's
-	// "VPCEndpoint" CRD kind.
+	// Kind lookup is case-insensitive (AWS "VpcEndpoint" vs CRD "VPCEndpoint").
 	assert.True(t, in.HasCRD("Widget"))
 	assert.True(t, in.HasCRD("WIDGET"))
 	assert.True(t, in.HasCRD("widget"))
@@ -58,15 +56,12 @@ func TestClassifyOpWithOverrides(t *testing.T) {
 	assert.Equal(t, OpTypes{OpTypeCreate}, opTypes)
 	assert.Equal(t, "Widget", resName)
 
-	// Override with a scalar resource_name and a list operation_type. Without
-	// the override this name infers to OpTypeUnknown, since "Change" is not a
-	// recognised prefix.
+	// Override sets resource_name and operation_type; the name alone infers OpTypeUnknown.
 	bare, _ := ClassifyOp("ChangeGadgetSettings", nil)
 	assert.Equal(t, OpTypeUnknown, bare, "precondition: name alone must not classify")
 
-	// operation_type: [Create, Delete] holds both roles, as code-generator's
-	// GetOperationMap registers it under each: Gadget is created *and* deleted by
-	// it, so it must not look undeletable.
+	// A multi-valued operation_type registers the op under each role, as code-generator does,
+	// so Gadget must not look undeletable.
 	opTypes, resName = in.ClassifyOpWithOverrides("ChangeGadgetSettings", nil)
 	assert.Equal(t, OpTypes{OpTypeCreate, OpTypeDelete}, opTypes)
 	assert.True(t, opTypes.Has(OpTypeCreate))
@@ -93,22 +88,9 @@ func TestClassifyOpWithOverridesDedupesTypes(t *testing.T) {
 }
 
 func TestClassifyOpWithOverridesMultiResourceName(t *testing.T) {
-	// lambda's real override, the only multi-valued resource_name in the whole
-	// corpus:
-	//
-	//	DeleteFunction:
-	//	  operation_type: [Delete]
-	//	  resource_name: [Version, Function]
-	//
-	// Name inference alone already yields "Function". Blindly taking element [0]
-	// would substitute "Version", making the override worse than no override, so
-	// the inferred name must win when it appears in the list.
-	//
-	// kindsByLower is deliberately left nil: this test only exercises override
-	// resolution, not kind lookup. A nil map read returns the zero value rather
-	// than panicking, so a future edit adding a HasCRD/CanonicalKind assertion
-	// here would silently get "not found" for everything instead of failing
-	// loudly — worth knowing if this test ever grows.
+	// Modeled on lambda's DeleteFunction override (resource_name: [Version, Function]):
+	// the inferred name wins when it is in the list, instead of element [0].
+	// kindsByLower is nil: only override resolution is tested here.
 	in := &ControllerInputs{
 		Config: &generatorConfig{
 			Operations: map[string]operationOverride{
@@ -164,9 +146,7 @@ func TestClassifyOpWithOverridesNilConfig(t *testing.T) {
 }
 
 func TestOpTypeFromConfigStringAcceptsSnakeCase(t *testing.T) {
-	// Real controllers use upper-snake spellings — 20 operations across acm,
-	// apigateway, cloudfront, kinesis, route53resolver, and sns declare
-	// READ_ONE, GET_ATTRIBUTES, or SET_ATTRIBUTES.
+	// Real controllers use upper-snake spellings (READ_ONE, GET_ATTRIBUTES, SET_ATTRIBUTES).
 	for _, tc := range []struct {
 		in   string
 		want OpType

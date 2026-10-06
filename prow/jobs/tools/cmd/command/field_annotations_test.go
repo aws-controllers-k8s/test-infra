@@ -20,9 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestAnnotateFieldsPairsChangeLists is dynamodb's GlobalTableWitnesses: returned
-// but not sent, and converged through a change list on UpdateTable, which makes it
-// desired state rather than status.
+// TestAnnotateFieldsPairsChangeLists: dynamodb's GlobalTableWitnesses is returned
+// but not sent, yet converges through an UpdateTable change list, so it is spec.
 func TestAnnotateFieldsPairsChangeLists(t *testing.T) {
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
 		"demo#UpdateTable": {"type": "operation", "input": {"target": "demo#UpdateTableInput"}},
@@ -69,9 +68,8 @@ func TestAnnotateFieldsPairsChangeLists(t *testing.T) {
 	}, got)
 }
 
-// TestAnnotateFieldsFoldsReadBacks is networkfirewall's TransitGatewayId: sent on
-// CreateFirewall and read back as `Firewall.TransitGatewayId`, which is one field,
-// not two. A list wrapper is a per-element observation and stays.
+// TestAnnotateFieldsFoldsReadBacks: a field sent on Create and read back under
+// the resource wrapper is one field. A list wrapper is per-element and stays.
 func TestAnnotateFieldsFoldsReadBacks(t *testing.T) {
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
 		"demo#CreateFirewall": {"type": "operation", "input": {"target": "demo#CreateFirewallInput"}},
@@ -106,9 +104,8 @@ func TestAnnotateFieldsFoldsReadBacks(t *testing.T) {
 	assert.Equal(t, "DescribeFirewall", got[0].ReadBy, "a read is durable read-back")
 }
 
-// TestAnnotateFieldsAddsUpdateOperations is networkfirewall's
-// AvailabilityZoneMappings: new on CreateFirewall's request, and changed by two new
-// operations findNewOperations reported separately.
+// TestAnnotateFieldsAddsUpdateOperations: a field changed by operations other than
+// the resource's Update is flagged for a custom update hook.
 func TestAnnotateFieldsAddsUpdateOperations(t *testing.T) {
 	m := opsModel(t, map[string][]string{
 		"CreateFirewall":                {"FirewallName", "AvailabilityZoneMappings"},
@@ -131,9 +128,8 @@ func TestAnnotateFieldsAddsUpdateOperations(t *testing.T) {
 		"the list and call them", got[0].Detail)
 }
 
-// TestAnnotateFieldsFlagsCustomSourcedSiblings is networkfirewall's
-// EnableMonitoringDashboard, which arrives on the same operation the existing
-// LoggingConfiguration field is read and written through by custom code.
+// TestAnnotateFieldsFlagsCustomSourcedSiblings: a new field on an operation that
+// custom code already handles for another field is flagged.
 func TestAnnotateFieldsFlagsCustomSourcedSiblings(t *testing.T) {
 	m := opsModel(t, map[string][]string{
 		"UpdateLoggingConfiguration": {"FirewallArn", "LoggingConfiguration", "EnableMonitoringDashboard"},
@@ -153,9 +149,8 @@ func TestAnnotateFieldsFlagsCustomSourcedSiblings(t *testing.T) {
 		"reconciles: adding it means updating that hook, not only regenerating", got[0].Detail)
 }
 
-// TestAnnotateFieldsMarksCreateOnlyFields pins both halves of the rule: a field
-// only a Create sends is immutable, and one another operation sends under a shorter
-// path is not. Both are real lambda fields.
+// TestAnnotateFieldsMarksCreateOnlyFields: a field only Create sends is
+// immutable; one another operation sends under a shorter path is not.
 func TestAnnotateFieldsMarksCreateOnlyFields(t *testing.T) {
 	m := opsModel(t, map[string][]string{
 		"CreateFunction":      {"FunctionName", "StorageMode", "Runtime"},
@@ -176,8 +171,7 @@ func TestAnnotateFieldsMarksCreateOnlyFields(t *testing.T) {
 }
 
 // TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly: an operation declared
-// operation_type: [Create, Update] is also the resource's Update, so a field only
-// it sends changes after creation and needs no custom work.
+// [Create, Update] is also the Update, so its fields are mutable.
 func TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly(t *testing.T) {
 	m := opsModel(t, map[string][]string{"PutWidget": {"WidgetName", "Color"}})
 	in := &ControllerInputs{
@@ -193,10 +187,8 @@ func TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly(t *testing.T) {
 	assert.Empty(t, got[0].Detail)
 }
 
-// TestAnnotateFieldsFlagsHandWrittenUpdate: a field the resource's own Update sends
-// needs no hook when codegen writes that Update, but does when generator.yaml
-// replaces it with update_operation.custom_method_name — codegen then sends
-// nothing, and the hand-written method must.
+// TestAnnotateFieldsFlagsHandWrittenUpdate: an Update field needs a hook only
+// when update_operation.custom_method_name replaces the generated Update.
 func TestAnnotateFieldsFlagsHandWrittenUpdate(t *testing.T) {
 	m := opsModel(t, map[string][]string{
 		"CreateWidget": {"WidgetName"},
@@ -222,11 +214,9 @@ func TestAnnotateFieldsFlagsHandWrittenUpdate(t *testing.T) {
 		"regenerating", got[0].Detail)
 }
 
-// TestAnnotateFieldsSeparatesSummaryAndDetailedViews is ec2's Instance application
-// health with the real shapes: DescribeApplicationStatus returns, per instance, the
-// detailed ApplicationStatus; DescribeInstanceStatus the two-member
-// ApplicationStatusSummary. They are not one state with two sources, so both stay,
-// named for the state rather than the `ApplicationStatuses` wrapper.
+// TestAnnotateFieldsSeparatesSummaryAndDetailedViews: ec2's detailed
+// ApplicationStatus and ApplicationStatusSummary are different states, so both
+// stay, named for the state rather than the `ApplicationStatuses` wrapper.
 func TestAnnotateFieldsSeparatesSummaryAndDetailedViews(t *testing.T) {
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
 		"demo#DescribeApplicationStatus": {"type": "operation", "output": {"target": "demo#AppOut"}},
@@ -293,9 +283,8 @@ func TestAnnotateFieldsFoldsIdenticalViews(t *testing.T) {
 		"`Healths` from `DescribeHealth` or `Widgets.Health` from `DescribeWidgetStatus`", got[0].Detail)
 }
 
-// TestAnnotateResourcesFlagsPartsBeyondCRUD is networkfirewall's ProxyRuleGroup,
-// with its real request and response members: no Update of its own, and the
-// update token each rule operation takes comes from a different read.
+// TestAnnotateResourcesFlagsPartsBeyondCRUD: networkfirewall's ProxyRuleGroup has
+// no Update, and its rule operations take an update token from a different read.
 func TestAnnotateResourcesFlagsPartsBeyondCRUD(t *testing.T) {
 	requests := map[string][]string{
 		"CreateProxyRuleGroup":      {"ProxyRuleGroupName"},
@@ -328,11 +317,9 @@ func TestAnnotateResourcesFlagsPartsBeyondCRUD(t *testing.T) {
 	assert.Equal(t, "implied", got[1].Detail, "a resource of only its own operations needs no note")
 }
 
-// TestAnnotateFieldsAttributesRolesByPath is ec2's VPCEndpoint payer fields. The
-// setter sends a top-level Scope; responses return it only inside each
-// PayerResponsibilities entry, and that difference is what a maintainer needs to
-// see. PayerResponsibilities itself comes back unwrapped from the controller's own
-// list read, through VpcEndpoints, which stands for the resource.
+// TestAnnotateFieldsAttributesRolesByPath: ec2's setter sends a top-level Scope
+// that responses return only inside each PayerResponsibilities entry; the
+// maintainer needs to see that path difference.
 func TestAnnotateFieldsAttributesRolesByPath(t *testing.T) {
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
 		"demo#ModifyVpcEndpointPayerResponsibility": {"type": "operation",

@@ -22,9 +22,8 @@
         command:
           - commenter
         args:
-          # ack/api-change-detected is exempt: detect-api-changes reads a closed issue
-          # as a maintainer dismissing its finding set, so an automatic close would
-          # silence still-current findings for good.
+          # ack/api-change-detected is exempt: detect-api-changes treats a closed issue
+          # as dismissed, so an auto-close would silence current findings.
           - --query=org:${TEST_INFRA_ORG} -label:lifecycle/frozen -label:ack/api-change-detected -label:lifecycle/rotten -label:lifecycle/stale
           - --updated=4320h
           - --token=/etc/github/token

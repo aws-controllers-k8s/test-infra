@@ -147,21 +147,13 @@ acktest_presubmit_services:
 - iam
 - s3
 
-# List of AWS services whose associated AWS API is monitored for changes. When
-# the API changes, a GitHub issue is opened in the community repo describing
-# the new resources, operations, and fields.
+# Services whose AWS API is monitored by detect-api-changes; changes are filed as
+# issues in the community repo.
 api_notification_services:
 - s3
 
-# Maximum number of open `ack/api-change-detected` issues this job may hold open
-# in the community repo. Once reached, no new issues are created until some are
-# closed; existing ones are still refreshed, since that does not grow the count.
-#
-# Required whenever api_notification_services is non-empty, and it must not
-# exceed the length of that list: the run files at most one issue per service
-# listed above, so a larger cap could only be reached by duplicate or stale
-# issues — not by anything this run files — and is rejected as a typo.
-# Setting it *below* the list length is fine and is the point during a rollout:
-# services past the cap are logged as skipped and picked up once a slot frees, so
-# adding a service here does not require raising the cap.
+# Max open `ack/api-change-detected` issues. At the cap, no new issues are filed but
+# existing ones are still updated. Required when api_notification_services is
+# non-empty; must not exceed its length. A lower value is fine: services past the
+# cap are skipped until a slot frees.
 api_notification_max_open_issues: 1

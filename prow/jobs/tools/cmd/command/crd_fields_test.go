@@ -27,9 +27,7 @@ func TestReadCRDFields(t *testing.T) {
 		"widgetid",
 		// The literal CRD spelling, codegen's Go-keyword escape.
 		"rules.type_",
-		// And the un-suffixed spelling, which is what a lookup derived from
-		// the AWS member name `Type` will ask for. Without this the suppression
-		// filter misses and we report a field the CRD already exposes.
+		// And the un-suffixed spelling, which lookups from the AWS member name `Type` use.
 		"rules.type",
 	} {
 		assert.True(t, widget[want], "expected field path %q", want)
@@ -40,9 +38,7 @@ func TestReadCRDFields(t *testing.T) {
 }
 
 func TestReadCRDFieldsNoVersions(t *testing.T) {
-	// Guards the len(doc.Spec.Versions) == 0 check. Without it, indexing
-	// Versions[0] panics, and this code parses YAML from repos we do not
-	// control. A committed test is what stops a future edit reintroducing that.
+	// A CRD with no versions must not panic on Versions[0].
 	root := t.TempDir()
 	dir := filepath.Join(root, "config", "crd", "bases")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
@@ -63,11 +59,8 @@ spec:
 }
 
 func TestReadCRDFieldsFailsOnMalformedFile(t *testing.T) {
-	// A malformed CRD must fail the controller, not be skipped. A partial field
-	// set is a suppression filter with holes in it: the missing kind would be
-	// announced as a new resource by producer 1 and skipped entirely by
-	// producers 3 and 4, both silently. Failing here turns that into a visible
-	// per-service error instead.
+	// A malformed CRD fails the controller instead of being skipped: a partial field
+	// set would silently misreport resources and fields.
 	root := t.TempDir()
 	dir := filepath.Join(root, "config", "crd", "bases")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
@@ -93,8 +86,7 @@ spec:
                 type: string
 `), 0o644))
 
-	// Sorts after a_good.yaml, so a good CRD is already in the accumulator when
-	// the bad one is hit — proving the failure is not merely "nothing parsed".
+	// Sorts after a_good.yaml, so the failure is not just "nothing parsed".
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "b_bad.yaml"),
 		[]byte("\t- this: is not: valid yaml\n"), 0o644))
 

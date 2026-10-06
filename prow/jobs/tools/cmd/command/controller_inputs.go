@@ -29,9 +29,8 @@ type ControllerInputs struct {
 	SDKVersion string
 	// ServiceSDKVersion is the per-service tag, empty for most controllers.
 	ServiceSDKVersion string
-	// GoModServiceVersion is the service module version go.mod requires: the SDK
-	// release the controller builds against, and so the baseline for what is new.
-	// Empty when go.mod does not require the module.
+	// GoModServiceVersion is the service module version go.mod requires, the
+	// baseline for what is new. Empty when go.mod does not require it.
 	GoModServiceVersion string
 	// ModelName is the aws-models JSON file base name, which can differ from
 	// the service alias (route53 -> route-53, opensearchservice -> opensearch).
@@ -45,20 +44,13 @@ type ControllerInputs struct {
 	// paths its CRD exposes.
 	CRDFields map[string]map[string]bool
 	// UsedOps maps normalizeResourceKey of a resource package directory name to
-	// the SDK operations that package invokes.
-	//
-	// Not every key is a CRD kind. Seven controllers (bedrockagent, cloudfront,
-	// elbv2, emrcontainers, firehose, kinesis, secretsmanager) ship a shared
-	// pkg/resource/tags helper package with no corresponding CRD. Conversely a
-	// kind can have no package at all: prometheusservice ships CRDs for
-	// AnomalyDetector and QueryLoggingConfiguration with no resource package, so
-	// those appear in CRDFields but not here. Consumers must tolerate both
-	// directions.
+	// the SDK operations that package invokes. Keys and CRD kinds don't line up
+	// one-to-one: some controllers have a pkg/resource/tags helper with no CRD,
+	// and some CRDs (e.g. prometheusservice's) have no resource package.
 	UsedOps map[string]map[string]bool
 
-	// kindsByLower maps a lowercased kind to the CRD's canonical kind. AWS
-	// operation names yield "VpcEndpoint"-style casing while ACK generates
-	// "VPCEndpoint"-style kinds, so kind matching must ignore case.
+	// kindsByLower maps a lowercased kind to the CRD's canonical kind. AWS names
+	// use "VpcEndpoint" casing while ACK kinds use "VPCEndpoint".
 	kindsByLower map[string]string
 }
 
@@ -84,8 +76,7 @@ func ReadControllerInputs(root, service string) (*ControllerInputs, error) {
 		return nil, err
 	}
 
-	// model_name and package_name are both optional; they default to the
-	// service alias.
+	// model_name and package_name default to the service alias.
 	modelName := cfg.SDKNames.ModelName
 	if modelName == "" {
 		modelName = service
@@ -127,43 +118,22 @@ func (in *ControllerInputs) HasCRD(kind string) bool {
 }
 
 // CanonicalKind resolves a resource name inferred from an AWS operation to the
-// CRD kind ACK actually generated, ignoring case, and reports whether such a
-// CRD exists. This matters more than it looks: ec2 alone ships DHCPOptions,
-// NATGateway, NetworkACL, VPC, VPCEndpoint, VPCEndpointServiceConfiguration,
-// VPCPeeringConnection, and TransitGatewayVPCAttachment, while the AWS API
-// names them DhcpOptions, NatGateway, NetworkAcl, Vpc, VpcEndpoint, and so on.
-// An exact-match lookup would report 8 of ec2's 20 resources as missing on
-// every single run.
+// CRD kind ACK generated, ignoring case (AWS "NatGateway" vs ACK "NATGateway"),
+// and reports whether such a CRD exists.
 func (in *ControllerInputs) CanonicalKind(kind string) (string, bool) {
 	canonical, ok := in.kindsByLower[strings.ToLower(kind)]
 	return canonical, ok
 }
 
-// ClassifyOpWithOverrides classifies an operation, consulting the controller's
-// generator.yaml `operations:` overrides before falling back to name
-// inference. code-generator does the same in GetOperationMap, which calls
-// getOpTypesAndResourcesMapping(opID, cfg) — the config wins over the prefix
-// heuristic.
+// ClassifyOpWithOverrides classifies an operation, letting generator.yaml
+// `operations:` overrides win over name inference, as code-generator's
+// GetOperationMap does (e.g. route53 ChangeResourceRecordSets has no
+// recognisable prefix but is declared [Create, Delete]).
 //
-// This matters for operations whose names carry no recognisable prefix.
-// route53's `ChangeResourceRecordSets` infers to OpTypeUnknown, but its
-// generator.yaml declares `operation_type: [Create, Delete]`, so codegen treats
-// it as the create operation for a resource. Without reading the override we
-// would drop it into the "needs review" bucket on every run.
-//
-// When an override lists several operation types, the operation holds every
-// one of them, as in code-generator, whose GetOperationMap registers it under
-// each declared type: route53's ChangeResourceRecordSets is RecordSet's Create
-// *and* its Delete, and 12 controllers declare a multi-valued operation_type.
-// Keeping only the first would make such a resource look undeletable, and a
-// field sent on a [Create, Update] operation look immutable. Callers therefore
-// ask whether an operation holds a role, with OpTypes.Has, rather than
-// comparing a single type.
-//
-// One deliberate divergence from code-generator, verified to have no effect on
-// any controller in the corpus: codegen ignores an override entirely unless
-// both operation_type and resource_name are set; we apply whichever is present.
-// No controller declares one without the other.
+// Like code-generator, an operation holds every declared type, so callers
+// should test roles with OpTypes.Has. Unlike code-generator, an override with
+// only one of operation_type/resource_name is still applied; no controller
+// declares one without the other.
 func (in *ControllerInputs) ClassifyOpWithOverrides(
 	opID string,
 	configResources []string,
@@ -178,23 +148,9 @@ func (in *ControllerInputs) ClassifyOpWithOverrides(
 		return OpTypes{inferredType}, inferredName
 	}
 
-	// Resolve the resource name. When the override lists several, prefer the
-	// one name inference already arrived at, and only fall back to the first
-	// declared name otherwise.
-	//
-	// Taking [0] unconditionally is actively wrong on real data. lambda declares:
-	//
-	//	DeleteFunction:
-	//	  operation_type: [Delete]
-	//	  resource_name: [Version, Function]
-	//
-	// Name inference alone yields "Function", which is right. Taking [0] would
-	// substitute "Version", making the override worse than no override at all.
-	// code-generator registers such an operation under *every* listed resource;
-	// this function returns a single classification, so preferring the inferred
-	// name is the most faithful single answer available. This is the only
-	// multi-valued resource_name in the corpus — 223 overrides across 78
-	// generator.yaml files — so the narrow rule suffices.
+	// code-generator registers the operation under every listed resource_name;
+	// we return one, so prefer the inferred name when it is listed. lambda's
+	// DeleteFunction declares [Version, Function], and [0] would be wrong.
 	resName := inferredName
 	if len(override.ResourceName) > 0 {
 		resName = firstMatchOrDefault(override.ResourceName, inferredName)
@@ -238,15 +194,8 @@ func firstMatchOrDefault(declared []string, want string) string {
 }
 
 // opTypeFromConfigString maps a generator.yaml `operation_type` value onto an
-// OpType. The spellings are those code-generator accepts in its
-// OpTypeFromString.
-//
-// Underscores are stripped as well as case folded, because real controllers use
-// upper-snake spellings: 20 operations across acm, apigateway, cloudfront,
-// kinesis, route53resolver, and sns declare READ_ONE, GET_ATTRIBUTES, or
-// SET_ATTRIBUTES. Those happen to reach the same OpType through name inference
-// today, so recognising them here changes nothing yet — but relying on that
-// coincidence is how a latent gap becomes a bug.
+// OpType, accepting the spellings of code-generator's OpTypeFromString.
+// Underscores are ignored because controllers use forms like READ_ONE.
 func opTypeFromConfigString(s string) (OpType, bool) {
 	switch strings.ReplaceAll(strings.ToLower(s), "_", "") {
 	case "create":

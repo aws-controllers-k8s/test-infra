@@ -47,9 +47,8 @@ func opsModel(t *testing.T, ops map[string][]string) *SmithyModel {
 	return m
 }
 
-// TestPlaceUnknownOp pins each rule to an operation it was written for. The
-// request members are the real ones from the v1.47.1 models, because several rules
-// turn on exactly which identifiers a request carries.
+// TestPlaceUnknownOp pins each rule to a real operation. Request members come
+// from the v1.47.1 models because several rules depend on them.
 func TestPlaceUnknownOp(t *testing.T) {
 	model := opsModel(t, map[string][]string{
 		// s3control: AccessPointScope has its own Get/Put/Delete, but the request
@@ -68,15 +67,13 @@ func TestPlaceUnknownOp(t *testing.T) {
 		// cloudwatchlogs: its own Get/Put, attributed by logGroupIdentifier.
 		"PutSyslogConfiguration": {"logGroupIdentifier", "vpcEndpointId"},
 		"GetSyslogConfiguration": {"logGroupIdentifier"},
-		// Exact names: a new resource takes even an action verb; an existing one
-		// does not.
+		// Exact names: a new resource takes even an action verb; an existing one does not.
 		"AcceptDelegationRequest":              {"DelegationRequestId"},
 		"StopAIBenchmarkJob":                   {"AIBenchmarkJobName"},
 		"AcquireRole":                          {"RoleArn"},
 		"AttachRuleGroupsToProxyConfiguration": {"ProxyConfigurationName", "RuleGroups"},
-		// ec2: named after the new ApplicationStatusCheck, but the request takes
-		// InstanceIds, so it acts on instances. A request naming the prefix
-		// resource itself keeps the operation there.
+		// ec2: named after the new ApplicationStatusCheck but takes InstanceIds, so it
+		// acts on instances. A request naming the prefix resource keeps it there.
 		"EnableApplicationStatusCheckSuppression": {"ClientToken", "DryRun", "DurationSeconds", "InstanceIds"},
 		"PutApplicationStatusCheckThreshold":      {"ApplicationStatusCheckId", "Threshold"},
 		// Queries and end-user operations, dropped even when they name a resource.
@@ -93,8 +90,7 @@ func TestPlaceUnknownOp(t *testing.T) {
 		"RegisterCapability":   {"applicationId", "capabilityName"},
 		"DeregisterCapability": {"applicationId", "capabilityName"},
 		"GetCapability":        {"applicationId", "capabilityName"},
-		// ec2: the registration is only ever listed, so nothing can check the
-		// request against it, and its name decides.
+		// ec2: the registration is only listed, so its name decides.
 		"GetIpamRoutingPolicyRegistrationDeltas": {"DeltaId", "IpamInternetRegistryAssociationId", "StartTime"},
 		"GetIpamRoutingPolicyRegistrations":      {"Cidr", "IpamInternetRegistryAssociationId"},
 		// Nothing to go on.
@@ -149,11 +145,8 @@ func TestPlaceUnknownOp(t *testing.T) {
 }
 
 func TestFindNewOperationsHonoursIgnoredResourcesBeforePlacing(t *testing.T) {
-	// AbortSession would be placed as part of a possible Session resource — it
-	// has CreateSession beside it and a SessionId to address it by — so only the
-	// ignore.resource_names filter keeps it out. The fixture-based
-	// TestFindNewOperations cannot show this: its AbortSession has no request, so
-	// the account-level rule drops it whether or not the filter runs.
+	// Guards: ignore.resource_names drops AbortSession before placement, which
+	// would otherwise make it part of a possible Session resource.
 	latest := opsModel(t, map[string][]string{
 		"CreateSession": {"Name"},
 		"AbortSession":  {"SessionId"},
@@ -170,14 +163,13 @@ func TestFindNewOperationsHonoursIgnoredResourcesBeforePlacing(t *testing.T) {
 }
 
 func TestFindNewOperationsCollapsesPossibleResources(t *testing.T) {
-	// Register and Deregister manage one Capability, so they are one finding
-	// naming both, not two.
+	// Register and Deregister of one Capability collapse into a single finding.
 	latest := opsModel(t, map[string][]string{
 		"RegisterCapability":   {"applicationId", "capabilityName"},
 		"DeregisterCapability": {"applicationId", "capabilityName"},
 		"GetCapability":        {"applicationId", "capabilityName"},
 	})
-	// The pin predates all three; a model must have at least one shape.
+	// A model needs at least one shape.
 	baseline := opsModel(t, map[string][]string{"Placeholder": nil})
 	in := &ControllerInputs{Config: &generatorConfig{}, kindsByLower: map[string]string{}}
 
@@ -188,15 +180,13 @@ func TestFindNewOperationsCollapsesPossibleResources(t *testing.T) {
 		Subject:     "Capability",
 		Detail:      "no Create operation, so a controller cannot create it; modelling it needs an `operations:` override",
 		NewSincePin: true,
-		// GetCapability classifies, but is still how the resource would be read.
-		Evidence: "DeregisterCapability,GetCapability,RegisterCapability",
+		Evidence:    "DeregisterCapability,GetCapability,RegisterCapability",
 	}}, got)
 }
 
 func TestFindNewOperationsPlacesSubObjectOperations(t *testing.T) {
-	// ec2's v1.338.1 operations that classify to names no resource has. Skipping
-	// them lost a VPCEndpoint setter, an Instance read and an association read of
-	// the new ApplicationStatusCheck.
+	// Guards: ec2 operations that classify to names no resource has are still
+	// placed on a sub-object, not skipped.
 	latest := opsModel(t, map[string][]string{
 		"ModifyVpcEndpointPayerResponsibility":       {"DryRun", "PayerResponsibility", "Scope", "ServiceId", "VpcEndpointId"},
 		"DescribeApplicationStatus":                  {"DryRun", "Filters", "InstanceIds", "MaxResults", "NextToken"},
@@ -221,9 +211,8 @@ func TestFindNewOperationsPlacesSubObjectOperations(t *testing.T) {
 		sort.Strings(v)
 	}
 	assert.Equal(t, map[string][]string{
-		// The setter's members are candidates, but no read returns them under these
-		// names, so they are manual review; its VpcEndpointId identifies the
-		// endpoint and DryRun carries no state.
+		// No read returns these members under the same names, so they are manual
+		// review. VpcEndpointId is the identifier and DryRun carries no state.
 		"VPCEndpoint": {
 			"lifecycle-field PayerResponsibility ModifyVpcEndpointPayerResponsibility",
 			"lifecycle-field Scope ModifyVpcEndpointPayerResponsibility",
@@ -265,8 +254,8 @@ func TestFindNewResourcesFlagsResourcesNothingDeletes(t *testing.T) {
 }
 
 func TestFindNewOperationsDropsReadOnlyPossibleResources(t *testing.T) {
-	// networkfirewall: flow operations are only described and listed, reporting on
-	// what StartFlowCapture ran, so there is nothing for a controller to manage.
+	// networkfirewall flow operations are only described and listed, so there is
+	// nothing to manage.
 	latest := opsModel(t, map[string][]string{
 		"DescribeFlowOperation": {"FlowOperationId", "FirewallArn"},
 		"ListFlowOperations":    {"FirewallArn"},
@@ -337,8 +326,7 @@ func responsesModel(t *testing.T, requests, responses map[string][]string) *Smit
 }
 
 func TestReadStatusCandidates(t *testing.T) {
-	// DescribeInstanceStatus predates the pin and the controller never calls it,
-	// but its response gained application health.
+	// An old read the controller never calls still reports response members it gained.
 	requests := map[string][]string{"DescribeInstanceStatus": {"InstanceIds"}}
 	baseline := responsesModel(t, requests, map[string][]string{"DescribeInstanceStatus": {"InstanceState", "NextToken"}})
 	latest := responsesModel(t, requests, map[string][]string{"DescribeInstanceStatus": {"InstanceState", "ApplicationStatus", "NextToken"}})
@@ -409,9 +397,8 @@ func TestReadStatusCandidatesIgnoreOtherOldReads(t *testing.T) {
 	assert.Empty(t, findNewOperations(latest, baseline, in))
 }
 
-// TestFindNewOperationsDropsUnreadablePossibleResources is networkfirewall's
-// NetworkFirewallTransitGatewayAttachment: no Create, and nothing reads it, here or
-// through a broader resource, so a controller could not recover its state.
+// TestFindNewOperationsDropsUnreadablePossibleResources: a resource with no Create
+// and no read cannot have its state recovered, so it is dropped.
 func TestFindNewOperationsDropsUnreadablePossibleResources(t *testing.T) {
 	latest := opsModel(t, map[string][]string{
 		"AcceptNetworkFirewallTransitGatewayAttachment": {"TransitGatewayAttachmentId"},
@@ -437,10 +424,8 @@ func TestFindNewOperationsDropsUnreadablePossibleResources(t *testing.T) {
 	}, dropped)
 }
 
-// TestReadStatusCandidatesDropGeneratedHistory pins both sides of the rule with
-// the two real cases: networkfirewall's analysis reports, which only
-// StartAnalysisReport produces, and cloudwatchlogs' syslog configurations, which
-// PutSyslogConfiguration sets.
+// TestReadStatusCandidatesDropGeneratedHistory: reports that only a Start*
+// operation produces are dropped; configurations a Put* sets are kept.
 func TestReadStatusCandidatesDropGeneratedHistory(t *testing.T) {
 	requests := map[string][]string{
 		"ListAnalysisReports":      {"FirewallArn"},

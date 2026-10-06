@@ -45,9 +45,7 @@ func TestNewestSemverRefsOrdersAndBounds(t *testing.T) {
 	assert.Equal(t, []string{"v1.100.0", "v1.9.0"}, got, "fewer than n is not an error")
 }
 
-// modelTransport serves model fetches by URL path: a path in models gets that file's
-// contents, a path in statuses gets that status, and anything else a 404. Every request
-// is recorded so a test can assert which candidates were never asked for.
+// modelTransport serves models by URL path (unknown paths 404) and records every request.
 type modelTransport struct {
 	models   map[string]string
 	statuses map[string]int
@@ -74,8 +72,7 @@ func (m modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// withModelTransport points modelHTTPClient at a modelTransport, so nothing reaches
-// raw.githubusercontent.com, and returns the request log.
+// withModelTransport points modelHTTPClient at a modelTransport and returns the request log.
 func withModelTransport(t *testing.T, models map[string]string, statuses map[string]int) *[]string {
 	t.Helper()
 	var requests []string
@@ -91,9 +88,7 @@ func demoModelPath(version string) string {
 }
 
 func TestLatestModelSkipsATagWithoutTheModel(t *testing.T) {
-	// A per-service module tag can be cut without the model file at that ref. Taking the
-	// highest tag unconditionally turned that 404 into an analysis failure for the
-	// service; the next tag down that has the model is the latest model there is.
+	// A module tag can exist without the model file; fall back to the next tag that has it.
 	requests := withModelTransport(t,
 		map[string]string{demoModelPath("v1.2.0"): "../../../testdata/smithy_basic.json"}, nil)
 	_ = captureLog(t)
@@ -109,8 +104,7 @@ func TestLatestModelSkipsATagWithoutTheModel(t *testing.T) {
 }
 
 func TestLatestModelStopsAtTheReleaseVersion(t *testing.T) {
-	// The controller already ships the newest SDK that has the model: nothing to
-	// compare, so the release model is not fetched either.
+	// The controller already ships the newest SDK with the model, so nothing is fetched.
 	requests := withModelTransport(t, nil, nil)
 	_ = captureLog(t)
 
@@ -124,8 +118,7 @@ func TestLatestModelStopsAtTheReleaseVersion(t *testing.T) {
 }
 
 func TestLatestModelDoesNotSkipOtherFailures(t *testing.T) {
-	// Only a 404 says the model is not at a ref. A 500 says nothing either way, and
-	// stepping past it would report against an older model as if it were the latest.
+	// Only a 404 means the model is absent; a 500 must not step back to an older model.
 	requests := withModelTransport(t,
 		map[string]string{demoModelPath("v1.2.0"): "../../../testdata/smithy_basic.json"},
 		map[string]int{demoModelPath("v1.3.0"): http.StatusInternalServerError})
@@ -168,8 +161,7 @@ func TestHTTPGetMarksANotFound(t *testing.T) {
 }
 
 func TestNewGithubClientFromEnvBoundsEachRequest(t *testing.T) {
-	// go-github's default client has no timeout, so one stalled response would hold the
-	// job until Prow's timeout.
+	// go-github's default client has no timeout, so a stalled response would hang the job.
 	t.Setenv("GITHUB_TOKEN", "not-a-real-token")
 	client, err := newGithubClientFromEnv()
 	require.NoError(t, err)

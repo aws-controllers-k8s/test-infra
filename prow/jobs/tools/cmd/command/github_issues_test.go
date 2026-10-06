@@ -38,24 +38,12 @@ func testKnownServices(names ...string) map[string]bool {
 	return known
 }
 
-// emptySearchPage is a complete, well-formed search response with nothing in it —
-// what a pass a fixture has nothing to say about should answer.
+// emptySearchPage is a well-formed search response with no items.
 const emptySearchPage = `{"total_count": 0, "incomplete_results": false, "items": []}`
 
-// issueSearchHandler serves the two searches listAPIChangeIssues makes, keyed on
-// the is:open / is:closed qualifier in the query.
-//
-// Fixtures must distinguish them, but not for the reason it first looks. An open
-// issue shown to the closed pass is *not* recorded as a closed fingerprint: the
-// state check inside attribute already declines it, and a handler serving one
-// open-state page to both passes yields openCount=1 with an empty closed set. The
-// production guard is what protects that, not this fixture — do not weaken the state
-// check on the strength of these tests routing by query.
-//
-// The narrower reason: such a handler injects a spurious state-mismatch warning into
-// every pass it does not belong to, which breaks the exact `require.Len(warnings, N)`
-// assertions the window and attribution tests rely on to prove no *other* warning
-// fired.
+// issueSearchHandler serves the is:open and is:closed searches separately so
+// a pass never sees the other's page, which would add a state-mismatch warning
+// and break the exact warning counts the tests assert.
 func issueSearchHandler(t *testing.T, openPage, closedPage string) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -66,9 +54,7 @@ func issueSearchHandler(t *testing.T, openPage, closedPage string) http.HandlerF
 		case strings.Contains(query, "is:closed"):
 			fmt.Fprint(w, closedPage)
 		default:
-			// t.Fatalf cannot stop the test from the server's goroutine, and this
-			// should read as "the handler got a query it does not recognise"
-			// rather than as whichever assertion trips next.
+			// t.Fatalf cannot stop the test from the server's goroutine.
 			t.Errorf("search query names neither is:open nor is:closed: %q", query)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -76,15 +62,8 @@ func issueSearchHandler(t *testing.T, openPage, closedPage string) http.HandlerF
 }
 
 func TestListAPIChangeIssuesSkipsUnfingerprintedIssues(t *testing.T) {
-	// The failure this guards: `kind/api-change` and `service/s3` are both
-	// addedBy:anyone, so a maintainer triaging a contributor's issue used to make
-	// it a candidate for wholesale body replacement. An issue with no fingerprint
-	// marker is never managed.
-	//
-	// The search is scoped to the bot's author and ownership label, so #7 here is
-	// the bot's own issue with its fingerprint edited away — and it is still open in
-	// the public backlog. It counts against the cap: skipping the count let another
-	// issue be filed past it for every such issue.
+	// Guards: an issue without a fingerprint marker is never managed, but still
+	// holds a slot under the cap since it is open.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	client := newTestGitHubClient(t, issueSearchHandler(t, fmt.Sprintf(
 		`{"total_count": 2, "incomplete_results": false, "items": [
@@ -100,18 +79,15 @@ func TestListAPIChangeIssuesSkipsUnfingerprintedIssues(t *testing.T) {
 	require.Contains(t, openByService, "s3")
 	assert.Equal(t, 42, openByService["s3"].GetNumber())
 
-	// Skipping it is right, but silently skipping it is not: an orphan with an
-	// unreadable body gets a duplicate filed against it. A human has to see it.
+	// An unreadable orphan must be surfaced, or a duplicate gets filed against it.
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "#7")
 	assert.Contains(t, warnings[0], "no readable fingerprint")
 }
 
 func TestListAPIChangeIssuesSkipsSearchIndexLagQuietly(t *testing.T) {
-	// GitHub's search index lags writes by seconds. Observed live: closing an issue
-	// and running straight away returned it from the is:open search reporting
-	// "closed". The issue must still be skipped — the search result is stale — but
-	// flagging it "needs a human" is a false alarm that clears on the next run.
+	// The search index lags writes, so a just-closed issue can come back from the
+	// is:open search. Skip it without warning; the next run clears it.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	item := func(state string) string {
 		return fmt.Sprintf(`{"total_count": 1, "incomplete_results": false, "items": [
@@ -137,10 +113,8 @@ func TestListAPIChangeIssuesSkipsSearchIndexLagQuietly(t *testing.T) {
 }
 
 func TestListAPIChangeIssuesIgnoresClosedIssuesOfUncheckedServices(t *testing.T) {
-	// Observed live: sns dropped out of the run's service list and its closed
-	// issue warned "needs a human" on every run with nothing for anyone to do. A
-	// closed issue only feeds suppression for a service this run checks. The open
-	// pass must keep warning — an open issue for a dropped service needs closing.
+	// Closed issues only matter for services this run checks; an open issue for a
+	// dropped service still warns because it needs closing.
 	body, _ := renderIssueBody("sns", "v1.41.5", "v1.44.0", sampleFindings())
 	item := func(state string) string {
 		return fmt.Sprintf(`{"total_count": 1, "incomplete_results": false, "items": [
@@ -166,13 +140,8 @@ func TestListAPIChangeIssuesIgnoresClosedIssuesOfUncheckedServices(t *testing.T)
 }
 
 func TestListAPIChangeIssuesWarnsOnAnUnrecognisedState(t *testing.T) {
-	// `GetState() != "open"` read an unexpected or empty state as closed, which
-	// suppresses filing *and* skips updating — the service goes quiet with no log
-	// line. GitHub documents only open and closed, so this is polarity rather than a
-	// reachable bug, but an unattended writer should surface a surprise, not obey it.
-	// Both passes are checked. Testing only the open one leaves the original
-	// polarity — "anything that is not open is closed" — passing, which is the
-	// reading that suppresses filing.
+	// Guards: an unexpected state is surfaced, not read as closed (which would
+	// suppress filing silently). Checked on both passes.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	odd := fmt.Sprintf(`{"total_count": 1, "incomplete_results": false, "items": [
 		{"number": 42, "state": "merged", "body": %q, "labels": [{"name": "service/s3"}]}
@@ -199,10 +168,8 @@ func TestListAPIChangeIssuesWarnsOnAnUnrecognisedState(t *testing.T) {
 }
 
 func TestListAPIChangeIssuesScopesBothQueries(t *testing.T) {
-	// Two searches with different reliability requirements: the open one gates the
-	// cap and must be exact, the closed one only improves suppression. One query
-	// doing both is what let the cap be measured against a window of ancient closed
-	// issues while every open issue sat outside it.
+	// The open search gates the cap and must be exact; the closed one only feeds
+	// suppression, so they are separate queries.
 	var queries, sorts, orders []string
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		queries = append(queries, r.URL.Query().Get("q"))
@@ -228,19 +195,14 @@ func TestListAPIChangeIssuesScopesBothQueries(t *testing.T) {
 	assert.Contains(t, queries[1], "is:closed",
 		"closed issues must be fetched, or closing one just means it is re-filed tomorrow")
 
-	// Oldest first on the open pass is the only reason the duplicate resolution is
-	// stable; under the default best-match sort a different issue can win on a
-	// different day. Newest first on the closed pass keeps the most recently closed
-	// fingerprints inside the window when there are more than it can hold.
+	// Oldest-first on the open pass makes duplicate resolution stable; newest-first
+	// on the closed pass keeps recent fingerprints inside the window.
 	assert.Equal(t, []string{"created", "created"}, sorts)
 	assert.Equal(t, []string{"asc", "desc"}, orders)
 }
 
 func TestListAPIChangeIssuesRefusesAnOpenCountPastTheSearchWindow(t *testing.T) {
-	// The search window is the first 1,000 results, and total_count stays accurate
-	// past it. An open count that large means the cap has already failed, so paging
-	// what can be paged and filing against an undercount is the worst response
-	// available — and the Order: asc window would hold the oldest issues anyway.
+	// An open count past the 1,000-result search window means the cap already failed.
 	client := newTestGitHubClient(t, issueSearchHandler(t,
 		`{"total_count": 1001, "incomplete_results": false, "items": []}`, emptySearchPage))
 
@@ -252,10 +214,8 @@ func TestListAPIChangeIssuesRefusesAnOpenCountPastTheSearchWindow(t *testing.T) 
 }
 
 func TestListAPIChangeIssuesOnlyWarnsOnClosedIssuesPastTheSearchWindow(t *testing.T) {
-	// Closed issues accumulate for the life of the job with nothing bounding them,
-	// so this pass can legitimately overrun the window. Failing here would stop the
-	// job outright over lost suppression, which is a bad day rather than a broken
-	// repo — and refusing to run is itself how the service goes quiet.
+	// Closed issues are unbounded, so overrunning the window only warns: lost
+	// suppression should not stop the job.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	client := newTestGitHubClient(t, issueSearchHandler(t, emptySearchPage, fmt.Sprintf(
 		`{"total_count": 4096, "incomplete_results": false, "items": [
@@ -265,8 +225,6 @@ func TestListAPIChangeIssuesOnlyWarnsOnClosedIssuesPastTheSearchWindow(t *testin
 	_, _, closed, warnings, err := listAPIChangeIssues(
 		context.Background(), client, "o", "community", "ack-bot", testKnownServices("s3"))
 	require.NoError(t, err, "an overrun of the closed window must not stop the run")
-	// The page it did get is still used, so suppression degrades rather than
-	// disappearing.
 	assert.Len(t, closed["s3"], 1)
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "4096")
@@ -284,22 +242,17 @@ func TestListAPIChangeIssuesReportsDuplicates(t *testing.T) {
 	openByService, openCount, _, warnings, err := listAPIChangeIssues(
 		context.Background(), client, "o", "community", "ack-bot", testKnownServices("s3"))
 	require.NoError(t, err)
-	// The oldest wins — see the sort assertions above — and the duplicate is
-	// surfaced rather than silently ignored.
+	// The oldest wins and the duplicate is reported.
 	assert.Equal(t, 42, openByService["s3"].GetNumber())
-	// openCount counts open issues, duplicates included: it bounds how many issues
-	// of the detector's are open, not how many services are covered.
+	// openCount includes duplicates.
 	assert.Equal(t, 2, openCount)
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "#58")
 }
 
 func TestListAPIChangeIssuesRequiresUnambiguousService(t *testing.T) {
-	// `service/s3` and `service/s3control` both exist and are both addedBy:anyone,
-	// and response label order is not guaranteed. Taking the first `service/` label
-	// meant a bot issue for s3 that a maintainer also tagged `service/s3control`
-	// could file a duplicate s3 issue and overwrite the s3 report with the
-	// s3control one.
+	// Guards against s3 vs s3control mixups: response label order is not
+	// guaranteed, so an issue with more than one known service label is ambiguous.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	client := newTestGitHubClient(t, issueSearchHandler(t, fmt.Sprintf(
 		`{"total_count": 4, "incomplete_results": false, "items": [
@@ -316,9 +269,7 @@ func TestListAPIChangeIssuesRequiresUnambiguousService(t *testing.T) {
 		testKnownServices("s3", "s3control"))
 	require.NoError(t, err)
 	assert.Empty(t, openByService, "an issue that cannot be attributed must not be edited")
-	// Each is still an open issue this job filed, so each holds a slot: a service
-	// dropped from api_notification_services with its issue open used to free one,
-	// letting the run file past the cap.
+	// Each is still an open bot issue, so each holds a slot under the cap.
 	assert.Equal(t, 4, openCount)
 	require.Len(t, warnings, 4)
 	assert.Contains(t, warnings[0], "#11")
@@ -331,9 +282,7 @@ func TestListAPIChangeIssuesRequiresUnambiguousService(t *testing.T) {
 }
 
 func TestListAPIChangeIssuesRecordsClosedFingerprints(t *testing.T) {
-	// Closing is the only way a maintainer can say "I have seen this finding set
-	// and it needs no issue". While the search was scoped is:open that said
-	// nothing, and the next run re-filed the same fingerprint — daily, for ever.
+	// Guards: closing an issue suppresses re-filing the same fingerprint.
 	body, fingerprint := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	client := newTestGitHubClient(t, issueSearchHandler(t, emptySearchPage, fmt.Sprintf(
 		`{"total_count": 1, "incomplete_results": false, "items": [
@@ -345,20 +294,15 @@ func TestListAPIChangeIssuesRecordsClosedFingerprints(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, openByService)
 	assert.Empty(t, warnings)
-	// A closed issue is not open, so it neither fills the cap nor counts as a
-	// duplicate of anything.
 	assert.Equal(t, 0, openCount)
-	// This is the lookup reconcileIssue makes to decide issueSuppressedByClosed.
 	assert.True(t, closed["s3"][fingerprint])
 	assert.False(t, closed["s3"]["0000000000000000000000000000000000000000000000000000000000000000"],
 		"a genuinely new finding set must still file, or closing one issue silences the service")
 }
 
 func TestListAPIChangeIssuesRefusesIncompleteResults(t *testing.T) {
-	// total_count and the items are both partial when the search times out. On the
-	// open pass that gates the cap; on the closed pass it drops suppression, which is
-	// indistinguishable from "nothing was ever closed" — so both passes refuse, and
-	// unlike the search-window overrun this is not a degradation to warn about.
+	// Partial results would undercount the cap or drop suppression, so both
+	// passes refuse rather than warn.
 	partial := `{"total_count": 2, "incomplete_results": true, "items": []}`
 	for name, handler := range map[string]http.HandlerFunc{
 		"open":   issueSearchHandler(t, partial, emptySearchPage),
@@ -415,9 +359,7 @@ func TestListAPIChangeIssuesPaginates(t *testing.T) {
 }
 
 func TestListAPIChangeIssuesPaginatesTheClosedPassToo(t *testing.T) {
-	// Suppression degrades gracefully when the window overruns, but within the
-	// window it must be complete: a closed fingerprint on page two that never got
-	// read means the finding set a maintainer dismissed is re-filed tomorrow.
+	// Within the window, suppression must read every page.
 	body, fingerprint := renderIssueBody("ec2", "v1.41.5", "v1.44.0", sampleFindings())
 	var pages int
 	client := newTestGitHubClient(t, paginatedSearchHandler(t, "is:closed",
@@ -437,9 +379,8 @@ func TestListAPIChangeIssuesPaginatesTheClosedPassToo(t *testing.T) {
 }
 
 func TestListAPIChangeIssuesPaginatesPastAFullyFilteredPage(t *testing.T) {
-	// Pagination must not be tied to having kept anything: a first page of nothing
-	// but unmanageable issues would otherwise end the listing, and every service on
-	// the later pages would look uncovered and be re-filed.
+	// A page with nothing manageable must not end pagination, or later services
+	// look uncovered and get re-filed.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	var pages int
 	client := newTestGitHubClient(t, paginatedSearchHandler(t, "is:open",
@@ -455,7 +396,6 @@ func TestListAPIChangeIssuesPaginatesPastAFullyFilteredPage(t *testing.T) {
 		context.Background(), client, "o", "community", "ack-bot", testKnownServices("s3"))
 	require.NoError(t, err)
 	assert.Equal(t, 2, pages)
-	// #7 is unmanageable but still open, so it holds a slot.
 	assert.Equal(t, 2, openCount)
 	require.Contains(t, openByService, "s3")
 	assert.Equal(t, 42, openByService["s3"].GetNumber())
@@ -470,9 +410,7 @@ func TestUpdateAndCommentIssue(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/o/r/issues/42/comments":
 			commented = true
 		default:
-			// t.Fatalf cannot stop the test from the server's goroutine, and
-			// failing here should read as "the handler got an unexpected
-			// request" rather than as whichever assertion happens to trip next.
+			// t.Fatalf cannot stop the test from the server's goroutine.
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -488,8 +426,7 @@ func TestUpdateAndCommentIssue(t *testing.T) {
 }
 
 func TestUpdateGithubIssueBodySendsOnlyBody(t *testing.T) {
-	// The safety property: a maintainer's title, labels and assignees on the
-	// issue must survive a body refresh. Nothing pinned this.
+	// Guards: a body refresh leaves the maintainer's title, labels and assignees alone.
 	var payload map[string]any
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
@@ -502,8 +439,7 @@ func TestUpdateGithubIssueBodySendsOnlyBody(t *testing.T) {
 }
 
 func TestCreateGithubIssueOmitsLabelsWhenNone(t *testing.T) {
-	// Taking the address of a nil slice sends `"labels": null`, which asks the API
-	// to interpret an absent value rather than saying "no labels".
+	// A nil slice must not be sent as `"labels": null`.
 	var payload map[string]any
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
@@ -518,10 +454,8 @@ func TestCreateGithubIssueOmitsLabelsWhenNone(t *testing.T) {
 }
 
 func TestCreateGithubIssueRequiresOwnershipLabelToStick(t *testing.T) {
-	// GitHub silently drops `labels` on creation when the token's account lacks
-	// push access. An unlabelled issue is invisible to every later search, so the
-	// job would file one per service per day while openCount stayed at zero and the
-	// cap never intervened.
+	// GitHub drops labels on create without push access; an unlabelled issue is
+	// invisible to later searches, so the job would re-file it daily.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"number": 99, "labels": [{"name": "service/s3"}]}`)
 	}))
@@ -547,8 +481,7 @@ func TestCreateGithubIssueAcceptsLabelsThatStuck(t *testing.T) {
 }
 
 func TestCreateGithubIssueDoesNotRequireLabelsItWasNotAskedFor(t *testing.T) {
-	// scan_controllers_cve.go files with its own labels and none of them is the
-	// detector's, so the check must not fire for it.
+	// Other callers (scan_controllers_cve.go) use their own labels; the check must not fire.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"number": 99}`)
 	}))
@@ -560,7 +493,6 @@ func TestCreateGithubIssueDoesNotRequireLabelsItWasNotAskedFor(t *testing.T) {
 }
 
 func TestGithubHelpersReportAPIErrors(t *testing.T) {
-	// Every error path was untested. An unattended job's only output is its log.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message": "Not Found"}`)
@@ -582,8 +514,7 @@ func TestGithubHelpersReportAPIErrors(t *testing.T) {
 }
 
 func TestGithubHelpersSurfaceRateLimitErrors(t *testing.T) {
-	// %w rather than %s, so Task 14 can back off on a rate limit instead of
-	// treating it like a 404.
+	// Errors are wrapped with %w so callers can detect rate limits.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Limit", "30")
 		w.Header().Set("X-RateLimit-Remaining", "0")
@@ -611,8 +542,7 @@ func TestGithubLogin(t *testing.T) {
 }
 
 func TestGithubLoginRejectsAnEmptyLogin(t *testing.T) {
-	// An empty login would build the query `author:`, which GitHub answers with
-	// somebody else's issues rather than an error.
+	// An empty login would build `author:`, which matches other users' issues.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"login": ""}`)
 	}))
@@ -632,8 +562,7 @@ func TestNewGithubClientFromEnv(t *testing.T) {
 }
 
 func TestCreateGithubIssueClassifiesFailures(t *testing.T) {
-	// Only a failure GitHub answered with a 4xx is known not to have filed anything.
-	// A 5xx or a dropped connection may follow a committed create.
+	// Only a 4xx proves nothing was filed; a 5xx or dropped connection may follow a committed create.
 	for name, tc := range map[string]struct {
 		handler       http.HandlerFunc
 		indeterminate bool

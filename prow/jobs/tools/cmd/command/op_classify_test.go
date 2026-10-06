@@ -39,31 +39,21 @@ func TestClassifyOp(t *testing.T) {
 		{"CreateDhcpOptions", []string{"DhcpOptions"}, OpTypeCreate, "DhcpOptions"},
 		{"DescribeDhcpOptions", []string{"DhcpOptions"}, OpTypeList, "DhcpOptions"},
 
-		// The declared-resource check is case-insensitive, matching
-		// code-generator's resourceExistsInConfig (strings.EqualFold). The
-		// returned name is the one derived from the operation, not the
-		// declaration's spelling.
+		// The declared-resource check is case-insensitive, like code-generator's
+		// resourceExistsInConfig; the returned name comes from the operation.
 		{"CreateDhcpOptions", []string{"dhcpoptions"}, OpTypeCreate, "DhcpOptions"},
 		{"CreateDhcpOptions", []string{"DHCPOPTIONS"}, OpTypeCreate, "DhcpOptions"},
 
-		// The declared-plural side of the Get and List branches. Without a
-		// declaration these would singularize; with one they must keep the
-		// plural spelling. Only the undeclared side is covered above.
+		// Declared plurals keep their spelling in the Get and List branches.
 		{"GetDhcpOptions", []string{"DhcpOptions"}, OpTypeGet, "DhcpOptions"},
 		{"ListDhcpOptions", []string{"DhcpOptions"}, OpTypeList, "DhcpOptions"},
 
-		// A Set prefix without an Attributes suffix matches the Set case, does
-		// not return from it, and falls through to Unknown with the operation
-		// name unstripped. That fallthrough is easy to break when editing the
-		// switch, so pin it.
+		// A Set prefix without an Attributes suffix falls through to Unknown, name unstripped.
 		{"SetBucketPolicy", nil, OpTypeUnknown, "SetBucketPolicy"},
 	}
 
 	for _, tc := range tests {
-		// Include the declared resources in the subtest name: several rows
-		// share an opID and differ only in that field, so naming by opID alone
-		// yields CreateDhcpOptions#01 and you have to count table rows to find
-		// which case failed.
+		// Rows share an opID, so include the declared resources in the subtest name.
 		t.Run(fmt.Sprintf("%s/%v", tc.opID, tc.resources), func(t *testing.T) {
 			gotType, gotRes := ClassifyOp(tc.opID, tc.resources)
 			assert.Equal(t, tc.wantType, gotType, "op type")
@@ -73,17 +63,13 @@ func TestClassifyOp(t *testing.T) {
 }
 
 func TestClassifyOpBatchCreateIsNotACreate(t *testing.T) {
-	// This distinction is load-bearing for producer 1. code-generator emits a
-	// CRD only for resources with an OpTypeCreate operation
-	// (pkg/model/model.go:128 builds crdNameKeys from opMap[OpTypeCreate]
-	// alone). OpTypeCreateBatch and OpTypeReplace never produce a CRD, so
-	// producer 1 must not treat them as implying one.
+	// code-generator emits a CRD only for OpTypeCreate resources (pkg/model/model.go), so
+	// CreateBatch and Replace must not imply one.
 	opType, resName := ClassifyOp("BatchCreateTables", nil)
 	assert.Equal(t, OpTypeCreateBatch, opType)
 	assert.Equal(t, "Table", resName)
 
-	// A plural Create<X>s with no declared resource also lands on CreateBatch,
-	// so it likewise implies no CRD.
+	// An undeclared plural Create<X>s is CreateBatch, so it implies no CRD either.
 	opType, resName = ClassifyOp("CreateTables", nil)
 	assert.Equal(t, OpTypeCreateBatch, opType)
 	assert.Equal(t, "Table", resName)

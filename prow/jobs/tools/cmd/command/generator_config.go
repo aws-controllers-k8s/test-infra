@@ -24,18 +24,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// generatorConfig is the subset of a controller's generator.yaml this tool
-// needs. The full schema lives in code-generator's pkg/config; we deliberately
-// model only these fields so that unrelated schema changes cannot break us.
+// generatorConfig is the subset of generator.yaml this tool needs (full schema
+// in code-generator's pkg/config), kept small so unrelated schema changes
+// cannot break it.
 type generatorConfig struct {
 	Ignore   ignoreConfig   `yaml:"ignore"`
 	SDKNames sdkNamesConfig `yaml:"sdk_names"`
-	// Operations carries per-operation overrides. code-generator's
-	// GetOperationMap consults these before falling back to name inference, so
-	// an operation listed here is classified by declaration rather than by its
-	// prefix. route53 is the canonical case: `ChangeResourceRecordSets` has no
-	// recognisable prefix, and its generator.yaml declares
-	// `operation_type: [Create, Delete]` to bind it to a resource.
+	// Operations carries per-operation overrides, which code-generator applies
+	// before name inference.
 	Operations map[string]operationOverride `yaml:"operations"`
 	Resources  map[string]resourceConfig    `yaml:"resources"`
 }
@@ -44,22 +40,16 @@ type generatorConfig struct {
 type ignoreConfig struct {
 	Operations    []string `yaml:"operations"`
 	ResourceNames []string `yaml:"resource_names"`
-	// FieldPaths are shape-member paths codegen is told to skip, in the same
-	// dotted form the Smithy member walk produces — s3 declares
-	// `CreateBucketConfiguration.Tags` and `VersioningConfiguration.MFADelete`.
-	// Producer 3 must consult these or it reports fields the controller
-	// deliberately declined as though they were gaps.
+	// FieldPaths are dotted shape-member paths codegen skips, e.g. s3's
+	// `VersioningConfiguration.MFADelete`.
 	FieldPaths []string `yaml:"field_paths"`
-	// ShapeNames suppress a member wherever its *target shape* carries one of
-	// these names, independently of the path it is reached by. s3 declares
-	// `BlockedEncryptionTypes`, which suppressed four producer-3 findings
-	// reached via two different operations.
+	// ShapeNames skip a member whose target shape has one of these names,
+	// whatever path reaches it.
 	ShapeNames []string `yaml:"shape_names"`
 }
 
-// sdkNamesConfig overrides the names used to locate the SDK model. All three
-// can differ from the service alias: route53's model is `route-53`,
-// opensearchservice's is `opensearch`, documentdb's package is `docdb`.
+// sdkNamesConfig overrides the names used to locate the SDK model, e.g.
+// route53's model is `route-53` and documentdb's package is `docdb`.
 type sdkNamesConfig struct {
 	ModelName   string `yaml:"model_name"`
 	PackageName string `yaml:"package_name"`
@@ -69,27 +59,17 @@ type sdkNamesConfig struct {
 // renames and field sourcing this tool needs.
 type resourceConfig struct {
 	Renames resourceRenames `yaml:"renames"`
-	// Fields declares CRD fields assembled from somewhere other than the
-	// resource's own create input. This is a distinct mechanism from Renames:
-	// a rename maps a member within one operation, whereas `from` sources a
-	// field out of a *different* operation's shape.
-	//
-	// s3's Bucket declares:
+	// Fields declares CRD fields sourced from another operation's shape via
+	// `from`, e.g. s3 Bucket's `Abac` comes from PutBucketAbac's AbacStatus:
 	//
 	//	fields:
 	//	  Abac:
 	//	    from:
 	//	      operation: PutBucketAbac
 	//	      path: AbacStatus
-	//
-	// so the CRD field `abac` is the AWS member `AbacStatus` on PutBucketAbac.
-	// Without reading this, producer 3 reports AbacStatus as missing from a CRD
-	// that plainly exposes it — four findings on the real s3 delta.
 	Fields map[string]resourceFieldConfig `yaml:"fields"`
-	// UpdateOperation names hand-written update code that replaces codegen's.
-	// lambda's Function declares `custom_method_name: customUpdateFunction`, which
-	// calls UpdateFunctionConfiguration itself, so a field set there needs that
-	// code changed rather than a new hook.
+	// UpdateOperation names hand-written update code that replaces codegen's,
+	// so fields it sets need that code changed rather than a new hook.
 	UpdateOperation struct {
 		CustomMethodName string `yaml:"custom_method_name"`
 	} `yaml:"update_operation"`
@@ -123,22 +103,14 @@ type operationOverride struct {
 	// OutputWrapperFieldPath names the response member codegen reads the
 	// resource's fields from, e.g. iam's GetGroup declares `Group`.
 	OutputWrapperFieldPath string `yaml:"output_wrapper_field_path"`
-	// InputWrapperFieldPath is its request-side counterpart: codegen flattens
-	// the members of this request member into Spec and leaves every other
-	// request member out. backup's CreateBackupPlan and UpdateBackupPlan
-	// declare `BackupPlan`, so the CRD's fields are BackupPlan's members and
-	// the request's other top-level members are not Spec fields at all.
+	// InputWrapperFieldPath is the request-side counterpart: codegen flattens
+	// this member's members into Spec and drops other request members.
 	InputWrapperFieldPath string `yaml:"input_wrapper_field_path"`
 }
 
-// stringArray accepts either a YAML scalar or a YAML sequence, mirroring
-// code-generator's StringArray. Both spellings appear in real generator.yaml
-// files, so a plain []string would fail to parse the scalar form.
-//
-// An explicitly null value (`operation_type:` with nothing after it) never
-// reaches this method — yaml.v3 skips custom unmarshalling for null nodes and
-// leaves the field at its zero value, which behaves the same as absent. The
-// error branch below therefore only fires for a mapping or alias node.
+// stringArray accepts a YAML scalar or sequence, mirroring code-generator's
+// StringArray. yaml.v3 does not call UnmarshalYAML for null values, so those
+// stay empty.
 type stringArray []string
 
 func (s *stringArray) UnmarshalYAML(node *yaml.Node) error {
@@ -177,32 +149,23 @@ func readGeneratorConfig(controllerPath string) (*generatorConfig, error) {
 	return &cfg, nil
 }
 
-// ResourceNames returns the resource names declared in the config. These feed
-// ClassifyOp so that "pluralized singular" names are handled the way codegen
-// handles them.
+// ResourceNames returns the declared resource names, sorted. ClassifyOp uses
+// them to handle "pluralized singular" names as codegen does.
 func (c *generatorConfig) ResourceNames() []string {
 	names := make([]string, 0, len(c.Resources))
 	for name := range c.Resources {
 		names = append(names, name)
 	}
-	// Sorted, not map order. This tool fingerprints its findings to decide
-	// whether an existing GitHub issue needs updating, so any map-iteration
-	// order that can reach the output risks spurious issue churn between runs.
-	// Cheap to guarantee here rather than audit every consumer.
+	// Sorted so output is deterministic; findings are fingerprinted to detect
+	// GitHub issue changes.
 	sort.Strings(names)
 	return names
 }
 
 // resource returns the config block for a resource kind, matched
-// case-insensitively as code-generator's GetResourceConfig matches it.
-//
-// Callers hold CRD kinds, which uppercase acronyms, while generator.yaml is
-// keyed by the name inferred from the AWS operation: ec2's CRD kinds are
-// VPCEndpoint and DHCPOptions, its config blocks VpcEndpoint and DhcpOptions.
-// An exact lookup silently drops such a resource's renames, sourced fields, and
-// custom update, so every lookup by kind goes through here. An exact match
-// wins; otherwise the first case-insensitive match in sorted order, so the
-// result is deterministic even if two keys differ only in case.
+// case-insensitively as code-generator's GetResourceConfig does: CRD kinds
+// uppercase acronyms (VPCEndpoint) while config keys may not (VpcEndpoint).
+// An exact match wins, then the first case-insensitive match in sorted order.
 func (c *generatorConfig) resource(kind string) (resourceConfig, bool) {
 	if c == nil {
 		return resourceConfig{}, false
@@ -228,12 +191,7 @@ func (c *generatorConfig) RenamesForResource(kind string) map[string]string {
 		return nil
 	}
 
-	// Merge in sorted operation order. Collapsing assumes ACK keeps renames
-	// consistent within a resource, which is convention rather than something
-	// the schema enforces. If that ever breaks, last-write-wins over map
-	// iteration order would let a different rename win on different runs, and
-	// the resulting field-suppression difference would churn GitHub issues.
-	// Sorting makes the outcome at least deterministic.
+	// Merge in sorted order so conflicting renames resolve deterministically.
 	opNames := make([]string, 0, len(res.Renames.Operations))
 	for opName := range res.Renames.Operations {
 		opNames = append(opNames, opName)
@@ -257,13 +215,10 @@ func (c *generatorConfig) RenamesForResource(kind string) map[string]string {
 }
 
 // renamedPath applies a resource's renames to an AWS member path, segment by
-// segment. A rename key is either a top-level member name, `WidgetName`, or a
-// full dotted path whose final segment it renames, as firehose's
-// `HttpEndpointDestinationConfiguration.S3Update: S3Configuration`. A dotted
-// key may spell its parents as AWS names them or as already renamed —
-// firehose's spells its parent renamed, from UpdateDestination's
-// `HttpEndpointDestinationUpdate` — so both prefixes are tried. Keys are
-// matched exactly, as code-generator's GetResourceFieldName matches them.
+// segment. A key is a member name or a dotted path renaming its last segment;
+// a dotted key's parents may be spelled as in AWS or already renamed (as in
+// firehose), so both are tried. Keys match exactly, as in code-generator's
+// GetResourceFieldName.
 func (c *generatorConfig) renamedPath(kind string, segments []string) []string {
 	out := slices.Clone(segments)
 	renames := c.RenamesForResource(kind)

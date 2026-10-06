@@ -48,20 +48,16 @@ const (
 	modelFetchTimeout = 60 * time.Second
 
 	// maxLatestCandidates bounds how many of the newest per-service tags are tried
-	// for the latest model. A per-service module tag can exist without the model
-	// file at that ref (see httpGet), so the newest tag alone is not enough; but
-	// every extra candidate is one more request, and a series missing the model at
-	// several consecutive tags is a layout change to look at, not one to walk past.
+	// for the latest model. A tag can lack the model file, so the newest alone is
+	// not enough; several misses in a row mean a layout change worth looking at.
 	maxLatestCandidates = 3
 )
 
-// errModelNotFound marks a model fetch that returned 404: the model file is not at
-// that ref, as opposed to a fetch that could not tell.
+// errModelNotFound marks a model fetch that returned 404.
 var errModelNotFound = errors.New("model file not found")
 
-// tagPrefixFor returns the git ref prefix to search for the newest tag. An
-// empty packageName means the core aws-sdk-go-v2 tag series; otherwise the
-// per-service series, which is named after the SDK service package.
+// tagPrefixFor returns the git ref prefix of a tag series: core aws-sdk-go-v2
+// for an empty packageName, otherwise the per-service series.
 func tagPrefixFor(packageName string) string {
 	if packageName == "" {
 		return "tags/v"
@@ -70,8 +66,7 @@ func tagPrefixFor(packageName string) string {
 }
 
 // newestSemverRef picks the highest non-prerelease semver from a list of git
-// refs. Refs whose last path segment is not parseable semver are skipped, so
-// stray or malformed tags cannot derail resolution.
+// refs, skipping refs whose last path segment is not semver.
 func newestSemverRef(refs []string) (string, error) {
 	newest, err := newestSemverRefs(refs, 1)
 	if err != nil {
@@ -96,18 +91,10 @@ func newestSemverRefs(refs []string, n int) ([]string, error) {
 			continue
 		}
 
-		// The leading `v` must go before parsing. aquasecurity/go-version's
-		// regex is anchored `^(major)\.` with no tolerance for a prefix, so
-		// `v1.44.0` does not parse at all. Every real aws-sdk-go-v2 tag carries
-		// that prefix, so parsing the raw string would make every candidate
-		// unparseable and this function would return "no usable semver tags"
-		// for every service on every run.
-		//
-		// Keep the original, prefixed spelling in the result: that is what callers
-		// need for building model URLs and for reporting the compared versions.
+		// aquasecurity/go-version does not accept a leading `v`, so strip it to
+		// parse; the result keeps the prefixed spelling for model URLs.
 		parsed, err := semver.Parse(strings.TrimPrefix(version, "v"))
 		if err != nil {
-			// Not parseable semver; a stray tag must not derail resolution.
 			continue
 		}
 		candidates = append(candidates, candidate{version, parsed})
@@ -126,15 +113,12 @@ func newestSemverRefs(refs []string, n int) ([]string, error) {
 	return newest, nil
 }
 
-// resolveLatestSDKVersion returns the newest published per-service tags for a
-// service, whichever series the controller pins: up to maxLatestCandidates of them,
-// highest first, so that latestModel can step past a tag that lacks the model.
+// resolveLatestSDKVersion returns up to maxLatestCandidates of the newest
+// per-service tags for a service, highest first.
 //
-// The per-service series even for a controller pinned to a core version: the core
-// tag moves only when the core module changes, so the model at the newest core tag
-// can be releases behind the newest model for the service, and a report against it
-// misses whatever AWS has shipped since. A per-service tag is cut whenever the
-// service's model changes, so the model at its newest tag is the newest there is.
+// It uses the per-service series even for a controller pinned to a core version:
+// the core tag moves only when the core module changes, so its model can lag the
+// service's, while a per-service tag is cut whenever the service model changes.
 func resolveLatestSDKVersion(
 	ctx context.Context,
 	client *github.Client,
@@ -164,36 +148,17 @@ func resolveLatestSDKVersion(
 	return newestSemverRefs(refsAtPrefixDepth(refs, prefix), maxLatestCandidates)
 }
 
-// latestVersionCache memoises resolveLatestSDKVersion for the duration of one run.
+// latestVersionCache memoises resolveLatestSDKVersion per tag series for one run.
+// It is not concurrency-safe; the reconcile loop is sequential.
 //
-// fetchModel caches models on disk precisely so that a baseline shared between
-// services is fetched once, but resolution had no such cache: every service re-ran a
-// full paginated ListMatchingRefs over the same core tag series, roughly 200+
-// redundant requests at ~74 services. Those count against the 5,000/hr core limit
-// rather than the 30/min search limit, so they will not 403 the way a per-service
-// issue search did — but the same rationale applies, and one map removes them.
-//
-// Keyed by tag series. Every series is per-service now — see resolveLatestSDKVersion —
-// so this saves a listing only when two controllers share an SDK package; it is kept
-// for the memoised failures below. A plain map with no mutex is
-// deliberate — the reconcile loop is sequential, and making this concurrency-safe
-// would imply a concurrency this job does not have.
-//
-// Failures are memoised too. Caching an error is not caching a wrong answer: no version
-// is ever invented and no diff is ever run against one, and every service still records
-// its own analysis failure — the only thing shared is the one upstream request that
-// established the series cannot be listed, instead of ~74 of them. That matters most in
-// exactly the likeliest persistent failure of this call, a rate-limit or
-// secondary-rate-limit 403, where re-listing 73 more times is actively
-// counterproductive. Retrying within a run cannot help either: a single job invocation
-// is far shorter than a rate-limit window, and the next periodic run starts with a fresh
-// cache.
+// Failures are cached too: the likeliest persistent failure is a rate-limit 403,
+// which re-listing for every service would only prolong, and a run is shorter than
+// a rate-limit window. Each service still records its own analysis failure.
 type latestVersionCache struct {
 	resolved map[string]latestVersionResult
 }
 
-// latestVersionResult is one series' answer, which is either the candidate versions or
-// the error that prevented there being any.
+// latestVersionResult is one series' candidate versions or the error resolving them.
 type latestVersionResult struct {
 	versions []string
 	err      error
@@ -203,9 +168,7 @@ func newLatestVersionCache() *latestVersionCache {
 	return &latestVersionCache{resolved: map[string]latestVersionResult{}}
 }
 
-// resolve returns the newest published per-service tags for a service, highest first,
-// consulting the cache first. The cache key is exactly the ref prefix that would have
-// been listed.
+// resolve is resolveLatestSDKVersion through the cache, keyed by ref prefix.
 func (c *latestVersionCache) resolve(
 	ctx context.Context,
 	client *github.Client,
@@ -226,16 +189,9 @@ func (c *latestVersionCache) resolve(
 }
 
 // latestModel returns the newest of candidates (highest first) whose model file
-// exists, and that model.
-//
-// A per-service module tag can be cut without the model file at that ref, and taking
-// the highest tag unconditionally turned that 404 into an analysis failure for the
-// service. Only a 404 moves on to the next candidate; any other failure is returned,
-// since it says nothing about whether the model is there.
-//
-// Reaching releaseVersion stops the walk with found false and no error: the controller
-// already ships the newest SDK that has the model, so there is nothing to compare and
-// nothing to fetch.
+// exists, and that model. Only a 404 moves on to the next candidate; other errors
+// are returned. Reaching releaseVersion returns found false and no error: the
+// controller already ships the newest SDK that has the model.
 func latestModel(
 	ctx context.Context,
 	cacheDir, modelName, packageName, releaseVersion string,
@@ -261,23 +217,15 @@ func latestModel(
 }
 
 // refsAtPrefixDepth keeps only refs whose remainder after the prefix is a single
-// path segment, discarding tags for nested sub-modules.
-//
-// The GitHub matching-refs filter is textual, not path-aware, so the prefix
-// `tags/service/s3/` also matches `refs/tags/service/s3/internal/configtesting/
-// v0.1.0`. newestSemverRef reads the last path segment, so such a tag would be
-// treated as a candidate version for the s3 service module itself. Those nested
-// versions happen to be low today and lose the comparison, but nothing
-// guarantees that — a sub-module that ever outran its parent would silently
-// resolve as the service's "latest", and we would then diff against a model that
-// does not exist at that tag.
+// path segment, discarding tags for nested sub-modules. GitHub's matching-refs
+// filter is textual, so `tags/service/s3/` also matches
+// `refs/tags/service/s3/internal/configtesting/v0.1.0`.
 func refsAtPrefixDepth(refs []string, prefix string) []string {
 	full := "refs/" + prefix
 	out := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		remainder := strings.TrimPrefix(ref, full)
 		if remainder == ref {
-			// Did not actually carry the prefix.
 			continue
 		}
 		if strings.Contains(remainder, "/") {
@@ -300,7 +248,7 @@ func modelURL(modelName, packageName, coreVersion, serviceVersion string) string
 
 // fetchModel returns the parsed model at a version, caching the raw JSON on
 // disk under cacheDir so that a baseline shared between services is fetched
-// once per run.
+// once.
 func fetchModel(
 	ctx context.Context,
 	cacheDir string,
@@ -308,19 +256,10 @@ func fetchModel(
 ) (*SmithyModel, error) {
 	url := modelURL(modelName, packageName, coreVersion, serviceVersion)
 
-	// Qualify the cache path by series. The core and per-service tag series are
-	// independent counters, so core v1.41.5 and service/<pkg>/v1.41.5 are
-	// entirely different models that would otherwise land on the same path. A
-	// single service uses one series throughout a run, so this is unreachable
-	// today — but --model-cache-dir exists precisely so the cache can persist
-	// across runs, and a controller that ever switches pinning style would then
-	// be served the wrong model from cache. Two lines to foreclose the class.
-	//
-	// filepath.Base guards the two path segments that come from a controller's
-	// generator.yaml. filepath.Join collapses ".." lexically rather than
-	// confining to cacheDir, so a stray `package_name: ../../..` would write
-	// outside the cache directory. Both values are documented as single
-	// segments, so this costs nothing.
+	// The path is qualified by series because core v1.41.5 and
+	// service/<pkg>/v1.41.5 are different models, and the cache can persist
+	// across runs. filepath.Base keeps generator.yaml values such as
+	// `package_name: ../..` from escaping cacheDir.
 	series := "core"
 	version := coreVersion
 	if serviceVersion != "" {
@@ -348,9 +287,8 @@ func fetchModel(
 	return LoadSmithyModel(data)
 }
 
-// modelHTTPClient is this package's own client rather than http.DefaultClient,
-// so that model fetching does not share transport state with anything else in
-// the process, and so there is a seam for future customisation.
+// modelHTTPClient is used instead of http.DefaultClient so model fetching does
+// not share transport state with the rest of the process.
 var modelHTTPClient = &http.Client{}
 
 func httpGet(ctx context.Context, url string) ([]byte, error) {
@@ -368,9 +306,8 @@ func httpGet(ctx context.Context, url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Drain before returning so the connection can be reused. A 404 is a
-		// legitimate outcome here — a per-service module tag can exist without a
-		// model file at that ref — so this path is not vanishingly rare.
+		// Drain so the connection can be reused. A 404 is expected: a
+		// per-service tag can exist without the model file.
 		_, _ = io.Copy(io.Discard, resp.Body)
 		if resp.StatusCode == http.StatusNotFound {
 			return nil, fmt.Errorf("GET %s returned %d: %w", url, resp.StatusCode, errModelNotFound)
@@ -386,43 +323,34 @@ type FindingClass int
 const (
 	// ClassNewResource is a resource codegen would add a CRD for today.
 	ClassNewResource FindingClass = iota
-	// ClassNewOperation is an operation on a resource that already has a CRD,
-	// which the controller does not call. Operations on a resource the report
-	// lists as new are folded into that resource's Evidence instead: see
-	// foldOperationsIntoResources.
+	// ClassNewOperation is an uncalled operation on a resource that has a CRD.
+	// Operations on a resource reported as new go into that resource's Evidence
+	// instead (foldOperationsIntoResources).
 	ClassNewOperation
-	// ClassUnknownOperation is an operation whose name does not classify, and
-	// which therefore needs human judgement.
+	// ClassUnknownOperation is an operation whose name does not classify, so it
+	// needs human judgement.
 	ClassUnknownOperation
-	// ClassSpecField is a new member that could be desired state: it is set at
-	// Create, or set at Update and readable back. See fieldRoles.class.
+	// ClassSpecField is a new member that could be desired state: set at Create,
+	// or set at Update and readable back. See fieldRoles.class.
 	ClassSpecField
-	// ClassPossibleResource is a resource the model manages without a Create
-	// verb — PutAsset with GetAsset, RegisterCapability with
-	// DeregisterCapability — so codegen cannot infer it without an
-	// `operations:` override.
+	// ClassPossibleResource is a resource managed without a Create verb (e.g.
+	// RegisterCapability/DeregisterCapability), which codegen cannot infer
+	// without an `operations:` override.
 	ClassPossibleResource
-	// ClassDroppedOperation is an operation placeUnknownOp judged to be nothing
-	// ACK could model, with the reason as its Detail. It is carried only so the
-	// issue can show what was left out: it is never a finding in its own right.
-	// See reportable for everywhere that matters.
+	// ClassDroppedOperation is an operation nothing in ACK could model, with the
+	// reason as its Detail. It is listed for transparency only, never reported.
 	ClassDroppedOperation
-	// ClassStatusField is a new member only ever returned, which could expose
-	// observed state.
+	// ClassStatusField is a new member only ever returned: observed state.
 	ClassStatusField
 	// ClassLifecycleField is a new member only sent on Update or Delete and never
-	// returned — ec2's QuoteId, AcceptModificationTerms, ApplyCancellationCharges.
-	// It parameterises one call rather than describing the resource, so it needs
-	// a maintainer to decide whether it belongs in the CRD at all.
+	// returned (e.g. ec2's QuoteId). It parameterises one call, so a maintainer
+	// decides whether it belongs in the CRD.
 	ClassLifecycleField
-	// ClassDroppedField is a new member that only appears on a read request —
-	// ec2's IncludeManagedResources on DescribeInstances. It shapes what the
-	// controller reads back, not the resource, and like ClassDroppedOperation it
-	// is listed for transparency only.
+	// ClassDroppedField is a new member only on a read request (e.g. ec2's
+	// IncludeManagedResources). It is listed for transparency only.
 	ClassDroppedField
-	// ClassTransientResource is a resource codegen would add a CRD for, but which
-	// has no Delete operation, so AWS expires or consumes it — ec2's
-	// CapacityReservationCancellationQuote. It needs a maintainer to decide.
+	// ClassTransientResource is a resource codegen would add a CRD for but which
+	// has no Delete operation, so AWS expires or consumes it.
 	ClassTransientResource
 )
 
@@ -433,19 +361,14 @@ func (c FindingClass) isDropped() bool {
 }
 
 // isOperation reports whether a class is an operation finding. Operations are
-// supporting evidence for a notification about resources and fields, never a
-// reason for one on their own: see actionable.
+// supporting evidence, never a reason to notify on their own: see actionable.
 func (c FindingClass) isOperation() bool {
 	return c == ClassNewOperation || c == ClassUnknownOperation
 }
 
-// reportable returns the findings that drive the notification: new since the
-// controller's SDK release, and not dropped. The others are shown in the issue for
-// transparency and nothing else, so everything that decides what to do — whether
-// there is anything to report, how many findings there are, the fingerprint — goes
-// through here. A dropped operation counting as a finding would file an issue for a
-// service whose only change is a new StartFlowCapture; a pre-existing gap counting
-// would file one for a controller no SDK release has touched.
+// reportable returns the findings new since the controller's SDK release and not
+// dropped. The rest are shown in the issue for transparency only, so counts and
+// rendering of findings go through here.
 func reportable(findings []Finding) []Finding {
 	out := make([]Finding, 0, len(findings))
 	for _, f := range findings {
@@ -456,19 +379,10 @@ func reportable(findings []Finding) []Finding {
 	return out
 }
 
-// actionable returns the reportable findings that are about a resource or a field,
-// which is what the notification is for. Operations are left out: they are listed
-// in the issue as supporting evidence, but an SDK release that only adds an
-// operation — a new List* or Start* the controller does not call — is not one a
-// maintainer needs an issue for, and filing one would spend an open-issue slot on it.
-//
-// So this, not reportable, decides eligibility: no actionable finding means no
-// issue is filed, and an open issue whose findings have shrunk to operations is
-// treated like one whose findings have gone (issueStaleOpenIssue), not refreshed.
-// It is also what the fingerprint hashes, which keeps the two coherent: an
-// operation appearing or disappearing alongside an unchanged resource and field set
-// neither notifies subscribers nor re-files an issue a maintainer closed — it only
-// rewords the open issue's body, silently, through the same-fingerprint path.
+// actionable returns the reportable findings about a resource or field. It, not
+// reportable, decides whether an issue is filed, and it is what the fingerprint
+// hashes, so a change in operations alone never notifies anyone or re-files a
+// closed issue; it only silently rewords an open one.
 func actionable(findings []Finding) []Finding {
 	out := make([]Finding, 0, len(findings))
 	for _, f := range reportable(findings) {
@@ -480,14 +394,12 @@ func actionable(findings []Finding) []Finding {
 }
 
 // markPreexisting clears NewSincePin on every finding the release model already
-// has. release is the model at the service module version the controller's go.mod
-// requires; nil leaves findings as the producers set them.
+// has. release is the model at the service module version in the controller's
+// go.mod; nil leaves findings unchanged.
 //
-// The producers compare against the model the controller was generated from, which
-// is right for "is this a gap": codegen saw that model and nothing newer. It is
-// wrong for "is this new": ec2-controller was generated from core v1.41.1 but
-// builds against service/ec2 v1.290.1, and SecondaryNetwork, already in v1.290.1,
-// was reported as an SDK addition.
+// Producers diff against the generation model, which answers "is this a gap" but
+// not "is this new": a controller can build against a much newer service module
+// than it was generated from.
 func markPreexisting(findings []Finding, release *SmithyModel, in *ControllerInputs) []Finding {
 	if release == nil {
 		return findings
@@ -504,8 +416,8 @@ func markPreexisting(findings []Finding, release *SmithyModel, in *ControllerInp
 		case ClassNewResource, ClassTransientResource:
 			old = releaseResources[f.Subject]
 		case ClassPossibleResource:
-			// Only its own operations decide: the generic read Evidence also names,
-			// DescribeTransitGatewayAttachments, is far older than the attachment.
+			// Only its own operations decide; a generic read in Evidence can be
+			// far older than the resource.
 			old = slices.ContainsFunc(f.evidenceOps(), func(opID string) bool {
 				return strings.Contains(opID, f.Subject) && inRelease(opID)
 			})
@@ -524,8 +436,7 @@ func markPreexisting(findings []Finding, release *SmithyModel, in *ControllerInp
 }
 
 // fieldInModel reports whether an operation's request or response carries a member
-// path, spelled as findAddedFields keys it: relative to the request or response
-// wrapper when codegen unwraps one.
+// path, spelled as findAddedFields keys it (relative to any unwrapped wrapper).
 func fieldInModel(m *SmithyModel, in *ControllerInputs, opID, path string) bool {
 	op, ok := m.Operation(opID)
 	if !ok {
@@ -555,10 +466,8 @@ func fieldInModel(m *SmithyModel, in *ControllerInputs, opID, path string) bool 
 	return false
 }
 
-// String returns the stable name of a finding class. This name is hashed into
-// the issue fingerprint, so these strings are a wire format — renaming one
-// invalidates every fingerprint in every open issue. Adding a class is safe;
-// renaming or reusing a name is not.
+// String returns the stable name of a finding class. Names are hashed into issue
+// fingerprints, so renaming or reusing one invalidates every open issue's marker.
 func (c FindingClass) String() string {
 	switch c {
 	case ClassNewResource:
@@ -587,38 +496,26 @@ func (c FindingClass) String() string {
 
 // Finding is one detected change.
 type Finding struct {
-	// Kind is the resource kind the finding belongs to, or "" when it is not
-	// attributable to one resource.
-	Kind string
-	// Class categorises the finding.
+	// Kind is the resource kind, or "" when not attributable to one resource.
+	Kind  string
 	Class FindingClass
-	// Subject is the operation name, resource name, or member path the finding
-	// is about.
+	// Subject is the operation name, resource name, or member path.
 	Subject string
 	// Detail is human-readable supporting text, or "" when the section heading
-	// already says everything a detail would. Each bullet used to repeat its
-	// heading — "not present in the CRD" under "Added fields" — which read as
-	// noise across a body of dozens of fields.
+	// says enough.
 	Detail string
 	// NewSincePin records whether the subject is new since the SDK release the
-	// controller builds against, as opposed to something already in that release
-	// that the controller has never covered. Only new findings drive the
-	// notification; the rest are listed in a collapsed section. See
+	// controller builds against. Only new findings drive the notification. See
 	// markPreexisting.
 	NewSincePin bool
-	// Evidence is the sorted, comma-separated operations that support the
-	// finding: where a field appeared, or which operations manage a new
-	// resource. Unlike Detail it is hashed into the fingerprint, so an issue
-	// refreshes when, say, AWS adds a Delete operation to a resource it lists.
-	// A string rather than a slice so that Finding stays comparable.
+	// Evidence is the sorted, comma-separated operations supporting the finding.
+	// Unlike Detail it is hashed into the fingerprint. A string so that Finding
+	// stays comparable.
 	Evidence string
-	// SetBy, ReadBy and ReturnedBy say what each operation does with a field:
-	// sends it, returns it from a read (durable read-back), or returns it from any
-	// other call's response. Listing CreateTable, DeleteTable, DescribeTable and
-	// UpdateTable together read as though every one of them sets the field. Each
-	// is in Evidence's form; a ReadBy or ReturnedBy entry is `Op=Path` when the
-	// operation returns the field somewhere other than its own path. They cover
-	// the controller's own operations too, so are not hashed. See annotateFields.
+	// SetBy, ReadBy and ReturnedBy split operations by what they do with a field:
+	// send it, return it from a read, or return it from another response. Same
+	// form as Evidence; a ReadBy or ReturnedBy entry is `Op=Path` when returned at
+	// a different path. Not hashed. See annotateFields.
 	SetBy      string
 	ReadBy     string
 	ReturnedBy string
@@ -661,30 +558,14 @@ func isDenylistedOp(opID string) bool {
 	return false
 }
 
-// namesIgnoredResource reports whether an operation name mentions a resource the
-// controller explicitly declines to generate.
+// namesIgnoredResource reports whether an operation name mentions a resource in
+// ignore.resource_names (e.g. s3's AbortMultipartUpload and MultipartUpload).
 //
-// Without this, producer 2 reports permanent noise. Measured against the real s3
-// controller on a zero-change diff: 16 operations land in the unclassified
-// bucket, and almost all of them — AbortMultipartUpload, CopyObject,
-// PutObjectAcl, RestoreObject, SelectObjectContent, WriteGetObjectResponse — are
-// operations on `Object` and `MultipartUpload`, both of which s3's
-// generator.yaml lists under ignore.resource_names. They would reappear in the
-// issue on every run forever, which defeats the point of a bucket meant for
-// operations that actually need human judgement.
-//
-// A substring match is the right test here rather than the classified resource
-// name, because these operations classify to OpTypeUnknown precisely because
-// their verb is unrecognised — so the classifier hands back the whole operation
-// ID, not a resource. `AbortMultipartUpload` has no usable resource name, but it
-// plainly concerns MultipartUpload.
-//
-// Except where the operation names a longer resource the report knows about.
-// ec2 ignores the broad `Ipam`, and the same report lists the new
-// IpamInternetRegistryAssociation; the bare substring test then hid
-// EnableIpamInternetRegistryAssociation, which is that new resource's own
-// operation. known holds the lowercased names of every CRD kind and reported
-// resource; nil means none.
+// It is a substring test because unclassified operations carry no resource
+// name. A match does not count when the operation also names a longer known
+// resource containing the ignored one (ec2 ignores `Ipam` but reports
+// IpamInternetRegistryAssociation). known holds the lowercased names of every
+// CRD kind and reported resource; nil means none.
 func namesIgnoredResource(opID string, ignoredResourceNames []string, known map[string]string) bool {
 	return ignoredNameIn(opID, ignoredResourceNames, known) != ""
 }
@@ -715,24 +596,15 @@ func ignoredNameIn(opID string, ignoredResourceNames []string, known map[string]
 	return ""
 }
 
-// findNewResources reports resources that codegen would generate a CRD for
-// today but which the controller does not have. Because the inference mirrors
-// codegen's own rule, this is not a guess: it is exactly the set of CRDs a
-// regeneration would add.
+// findNewResources reports resources codegen would generate a CRD for today but
+// the controller does not have. It mirrors codegen's rule, so this is the set of
+// CRDs a regeneration would add.
 func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Finding {
 	declared := in.Config.ResourceNames()
 	ignored := in.Config.Ignore.ResourceNames
 
-	// Resource names the baseline model already implied a CRD for. NewSincePin
-	// must be a fact about the resource, not about whichever operation happened
-	// to sort first.
-	//
-	// A resource can be implied by more than one Create operation — a
-	// generator.yaml `operations:` override can bind an oddly-named operation to
-	// a resource with operation_type: [Create], alongside a conventional
-	// Create<X>. Deriving the flag from the first operation encountered would
-	// then report "new" or "not new" depending on alphabetical order, which can
-	// flip as AWS adds operations.
+	// NewSincePin is decided per resource, not per operation: an `operations:`
+	// override can imply one resource through several Create operations.
 	baselineResources := createResourceNames(baseline, in, declared)
 	opsByResource := operationsByResource(latest, in)
 
@@ -741,13 +613,9 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 	for _, opID := range latest.OperationNames() {
 		opTypes, resName := in.ClassifyOpWithOverrides(opID, declared)
 
-		// OpTypeCreate exactly, not a "create family". code-generator emits a
-		// CRD only for resources carrying an OpTypeCreate operation
-		// (pkg/model/model.go:128 builds crdNameKeys from opMap[OpTypeCreate]
-		// alone). OpTypeCreateBatch — which is where a plural Create<X>s and
-		// every BatchCreate<X> land — and OpTypeReplace produce no CRD, so
-		// counting them here would report resources codegen would never
-		// generate, on every run, forever.
+		// OpTypeCreate only: code-generator builds CRDs from opMap[OpTypeCreate]
+		// alone (pkg/model/model.go), so OpTypeCreateBatch and OpTypeReplace
+		// produce no CRD.
 		if !opTypes.Has(OpTypeCreate) {
 			continue
 		}
@@ -765,10 +633,8 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 			NewSincePin: !baselineResources[resName],
 			Evidence:    newEvidence(ops),
 		}
-		// A resource nothing can delete is one AWS expires or consumes: ec2's
-		// CapacityReservationCancellationQuote lives 24 hours and is spent by
-		// CancelCapacityReservation. Codegen would still generate a CRD for it, but
-		// a CRD whose object cannot be deleted is rarely what anyone wants.
+		// A resource nothing can delete is one AWS expires or consumes; a CRD for
+		// it is rarely wanted.
 		if !slices.ContainsFunc(ops, func(op string) bool {
 			opTypes, _ := in.ClassifyOpWithOverrides(op, declared)
 			return opTypes.Has(OpTypeDelete)
@@ -782,10 +648,7 @@ func findNewResources(latest, baseline *SmithyModel, in *ControllerInputs) []Fin
 }
 
 // operationsByResource maps each lowercased resource name to the operations that
-// classify onto it — the implementation context a maintainer needs for a resource
-// the report lists as new: `CreateSecondaryNetwork`, `DeleteSecondaryNetwork`,
-// `DescribeSecondaryNetworks`. Tag operations and ignore.operations are left out,
-// as everywhere else.
+// classify onto it, excluding Tag operations and ignore.operations.
 func operationsByResource(m *SmithyModel, in *ControllerInputs) map[string][]string {
 	declared := in.Config.ResourceNames()
 	out := map[string][]string{}
@@ -801,10 +664,8 @@ func operationsByResource(m *SmithyModel, in *ControllerInputs) map[string][]str
 	return out
 }
 
-// foldOperationsIntoResources moves operations placed on a resource the report
-// lists as new, or as possibly new, into that resource's Evidence. They are how
-// the resource would be implemented, not a separate gap: AcceptDelegationRequest
-// belongs beside the new DelegationRequest, not in a list of its own.
+// foldOperationsIntoResources moves operations on a new or possibly new resource
+// into that resource's Evidence: they implement it rather than being a separate gap.
 func foldOperationsIntoResources(findings []Finding) []Finding {
 	resources := map[string]int{}
 	for i, f := range findings {
@@ -848,22 +709,17 @@ func createResourceNames(
 	return out
 }
 
-// findNewOperations reports operations the controller does not call. Ones that
-// classify onto an existing CRD are ClassNewOperation. Operations that imply a
-// resource with no CRD are skipped, because findNewResources already reports that
-// resource and reporting both would double-count the same gap.
-//
-// Operations whose verb does not classify go through placeUnknownOp: onto a
-// resource as ClassNewOperation, existing or new; as a ClassPossibleResource for a
-// resource with no Create verb; dropped; or, failing every rule, reported as
-// ClassUnknownOperation.
+// findNewOperations reports operations the controller does not call. Ones on an
+// existing CRD are ClassNewOperation; Create operations for a resource with no
+// CRD are left to findNewResources. Unclassified operations go through
+// placeUnknownOp, which places them on a resource, as a possible resource,
+// drops them, or leaves them as ClassUnknownOperation.
 func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Finding {
 	declared := in.Config.ResourceNames()
 	used := allUsedOps(in.UsedOps)
 
-	// Every resource the report knows about, for placeUnknownOp: CRD kinds, and the
-	// resources findNewResources reports, so that AcceptDelegationRequest lands
-	// beside the new DelegationRequest rather than in a separate list.
+	// Every resource the report knows about, for placeUnknownOp: CRD kinds and
+	// the resources findNewResources reports.
 	resources := map[string]string{}
 	existing := map[string]bool{}
 	for low, kind := range in.kindsByLower {
@@ -890,33 +746,17 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 		_, knownResource := resources[strings.ToLower(resName)]
 
 		switch {
-		// A classified operation is placed like an unknown one when the name it
-		// classifies to is no resource the report knows. Skipping those, as this
-		// once did, silently lost every operation on a sub-object:
-		// ModifyVpcEndpointPayerResponsibility classifies to a
-		// VpcEndpointPayerResponsibility that does not exist, but configures
-		// VPCEndpoint; DescribeApplicationStatus reads instances. Create operations
-		// stay with findNewResources, and an operation on a known resource is
-		// either the hasCRD arm's or already in that resource's Evidence.
+		// A classified operation whose resource name is unknown is placed like an
+		// unclassified one: it is usually on a sub-object, e.g.
+		// ModifyVpcEndpointPayerResponsibility configures VPCEndpoint.
 		case opTypes.Has(OpTypeUnknown) || (!opTypes.Has(OpTypeCreate) && !knownResource):
-			// The ignored-resource filter belongs here, inside the Unknown arm,
-			// and must NOT be hoisted above the classification call.
-			//
-			// It is a substring test, which is only safe for operations that
-			// carry no usable resource name — exactly the Unknown case, where
-			// the classifier hands back the whole operation ID. Applied before
-			// classification it silently deletes real findings whenever an
-			// ignored name is a substring of a managed one. Two present-day
-			// collisions: ec2 ignores the bare name `Route` while managing a
-			// `RouteTable` CRD, so every RouteTable operation would vanish; and
-			// organizations ignores `Organization` while managing
-			// `OrganizationalUnit`. The hasCRD arm below has an exact resource
-			// name from the classifier and needs no substring guessing.
+			// The ignored-resource substring test must stay inside this arm. Run
+			// before classification it would hide real findings whenever an
+			// ignored name is a substring of a managed one (ec2 ignores `Route`
+			// but manages `RouteTable`).
 			if ignored := ignoredNameIn(opID, in.Config.Ignore.ResourceNames, resources); ignored != "" {
-				// Listed, not silently skipped, when new: ec2's new
-				// DescribeAccountVpcEncryptionControl vanished from the report
-				// without a word, and a reader cannot tell a deliberate ignore from
-				// a miss.
+				// Listed when new, so a deliberate ignore is distinguishable
+				// from a miss.
 				if !inBaseline {
 					findings = append(findings, Finding{
 						Class:       ClassDroppedOperation,
@@ -928,24 +768,13 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 				continue
 			}
 
-			// Temporal, not structural — unlike every other producer. An
-			// operation whose verb we cannot classify and which has been in the
-			// model since before the controller's pin is not news: ACK has
-			// already implicitly declined to model it, and regeneration would do
-			// nothing with it either way. Only a newly appeared unclassifiable
-			// operation warrants a human look.
-			//
-			// This matters at scale. Measured on a zero-change diff: reporting
-			// every unclassifiable operation structurally yields 108 entries for
-			// ec2 and 3 for s3, all permanent. ec2 has hundreds of operations
-			// against 20 modelled resources, so the bucket meant for human
-			// judgement would be almost entirely noise, on every run, forever.
+			// Only operations new since the baseline are reported: an old
+			// unclassifiable operation has already been declined, and reporting
+			// them all would be permanent noise (over 100 for ec2).
 			if inBaseline {
-				// An old status read the controller does not call can still return
-				// new state: DescribeInstanceStatus now carries ApplicationStatus for
-				// each instance. Only a read of the resource's status counts — other
-				// old reads placed on a resource are about something else
-				// (cloudwatchlogs' DescribeQueries reads queries, not log groups).
+				// An old status read can still return new state (e.g.
+				// DescribeInstanceStatus gained ApplicationStatus). Only reads of
+				// the resource's own status count.
 				if isReadOp(opTypes, opID) {
 					if placement, name := placeUnknownOp(opID, latest, resources, existing); placement == placeOnResource &&
 						existing[name] && isStatusRead(opID, name) {
@@ -980,13 +809,8 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 				})
 			}
 		case hasCRD:
-			// Temporal, for the same reason as the Unknown arm above. An
-			// operation that was already in the model at the controller's pin
-			// and still is not called has been declined, not missed: on the live
-			// sns run every finding here was a years-old List* operation
-			// (ListTopics, ListSubscriptions, ListPlatformApplications), which
-			// ACK controllers do not call by design. Reporting those files an
-			// issue that no regeneration can ever resolve.
+			// As above: an old operation still not called was declined, not
+			// missed (typically List*, which ACK does not call by design).
 			if inBaseline {
 				continue
 			}
@@ -999,16 +823,11 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 		}
 	}
 
-	// One finding per possible resource, naming every operation that manages it —
-	// RegisterCapability and DeregisterCapability are one Capability. Operations
-	// that do classify count too: TransitGatewayClientVpnAttachment is placed by
-	// Accept and Reject, but DeleteTransitGatewayClientVpnAttachment is how it
-	// would be deleted.
+	// One finding per possible resource, naming every operation that manages it,
+	// including ones that classify (e.g. its Delete).
 	opsByResource := operationsByResource(latest, in)
 	for name, opIDs := range possible {
-		// Only reads is no resource a controller could manage: networkfirewall's
-		// DescribeFlowOperation and ListFlowOperations report on flow captures that
-		// StartFlowCapture runs.
+		// A resource with only reads is not one a controller could manage.
 		allOps := append(slices.Clone(opIDs), opsByResource[strings.ToLower(name)]...)
 		if !slices.ContainsFunc(allOps, func(opID string) bool {
 			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
@@ -1021,9 +840,8 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 			}
 			continue
 		}
-		// Nor is one nothing can read, here or through a broader resource: after a
-		// restart a controller could not recover its state. networkfirewall's
-		// NetworkFirewallTransitGatewayAttachment has only Accept, Reject and Delete.
+		// Nor is one nothing can read, directly or through a broader resource: a
+		// controller could not recover its state after a restart.
 		reads := genericReads(latest, name, opIDs)
 		if !slices.ContainsFunc(append(slices.Clone(allOps), reads...), func(opID string) bool {
 			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
@@ -1051,11 +869,9 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 	return findings
 }
 
-// genericReads returns the read operations of the broader resource a possible
-// resource's operations address it as. ec2's AcceptTransitGatewayClientVpnAttachment
-// takes a TransitGatewayAttachmentId, and there is no
-// DescribeTransitGatewayClientVpnAttachments: the attachment is read through
-// DescribeTransitGatewayAttachments, with the other attachment types.
+// genericReads returns the reads of the broader resource a possible resource's
+// operations identify it by: AcceptTransitGatewayClientVpnAttachment takes a
+// TransitGatewayAttachmentId, read via DescribeTransitGatewayAttachments.
 func genericReads(m *SmithyModel, name string, opIDs []string) []string {
 	var out []string
 	for _, opID := range opIDs {
@@ -1074,11 +890,9 @@ func genericReads(m *SmithyModel, name string, opIDs []string) []string {
 	return out
 }
 
-// readStatusCandidates returns the members a read operation's response gained
-// since the generation model, as Status candidates for the resource the read is
-// placed on. The controller does not call the read, so findAddedFields never sees
-// it: ec2's Instance gains application health only through DescribeInstanceStatus
-// (`InstanceStatuses.ApplicationStatus`) and the new DescribeApplicationStatus.
+// readStatusCandidates returns the members an uncalled read's response gained
+// since the generation model, as Status candidates for the resource it is placed
+// on. findAddedFields only sees operations the controller calls.
 func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, kind, opID string) []Finding {
 	op, ok := latest.Operation(opID)
 	if !ok || op.Output == nil {
@@ -1090,11 +904,8 @@ func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, k
 	if old, ok := baseline.Operation(opID); ok && old.Output != nil {
 		baselineMembers = baseline.WalkMembers(old.Output.Target, maxWalkDepth)
 	} else if !ok {
-		// A new read is a candidate only when its response is one thing —
-		// DescribeApplicationStatus returns ApplicationStatuses. A response of
-		// many scalars, like networkfirewall's GetAnalysisReportResults, describes
-		// a report, not the resource, and listing each member was noise; the read
-		// itself is still listed as a related operation.
+		// A new read counts only when its response has one top-level member; a
+		// response of many scalars describes something other than the resource.
 		top := 0
 		for name := range latest.Shapes[op.Output.Target].Members {
 			if !strings.EqualFold(name, "NextToken") {
@@ -1136,11 +947,9 @@ func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, k
 const dropGeneratedHistory = "paginated history of items the service generates, not resource state: " +
 	"in Status it grows without bound and churns reconciliation; expose at most a bounded latest summary"
 
-// isGeneratedHistory reports whether a new read pages through items nothing sets.
-// networkfirewall's ListAnalysisReports pages through the reports StartAnalysisReport
-// produces, which are a history, not Firewall state. cloudwatchlogs'
-// ListSyslogConfigurations pages too, but PutSyslogConfiguration sets what it
-// lists, so those are desired state.
+// isGeneratedHistory reports whether a read pages through items no Put, Create,
+// Update, Set or Modify operation sets, such as reports a Start* operation
+// produces.
 func isGeneratedHistory(m *SmithyModel, op SmithyShape) bool {
 	members := m.Shapes[op.Output.Target].Members
 	if _, paged := members["NextToken"]; !paged {
@@ -1165,10 +974,8 @@ func isGeneratedHistory(m *SmithyModel, op SmithyShape) bool {
 	return true
 }
 
-// secondaryReadDetail marks a Status candidate only a read the controller does
-// not call returns. Such a read usually answers for many resources at once —
-// DescribeInstanceStatus lists instances — so the field needs a custom read hook
-// that calls it and picks out this resource, not only regeneration.
+// secondaryReadDetail marks a Status candidate returned only by an uncalled read,
+// which usually answers for many resources at once.
 const secondaryReadDetail = "from a read the controller does not call: needs a custom read hook " +
 	"that filters the response to this resource, not only regeneration"
 
@@ -1183,9 +990,8 @@ func isStatusRead(opID, kind string) bool {
 	return ok && slices.Contains([]string{"status", "statuses", "health"}, rest)
 }
 
-// newOperationFinding is a new operation on a resource. A read says so, because
-// for an existing CRD its response is where Status fields would come from:
-// DescribeApplicationStatus on Instance.
+// newOperationFinding is a new operation on a resource. A read is flagged as
+// such, since its response could back Status fields.
 func newOperationFinding(m *SmithyModel, kind, opID string, opTypes OpTypes) Finding {
 	f := Finding{Kind: kind, Class: ClassNewOperation, Subject: opID, NewSincePin: true}
 	if isReadOp(opTypes, opID) {
@@ -1198,8 +1004,7 @@ func newOperationFinding(m *SmithyModel, kind, opID string, opTypes OpTypes) Fin
 	return f
 }
 
-// isReadOp reports whether an operation reads, by its classification or, for one
-// that does not classify, its verb.
+// isReadOp reports whether an operation reads, by classification or else verb.
 func isReadOp(opTypes OpTypes, opID string) bool {
 	if opTypes.Has(OpTypeGet, OpTypeList, OpTypeGetAttributes) {
 		return true
@@ -1207,24 +1012,16 @@ func isReadOp(opTypes OpTypes, opID string) bool {
 	return slices.ContainsFunc(readVerbs, func(v string) bool { return strings.HasPrefix(opID, v) })
 }
 
-// requestPlumbingMembers are request members that qualify how a call is made, not
-// what it sets: every s3 Put/Update carries the first three.
+// requestPlumbingMembers qualify how a call is made, not what it sets.
 var requestPlumbingMembers = []string{
 	"ChecksumAlgorithm", "ContentMD5", "ExpectedBucketOwner", "RequestPayer",
 }
 
 // setterFieldCandidates returns the request members of a new operation that sets
-// part of an existing resource.
-//
-// A dedicated setter exists to configure exactly what its request carries, so its
-// members are desired state even though they are never sent to the resource's own
-// Create or Update. They are Spec candidates when a read returns them under the
-// same name, which is what plain field reconciliation needs. Otherwise they are
-// manual review: ModifyVpcEndpointPayerResponsibility sets one Scope and
-// PayerResponsibility at a time, while reads return a PayerResponsibilities
-// collection, so reconciling it takes custom code. The resource's own identifier
-// and members that never carry state are left out, as is anything the CRD already
-// exposes.
+// part of an existing resource. They are Spec candidates when a read returns them
+// at the same top-level name, which plain reconciliation needs; otherwise they
+// are lifecycle fields needing custom code. The resource's identifier, plumbing
+// members and anything the CRD exposes are skipped.
 func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID string, opTypes OpTypes) []Finding {
 	setter := opTypes.Has(OpTypeUpdate, OpTypeSetAttributes) ||
 		strings.HasPrefix(opID, "Put") || strings.HasPrefix(opID, "Set")
@@ -1257,9 +1054,7 @@ func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID stri
 
 // returnedNames returns the lowercased top-level members of the responses of a
 // resource's operations and of opID itself, looking through a response wrapper.
-// Top level only: VPCEndpoint's reads do return a Scope, but inside each entry of
-// PayerResponsibilities, and a field set on its own and read back from a list
-// still needs custom reconciliation.
+// Top level only: a field read back from inside a list needs custom reconciliation.
 func returnedNames(m *SmithyModel, in *ControllerInputs, kind, opID string) map[string]bool {
 	names := map[string]bool{}
 	ops := []string{opID}
@@ -1282,17 +1077,13 @@ func returnedNames(m *SmithyModel, in *ControllerInputs, kind, opID string) map[
 }
 
 // kindToResourceDir maps a resource kind onto the key scanUsedOps stores its
-// operations under. Both sides go through normalizeResourceKey, because ACK's
-// package directories are snake_case while kinds are PascalCase with uppercased
-// acronyms — see that function's comment for why lowercasing alone is wrong.
+// operations under. See normalizeResourceKey.
 func kindToResourceDir(kind string) string {
 	return normalizeResourceKey(kind)
 }
 
-// exposedInCRD reports whether an AWS member path is already surfaced by a
-// resource's CRD. The AWS path is resolved through the resource's generator.yaml
-// renames, top-level and dotted, then every segment is lowercased, because CRD
-// properties are lowerCamelCase while AWS members are UpperCamel.
+// exposedInCRD reports whether an AWS member path is surfaced by a resource's CRD,
+// after applying generator.yaml renames and lowercasing each segment.
 func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
 	fields, ok := in.CRDFields[kind]
 	if !ok {
@@ -1306,28 +1097,13 @@ func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
 	return fields[strings.Join(segments, ".")]
 }
 
-// declinedFieldPath reports whether a member path is one the controller's
-// generator.yaml tells codegen to skip, or a descendant of one.
+// declinedFieldPath reports whether a member path, or an ancestor of it, is in
+// ignore.field_paths.
 //
-// These paths are absent from the CRD *because ACK excluded them*, which is the
-// opposite of a gap — reporting them says "you are missing this" about a
-// deliberate decision. s3 declines four, and the omission was not theoretical:
-// `CreateBucketConfiguration.Tags` plus its two children accounted for three of
-// producer 3's findings on the real s3 delta, and each survived hand-verification
-// because the check asked "is it in the CRD?" rather than "was it declined?".
-//
-// Descendants must go too. Declining `CreateBucketConfiguration.Tags` implicitly
-// declines `...Tags.Key` and `...Tags.Value`, which codegen never emits either.
-//
-// An entry is shape-qualified, as codegen reads it: the first segment names a
-// shape and the rest is a member path inside that shape — ec2's
-// `CreateCapacityReservationInput.DryRun`, `CapacityReservation.CapacityBlockId`.
-// So it is matched against the shape that contains each segment of awsPath, not
-// against awsPath itself, which is relative to the operation's request or response
-// and never carries the root shape's name. That s3's entries matched the relative
-// path was a coincidence of its members being named after their shapes. The root
-// shape answers to its codegen name, `<Operation>Input` or `<Operation>Output`, as
-// well as its Smithy one, `<Operation>Request`.
+// Entries are shape-qualified as codegen reads them: a shape name, then a member
+// path inside it (`CreateCapacityReservationInput.DryRun`). So each segment of
+// awsPath is matched against its containing shape. The root answers to
+// `<Operation>Input`/`<Operation>Output` as well as its Smithy shape name.
 func declinedFieldPath(
 	m *SmithyModel,
 	rootNames []string,
@@ -1375,8 +1151,7 @@ func fieldRootNames(opName string, ref *SmithyMemberRef, isOutput bool) []string
 	return names
 }
 
-// elementShape resolves a list, however deeply nested, to the shape of its
-// elements: the shape whose members a path segment under it names.
+// elementShape resolves a list, however deeply nested, to its element shape.
 func elementShape(m *SmithyModel, shapeID string) string {
 	for range maxWalkDepth {
 		shape, ok := m.Shapes[shapeID]
@@ -1388,16 +1163,9 @@ func elementShape(m *SmithyModel, shapeID string) string {
 	return shapeID
 }
 
-// declinedShapeName reports whether a member's target shape is one the
-// controller tells codegen to skip by name.
-//
-// This is a fourth suppression mechanism, distinct from ignore.field_paths: it
-// keys on the *target shape's* name rather than the path, so it applies wherever
-// that shape is referenced. s3 declares `BlockedEncryptionTypes`, which reaches
-// producer 3 via two operations and accounted for four findings.
-//
-// targetShapeID is the absolute Smithy ID recorded on MemberInfo, so compare
-// only its short name.
+// declinedShapeName reports whether a member's target shape is in
+// ignore.shape_names, which applies wherever the shape is referenced.
+// targetShapeID is an absolute Smithy ID; only its short name is compared.
 func declinedShapeName(targetShapeID string, declined []string) bool {
 	if targetShapeID == "" {
 		return false
@@ -1412,21 +1180,9 @@ func declinedShapeName(targetShapeID string, declined []string) bool {
 }
 
 // declinedShapeAncestor reports whether a member path, or any of the paths it
-// hangs from, targets a declined shape.
-//
-// Checking only the member's own target is not enough. Declining
-// `BlockedEncryptionTypes` removes that member, and codegen therefore emits
-// nothing beneath it either — but the child `...BlockedEncryptionTypes.
-// EncryptionType` has its own target (`EncryptionTypeList`), which is not itself
-// declined, so a self-only check lets the child through. That happened on the
-// real s3 delta: three of the four BlockedEncryptionTypes findings vanished and
-// the one child survived.
-//
-// This needs no ancestor bookkeeping in the walk, because WalkMembers records
-// every intermediate path — so each prefix can be looked up and its own target
-// tested directly. Doing it here rather than by tracking declined prefixes
-// during iteration also means it holds when the parent is not itself a candidate
-// (already present in the baseline) while the child is new.
+// hangs from, targets a declined shape. Codegen emits nothing beneath a declined
+// member, but its children have their own, undeclined targets. WalkMembers
+// records every intermediate path, so each prefix is looked up directly.
 func declinedShapeAncestor(
 	path string,
 	members map[string]MemberInfo,
@@ -1445,16 +1201,9 @@ func declinedShapeAncestor(
 	return false
 }
 
-// sourcedAsCRDField reports whether a member is already exposed by the CRD under
-// a different name, because generator.yaml sources a field from it.
-//
-// A fifth mechanism, and the subtlest: `resources.<Kind>.fields.<Name>.from`
-// pulls a field out of another operation's shape entirely. s3's Bucket sources
-// `abac` from PutBucketAbac's `AbacStatus`, so both PutBucketAbac and
-// GetBucketAbac report AbacStatus as absent unless this is consulted.
-//
-// The declared path is matched exactly and as a prefix, since sourcing
-// `AbacStatus` also brings its children.
+// sourcedAsCRDField reports whether a member is exposed under another name because
+// generator.yaml's `resources.<Kind>.fields.<Name>.from` sources a field from it.
+// The declared path matches exactly or as a prefix, covering its children.
 func sourcedAsCRDField(in *ControllerInputs, kind, opName, path string) bool {
 	res, ok := in.Config.resource(kind)
 	if !ok {
@@ -1478,37 +1227,19 @@ func sourcedAsCRDField(in *ControllerInputs, kind, opName, path string) bool {
 }
 
 // isACKManagedARN reports whether a member is the resource ARN that ack-generate
-// wires onto the common ACK status field.
-//
-// Unlike the other suppressions this one is not declared anywhere in
-// generator.yaml — it is a codegen convention. A Create or List response member
-// named `Arn` or `<Kind>Arn` is assigned to
-// `Status.ACKResourceMetadata.ARN`, which every ACK CRD exposes. The generated
-// s3 code does exactly that with `resp.BucketArn`. So the member *is* surfaced,
-// just not under a field of its own name, and no config we read says so.
-//
-// Being a heuristic rather than a declaration, keep it narrow: match only the
-// final path segment, and only the two spellings codegen actually recognises.
+// wires onto Status.ACKResourceMetadata.ARN. This is a codegen convention, not
+// configuration, for response members named `Arn` or `<Kind>Arn`; only the last
+// path segment is matched.
 func isACKManagedARN(kind, path string) bool {
 	segments := strings.Split(path, ".")
 	last := strings.ToLower(segments[len(segments)-1])
 	return last == "arn" || last == strings.ToLower(kind)+"arn"
 }
 
-// findAddedFields reports members added to operations the controller calls
-// that the resource's CRD does not expose. Members the CRD already exposes are
-// suppressed: codegen picked those up, so there is nothing to notify.
-//
-// One finding per new field per resource, not per (operation, path). A new field
-// normally appears in every operation that returns the resource, and a new
-// structure brings all of its children with it, so the per-path listing repeated
-// itself: iam's one new SourceRoleTemplate was 12 bullets on Role alone, and
-// dynamodb's 137 findings were 19 fields. The Subject is the member path, and the
-// Evidence names the operations it appeared in.
-//
-// Each field is classed by how those operations use it — see fieldRoles.class —
-// because a field a maintainer would add to Spec, one for Status, and a request
-// option of a single call are different pieces of work, and some are no work.
+// findAddedFields reports members added to operations the controller calls that
+// the resource's CRD does not expose: one finding per new field per resource,
+// not per operation, with Evidence naming the operations it appeared in. Each is
+// classed by how those operations use it (fieldRoles.class).
 func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Finding {
 	var findings []Finding
 	declared := in.Config.ResourceNames()
@@ -1538,9 +1269,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 			for _, side := range []struct {
 				latestRef   *SmithyMemberRef
 				baselineRef *SmithyMemberRef
-				// isOutput gates the ARN suppression, which only describes what
-				// codegen does with a *response* member.
-				isOutput bool
+				isOutput    bool
 			}{
 				{latestOp.Input, refOrNil(hadBaseline, baselineOp.Input), false},
 				{latestOp.Output, refOrNil(hadBaseline, baselineOp.Output), true},
@@ -1561,8 +1290,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 				}
 				sort.Strings(paths)
 
-				// The input wrapper is codegen's input_wrapper_field_path, which,
-				// unlike the output one, is never inferred.
+				// Codegen never infers an input wrapper, only an output one.
 				wrapper := in.Config.inputWrapper(opName)
 				if side.isOutput {
 					wrapper = outputWrapper(latest, in, opName, side.latestRef)
@@ -1573,12 +1301,9 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					if _, existed := baselineMembers[path]; existed {
 						continue
 					}
-					// With an input wrapper, codegen flattens the wrapper's
-					// members into Spec and sends nothing else from it, so a
-					// member outside the wrapper is not a field the CRD could
-					// carry, and one inside is spelled without the wrapper.
-					// backup's Rules arrives as `BackupPlan.Rules` on
-					// CreateBackupPlan and is the CRD's top-level `rules`.
+					// Codegen flattens an input wrapper's members into Spec and
+					// sends nothing outside it, so outside members are skipped
+					// and inside ones lose the wrapper prefix.
 					crdPath := path
 					if !side.isOutput && wrapper != "" {
 						rest, under := strings.CutPrefix(path, wrapper+".")
@@ -1587,10 +1312,8 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 						}
 						crdPath = rest
 					}
-					// A child of a field that is itself new is part of that
-					// field's finding, whether it is reported or suppressed:
-					// every suppression below that applies to the parent applies
-					// to its descendants too.
+					// A child of a new field belongs to that field's finding,
+					// and shares its suppressions.
 					if hasNewAncestor(path, latestMembers, baselineMembers) {
 						continue
 					}
@@ -1600,11 +1323,8 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					if underDeclinedParent(in, kind, opName, path, wrapper, baselineMembers) {
 						continue
 					}
-					// Absent from the CRD is not the same as missing. ACK has
-					// five separate ways of surfacing or declining a member, and
-					// a finding is only real if none of them applies — see each
-					// predicate's own comment for the mechanism it encodes and
-					// the evidence behind it.
+					// Absent from the CRD is not missing if generator.yaml or a
+					// codegen convention surfaces or declines the member.
 					if declinedFieldPath(latest, rootNames, path, latestMembers, in.Config.Ignore.FieldPaths) {
 						continue
 					}
@@ -1614,28 +1334,19 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					if sourcedAsCRDField(in, kind, opName, path) {
 						continue
 					}
-					// Output side only. The convention this encodes is that
-					// codegen assigns a *response* ARN onto the shared status
-					// field; it says nothing about request members. An input
-					// member literally named `Arn` or `<Kind>Arn` is a real
-					// unmodelled field and must still be reported.
+					// Output only: codegen maps a response ARN to status, but a
+					// request member named `Arn` is a real field.
 					if side.isOutput && isACKManagedARN(kind, path) {
 						continue
 					}
-					// Keyed by the path as the CRD would see it, so one field
-					// reached through different wrappers is one finding: dynamodb's
-					// VectorIndexes arrives as `Table.VectorIndexes` from
-					// DescribeTable, `TableDescription.VectorIndexes` from
-					// Create/Update/DeleteTable, and bare `VectorIndexes` on the
-					// CreateTable request. A wrapper the CRD itself models, as s3's
-					// Bucket does objectLockConfiguration, stays in the path. An
-					// input wrapper never does: codegen always flattens it.
+					// Keyed by the path as the CRD sees it, so one field reached
+					// through different wrappers (`Table.X`, `TableDescription.X`)
+					// is one finding. An output wrapper the CRD itself models
+					// stays in the path.
 					key := crdPath
 					if side.isOutput && wrapper != "" && !exposedInCRD(in, kind, wrapper) {
 						key = unwrapped(path, wrapper)
 					}
-					// Input and Output of one operation can both carry the path;
-					// name the operation once.
 					if !slices.Contains(opsByPath[key], opName) {
 						opsByPath[key] = append(opsByPath[key], opName)
 					}
@@ -1683,14 +1394,13 @@ type fieldRoles struct {
 	deleteInput bool
 	readInput   bool
 	output      bool
-	// readOutput is output from a read: what the controller observes again on
-	// the next reconciliation. A Create's or Update's response is seen once.
+	// readOutput is output from a read, which the controller observes on every
+	// reconciliation.
 	readOutput bool
 }
 
-// add records one side of one operation. An operation registered under several
-// types — generator.yaml's operation_type: [Create, Update] — sends the field in
-// each of those roles.
+// add records one side of one operation. An operation with several types
+// (operation_type: [Create, Update]) sends the field in each role.
 func (r *fieldRoles) add(opTypes OpTypes, opID string, isOutput bool) {
 	if isOutput {
 		r.output = true
@@ -1706,25 +1416,17 @@ func (r *fieldRoles) add(opTypes OpTypes, opID string, isOutput bool) {
 		case OpTypeDelete:
 			r.deleteInput = true
 		default:
-			// Update, Replace, SetAttributes, and the custom operations hooks call —
-			// s3's PutBucketVersioning is how Bucket's versioning is set.
+			// Update, Replace, SetAttributes, and custom operations hooks call.
 			r.updateInput = true
 		}
 	}
 }
 
-// class says what kind of candidate the field is.
-//
-// Spec is what can be set and stays set: sent at Create, or sent at Update and
-// returned again by a read. Only a read counts: an Update can echo a value no Get
-// or List returns, and the controller cannot reconcile what it never observes on
-// the next pass, so such a field is a parameter of that call. Status is what is
-// only ever returned. A field sent only on an Update or Delete, and never read
-// back, is a parameter of that one call — ec2's CapacityReservation QuoteId,
-// AcceptModificationTerms and ApplyCancellationCharges — and needs a maintainer to
-// say whether it belongs in the CRD. One that appears only on a read request —
-// ec2's IncludeManagedResources on DescribeInstances — is a filter on what the
-// controller reads, and is dropped.
+// class says what kind of candidate the field is: Spec if sent at Create, or sent
+// at Update and returned by a read (an Update's own response does not count, as
+// the controller cannot reconcile what it never reads back); Status if only
+// returned; Lifecycle if only sent on Update or Delete; dropped if only on a read
+// request.
 func (r *fieldRoles) class() FindingClass {
 	switch {
 	case r.createInput || (r.updateInput && r.readOutput):
@@ -1754,16 +1456,9 @@ func hasNewAncestor(path string, latestMembers, baselineMembers map[string]Membe
 }
 
 // outputWrapper returns the response member codegen unwraps before mapping a
-// response onto a resource, or "" when it reads the response as-is. This mirrors
-// code-generator's SetResource: the operation's configured
-// output_wrapper_field_path wins; otherwise a response whose only member is a
-// structure is unwrapped.
-//
-// Without this, every member of a wrapped response carries the wrapper as its
-// leading segment — `Role.Arn` from CreateRole — while the CRD field codegen
-// generates for it is `arn`, so no pre-existing parent inside a wrapped response
-// could be recognised as exposed. underDeclinedParent is the only consumer: a
-// member new since the pin cannot already be in a CRD generated at the pin.
+// response onto a resource, or "" when it reads the response as-is. Mirrors
+// code-generator's SetResource: a configured output_wrapper_field_path wins;
+// otherwise a response whose only member is a structure is unwrapped.
 func outputWrapper(m *SmithyModel, in *ControllerInputs, opName string, output *SmithyMemberRef) string {
 	if in.Config != nil {
 		if override, ok := in.Config.Operations[opName]; ok && override.OutputWrapperFieldPath != "" {
@@ -1785,9 +1480,7 @@ func outputWrapper(m *SmithyModel, in *ControllerInputs, opName string, output *
 	return ""
 }
 
-// unwrapped strips wrapper from the front of an output member path, returning
-// the path as codegen sees it. A path that is not under wrapper is returned
-// unchanged.
+// unwrapped strips wrapper from the front of an output member path, if present.
 func unwrapped(path, wrapper string) string {
 	if wrapper == "" {
 		return path
@@ -1800,18 +1493,8 @@ func unwrapped(path, wrapper string) string {
 
 // underDeclinedParent reports whether a new member sits beneath a member that
 // already existed at the pin and is not in the CRD. Codegen generates a nested
-// field only as part of its parent's type, so when the parent was left out — by
-// a deliberate decline, or because it was never modelled — the new child cannot
-// appear either, and reporting it is a finding no regeneration can resolve.
-//
-// Observed live on iam: InstanceProfile's responses carry `Roles`, the list of
-// roles attached to the profile, which the InstanceProfile CRD does not model.
-// The new `Role.SourceRoleTemplate` therefore surfaced as three InstanceProfile
-// findings as well as the legitimate Role ones.
-//
-// Only the nearest ancestor that existed at the pin decides. An ancestor that is
-// itself new is part of the same finding set; the wrapper is not a CRD field and
-// never decides.
+// field only as part of its parent's type, so regeneration cannot add it. Only
+// the nearest pre-existing ancestor decides; the wrapper never does.
 func underDeclinedParent(
 	in *ControllerInputs,
 	kind, opName, path, wrapper string,
@@ -1825,13 +1508,8 @@ func underDeclinedParent(
 		if ancestor == wrapper {
 			return false
 		}
-		// Both spellings, as for the member itself. A single-member response is
-		// not always unwrapped in practice: s3's Bucket models the whole
-		// GetObjectLockConfiguration response as its own `objectLockConfiguration`
-		// field, so the parent of the new DefaultEventHold is exposed as
-		// `objectLockConfiguration.rule.defaultRetention`, not as the unwrapped
-		// `rule.defaultRetention`. Checking only the unwrapped path dropped that
-		// real finding.
+		// Check both spellings: a CRD can model the wrapper itself (s3's
+		// `objectLockConfiguration`).
 		return !exposedInCRD(in, kind, ancestor) &&
 			!exposedInCRD(in, kind, unwrapped(ancestor, wrapper)) &&
 			!sourcedAsCRDField(in, kind, opName, ancestor)
@@ -1840,7 +1518,7 @@ func underDeclinedParent(
 }
 
 // refOrNil returns ref only when present is true, so a missing baseline
-// operation is treated as having no members rather than panicking.
+// operation has no members.
 func refOrNil(present bool, ref *SmithyMemberRef) *SmithyMemberRef {
 	if !present {
 		return nil
@@ -1850,51 +1528,24 @@ func refOrNil(present bool, ref *SmithyMemberRef) *SmithyMemberRef {
 
 const fingerprintPrefix = "<!-- ack-api-change-fingerprint: "
 
-// The generated region is everything renderIssueBody wrote, bounded so that a
-// maintainer's additions to the same body survive a refresh and so that the
-// fingerprint marker has somewhere definite to live.
-//
-// Before this, updateGithubIssueBody replaced the whole body: a maintainer who
-// appended "CreateBucketMetadataTableConfiguration is intentionally unsupported"
-// lost it on the next run, and the accompanying comment notified every subscriber
-// of the loss. Bounding the region also stops a marker pasted into prose from being
-// read as the live one, which used to leave a permanently unmatchable fingerprint
-// and an edit-and-comment on that issue every single day.
+// The generated region bounds what renderIssueBody writes, so a maintainer's
+// additions to the body survive a refresh and only the marker inside it counts.
 const (
 	generatedRegionBegin = "<!-- ack-api-change-begin -->"
 	generatedRegionEnd   = "<!-- ack-api-change-end -->"
 )
 
-// fingerprintRE matches the marker on a line of its own, anchored with (?m).
-// parseFingerprint applies it to the generated region rather than to the whole
-// body, so an identical marker in prose or in a pasted fragment outside the
-// region cannot be mistaken for the live one.
-//
-// The trailing [ \t\r]* is load-bearing rather than defensive. Go's (?m)$ matches
-// only directly before \n, and HTML form submission normalises textarea content
-// to CRLF, so any issue body a maintainer has edited in the GitHub web UI comes
-// back \r\n-terminated. Without this the marker stops matching the moment a human
-// touches the issue, and Task 14 files a duplicate on every subsequent run.
+// fingerprintRE matches the marker on a line of its own. The trailing [ \t\r]* is
+// required: Go's (?m)$ matches only before \n, and a body edited in the GitHub web
+// UI comes back CRLF-terminated.
 var fingerprintRE = regexp.MustCompile(
 	`(?m)^` + regexp.QuoteMeta(fingerprintPrefix) + `([0-9a-f]{64}) -->[ \t\r]*$`,
 )
 
-// dedupeFindings drops exact duplicates, preserving input order.
-//
-// Producers 3 and 4 walk an operation's Input and Output shapes independently,
-// and WalkMembers paths are relative to each root with no `input.`/`output.`
-// prefix, so a member present at the same path on both sides yields two
-// identical findings. This is real: on the s3-series v1.32.6 -> v1.41.5 delta,
-// lambda emits 16 such pairs from findAddedFields (CapacityProviderConfig and
-// its children on CreateFunction/UpdateFunctionConfiguration, LoggingConfig on
-// Create/UpdateEventSourceMapping); iam emits one
-// (CreateOpenIDConnectProvider -> Tags.Value). s3 and ec2 emit none, which is
-// why validating on those two alone did not surface it.
-//
-// Deduping on the whole struct rather than on (Kind, Class, Subject) keeps this
-// lossless: were the two sides' details ever to differ, both findings survive
-// and the reader sees two details for one subject, which is honest. Every
-// duplicate observed so far carries an identical Detail.
+// dedupeFindings drops exact duplicates, preserving input order. Producers walk
+// Input and Output independently with root-relative paths, so a member on both
+// sides can yield two identical findings. The whole struct is compared, so
+// findings that differ only in Detail both survive.
 func dedupeFindings(findings []Finding) []Finding {
 	seen := make(map[Finding]bool, len(findings))
 	out := make([]Finding, 0, len(findings))
@@ -1909,31 +1560,13 @@ func dedupeFindings(findings []Finding) []Finding {
 }
 
 // fingerprintFindings hashes the identity of a finding set so a later run can
-// recognise the same set in an already-open issue.
+// recognise it in an existing issue. It covers the service (all controllers file
+// into one repo) and each finding's Class name, Kind, Subject and Evidence, but
+// not Detail, so prose and version changes do not churn issues. Callers pass only
+// actionable findings.
 //
-// Hashed: the service, and each finding's Class (by name), Kind, Subject and
-// Evidence. Evidence is the operations behind a finding, so a resource gaining its
-// Delete operation, or a field turning up in one more operation, refreshes the
-// issue. The
-// service is part of the digest because every controller files into the single
-// aws-controllers-k8s/community repo, so the fingerprint is the lookup key
-// across ~50 services — without it an empty finding set hashes to the same
-// marker for all of them at once.
-//
-// Deliberately excluded:
-//
-//   - Detail, which carries version strings and prose. An SDK pin bump that
-//     yields the same gaps must not churn the issue.
-//   - NewSincePin, which is true of every finding hashed: the caller passes only
-//     actionable findings, so pre-existing gaps are not hashed at all and a change
-//     among them does not refresh the issue. Nor are operations, which the issue
-//     lists only as supporting evidence: see actionable.
-//
-// The exact bytes fed to sha256 are a wire format: fingerprints live in GitHub
-// issue bodies indefinitely, so any change to the layout below makes every open
-// issue's marker un-matchable and the next run recreates all of them.
-// TestFingerprintFormatLock pins it with a hardcoded digest. Change it only
-// deliberately.
+// The hashed bytes are a wire format stored in open issues; changing them
+// re-files every issue. TestFingerprintFormatLock pins it.
 func fingerprintFindings(service string, findings []Finding) string {
 	lines := make([]string, 0, len(findings))
 	for _, f := range findings {
@@ -1949,22 +1582,13 @@ func fingerprintFindings(service string, findings []Finding) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// parseFingerprint returns the fingerprint embedded in an issue body, or "" when
-// the body carries none.
+// parseFingerprint returns the fingerprint embedded in an issue body, or "".
 //
-// When the body has exactly one well-formed generated region (see generatedRegion),
-// the marker is read from inside it and not from the body at large. Scanning the
-// whole body and taking the last match meant that a maintainer who pasted another
-// service's report into this one — marker included — made the pasted fingerprint the
-// answer for ever, so the content comparison never matched again and the job edited
-// and commented on that issue daily.
-//
-// Any other body is scanned whole and the first marker wins, because
-// renderIssueBody's region starts at byte 0 and so the topmost marker is the bot's
-// own. That keeps a body whose markers a maintainer has damaged or duplicated
-// attributed to its service — disowning it would file a duplicate — while
-// replaceGeneratedRegion separately refuses to write into it. Attribution can afford
-// to be lenient; rewriting cannot.
+// With exactly one well-formed generated region the marker is read from inside it,
+// so a pasted marker elsewhere cannot win. Otherwise the first marker in the body
+// wins, since the bot's region starts at byte 0. This keeps a damaged body
+// attributed to its service (avoiding a duplicate) even though
+// replaceGeneratedRegion refuses to rewrite it.
 func parseFingerprint(body string) string {
 	if start, end, shape := generatedRegion(body); shape == regionUnique {
 		body = body[start:end]
@@ -1980,35 +1604,20 @@ func parseFingerprint(body string) string {
 type regionShape int
 
 const (
-	// regionAbsent: neither marker appears anywhere in the body.
+	// regionAbsent: neither marker appears in the body.
 	regionAbsent regionShape = iota
-	// regionUnique: exactly one begin and one end marker, each on a line of its
-	// own, begin first.
+	// regionUnique: exactly one begin and one end marker, each on its own line,
+	// begin first.
 	regionUnique
-	// regionMalformed: any other arrangement — a lone marker, a duplicated one, one
-	// embedded in prose, or the pair reversed.
+	// regionMalformed: any other arrangement.
 	regionMalformed
 )
 
-// generatedRegion locates the generated region: the half-open byte range from the
-// begin marker through the end marker.
-//
-// It accepts exactly one shape — one begin marker and one end marker, each a complete
-// line, begin before end — and reports every other body that mentions either marker
-// as regionMalformed rather than guessing. The previous rule took the first begin and
-// the first end after it, which picked *a* region out of almost anything: a partial
-// pair fell through to whole-body replacement, a quoted pair below the live one or a
-// pair spliced inside it was silently accepted, and a marker mentioned inline in prose
-// was treated as a boundary. Each of those rewrote text outside the bot's report or
-// deleted it outright, and both are worse than declining to refresh: a refused refresh
-// fails the run loudly, and a human can repair the markers in seconds.
-//
-// Raw occurrences are counted, not only complete lines, on purpose: a marker in prose
-// or a code span is exactly the accidentally edited region that must not be
-// reinterpreted, so it makes the body ambiguous rather than being skipped over.
-//
-// A complete line tolerates trailing spaces, tabs and \r, for the reason fingerprintRE
-// does: a body edited in the web UI comes back CRLF-terminated.
+// generatedRegion returns the half-open byte range from the begin marker through
+// the end marker. Anything but regionUnique is reported rather than guessed at:
+// refusing to refresh is safer than rewriting a maintainer's text. Raw marker
+// occurrences are counted, so a marker in prose also makes the body malformed.
+// Marker lines may have trailing whitespace or \r, as for fingerprintRE.
 func generatedRegion(body string) (start, end int, shape regionShape) {
 	begins := strings.Count(body, generatedRegionBegin)
 	ends := strings.Count(body, generatedRegionEnd)
@@ -2046,18 +1655,9 @@ func isCompleteLine(body string, at, n int) bool {
 var errUnmanageableRegion = errors.New("issue body has no single well-formed generated region")
 
 // replaceGeneratedRegion substitutes newRegion for the generated region of an
-// existing body, preserving every byte outside it.
-//
-// This is what keeps a maintainer's own text on the issue: the ownership checks in
-// github.go establish that the detector filed the issue, not that nobody has edited
-// it since, so a whole-body PATCH silently deleted whatever was added.
-//
-// There is no whole-body fallback. It used to apply to any body generatedRegion did
-// not recognise, on the theory that such a body predated the markers; but every issue
-// this job has filed carries them, so the bodies that actually reached the fallback
-// were ones whose markers had been edited — and replacing those deleted the very human
-// text this function exists to keep. A body without exactly one well-formed pair is
-// refused with errUnmanageableRegion and left for a human.
+// existing body, preserving every byte outside it so a maintainer's text survives.
+// There is deliberately no whole-body fallback: a body without exactly one
+// well-formed region is refused with errUnmanageableRegion and left for a human.
 func replaceGeneratedRegion(existingBody, newRegion string) (string, error) {
 	start, end, shape := generatedRegion(existingBody)
 	switch shape {
@@ -2067,22 +1667,14 @@ func replaceGeneratedRegion(existingBody, newRegion string) (string, error) {
 		return "", fmt.Errorf("%w: expected exactly one %s line followed by exactly one %s line",
 			errUnmanageableRegion, generatedRegionBegin, generatedRegionEnd)
 	}
-	// newRegion is a rendered body, so it ends in the newline after its end
-	// marker; the existing body's suffix already carries that separator. Trimming
-	// it makes replacing a body with an identical region a no-op rather than
-	// something that grows a blank line per run.
+	// The existing suffix already has the newline after the end marker; trimming
+	// newRegion's keeps an identical replacement a no-op.
 	return existingBody[:start] + strings.TrimSuffix(newRegion, "\n") + existingBody[end:], nil
 }
 
-// githubMaxIssueBody is GitHub's hard limit on an issue body. Exceeding it fails
-// the create with a 422.
+// githubMaxIssueBody is GitHub's limit on an issue body; exceeding it is a 422.
 const githubMaxIssueBody = 65536
 
-// issueFooter is how every generated region ends: the comparison line, then the
-// fingerprint marker on a line of its own, with only the region's end marker after
-// it. It is one function rather than two inline Fprintf calls so that
-// issueBodyBudget can reserve exactly its length — the marker is how Task 14 finds
-// this issue again, so it is the one part of the body truncation must never reach.
 // comparedVersionsRE reads back the versions issueFooter wrote.
 var comparedVersionsRE = regexp.MustCompile(`\nCompared aws-sdk-go-v2 (\S+) -> (\S+)\n`)
 
@@ -2095,49 +1687,21 @@ func parseComparedVersions(body string) (baseline, latest string, ok bool) {
 	return m[1], m[2], true
 }
 
+// issueFooter ends every generated region: the comparison line, then the
+// fingerprint marker. It is a function so issueBodyBudget can reserve exactly its
+// length; truncation must never reach the marker.
 func issueFooter(baselineVersion, latestVersion, fingerprint string) string {
 	return fmt.Sprintf("---\nCompared aws-sdk-go-v2 %s -> %s\n%s%s -->\n",
 		baselineVersion, latestVersion, fingerprintPrefix, fingerprint)
 }
 
-// issueBodyBudget is how many bytes the resource blocks may spend: the GitHub
-// limit, less everything renderIssueBody appends after them, less one byte so the
-// finished body lands strictly under the limit rather than exactly on it.
+// issueBodyBudget is how many bytes the blocks may spend: the GitHub limit, less
+// one byte, the footer (measured, since version strings are unbounded), the end
+// marker, and the overflow summary at its largest possible counts. The begin
+// marker and intro are written first, so b.Len() already charges them.
 //
-// Derived rather than a flat reserve, because the footer embeds two
-// caller-supplied version strings with no length bound — the earlier flat 2,048
-// bytes was really an assumption about how long those strings are. With
-// ~1,000-byte versions and 20,000 findings the body reached 65,623 bytes, over the
-// limit. Real pins are `v1.41.5`-shaped, so that was theoretical, but measuring
-// the footer costs nothing and removes the magic number along with the whole class
-// of failure.
-//
-// resourceBlocks and findingCount are the largest values the overflow summary can
-// print, and %d of a smaller non-negative number is never longer, so reserving the
-// summary at those counts bounds it whatever gets omitted.
-//
-// The region's end marker is reserved here too, but its begin marker is not: the
-// begin marker is written into the builder before the block loop, so it is already
-// charged against the budget through b.Len(), whereas the end marker is appended
-// after the loop has stopped looking.
-//
-// What this cannot save is an input where the parts renderIssueBody always writes
-// — the two region markers, the intro line, the summary and the footer — do not
-// themselves fit. The budget bounds only what the *blocks* may spend, and the
-// begin marker and intro are written unconditionally before the block loop, so
-// once the budget falls below their combined length the finished body is those
-// plus summary, footer and end marker, and exceeds the limit by exactly
-// len(begin marker + intro) - budget. That starts while the budget is still
-// positive: measured with equal-length version strings and no findings, at 32,634
-// bytes each the footer alone is 65,402 and the budget is +105, yet the body is
-// 65,537. With one finding the window opens at 32,583.
-//
-// No arithmetic here closes it — if the fixed parts do not fit, nothing can be
-// rendered that does. Only truncating the caller's version strings would, and a
-// mangled comparison line is worse than the 422 it avoids. Real pins are
-// `v1.41.5`-shaped and come from SDK git tags, so a ~32KB version is not a thing
-// this job can encounter; the point of recording the boundary is that it is the
-// fixed parts, not the footer alone, that set it.
+// If the fixed parts alone exceed the limit nothing fits; that needs ~32KB
+// version strings, which SDK tags never are.
 func issueBodyBudget(
 	baselineVersion, latestVersion, fingerprint string,
 	resourceBlocks, findingCount int,
@@ -2148,16 +1712,8 @@ func issueBodyBudget(
 		len(generatedRegionEnd) - len("\n")
 }
 
-// overflowSummary states what the cap cost the body as a whole, or "" when it cost
-// nothing. It totals everything dropped, including entries dropped from inside a
-// heading that did render and carries its own note, so the full magnitude appears
-// in one place — enough for a reader to decide whether to go and read the model
-// instead of the issue.
-//
-// The resource count is named only when there is one. Truncating inside a heading
-// that did render drops findings without dropping any resource, and "0 further
-// resource(s) and 19198 finding(s) omitted" invites the reader to wonder what the
-// zero is for.
+// overflowSummary states the total truncation cost across the body, or "" when
+// nothing was dropped. The resource count is named only when non-zero.
 func overflowSummary(omittedResources, omittedFindings int) string {
 	switch {
 	case omittedResources > 0:
@@ -2170,9 +1726,8 @@ func overflowSummary(omittedResources, omittedFindings int) string {
 	return ""
 }
 
-// resourceSection pairs a finding class with the heading it renders under inside
-// a resource's block. The order of resourceSections is the order of the headings
-// in the rendered body.
+// resourceSection pairs a finding class with its heading in a resource's block.
+// resourceSections is in rendering order.
 type resourceSection struct {
 	class  FindingClass
 	header string
@@ -2188,45 +1743,25 @@ var resourceSections = []resourceSection{
 	{ClassNewOperation, "Related new operations"},
 }
 
-// renderIssueBody renders the issue body and returns it along with the
-// fingerprint embedded in it. Findings are grouped by resource, with any finding
-// the per-resource sections cannot place under a trailing catch-all heading, and
-// a footer carrying the compared versions and the fingerprint.
+// renderIssueBody renders the issue body, wrapped in the generated-region markers,
+// and returns it with its fingerprint. Findings are grouped by resource, with a
+// catch-all block for the rest; the body is capped at githubMaxIssueBody.
 //
-// The whole thing is wrapped in the generated-region markers, so the result is both
-// a complete body for a new issue and the replacement region for an existing one —
-// see replaceGeneratedRegion, which is how a refresh keeps a maintainer's own text.
-//
-// The fingerprint is returned rather than left for the caller to recompute
-// because this function dedupes first: fingerprintFindings(service, findings) on
-// the caller's raw slice disagrees with the marker in the returned body whenever
-// a producer emitted a duplicate, which is most services. Task 14 compares this
-// value against parseFingerprint of an existing issue's body.
-//
-// The body is capped at githubMaxIssueBody. Measured on the v1.32.6 -> v1.41.5
-// delta, s3 renders 3,374 bytes and lambda 16,790, but ec2's 423 findings render
-// 48,251 — 74% of the cap on a nine-version delta — so a controller left stale
-// for longer will overflow and GitHub will answer 422.
+// The fingerprint is returned because findings are deduped first, so hashing the
+// caller's raw slice would not match the embedded marker.
 func renderIssueBody(
 	service, baselineVersion, latestVersion string,
 	findings []Finding,
 ) (string, string) {
 	findings = dedupeFindings(findings)
-	// Dropped operations are listed, then set aside before anything is counted or
-	// hashed: a change to what is dropped is not one anyone needs notifying of, and
-	// fingerprinting them would refresh every issue whenever AWS adds a Start*
-	// operation. The appendix is rendered for real after the findings, against
-	// whatever budget they leave; here it is only measured, to size its reserve.
+	// The appendix (pre-existing and dropped findings) is measured here to size
+	// its reserve, then rendered after the findings.
 	all := findings
 	appendixReserve := min(maxAppendixReserve,
 		len(preexistingBlock(all, baselineVersion, math.MaxInt))+len(droppedBlock(all, math.MaxInt)))
 	findings = reportable(findings)
 
-	// Computed over the whole deduped set, not over whatever survives the cap
-	// below: a body that overflows must keep the identity of the findings it was
-	// derived from, or an overflowing service would churn its own issue on every
-	// run. Over the actionable ones only, though: operations are rendered as
-	// supporting evidence but are not part of what the issue is about.
+	// Hashed before truncation, so an overflowing body keeps a stable identity.
 	fingerprint := fingerprintFindings(service, actionable(findings))
 
 	byKind := map[string][]Finding{}
@@ -2242,10 +1777,8 @@ func renderIssueBody(
 	}
 	sort.Strings(kinds)
 
-	// One block per resource, in heading order, then the catch-all. The count of
-	// resource blocks is remembered because the catch-all is not a resource: the
-	// overflow summary would otherwise report "1 further resource(s)" for
-	// "## Unattributed".
+	// One block per resource, then the catch-all, which is not counted as a
+	// resource in the overflow summary.
 	resourceBlocks := len(kinds)
 	blocks := make([]issueBlock, 0, resourceBlocks+1)
 	for _, kind := range kinds {
@@ -2253,40 +1786,23 @@ func renderIssueBody(
 	}
 	blocks = append(blocks, buildCatchAllBlock(findings))
 
-	// The appendix — pre-existing gaps and dropped changes — is written after the
-	// findings and is itself truncated to fit, so it is not reserved in full: an
-	// unbounded appendix reserved whole used to drive the findings' budget negative,
-	// render none of them, and still push the body past GitHub's limit. The findings
-	// hold back at most maxAppendixReserve for it, and it gets whatever they leave.
+	// The findings hold back at most maxAppendixReserve for the appendix, which
+	// gets whatever they leave and truncates itself to fit.
 	budget := issueBodyBudget(baselineVersion, latestVersion, fingerprint,
 		resourceBlocks, len(findings))
 	findingsBudget := budget - appendixReserve
 
 	var b strings.Builder
-	// Everything this function writes sits between the region markers, the
-	// fingerprint marker included, so that a refresh can rewrite exactly this much
-	// of an issue body and leave a maintainer's own additions alone.
 	b.WriteString(generatedRegionBegin + "\n")
 	fmt.Fprintf(&b, "AWS SDK releases since %s, the version the `%s` controller builds against, add "+
 		"resources and fields the controller does not represent. These are candidate additions for "+
 		"maintainer review; not every item is necessarily appropriate for the CRD API.\n\n",
 		baselineVersion, service)
 
-	// Each block in turn is offered whatever budget is left and takes what it
-	// can. Two properties matter here, and each was got wrong once:
-	//
-	//   - A block too large for the remaining budget renders partially — its
-	//     headings and as many entries as fit — rather than being dropped whole.
-	//     A service whose findings all sit under one Kind is a single block, and
-	//     dropping it produced a 298-byte issue with nothing actionable in it;
-	//     worse, the fingerprint covers the full finding set either way, so
-	//     Task 14 reported issueUnchanged and that empty issue was never
-	//     refreshed.
-	//   - A block that does not fit must not stop the ones behind it. One
-	//     oversized block used to starve every smaller block after it, leaving
-	//     ~63KB of budget unspent. Partial rendering alone does not fix that:
-	//     a greedy block would eat the whole budget, so reserves[i] holds back
-	//     what the blocks behind block i need to say anything at all.
+	// Each block takes what it can of the remaining budget. A block too large
+	// renders partially rather than being dropped, and reserves[i] holds back
+	// what the blocks after it need to render something, so one oversized block
+	// cannot starve the rest.
 	reserves := blockReserves(blocks)
 
 	omittedResources, omittedFindings := 0, 0
@@ -2294,22 +1810,17 @@ func renderIssueBody(
 		remaining := findingsBudget - b.Len()
 		text, omitted := blk.render(remaining, min(reserves[i], remaining/2))
 		if text == "" && omitted > 0 && i < resourceBlocks {
-			// Nothing of this block fit, not even a heading and one entry. An
-			// empty block — no section could place its findings — renders as ""
-			// with nothing omitted and is not counted. Nor is the catch-all, which
-			// is not a resource; its findings are still charged below.
+			// Nothing of this resource block fit. An empty block omits nothing
+			// and is not counted.
 			omittedResources++
 		}
 		b.WriteString(text)
 		omittedFindings += omitted
 	}
-	// The overflow summary is reserved inside budget already, so what the appendix
-	// may spend is measured before the summary is written.
+	// budget already reserves the overflow summary.
 	room := budget - b.Len()
 	preexisting := preexistingBlock(all, baselineVersion, room)
 	dropped := droppedBlock(all, room-len(preexisting))
-	// Say what the cap cost rather than silently shortening: a reader has no other
-	// way to tell a short list from a truncated one.
 	b.WriteString(overflowSummary(omittedResources, omittedFindings))
 	b.WriteString(preexisting)
 	b.WriteString(dropped)
@@ -2319,17 +1830,13 @@ func renderIssueBody(
 	return b.String(), fingerprint
 }
 
-// droppedBlock renders the dropped operations and fields as a collapsed list with
-// each reason, or "" when there are none. Collapsed because nothing in it needs
-// action; listed at all so that a wrong drop — a verb list entry that does not hold
-// for some service — can be seen and challenged rather than vanishing.
-//
-// The result is at most limit bytes: see collapsedList.
+// droppedBlock renders new dropped operations and fields as a collapsed list with
+// reasons, or "" when there are none, so a wrong drop can be seen and challenged.
+// The result is at most limit bytes.
 func droppedBlock(findings []Finding, limit int) string {
 	var ops, fields []Finding
 	for _, f := range findings {
 		if !f.NewSincePin {
-			// Already in the controller's SDK release: preexistingBlock's, if anyone's.
 			continue
 		}
 		switch f.Class {
@@ -2370,17 +1877,14 @@ func droppedBlock(findings []Finding, limit int) string {
 	return collapsedList(head, entries, len(entries), limit)
 }
 
-// maxAppendixReserve is the most the findings hold back for the collapsed appendix
-// — preexistingBlock and droppedBlock — written after them. The findings are what
-// the issue is for, so they come first; this only stops an overflowing set of them
-// from crowding the appendix out entirely.
+// maxAppendixReserve is the most the findings hold back for the appendix
+// (preexistingBlock and droppedBlock), so overflowing findings cannot crowd it out.
 const maxAppendixReserve = 8 << 10
 
 // collapsedList closes a "<details>" block opened by head, listing as many of
 // entries as fit within limit bytes, and at most maxEntries of them, with a
 // "_and N more_" line for the rest. It returns "" when not even head, that line
-// and the closing tag fit. These blocks are written outside the findings' own
-// truncation, so without a bound one long list pushed the body past GitHub's limit.
+// and the closing tag fit.
 func collapsedList(head string, entries []string, maxEntries, limit int) string {
 	const tail = "\n</details>\n\n"
 	more := func(n int) string { return fmt.Sprintf("- _and %d more_\n", n) }
@@ -2408,8 +1912,6 @@ func collapsedList(head string, entries []string, maxEntries, limit int) string 
 }
 
 // maxPreexistingEntries bounds preexistingBlock by count, on top of its byte limit.
-// A controller far behind its SDK can have hundreds of gaps, and none of them is
-// what the notification is about.
 const maxPreexistingEntries = 50
 
 // preexistingLabels names each class in preexistingBlock's flat list.
@@ -2424,11 +1926,9 @@ var preexistingLabels = map[FindingClass]string{
 	ClassLifecycleField:    "lifecycle field",
 }
 
-// preexistingBlock renders, collapsed, the candidates that were already in the SDK
-// release the controller builds against, or "" when there are none. They are real
-// gaps — regeneration would pick some of them up — but not news, so they are shown
-// without being counted: see reportable. The result is at most limit bytes: see
-// collapsedList.
+// preexistingBlock renders, collapsed, the candidates already in the SDK release
+// the controller builds against, or "" when there are none. They are real gaps but
+// not news, so they do not count (see reportable). At most limit bytes.
 func preexistingBlock(findings []Finding, baselineVersion string, limit int) string {
 	var old []Finding
 	for _, f := range findings {
@@ -2472,9 +1972,8 @@ func plural(n int, singular, pluralForm string) string {
 	return fmt.Sprintf("%d %s", n, pluralForm)
 }
 
-// issueBlock is one "## " heading's worth of the body, held as the pieces
-// truncation can drop independently rather than as one rendered string: whole
-// sections, and single entries within a section.
+// issueBlock is one "## " heading's worth of the body, held as sections and
+// entries so truncation can drop them independently.
 type issueBlock struct {
 	// heading is the "## ..." line without its newline.
 	heading  string
@@ -2488,23 +1987,17 @@ type issueSection struct {
 	entries []issueEntry
 }
 
-// issueEntry is one bullet and anything nested under it, paired with the number
-// of findings it stands for. Every entry the renderer builds today stands for one
-// finding; the count is kept separate so truncation charges what an entry hides
-// rather than assuming it.
+// issueEntry is one bullet and anything nested under it, with the number of
+// findings it stands for, which truncation charges when dropping it.
 type issueEntry struct {
 	// text is newline-terminated and may span several lines.
 	text     string
 	findings int
 }
 
-// blockReserves returns, for each block, the number of bytes the blocks after it
-// need in order to render something. Holding that back is what keeps one
-// oversized block from consuming the whole budget and starving the rest.
-//
-// A caller is expected to clamp these to a fraction of the budget it actually has
-// left: with thousands of blocks the sum far exceeds the cap, and reserving more
-// than is available would leave the body empty.
+// blockReserves returns, for each block, the bytes the blocks after it need to
+// render something. Callers clamp these to a fraction of the remaining budget,
+// since with many blocks the sum exceeds the cap.
 func blockReserves(blocks []issueBlock) []int {
 	reserves := make([]int, len(blocks))
 	behind := 0
@@ -2515,13 +2008,9 @@ func blockReserves(blocks []issueBlock) []int {
 	return reserves
 }
 
-// minRenderSize is the fewest bytes in which the block can still say something:
-// its heading, its first section's heading, the first entry, the blank line that
-// closes the section, and the note admitting the rest was dropped.
-//
-// A block with no entries to render is worth no bytes at all, which is why the
-// search below skips empty sections rather than indexing sections[0] — the
-// builders never produce one, but a hand-assembled block would panic.
+// minRenderSize is the fewest bytes in which the block can say something: its
+// heading, the first non-empty section's heading and first entry, the closing
+// blank line, and the omission note. A block with no entries needs 0.
 func (blk issueBlock) minRenderSize() int {
 	for _, section := range blk.sections {
 		if len(section.entries) == 0 {
@@ -2536,19 +2025,11 @@ func (blk issueBlock) minRenderSize() int {
 	return 0
 }
 
-// render emits the block, or as much of it as fits, returning the markdown and
-// the number of findings left out of it. It may write up to budget bytes when the
-// whole block fits, and up to budget-reserve when it has to truncate, leaving
-// reserve bytes for the blocks that come after.
-//
-// A block is dropped down to "" only when the space cannot hold a heading plus one
-// entry — a heading with nothing under it tells a reader nothing and spends bytes
-// the blocks behind this one can use. That is the same result as an empty block,
-// which also renders "", and the two are told apart by the returned count.
+// render emits as much of the block as fits, returning the markdown and the number
+// of findings omitted. It writes up to budget bytes when the whole block fits,
+// otherwise up to budget-reserve. It returns "" when not even a heading and one
+// entry fit; the omitted count distinguishes that from an empty block.
 func (blk issueBlock) render(budget, reserve int) (string, int) {
-	// entryCount rather than len(sections): a block whose sections are all empty
-	// has nothing to say either, and answering "" here is what keeps the loop below
-	// from having to reason about it.
 	if blk.entryCount() == 0 {
 		return "", 0
 	}
@@ -2556,9 +2037,8 @@ func (blk issueBlock) render(budget, reserve int) (string, int) {
 		return whole, 0
 	}
 
-	// What is left for entries after the caller's reserve and this block's own
-	// note. The note is charged up front, sized as if every entry were dropped, so
-	// appending it at the end can never push the block back over budget.
+	// The omission note is charged up front at its largest, so appending it
+	// cannot push the block over budget.
 	totalEntries := blk.entryCount()
 	avail := budget - reserve - len(blockOmissionNote(totalEntries, totalEntries))
 
@@ -2568,10 +2048,8 @@ func (blk issueBlock) render(budget, reserve int) (string, int) {
 		if len(section.entries) == 0 {
 			continue
 		}
-		// A "### " heading with nothing under it is as useless as a bare "## "
-		// one, so its bytes — and, until something has been written, the block
-		// heading's — are only spent once an entry is known to follow. The +1 is
-		// the blank line that closes the section.
+		// Headings are written only once an entry is known to fit. The +1 is the
+		// blank line that closes the section.
 		prefix := section.heading + "\n"
 		if b.Len() == 0 {
 			prefix = blk.heading + "\n\n" + prefix
@@ -2601,9 +2079,7 @@ func (blk issueBlock) render(budget, reserve int) (string, int) {
 	return b.String(), omittedFindings
 }
 
-// renderWhole renders the block untruncated. A section with no entries is skipped
-// rather than left as a bare "### " heading; render only calls this on a block that
-// has at least one entry somewhere.
+// renderWhole renders the block untruncated, skipping empty sections.
 func (blk issueBlock) renderWhole() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", blk.heading)
@@ -2646,22 +2122,15 @@ func findingCount(entries []issueEntry) int {
 	return n
 }
 
-// blockOmissionNote states what truncation dropped from one block. It counts
-// entries, which is what the reader can see above it; the summary line at the end
-// of the body totals findings across the whole body.
+// blockOmissionNote states how many entries truncation dropped from one block.
 func blockOmissionNote(omitted, total int) string {
 	return fmt.Sprintf("_%d of %d entries under this heading omitted to keep this issue body within GitHub's size limit._\n\n",
 		omitted, total)
 }
 
-// buildResourceBlock decomposes one resource's findings into a block. A section
-// with no items is left out entirely, so a resource whose findings no section can
-// place — a ClassUnknownOperation carrying a non-empty Kind, say — yields a block
-// with no sections, which renders as nothing rather than as a bare
-// "## Resource: X" header. buildCatchAllBlock picks those findings up instead.
-// writeBullet writes a finding's bullet up to, not including, any annotation. A
-// field's operations follow its path on the same line; a resource's go on a nested
-// line after it, see buildResourceBlock.
+// writeBullet writes a finding's bullet line without the trailing newline. A
+// field's operations follow on the same line; a resource's go on a nested line
+// (see buildResourceBlock).
 func writeBullet(text *strings.Builder, f Finding) {
 	fmt.Fprintf(text, "- `%s`", f.Subject)
 	if f.Detail != "" {
@@ -2704,6 +2173,8 @@ func isResourceClass(c FindingClass) bool {
 	return c == ClassNewResource || c == ClassPossibleResource || c == ClassTransientResource
 }
 
+// buildResourceBlock decomposes one resource's findings into a block, leaving out
+// empty sections. Findings no section places are left to buildCatchAllBlock.
 func buildResourceBlock(kind string, findings []Finding) issueBlock {
 	blk := issueBlock{heading: fmt.Sprintf("## Resource: %s", kind)}
 	for _, section := range resourceSections {
@@ -2731,10 +2202,8 @@ func buildResourceBlock(kind string, findings []Finding) issueBlock {
 	return blk
 }
 
-// buildCatchAllBlock collects the findings no resource block accounts for. It is
-// a true catch-all rather than just the unclassified operations: every finding is
-// hashed into the fingerprint, so one that reaches the digest but not the body is
-// a silent disagreement between the two that reads as a rendering bug.
+// buildCatchAllBlock collects every finding no resource block places, so each
+// finding the fingerprint covers also appears in the body.
 func buildCatchAllBlock(findings []Finding) issueBlock {
 	unplaced := make([]Finding, 0, len(findings))
 	for _, f := range findings {
@@ -2753,8 +2222,7 @@ func buildCatchAllBlock(findings []Finding) issueBlock {
 	for _, f := range unplaced {
 		var text strings.Builder
 		writeBullet(&text, f)
-		// A finding only lands here with a Kind when its class has no section;
-		// naming the kind keeps "Unattributed" from being a lie in that case.
+		// A finding with a Kind lands here only when its class has no section.
 		if f.Kind != "" {
 			fmt.Fprintf(&text, " (kind `%s`)", f.Kind)
 		}
@@ -2764,9 +2232,8 @@ func buildCatchAllBlock(findings []Finding) issueBlock {
 	return issueBlock{heading: "## Unattributed", sections: []issueSection{section}}
 }
 
-// filterFindings returns the findings of one class, ordered by lessFinding. The
-// sort is what makes a rendered body reproducible: the producers walk models in
-// map order, so their output order is not stable across runs.
+// filterFindings returns the findings of one class, ordered by lessFinding so the
+// body is reproducible despite producers walking maps.
 func filterFindings(findings []Finding, class FindingClass) []Finding {
 	var out []Finding
 	for _, f := range findings {
@@ -2779,18 +2246,8 @@ func filterFindings(findings []Finding, class FindingClass) []Finding {
 }
 
 // lessFinding orders findings by Subject, then Detail, Class, Kind, Evidence and
-// NewSincePin — every field of a Finding, so the order is total.
-//
-// Anything short of that churns the body. sort.Slice is not stable, so findings
-// that tie swap places between runs, and every field here reaches the rendered
-// text: Detail and Subject directly, NewSincePin as the "(new in vX)" annotation,
-// Kind as the "(kind `W`)" suffix buildCatchAllBlock appends. The body would
-// differ from run to run while the fingerprint — which hashes neither Detail nor
-// NewSincePin — stayed identical, so Task 14 would keep reporting issueUnchanged
-// and never notice. Ties are unreachable from today's producers, but
-// dedupeFindings deliberately preserves the Detail case for when an operation's
-// Input and Output doc traits diverge. Class is compared by ordinal, which is fine
-// for ordering; only the fingerprint needs the stable name.
+// NewSincePin. The order must be total: sort.Slice is unstable, and ties would
+// reorder the body between runs without changing the fingerprint.
 func lessFinding(a, b Finding) bool {
 	if a.Subject != b.Subject {
 		return a.Subject < b.Subject
@@ -2810,30 +2267,14 @@ func lessFinding(a, b Finding) bool {
 	return !a.NewSincePin && b.NewSincePin
 }
 
-// issueOutcome is what a run decided to do about one service's issue.
-// reconcileIssue is the only thing that returns one, so the type and every member
-// live here beside it.
-//
-// They used to be split: the type and issueSuppressedByClosed sat in github.go
-// next to listAPIChangeIssues, and this file continued that block's iota by hand
-// with `iota + 2`. The offset was correct and still wrong to keep — iota restarts
-// at 0 in every const block, so adding one member to the github.go block silently
-// aliased two decisions here, with nothing for the compiler to object to, in the
-// type that gates writes to a public repo. Explicit literal values make a
-// collision visible at the declaration instead of inferrable from an offset two
-// files away.
+// issueOutcome is what reconcileIssue decided to do about one service's issue.
+// Values are explicit literals so a collision is visible at the declaration.
 type issueOutcome int
 
 const (
 	// issueOutcomeNone is the zero value: no decision was reached. Every error
 	// return from reconcileIssue uses it, so a non-zero outcome always means a
-	// decision that completed. Returning a real outcome alongside an error was
-	// actively misleading — a create that filed the issue and then failed its label
-	// check reported issueUnchanged, the opposite of what happened, and a caller
-	// doing bookkeeping off that outcome would have believed nothing was written.
-	//
-	// 0 is deliberately not a decision for the same reason it always was: a
-	// reconcile that returns before deciding must not read as "a human said no".
+	// completed decision.
 	issueOutcomeNone issueOutcome = 0
 	// issueSuppressedByClosed means a maintainer closed an issue carrying this
 	// exact finding set, so it is deliberately not being re-filed.
@@ -2847,19 +2288,14 @@ const (
 	// issueSkippedAtCap means an issue should have been filed but the
 	// open-issue cap was already reached.
 	issueSkippedAtCap issueOutcome = 5
-	// issueStaleOpenIssue means an open issue exists for a service that has no
-	// current findings. Nothing is written, but it is not a quiet no-op either: the
-	// issue asserts changes that no longer exist and holds a cap slot that a service
-	// with real findings could use, so the caller logs it.
+	// issueStaleOpenIssue means an open issue exists for a service with no
+	// current findings. Nothing is written, but the caller logs it because the
+	// issue holds a cap slot.
 	issueStaleOpenIssue issueOutcome = 6
 )
 
-// String names an outcome for the log.
-//
-// This job runs unattended and its only other output is a log somebody may read
-// later, so `outcome=4` is not something a reader can act on. FindingClass.String
-// above sets the convention. Unlike that one these names are not a wire format —
-// no fingerprint hashes them — so they can be reworded freely.
+// String names an outcome for the log. Unlike FindingClass.String, these names
+// are not hashed and can be reworded freely.
 func (o issueOutcome) String() string {
 	switch o {
 	case issueOutcomeNone:
@@ -2883,62 +2319,24 @@ func (o issueOutcome) String() string {
 // reconcileIssue brings the GitHub issue for one service in line with the
 // findings.
 //
-// existing is this service's already-resolved open issue, or nil when the
-// detector has none. The caller gets it from a single listAPIChangeIssues
-// call for the whole run rather than one search per service: search allows 30
-// requests a minute, and a per-service lookup made a run cost 1+N of them, which
-// 403s about a third of the way through a full ~74-service rollout. The listing's
-// copy is minutes old by the time a service has been analysed, so a caller about to
-// refresh must pass refetchManagedIssue's copy instead: every body this function
-// writes is merged from existing's body, and a stale one drops whatever a maintainer
-// added in between.
+// existing is this service's open issue, or nil. Before a refresh the caller must
+// pass a fresh copy (refetchManagedIssue): bodies are merged from existing's, and
+// a stale one drops a maintainer's recent edits.
 //
-// closedFingerprints is the set of fingerprints on *closed* issues for this
-// service. A finding set matching one of them is deliberately not re-filed:
-// closing is the only way a maintainer can say "I have seen this and it needs no
-// issue", and while the search was scoped is:open that said nothing — the next run
-// found nothing open and re-filed the same fingerprint, daily, for ever. Because
-// the fingerprint covers findings only, a genuinely new change produces a new
-// fingerprint and still files, so closing cannot silence future changes.
+// closedFingerprints are the fingerprints of this service's closed issues. A
+// matching finding set is not re-filed: closing is how a maintainer dismisses it.
+// A new change yields a new fingerprint and still files.
 //
-// openCount is the number of open issues this detector already owns; maxOpen
-// is the configured cap, which must be positive. The cap gates creation only:
-// refreshing an existing issue does not increase the count, so a service whose
-// findings changed always gets current information.
+// maxOpen is the cap on open issues, which must be positive, and gates creation
+// only. openCount is owned by the caller, which must increment it on every
+// issueCreated and on errors wrapping errIssueCreateIndeterminate.
 //
-// The caller owns openCount. reconcileIssue never mutates it, so a caller looping
-// over services must increment its own counter on every issueCreated; nothing in
-// here can detect the caller forgetting, and a run where 40 services each need a
-// new issue would otherwise create all 40 under a cap of 10. The same goes for an
-// error wrapping errIssueCreateIndeterminate: the issue may exist, so it must be
-// counted as though it does.
+// Every error return carries issueOutcomeNone. An error wrapping
+// errCannotLabelIssues must abort the whole run.
 //
-// Every error return carries issueOutcomeNone, so an outcome is only ever a
-// decision that completed and a caller can never do bookkeeping off a phantom one.
-// An error wrapping errCannotLabelIssues is a property of the credential rather
-// than of this service and must abort the whole run — see that sentinel.
-//
-// dryRun suppresses exactly three calls — createGithubIssueWithClient,
-// commentOnGithubIssue and updateGithubIssueBody — and nothing else. Every decision
-// above them runs for real, because the point is to preview the decision rather than
-// to simulate one: closed-fingerprint suppression still applies, the cap still binds,
-// the fingerprint comparison still runs, and the oversized-merged-body guard below
-// still fires. That last one is deliberate on both counts — it is a pure computation,
-// so a dry run can reach the same verdict a real run would, and it reports a refresh
-// that genuinely cannot land, which is exactly what a preview is for.
-//
-// Two things a dry run cannot establish, and the caller says so in its output rather
-// than leaving a reader to assume otherwise:
-//
-//   - Whether the token can label issues. errCannotLabelIssues is raised inside
-//     createGithubIssueWithClient *after* the POST, by re-reading the created issue.
-//     Dry-run never posts, so that check cannot run at all and a clean dry run is no
-//     evidence that a real run will produce findable issues.
-//   - Whether any write would succeed — permissions, rate limits, a locked issue.
-//
-// The comment and the PATCH are gated together, not separately. Commenting without
-// patching is a state that tells subscribers a refresh is coming and then never
-// delivers it, which is the one outcome a dry run must never produce.
+// dryRun suppresses only the three GitHub writes; every decision still runs. A dry
+// run cannot show whether the token can label issues or whether writes would
+// succeed.
 func reconcileIssue(
 	ctx context.Context,
 	client *github.Client,
@@ -2951,77 +2349,47 @@ func reconcileIssue(
 	openCount int,
 	dryRun bool,
 ) (issueOutcome, error) {
-	// Rejected rather than read as "no cap". `maxOpen > 0 && openCount >= maxOpen`
-	// made 0 and negatives mean unlimited, so a flag defaulting to 0 or a caller
-	// forgetting to pass one turned the only brake on a public-repo writer into a
-	// no-op across ~74 services — failing open, in the unbounded direction, silently.
-	// Anyone who wants an effectively absent cap sets a large number on purpose.
+	// Rejected rather than read as "no cap", so a missing flag cannot silently
+	// remove the only limit on filing.
 	if maxOpen <= 0 {
 		return issueOutcomeNone, fmt.Errorf(
 			"open-issue cap must be positive, got %d; 0 would mean unlimited filing", maxOpen)
 	}
 
 	if len(actionable(findings)) == 0 {
-		// Nothing detected — or only operations, which are supporting evidence and
-		// never a reason to file or refresh on their own (see actionable) — so
-		// nothing is written — not even to close or annotate an
-		// open issue. That is the one real policy question in this function, so:
-		// an unattended job editing or closing issues off the *absence* of evidence
-		// is the failure mode worth avoiding, since a detector bug, a model fetch
-		// that returned an empty API, or a service whose model moved all produce
-		// zero findings and would then quietly retract a real report. A human
-		// closing the issue is cheap; a wrongly closed one is not noticed.
-		//
-		// The cost is real and is reported rather than hidden: the issue keeps
-		// asserting changes that no longer exist and keeps counting against
-		// openCount, starving creation for services that do have findings. The
-		// caller logs issueStaleOpenIssue so that shows up in the run's output
-		// instead of being indistinguishable from a service with nothing to say.
+		// Nothing actionable, so nothing is written, not even to close an open
+		// issue: zero findings can also come from a detector bug or an empty model
+		// fetch, and a wrongly closed issue goes unnoticed. A stale open issue is
+		// reported instead.
 		if existing != nil {
 			return issueStaleOpenIssue, nil
 		}
 		return issueUnchanged, nil
 	}
 
-	// Take the fingerprint renderIssueBody actually embedded rather than
-	// recomputing one. It dedupes before hashing, and producers 3 and 4 do emit
-	// exact duplicates (16 + 20 of them for lambda, 1 for iam — see
-	// dedupeFindings), so fingerprintFindings(service, findings) on the raw slice
-	// would not match the marker in the very body being compared against it.
+	// Use the embedded fingerprint, which is computed after deduplication.
 	body, want := renderIssueBody(service, baselineVersion, latestVersion, findings)
 
 	if existing == nil {
-		// Consulted only when nothing is open: an open issue takes precedence over
-		// a closed one carrying the same fingerprint, so a service with both gets
-		// its open issue refreshed rather than going quiet.
+		// Consulted only when nothing is open: an open issue takes precedence.
 		if closedFingerprints[want] {
 			return issueSuppressedByClosed, nil
 		}
 		if openCount >= maxOpen {
 			return issueSkippedAtCap, nil
 		}
-		// renderIssueBody budgets every section it writes, so this fires only when
-		// its fixed parts cannot fit (see issueBodyBudget). Refused here rather than
-		// left to a 422, as the refresh paths below refuse an oversized merged body.
+		// Fires only when the body's fixed parts cannot fit (see issueBodyBudget).
 		if len(body) > githubMaxIssueBody {
 			return issueOutcomeNone, fmt.Errorf(
 				"filing an issue for %s would produce a %d-byte body, over GitHub's %d-byte limit",
 				service, len(body), githubMaxIssueBody)
 		}
 		title := fmt.Sprintf("AWS API changes detected for %s", service)
-		// Both labels, and both are load-bearing for different reasons.
-		// apiChangeLabel (`ack/api-change-detected`) is what the next run's
-		// listing keys on, so an issue created without it is invisible for ever
-		// and the job files a fresh duplicate every day. `kind/api-change` is the
-		// Prow triage label humans filter by; it is `addedBy: anyone`, which is
-		// precisely why it cannot serve as the ownership marker.
-		//
-		// apiChangeLabel is also what exempts these issues from the org's
-		// periodic-stale/rotten/close jobs (see their -label: queries). An automatic
-		// close would otherwise read as a maintainer dismissing the finding set, and
-		// closedFingerprints would suppress still-current findings indefinitely.
-		// Exempted in the queries rather than by adding lifecycle/frozen here, since
-		// anyone can /remove-lifecycle frozen and nothing would put it back.
+		// apiChangeLabel is the ownership marker the next run's listing keys on,
+		// and it exempts these issues from the org's stale/rotten/close jobs (an
+		// automatic close would suppress current findings). `kind/api-change` is
+		// the triage label humans filter by; anyone can add it, so it cannot mark
+		// ownership.
 		labels := []string{
 			apiChangeLabel,
 			"kind/api-change",
@@ -3030,11 +2398,8 @@ func reconcileIssue(
 		}
 		if !dryRun {
 			if _, err := createGithubIssueWithClient(ctx, client, owner, repo, title, body, labels); err != nil {
-				// issueOutcomeNone, not issueUnchanged: the label check inside runs
-				// *after* the POST, so this error can mean an issue was in fact filed.
-				// Reporting issueUnchanged there asserted the opposite of what happened.
-				// The same is true of a POST whose response was lost, which arrives
-				// wrapping errIssueCreateIndeterminate for the caller's cap accounting.
+				// The issue may still have been filed: the label check runs after
+				// the POST, and a lost response wraps errIssueCreateIndeterminate.
 				return issueOutcomeNone, err
 			}
 		}
@@ -3043,27 +2408,17 @@ func reconcileIssue(
 
 	number := existing.GetNumber()
 
-	// Same finding set, so nothing to notify anyone about. But the report can still
-	// read differently — a reworded reason, an annotation saying a field is
-	// immutable — and the fingerprint deliberately hashes only the findings, so
-	// without this an issue filed before such a change kept its old text for as
-	// long as its finding set held: observed live, a reviewer's requested
-	// annotations never reached the open ec2 issue. The rewrite is silent, without
-	// the comment below, because subscribers have nothing new to look at.
-	//
-	// The comparison re-renders at the versions the issue already names. A new SDK
-	// release alone changes only those, and rewriting every open issue on each one
-	// is churn with nothing to read; an issue whose versions cannot be read is left
-	// alone for the same reason.
+	// Same finding set, but the rendered text may have changed (e.g. reworded
+	// details), so rewrite the body silently, without a comment. The comparison
+	// re-renders at the versions the issue already names, so a new SDK release
+	// alone does not rewrite every open issue.
 	if parseFingerprint(existing.GetBody()) == want {
 		oldBaseline, oldLatest, ok := parseComparedVersions(existing.GetBody())
 		if !ok {
 			return issueUnchanged, nil
 		}
 		asFiled, _ := renderIssueBody(service, oldBaseline, oldLatest, findings)
-		// A body whose region cannot be located is refused here as well as on the
-		// refresh path below, rather than read as unchanged: whether it differs is
-		// unknowable, and the damaged markers need a human either way.
+		// A body whose region cannot be located is refused, not read as unchanged.
 		reread, err := replaceGeneratedRegion(existing.GetBody(), asFiled)
 		if err != nil {
 			return issueOutcomeNone, fmt.Errorf("not rewording issue %s/%s#%d: %w",
@@ -3090,27 +2445,11 @@ func reconcileIssue(
 		return issueUpdated, nil
 	}
 
-	// Built before the comment deliberately, and checked here rather than at the
-	// PATCH. A merged body over the limit fails the PATCH with a 422 every run, which
-	// leaves the fingerprint stale, which means the update path runs again tomorrow —
-	// and since the comment now precedes the PATCH, each of those runs would notify
-	// every subscriber about a refresh that cannot land. Probed: five consecutive PATCH
-	// failures produced five comments. For a transient failure that is the accepted
-	// cost of commenting first; for a permanent one it is daily notification on a
-	// public issue, for ever.
-	//
-	// renderIssueBody budgets only its own output, so it cannot see this: the excess is
-	// the maintainer's text outside the region, which replaceGeneratedRegion adds back.
-	// Measured: a region at the truncation cap (65,457 bytes) plus a 300-byte
-	// maintainer note is 65,767, over the 65,536 limit.
-	//
-	// There is deliberately no fallback to PATCHing the rendered body alone. That is
-	// the whole-body replacement this function used to do, and it deletes the
-	// maintainer's notes — the very text that pushed the merge over the limit. Failing
-	// and leaving the issue untouched is correct: a human can shorten the note.
-	//
-	// The same holds for a body whose markers are missing, duplicated or damaged:
-	// replaceGeneratedRegion refuses it, and so does this, before the comment.
+	// Merge and size-check before commenting: a merged body that is permanently
+	// over the limit (maintainer text outside the region counts) or has damaged
+	// markers would otherwise get a comment every run for a refresh that never
+	// lands. There is no fallback to replacing the whole body, which would delete
+	// the maintainer's text.
 	merged, err := replaceGeneratedRegion(existing.GetBody(), body)
 	if err != nil {
 		return issueOutcomeNone, fmt.Errorf("not refreshing issue %s/%s#%d: %w",
@@ -3123,54 +2462,24 @@ func reconcileIssue(
 			owner, repo, number, len(merged), githubMaxIssueBody)
 	}
 
-	// Comment first, then rewrite the body. The order is the whole point, because
-	// the fingerprint in the body is also the done-marker.
+	// Comment first, then rewrite the body: the body's fingerprint is the
+	// done-marker, so a failed comment leaves it stale and the next run retries
+	// both. The worst case is a duplicate comment rather than a silent change.
 	//
-	// Patching first meant the new fingerprint was already written when the comment
-	// was attempted, so a failed comment left the next run matching on that
-	// fingerprint and short-circuiting to issueUnchanged with zero HTTP requests:
-	// the notification was never retried, not the next day, not ever. Editing a body
-	// is silent (see commentOnGithubIssue), so one transient 403 meant a finding-set
-	// change nobody was ever told about, on an unattended job.
-	//
-	// This way a failed comment leaves the fingerprint stale, the next run retries
-	// both, and the worst case is a duplicate comment — noisy and self-correcting
-	// rather than silent and permanent.
-	//
-	// The counts a reader might want here (was N findings, now M) are deliberately
-	// absent. previousCount is not recoverable from the fingerprint, which is a hash,
-	// and the only other source is the existing body — where truncation drops
-	// entries from a body whose fingerprint still covers the full set. Counting
-	// bullets would therefore put a
-	// wrong number on the one message that notifies humans, so this states only the
-	// fact the code actually knows. It also avoids the previous text's "New AWS API
-	// changes detected", which was a false alarm whenever the set had *shrunk* —
-	// findings being resolved changes the fingerprint too, and the code cannot tell
-	// the two directions apart.
-	//
-	// Future tense, because the PATCH below can still fail: the probe captured
-	// "Refreshing the report in this issue's body" immediately followed by a failed
-	// PATCH, which left a reader a claim of a refresh sitting next to an unchanged
-	// body. This comment must not assert a write that has not happened yet.
+	// The comment states no counts, since a truncated body cannot give the old
+	// one, nor whether the set grew or shrank. It uses the future tense because
+	// the PATCH can still fail.
 	comment := fmt.Sprintf(
 		"The detected API change set for `%s` has changed. The report in this issue's "+
 			"body will be refreshed, comparing aws-sdk-go-v2 %s -> %s.",
 		service, baselineVersion, latestVersion,
 	)
-	// Both writes sit behind one !dryRun rather than two, which is the ordering above
-	// read the other way round: the pair is what makes commenting first safe, so
-	// suppressing only one of them in a preview would manufacture the exact half-done
-	// state — subscribers told a refresh is coming that never arrives — that the
-	// ordering exists to bound.
+	// Both writes are gated together, so a preview never comments without patching.
 	if !dryRun {
 		if err := commentOnGithubIssue(ctx, client, owner, repo, number, comment); err != nil {
 			return issueOutcomeNone, err
 		}
 
-		// merged, not body: only the generated region is rewritten, so a maintainer's
-		// notes on the issue survive. Passing `body` straight through replaced the whole
-		// body and silently deleted them — and the accompanying comment then notified
-		// every subscriber about it.
 		if err := updateGithubIssueBody(ctx, client, owner, repo, number, merged); err != nil {
 			return issueOutcomeNone, err
 		}
@@ -3178,22 +2487,13 @@ func reconcileIssue(
 	return issueUpdated, nil
 }
 
-// getAPINotificationServices reads the api_notification_services list from
-// jobs_config.yaml, preserving file order so that cap-limited runs are
-// deterministic. It also returns api_notification_max_open_issues, which is
-// informational: see the --max-open-issues flag for why the flag stays
-// authoritative and this value only feeds a warning when the two disagree. A
-// config that omits it yields 0, which the caller reads as "nothing to compare
-// against".
+// getAPINotificationServices reads api_notification_services from
+// jobs_config.yaml in file order, so cap-limited runs are deterministic, and
+// api_notification_max_open_issues (0 if omitted), which only feeds a warning
+// when it disagrees with --max-open-issues.
 //
-// It validates the list here rather than trusting that `make prow-gen` did.
-// Generation-time validation is not on this path at all: the running job is handed
-// jobs_config.yaml through extra_refs or the jobs-config ConfigMap, both of which
-// read the file directly, and that file is hand-maintained. An unvalidated entry
-// that is not an ACK service has no controller to diff against and no
-// `service/<name>` label to apply, and the post-create label check verifies only the
-// ownership label — so it would file a real issue in a public repo carrying a label
-// that exists in no config file.
+// The list is validated here because the running job reads the hand-maintained
+// file directly, bypassing `make prow-gen`.
 func getAPINotificationServices(configPath string) ([]string, int, error) {
 	fileData, err := os.ReadFile(configPath)
 	if err != nil {

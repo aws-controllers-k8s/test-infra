@@ -26,10 +26,7 @@ func TestValidateJobsConfigEmptyListNeedsNoCap(t *testing.T) {
 }
 
 func TestValidateJobsConfigRejectsNonSubsetService(t *testing.T) {
-	// The cap satisfies both cap rules (positive, and no larger than the notified
-	// list), so the subset rule is the only one this fixture breaks. It used to pair
-	// a one-entry aws_services with a cap of 10, which the cap rule rejects too, and
-	// passed only because the subset check runs first.
+	// The cap is valid, so the subset rule is the only one this fixture breaks.
 	cfg := &JobsConfig{
 		AWSServices:                  []string{"ecr", "iam", "lambda"},
 		APINotificationServices:      []string{"s3"},
@@ -42,9 +39,7 @@ func TestValidateJobsConfigRejectsNonSubsetService(t *testing.T) {
 }
 
 func TestValidateJobsConfigReportsTheSubsetErrorFirst(t *testing.T) {
-	// A config that breaks both rules at once must name the service, not the cap:
-	// the service is the actionable half, and a cap that looks wrong only because
-	// the list is wrong would send the reader to the wrong line.
+	// When both rules break, the error names the service, which is the actionable half.
 	cfg := &JobsConfig{
 		AWSServices:                  []string{"s3", "ecr", "iam"},
 		APINotificationServices:      []string{"bogussvc"},
@@ -67,9 +62,7 @@ func TestValidateJobsConfigRejectsMissingCap(t *testing.T) {
 }
 
 func TestValidateJobsConfigRejectsDuplicateService(t *testing.T) {
-	// Duplicates used to validate cleanly, and the caller resolves each service's
-	// existing issue from a single listAPIChangeIssues call for the whole run, so
-	// the repeat would still see no existing issue and file a second one.
+	// Duplicates would each see no existing issue and file a second one.
 	cfg := &JobsConfig{
 		AWSServices:                  []string{"s3", "ecr", "iam"},
 		APINotificationServices:      []string{"s3", "s3"},
@@ -82,10 +75,7 @@ func TestValidateJobsConfigRejectsDuplicateService(t *testing.T) {
 }
 
 func TestValidateJobsConfigRejectsCapThatCannotBind(t *testing.T) {
-	// The run files at most one issue per *notified* service, so a cap above the
-	// length of api_notification_services is a typo rather than a policy — however
-	// many entries aws_services happens to hold. Measured against aws_services
-	// instead, a cap of 2 here would be accepted despite there being one service.
+	// The cap is bounded by api_notification_services, not aws_services.
 	for _, maxOpen := range []int{2, 3, 74, 1000000} {
 		cfg := &JobsConfig{
 			AWSServices:                  []string{"s3", "ecr", "iam"},
@@ -99,11 +89,8 @@ func TestValidateJobsConfigRejectsCapThatCannotBind(t *testing.T) {
 }
 
 func TestValidateJobsConfigAcceptsACapEqualToTheNotifiedListLength(t *testing.T) {
-	// One issue per notified service is the honest policy, and bounding the cap by
-	// len(aws_services) rejected it — which also left a single-service config
-	// unrepresentable, its cap having to be both greater than 0 and less than 1.
-	// Equality is allowed because the open count includes stale issues for services
-	// since removed from the list, so a cap equal to the list length can still bind.
+	// A cap equal to the list length is allowed: stale issues for removed services still
+	// count toward the open total, so it can still bind.
 	for _, cfg := range []*JobsConfig{
 		{
 			AWSServices:                  []string{"s3"},
@@ -127,8 +114,7 @@ func TestValidateJobsConfigRejectsNilConfig(t *testing.T) {
 }
 
 func TestValidateAPINotificationServicesDirectly(t *testing.T) {
-	// Called the way Task 15's reader calls it: the two lists on their own, with no
-	// JobsConfig and no cap, after unmarshalling and before any service is processed.
+	// Called with just the two lists, before any JobsConfig or cap exists.
 	awsServices := []string{"s3", "ecr", "iam"}
 
 	tests := []struct {
@@ -161,14 +147,8 @@ func TestValidateAPINotificationServicesDirectly(t *testing.T) {
 }
 
 func TestLoadConfigReadsAndValidatesAPINotificationFields(t *testing.T) {
-	// Pins the yaml tags against the real file: a typo in either tag would silently
-	// produce a zero value here, while every struct-literal test above — which sets
-	// the fields directly — would still pass.
-	//
-	// It does *not* pin the wiring. loadConfig's call to validateJobsConfig is held in
-	// place by TestLoadConfigRejectsAnInvalidConfig and
-	// TestLoadConfigRejectsAnEmptyConfig, which are the two that fail if it is
-	// deleted; this one reads a config that validates, so it passes either way.
+	// Pins the yaml tags against the real file; struct-literal tests would miss a tag typo.
+	// The loadConfig wiring is covered by TestLoadConfigRejects*.
 	config, err := loadConfig("../../../../jobs_config.yaml")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"s3"}, config.APINotificationServices)
@@ -177,10 +157,8 @@ func TestLoadConfigReadsAndValidatesAPINotificationFields(t *testing.T) {
 }
 
 func TestLoadConfigRejectsAnInvalidConfig(t *testing.T) {
-	// The wiring, from the other side: loadConfig must refuse a config
-	// validateJobsConfig rejects, not merely parse it. The cap satisfies both cap
-	// rules so the subset rule is the only one broken; a one-entry aws_services with
-	// this cap used to break the cap rule too.
+	// loadConfig must reject a config that validateJobsConfig rejects. Only the subset rule
+	// is broken here.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "jobs_config.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(

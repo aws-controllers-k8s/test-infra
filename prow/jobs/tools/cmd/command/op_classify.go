@@ -36,30 +36,16 @@ const (
 	OpTypeSetAttributes
 )
 
-// pluralizer is shared across calls on purpose. pluralize.NewClient() compiles
-// roughly 67 regexes to build its static rule tables — measured at ~146us,
-// which is about 93% of ClassifyOp's total cost. ClassifyOp runs once per
-// operation, and a large service has hundreds, so constructing a client per
-// call wastes seconds per job run for no benefit.
-//
-// Sharing is safe: after construction the client's rule tables are only read,
-// never mutated, by IsPlural/Singular, and *regexp.Regexp is safe for
-// concurrent use.
+// pluralizer is shared because NewClient compiles dozens of regexes, most of
+// ClassifyOp's cost. Sharing is safe: IsPlural/Singular only read its tables.
 var pluralizer = pluralize.NewClient()
 
 // ClassifyOp guesses the operation type and resource name from an operation
-// ID. It is a faithful port of code-generator's
-// model.GetOpTypeAndResourceNameFromOpID, so that the resources this tool
-// reports match the CRDs codegen would actually generate. configResources is
-// the list of resource names declared in the controller's generator.yaml,
-// which disambiguates "pluralized singular" names such as EC2's DhcpOptions.
+// ID. It ports code-generator's model.GetOpTypeAndResourceNameFromOpID so
+// results match the CRDs codegen generates. configResources (generator.yaml
+// resource names) disambiguates "pluralized singular" names like DhcpOptions.
 func ClassifyOp(opID string, configResources []string) (OpType, string) {
-	// Case-insensitive, because code-generator's resourceExistsInConfig
-	// compares with strings.EqualFold. Matching that exactly is the point of
-	// this port: a controller whose generator.yaml declares a resource in
-	// different casing than the AWS operation name yields would otherwise miss
-	// the pluralized-singular carve-out here but hit it in codegen, and we
-	// would report a resource ACK already generates.
+	// Case-insensitive, matching code-generator's resourceExistsInConfig.
 	declared := func(name string) bool {
 		for _, res := range configResources {
 			if strings.EqualFold(res, name) {

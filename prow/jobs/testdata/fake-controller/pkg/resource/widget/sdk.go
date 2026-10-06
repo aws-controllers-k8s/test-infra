@@ -1,7 +1,6 @@
 package widget
 
-// This fixture mimics generated ACK resource manager code. It is testdata
-// only and is never compiled as part of the tool.
+// Testdata mimicking generated ACK resource manager code; never compiled.
 
 func sdkCreate() {
 	input := &svcsdk.CreateWidgetInput{}

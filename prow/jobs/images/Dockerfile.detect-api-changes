@@ -1,6 +1,5 @@
-# Matches go_version in build_config.yaml, which is what CI passes via --build-arg. The
-# default only applies to a hand build, so it should reproduce CI rather than pick a third
-# value — most sibling Dockerfiles still default to 1.22.5, which CI overrides anyway.
+# Matches go_version in build_config.yaml (CI passes it via --build-arg); the default
+# only affects local builds.
 ARG GO_VERSION=1.27.1
 
 FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine AS builder
@@ -16,10 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ack-build-tools ./prow/job
 # Start a new stage from scratch
 FROM public.ecr.aws/docker/library/alpine:latest
 
-# Patch the base image before installing. Both structurally identical siblings
-# (Dockerfile.scan-controllers-cve, Dockerfile.upgrade-go-version) do this, and omitting
-# it ships whatever CVEs alpine:latest's published layer happened to carry at build time —
-# in a repo whose own scan-controllers-cve job exists to flag exactly that.
+# Patch base-image CVEs, as the sibling Dockerfiles do.
 RUN apk -U upgrade --no-cache
 
 RUN apk add --no-cache ca-certificates

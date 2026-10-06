@@ -19,31 +19,18 @@ import (
 	"strings"
 )
 
-// annotateFields tells a maintainer how each field candidate would be reconciled,
-// which is what decides the work it takes. It runs over the merged findings of
-// every producer, because the answer depends on operations other producers found:
+// annotateFields notes how each field candidate would be reconciled. It runs over
+// every producer's merged findings, because the answer depends on their operations:
 //
-//   - A new operation on the resource whose request carries the field is how the
-//     field is updated, so it joins the field's evidence: networkfirewall's
-//     AvailabilityZoneMappings is changed by AssociateAvailabilityZones and
-//     DisassociateAvailabilityZones.
-//   - A `<Field>Updates` request member is a change list an Update applies to
-//     Field, as dynamodb's ReplicaUpdates is to Replicas. Field is then desired
-//     state even when only returned (GlobalTableWitnesses), and the change list is
-//     implementation, not something to expose (GlobalTableWitnessUpdates).
-//   - A field sent with one a generator.yaml `from:` field is read from is
-//     reconciled by that field's custom code: networkfirewall's
-//     EnableMonitoringDashboard is sent with LoggingConfiguration on
-//     UpdateLoggingConfiguration.
-//   - A Spec field only a Create sends is immutable: networkfirewall's
-//     TransitGatewayId, dynamodb's GlobalTableSourceArn.
-//   - A Status path that is a Spec field read back inside a response structure is
-//     that field's observed form, not a second addition: networkfirewall's
-//     `Firewall.TransitGatewayId` is what CreateFirewall's TransitGatewayId reads
-//     back as. It is folded into the Spec field as read-back evidence.
+//   - A new operation whose request carries the field joins its evidence.
+//   - A `<Field>Updates` request member is a change list applied to Field (dynamodb
+//     ReplicaUpdates to Replicas): Field is desired state, the list is not exposed.
+//   - A field sent beside a generator.yaml `from:` field is reconciled by that
+//     field's custom code.
+//   - A Spec field only a Create sends is immutable.
+//   - A Status `W.X` reading back Spec field X is folded into X.
 //
-// Last, each field's operations are split into those that set it and those that
-// return it.
+// Last, each field's operations are split into those that set and return it.
 func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	findings = foldReadBacks(latest, findings)
 
@@ -135,8 +122,7 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 }
 
 // roleIndex answers where an operation's request or response carries a field,
-// walking each shape once: ec2 fields are checked against every operation the
-// controller calls.
+// caching each shape walk since every field is checked against every used operation.
 type roleIndex struct {
 	m     *SmithyModel
 	walks map[string]map[string]MemberInfo
@@ -147,17 +133,12 @@ func newRoleIndex(m *SmithyModel) *roleIndex {
 }
 
 // find reports whether an operation's request (or response) carries field, and
-// at which path when that is not field itself, unwrapped.
+// the path when it is found other than directly or under a resource wrapper.
 //
-// A wrapper is how a single resource comes back — `TableDescription.VectorIndexes`,
-// or `VpcEndpoints.PayerResponsibilities` from a list read — so it says nothing.
-// Anywhere else the path is the answer: ModifyVpcEndpointPayerResponsibility sets a
-// top-level Scope, but responses return it only as `PayerResponsibilities.Scope`,
-// one entry per payer, and calling that "returned" without the path hid exactly
-// why reconciling it needs custom code. So for a top-level field the wrapper must
-// be the resource — named for the kind, or the response's only member — and
-// PayerResponsibilities is neither. A nested field keeps any one wrapper, since its
-// own path already places it. Only a top-level field is looked for deeper.
+// A top-level field may sit under one wrapper only if the wrapper is the resource
+// (named for the kind, or the only member), as in `TableDescription.VectorIndexes`.
+// Elsewhere the path matters: Scope returned only as `PayerResponsibilities.Scope`
+// is per entry, which is why reconciling it needs custom code.
 func (r *roleIndex) find(opID string, output bool, kind, field string) (string, bool) {
 	key := opID + "/in"
 	if output {
@@ -206,10 +187,8 @@ func (r *roleIndex) resourceWrapper(walk map[string]MemberInfo, kind, name strin
 	return true
 }
 
-// foldReadBacks drops each Status finding `W.X` for which the same resource has a
-// Spec finding X and W is a structure in the response — a list W would be a
-// per-element observation, like dynamodb's `Replicas.GlobalTableSettingsReplicationMode`
-// next to the table's own setting — and adds its operations to X's evidence.
+// foldReadBacks folds each Status finding `W.X` into the resource's Spec finding X
+// when W is a response structure. A list W is a per-element observation and stays.
 func foldReadBacks(latest *SmithyModel, findings []Finding) []Finding {
 	spec := map[[2]string]int{}
 	for i, f := range findings {
@@ -258,16 +237,11 @@ func isFieldCandidate(c FindingClass) bool {
 }
 
 // pairChangeLists annotates each `<Field>Updates` lifecycle field and the Field it
-// changes, and returns findings with Status candidates added for Field's
-// observed-only members.
+// changes, and adds Status candidates for Field's observed-only entry members.
 //
-// Field is a collection whose entries mix desired and observed state, so a
-// normalized Spec shape holds only the members some request sends, and the members
-// only ever returned are Status candidates of their own. Without listing them the
-// report hid real fields: dynamodb's VectorIndexes entries return IndexStatus,
-// Backfilling, IndexArn, IndexSizeBytes and ItemCount, none of which any request
-// carries. They were invisible before because a child of a new field is part of
-// that field's finding (see hasNewAncestor).
+// Field's entries mix desired and observed state, so its Spec shape holds only the
+// members a request sends. The returned-only members (dynamodb VectorIndexes'
+// IndexStatus) would otherwise be hidden inside Field's finding; see hasNewAncestor.
 func pairChangeLists(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	var added []Finding
 	for i := range findings {
@@ -366,15 +340,10 @@ func entryMembers(m *SmithyModel, opIDs []string, field, changeList string) (des
 // foldSecondaryViews reconciles Status fields that secondary reads return for one
 // piece of state, matched by the singular of their last segment.
 //
-// ec2's Instance application health comes from two reads, and they are not one
-// shape. DescribeApplicationStatus returns, per instance, the detailed
-// ApplicationStatus (status, timestamps, resume time, per-check details);
-// DescribeInstanceStatus returns the two-member ApplicationStatusSummary. So the
-// state shape decides: where every view is the same shape they are one candidate
-// with alternative sources, and otherwise each stays, named for what it holds and
-// marked detailed or summary. Either way the candidate is named for the state —
-// `ApplicationStatus` — not for the response wrapper `ApplicationStatuses` around
-// it.
+// Views of the same shape merge into one candidate with alternative sources.
+// Otherwise each stays, marked detailed or summary: ec2's DescribeApplicationStatus
+// and DescribeInstanceStatus return differently shaped application status. The
+// candidate is named for the state, not the response wrapper.
 func foldSecondaryViews(latest *SmithyModel, findings []Finding) []Finding {
 	stem := func(f Finding) string { return strings.ToLower(pluralizer.Singular(lastSegment(f.Subject))) }
 	secondary := func(f Finding) bool {
@@ -490,15 +459,10 @@ func findStateView(m *SmithyModel, f Finding) stateView {
 	return view
 }
 
-// customSetterDetail says when a Spec field is changed by something other than the
-// resource's own Update, which codegen's update path does not call.
-// networkfirewall's AvailabilityZoneMappings is changed by
-// AssociateAvailabilityZones and DisassociateAvailabilityZones, so the hook must
-// diff the list; its ProxySettings by UpdateProxySettings alone, so it needs a
-// dedicated update hook. A field only a Create sends gets nothing here, nor does
-// one the resource's own Update also sends — unless that Update is hand-written
-// (update_operation.custom_method_name), when codegen does not send the field and
-// the custom method must.
+// customSetterDetail notes when a Spec field is changed by an operation other than
+// the resource's own Update, which codegen does not call. It returns "" for fields
+// only a Create sends, or that the generated Update sends; a hand-written Update
+// (update_operation.custom_method_name) must send the field itself.
 func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string, f Finding) string {
 	custom := customUpdateMethod(in, f.Kind)
 	var setters []string
@@ -572,10 +536,9 @@ func customSourcedSibling(latest *SmithyModel, in *ControllerInputs, f Finding) 
 
 // createOnly reports whether a Create sends f and nothing else does.
 //
-// Every operation of the resource is checked, not only the ones f's Evidence names,
-// and by f's last path segment, because the same field reached another way is
-// another path: lambda's `Code.S3ObjectStorageMode` is sent again as bare
-// `S3ObjectStorageMode` on UpdateFunctionCode, so it is not immutable.
+// It checks every operation of the resource by f's last segment, since an update
+// may send the field at another path (lambda's `Code.S3ObjectStorageMode` is bare
+// `S3ObjectStorageMode` on UpdateFunctionCode).
 func createOnly(latest *SmithyModel, in *ControllerInputs, declared []string, newOps []string, f Finding) bool {
 	created := false
 	ops := append([]string{}, newOps...)
@@ -639,19 +602,11 @@ func requestCarries(m *SmithyModel, in *ControllerInputs, opID, path string) boo
 	return ok
 }
 
-// annotateResources says when a new resource changes through operations codegen
-// does not wire into its update. networkfirewall's ProxyRuleGroup has no Update of
-// its own: CreateProxyRules, DeleteProxyRules, UpdateProxyRule and
-// UpdateProxyRulePriorities are how it changes, so its rules need a custom diff and
-// update hooks. ProxyConfiguration does have UpdateProxyConfiguration, but its
-// rule-group attachments and priorities change only through operations beside it.
-// An operation is the resource's own when it classifies to the resource itself;
-// reads are left out, since they change nothing.
-//
-// Where an operation takes an update token, the note names the read it comes
-// from: the read whose request the operation's request covers most fully, so
-// UpdateProxyRule takes DescribeProxyRule's token and UpdateProxyRulePriorities,
-// which names no single rule, DescribeProxyRuleGroup's.
+// annotateResources notes when a new resource changes through non-read operations
+// that classify to another resource, which codegen does not wire into its update
+// (networkfirewall's ProxyRuleGroup changes only through CreateProxyRules and
+// similar). Where such an operation takes an update token, the note names the read
+// that returns it; see tokenSource.
 func annotateResources(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	declared := []string{}
 	if in.Config != nil {
@@ -714,9 +669,8 @@ func annotateResources(latest *SmithyModel, in *ControllerInputs, findings []Fin
 	return findings
 }
 
-// tokenSource returns the read among reads whose request members the operation's
-// request carries all of, preferring the one that needs the most — the most
-// specific object both name.
+// tokenSource returns the read whose request members the operation's request all
+// carries, preferring the read that needs the most members (the most specific).
 func tokenSource(m *SmithyModel, opID string, reads []string) string {
 	request := requestMembers(m, opID)
 	best, bestSize := "", 0

@@ -29,17 +29,12 @@ type SmithyMemberRef struct {
 	Traits map[string]json.RawMessage `json:"traits"`
 }
 
-// SmithyShape is one entry in a Smithy model's `shapes` map. Only the subset
-// of fields this tool needs is modelled; unknown fields are ignored so that
-// additions to the format do not break parsing.
+// SmithyShape is the subset of a Smithy `shapes` entry this tool needs.
 type SmithyShape struct {
 	Type    string                     `json:"type"`
 	Members map[string]SmithyMemberRef `json:"members"`
-	// Member is the element reference of a `list` shape. Smithy encodes this
-	// as a top-level singular "member" key, a sibling of "type" — not as an
-	// entry inside the "members" map. Verified against a real model:
-	// "com.amazonaws.s3files#AccessPoints" is
-	// {"type": "list", "member": {"target": "...#ListAccessPointsDescription"}}.
+	// Member is a `list` shape's element. Smithy encodes it as a top-level
+	// "member" key, not inside "members".
 	Member *SmithyMemberRef           `json:"member"`
 	Input  *SmithyMemberRef           `json:"input"`
 	Output *SmithyMemberRef           `json:"output"`
@@ -74,8 +69,7 @@ func LoadSmithyModel(data []byte) (*SmithyModel, error) {
 	return &m, nil
 }
 
-// OperationNames returns the short names of every operation in the model, in
-// sorted order so that output is deterministic.
+// OperationNames returns the short names of every operation, sorted.
 func (m *SmithyModel) OperationNames() []string {
 	names := make([]string, 0, len(m.opsByName))
 	for name := range m.opsByName {
@@ -116,9 +110,8 @@ func docTrait(traits map[string]json.RawMessage) string {
 	return doc
 }
 
-// maxWalkDepth bounds how deep the member walk descends into nested
-// structures. Six levels is well past anything ACK surfaces in a CRD and
-// keeps the output reviewable.
+// maxWalkDepth bounds the member walk; it is well past anything ACK surfaces in
+// a CRD.
 const maxWalkDepth = 6
 
 // MemberInfo describes one member reached by WalkMembers.
@@ -132,19 +125,11 @@ type MemberInfo struct {
 }
 
 // WalkMembers returns every member reachable from shapeID, keyed by dotted
-// path. List shapes are traversed transparently, so a list of structures
-// contributes the structure's members at the list member's path rather than
-// introducing an index segment.
+// path. Lists are transparent (no index segment). maxDepth is capped at
+// maxWalkDepth.
 //
-// The walk is cycle-guarded by tracking the shape IDs on the current branch,
-// and bounded by maxDepth, which is silently capped at maxWalkDepth. An
-// unknown or empty shapeID yields an empty map.
-//
-// The guard is per-branch rather than global on purpose: a global visited set
-// would suppress legitimately distinct paths to the same shape, so two sibling
-// fields both targeting Tag would only report one of them. Completeness of the
-// path enumeration matters more here than avoiding re-visits, which maxDepth
-// already bounds.
+// Cycles are guarded per branch, not globally, so distinct paths to the same
+// shape (two fields targeting Tag) are all reported.
 func (m *SmithyModel) WalkMembers(shapeID string, maxDepth int) map[string]MemberInfo {
 	out := map[string]MemberInfo{}
 	if maxDepth > maxWalkDepth {
@@ -172,9 +157,7 @@ func (m *SmithyModel) walk(
 	onBranch[shapeID] = true
 	defer delete(onBranch, shapeID)
 
-	// Lists are transparent: descend into the element shape at the same path.
-	// Note this reads shape.Member (the singular top-level key), not
-	// shape.Members["member"] — see the SmithyShape.Member comment.
+	// Lists are transparent: descend into the element at the same path.
 	if shape.Type == "list" {
 		if shape.Member != nil {
 			m.walk(shape.Member.Target, prefix, remaining, onBranch, out)
@@ -182,40 +165,19 @@ func (m *SmithyModel) walk(
 		return
 	}
 
-	// Maps are deliberately opaque leaves. Smithy encodes a map's element
-	// types under top-level "key"/"value" keys, so they would not be reached
-	// by the members loop below anyway — this branch makes the choice explicit
-	// rather than incidental. ACK renders an AWS map as a CRD object with
-	// additionalProperties, meaning there are no per-key field paths in the
-	// CRD to compare against, so descending would emit paths that can never
-	// match. Do not "fix" this the way the list branch above was fixed.
+	// Maps are leaves: ACK renders them as additionalProperties, so per-key
+	// paths could never match a CRD field.
 	if shape.Type == "map" {
 		return
 	}
 
-	// Enums are leaves too, and this one is not obvious: a Smithy enum shape
-	// carries a `members` map exactly like a structure, one entry per permitted
-	// value, each targeting smithy.api#Unit with an enumValue trait. So the
-	// loop below would happily descend and report every allowed value as though
-	// it were a field.
-	//
-	// An enum-typed member is a plain string in the CRD; its values are never
-	// CRD properties, so those paths can never match and every one is a false
-	// finding. Measured on the real s3 model: 73 enum shapes, and the
-	// v1.32.6 -> v1.41.5 delta adds 28 enum values — about 40% of producer 3's
-	// output for that diff was entries like
-	// `CreateBucketConfiguration.LocationConstraint.ap_southeast_4`, one per AWS
-	// region. The enum-typed member itself is still recorded at its own path,
-	// which is the thing a CRD can actually expose.
+	// Enums are leaves: Smithy gives enum shapes a `members` map of allowed
+	// values, which are not CRD fields.
 	if shape.Type == "enum" || shape.Type == "intEnum" {
 		return
 	}
 
-	// Structures and unions are both walked here. A union's variants are
-	// mutually exclusive, but this function enumerates reachable paths rather
-	// than valid combinations, so listing every variant is correct for a diff:
-	// the question asked later is only whether a given path appeared or
-	// disappeared between two model versions.
+	// Structures and unions; every union variant is a reachable path.
 	for name, ref := range shape.Members {
 		path := name
 		if prefix != "" {

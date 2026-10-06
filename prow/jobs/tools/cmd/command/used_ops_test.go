@@ -14,9 +14,8 @@ func TestScanUsedOps(t *testing.T) {
 	got, err := scanUsedOps(fakeControllerPath)
 	require.NoError(t, err)
 
-	// The snake_case directory `gizmo_widget` must be reachable under its
-	// normalized key. This is the integration guard: `widget` alone is a single
-	// word, so a regression to plain strings.ToLower would still pass on it.
+	// Snake_case `gizmo_widget` must be found under its normalized key; single-word `widget`
+	// would not catch a plain strings.ToLower regression.
 	require.Contains(t, got, "gizmowidget",
 		"a snake_case resource directory must be keyed by its normalized name")
 	assert.True(t, got["gizmowidget"]["CreateGizmoWidget"])
@@ -40,9 +39,7 @@ func TestScanUsedOps(t *testing.T) {
 }
 
 func TestScanUsedOpsFailsOnUnreadableFile(t *testing.T) {
-	// Pins the abort-on-unreadable-file design, matching
-	// TestReadCRDFieldsFailsOnMalformedFile. An incomplete operation set would
-	// silently under-report; an error surfaces as a per-service failure.
+	// An unreadable file is an error, not a silent gap in the operation set.
 	if os.Getuid() == 0 {
 		t.Skip("running as root: chmod 0000 does not make a file unreadable")
 	}
@@ -69,10 +66,7 @@ func TestScanUsedOpsNoDir(t *testing.T) {
 }
 
 func TestNormalizeResourceKey(t *testing.T) {
-	// Real kind/directory pairs from ec2-controller, which is the controller
-	// that breaks naive lowercasing. The fixture used elsewhere in this file is
-	// single-word (`widget`), so it cannot catch this class of bug — these
-	// pairs can.
+	// Real kind/directory pairs from ec2-controller, which naive lowercasing breaks.
 	pairs := []struct {
 		kind string
 		dir  string
@@ -97,8 +91,7 @@ func TestNormalizeResourceKey(t *testing.T) {
 		})
 	}
 
-	// And the naive approach this replaced must genuinely have been broken, so
-	// nobody "simplifies" it back.
+	// Guard against "simplifying" back to naive lowercasing.
 	assert.NotEqual(t, "dhcp_options", strings.ToLower("DHCPOptions"),
 		"lowercasing alone does not reach the directory name")
 }
