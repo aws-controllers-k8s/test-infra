@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -425,7 +426,10 @@ func markPreexisting(findings []Finding, release *SmithyModel, in *ControllerInp
 			old = inRelease(f.Subject)
 		case ClassSpecField, ClassStatusField, ClassLifecycleField, ClassDroppedField:
 			old = slices.ContainsFunc(f.evidenceOps(), func(opID string) bool {
-				return fieldInModel(release, in, opID, f.Subject)
+				return fieldInModel(release, in, opID, f.Subject) ||
+					slices.ContainsFunc(f.sdkPaths(opID), func(path string) bool {
+						return fieldInModel(release, in, opID, path)
+					})
 			})
 		}
 		if old {
@@ -453,7 +457,7 @@ func fieldInModel(m *SmithyModel, in *ControllerInputs, opID, path string) bool 
 		if _, ok := members[path]; ok {
 			return true
 		}
-		wrapper := in.Config.inputWrapper(opID)
+		wrapper := inputWrapper(m, in, opID, side.ref)
 		if side.isOutput {
 			wrapper = outputWrapper(m, in, opID, side.ref)
 		}
@@ -509,7 +513,7 @@ type Finding struct {
 	// markPreexisting.
 	NewSincePin bool
 	// Evidence is the sorted, comma-separated operations supporting the finding.
-	// Unlike Detail it is hashed into the fingerprint. A string so that Finding
+	// Like Detail it is not hashed into the fingerprint. A string so that Finding
 	// stays comparable.
 	Evidence string
 	// SetBy, ReadBy and ReturnedBy split operations by what they do with a field:
@@ -519,6 +523,27 @@ type Finding struct {
 	SetBy      string
 	ReadBy     string
 	ReturnedBy string
+	// SDKPaths lists, as sorted `Op=Path` entries, where an operation carries a
+	// field at an SDK member path other than Subject (behind a wrapper or a
+	// rename). Not hashed.
+	SDKPaths string
+}
+
+// joinSDKPaths merges two SDKPaths values.
+func joinSDKPaths(a, b string) string {
+	entries := append(strings.Split(a, ","), strings.Split(b, ",")...)
+	return newEvidence(slices.DeleteFunc(entries, func(s string) bool { return s == "" }))
+}
+
+// sdkPaths returns the SDK member paths SDKPaths records for an operation.
+func (f Finding) sdkPaths(opID string) []string {
+	var out []string
+	for _, entry := range strings.Split(f.SDKPaths, ",") {
+		if op, path, ok := strings.Cut(entry, "="); ok && op == opID {
+			out = append(out, path)
+		}
+	}
+	return out
 }
 
 // newEvidence builds an Evidence value from operation names in any order.
@@ -698,6 +723,11 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 		resources[strings.ToLower(f.Subject)] = f.Subject
 	}
 	possible := map[string][]string{}
+	type pendingSetter struct {
+		kind, opID string
+		opTypes    OpTypes
+	}
+	var setters []pendingSetter
 
 	var findings []Finding
 	for _, opID := range latest.OperationNames() {
@@ -768,7 +798,7 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 			case placeOnResource:
 				findings = append(findings, newOperationFinding(latest, name, opID, opTypes))
 				if existing[name] {
-					findings = append(findings, setterFieldCandidates(latest, in, name, opID, opTypes)...)
+					setters = append(setters, pendingSetter{name, opID, opTypes})
 					if isReadOp(opTypes, opID) {
 						findings = append(findings, readStatusCandidates(latest, baseline, in, name, opID)...)
 					}
@@ -790,11 +820,23 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 			}
 			// Report the CRD's own casing, not the AWS spelling.
 			findings = append(findings, newOperationFinding(latest, canonicalKind, opID, opTypes))
-			findings = append(findings, setterFieldCandidates(latest, in, canonicalKind, opID, opTypes)...)
+			setters = append(setters, pendingSetter{canonicalKind, opID, opTypes})
 			if isReadOp(opTypes, opID) {
 				findings = append(findings, readStatusCandidates(latest, baseline, in, canonicalKind, opID)...)
 			}
 		}
+	}
+
+	// Setters run last so a new read on the same resource, which the controller
+	// would call alongside them, counts as reading their fields back.
+	newReads := map[string][]string{}
+	for _, f := range findings {
+		if f.Class == ClassNewOperation {
+			newReads[f.Kind] = append(newReads[f.Kind], f.Subject)
+		}
+	}
+	for _, s := range setters {
+		findings = append(findings, setterFieldCandidates(latest, in, s.kind, s.opID, s.opTypes, newReads[s.kind])...)
 	}
 
 	// One finding per possible resource, naming every operation that manages it,
@@ -995,14 +1037,17 @@ var requestPlumbingMembers = []string{
 // part of an existing resource. They are Spec candidates when a read returns them
 // at the same top-level name, which plain reconciliation needs; otherwise they
 // are lifecycle fields needing custom code. The resource's identifier, plumbing
-// members and anything the CRD exposes are skipped.
-func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID string, opTypes OpTypes) []Finding {
+// members and anything the CRD exposes are skipped. newOps are the resource's
+// other new operations; reads among them count.
+func setterFieldCandidates(
+	m *SmithyModel, in *ControllerInputs, kind, opID string, opTypes OpTypes, newOps []string,
+) []Finding {
 	setter := opTypes.Has(OpTypeUpdate, OpTypeSetAttributes) ||
 		strings.HasPrefix(opID, "Put") || strings.HasPrefix(opID, "Set")
 	if !setter {
 		return nil
 	}
-	readable := returnedNames(m, in, kind, opID)
+	readable := returnedNames(m, in, kind, append(in.calledOps(kind), newOps...))
 	op, _ := m.Operation(opID)
 	var members map[string]MemberInfo
 	if op.Input != nil {
@@ -1032,19 +1077,40 @@ func setterFieldCandidates(m *SmithyModel, in *ControllerInputs, kind, opID stri
 	return out
 }
 
-// returnedNames returns the lowercased top-level members of the responses of a
-// resource's operations and of opID itself, looking through a response wrapper.
-// Top level only: a field read back from inside a list needs custom reconciliation.
-func returnedNames(m *SmithyModel, in *ControllerInputs, kind, opID string) map[string]bool {
+// returnedNames returns the lowercased top-level members of the responses of the
+// read operations among ops, looking through a response wrapper or a member that
+// stands for the resource (DescribeFirewall's `Firewall`). Top level only: a field
+// read back from inside a list needs custom reconciliation.
+func returnedNames(m *SmithyModel, in *ControllerInputs, kind string, ops []string) map[string]bool {
 	names := map[string]bool{}
-	for _, op := range append([]string{opID}, in.calledOps(kind)...) {
+	var declared []string
+	if in.Config != nil {
+		declared = in.Config.ResourceNames()
+	}
+	roles := newRoleIndex(m)
+	for _, op := range ops {
+		// A Create/Update echo, or the setter's own response, is not observed on
+		// the next reconciliation.
+		if opTypes, _ := in.ClassifyOpWithOverrides(op, declared); !isReadOp(opTypes, op) {
+			continue
+		}
 		shape, ok := m.Operation(op)
 		if !ok || shape.Output == nil {
 			continue
 		}
 		wrapper := outputWrapper(m, in, op, shape.Output)
-		for path := range m.WalkMembers(shape.Output.Target, maxWalkDepth) {
-			if path = unwrapped(path, wrapper); !strings.Contains(path, ".") {
+		walk := m.WalkMembers(shape.Output.Target, maxWalkDepth)
+		for path := range walk {
+			// Case-insensitive, as codegen matches output_wrapper_field_path
+			// (emrcontainers' `VirtualCluster` names member `virtualCluster`).
+			if w := strings.ToLower(wrapper) + "."; wrapper != "" && strings.HasPrefix(strings.ToLower(path), w) {
+				path = path[len(w):]
+			}
+			if head, rest, ok := strings.Cut(path, "."); ok && wrapper == "" &&
+				!strings.Contains(rest, ".") && roles.resourceWrapper(walk, kind, head) {
+				path = rest
+			}
+			if !strings.Contains(path, ".") {
 				names[strings.ToLower(path)] = true
 			}
 		}
@@ -1058,29 +1124,41 @@ func kindToResourceDir(kind string) string {
 	return normalizeResourceKey(kind)
 }
 
-// exposedInCRD reports whether an AWS member path is surfaced by a resource's CRD,
-// after applying generator.yaml renames and lowercasing each segment.
+// exposedInCRD reports whether an AWS member path is surfaced by a resource's CRD
+// as spelled or as any one operation's renames spell it. For a member of a known
+// operation, crdFieldPath and exposedAt are exact.
 func exposedInCRD(in *ControllerInputs, kind, awsPath string) bool {
-	fields, ok := in.CRDFields[kind]
-	if !ok {
-		return false
+	if exposedAt(in, kind, awsPath) {
+		return true
 	}
-
-	segments := in.Config.renamedPath(kind, strings.Split(awsPath, "."))
-	for i, segment := range segments {
-		segments[i] = strings.ToLower(segment)
+	segments := strings.Split(awsPath, ".")
+	for _, opName := range in.Config.renamedOps(kind) {
+		if exposedAt(in, kind, strings.Join(in.Config.renamedPath(kind, opName, segments), ".")) {
+			return true
+		}
 	}
-	return fields[strings.Join(segments, ".")]
+	return false
 }
 
-// elementShape resolves a list, however deeply nested, to its element shape.
+// exposedAt reports whether a resource's CRD has a field at a CRD path, compared
+// case-insensitively.
+func exposedAt(in *ControllerInputs, kind, crdPath string) bool {
+	return in.CRDFields[kind][strings.ToLower(crdPath)]
+}
+
+// elementShape resolves a list or map, however deeply nested, to its element or
+// value shape; WalkMembers and codegen's field paths look through both.
 func elementShape(m *SmithyModel, shapeID string) string {
 	for range maxWalkDepth {
 		shape, ok := m.Shapes[shapeID]
-		if !ok || shape.Type != "list" || shape.Member == nil {
+		switch {
+		case ok && shape.Type == "list" && shape.Member != nil:
+			shapeID = shape.Member.Target
+		case ok && shape.Type == "map" && shape.Value != nil:
+			shapeID = shape.Value.Target
+		default:
 			return shapeID
 		}
-		shapeID = shape.Member.Target
 	}
 	return shapeID
 }
@@ -1100,7 +1178,9 @@ func sourcedAsCRDField(in *ControllerInputs, kind, opName, path string) bool {
 		if !strings.EqualFold(field.From.Operation, opName) {
 			continue
 		}
-		declared := strings.ToLower(field.From.Path)
+		// `..` steps into a list element (applicationautoscaling's
+		// `ScalingPolicies..CreationTime`); member walks see lists transparently.
+		declared := strings.ToLower(strings.ReplaceAll(field.From.Path, "..", "."))
 		lowered := strings.ToLower(path)
 		if declared != "" &&
 			(lowered == declared || strings.HasPrefix(lowered, declared+".")) {
@@ -1127,6 +1207,7 @@ func isACKManagedARN(kind, path string) bool {
 func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Finding {
 	var findings []Finding
 	declared := in.Config.ResourceNames()
+	servicePaging := servicePagination(latest)
 
 	for kind := range in.CRDFields {
 		opNames := in.calledOps(kind)
@@ -1134,6 +1215,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 			continue
 		}
 		opsByPath := map[string][]string{}
+		sdkPaths := map[string][]string{}
 		rolesByPath := map[string]*fieldRoles{}
 
 		for _, opName := range opNames {
@@ -1169,35 +1251,36 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 				sort.Strings(paths)
 
 				// Codegen never infers an input wrapper, only an output one.
-				wrapper := in.Config.inputWrapper(opName)
+				wrapper := inputWrapper(latest, in, opName, side.latestRef)
 				if side.isOutput {
 					wrapper = outputWrapper(latest, in, opName, side.latestRef)
 				}
+				paging := paginationMembers(latest, opName, servicePaging, side.isOutput)
 
 				for _, path := range paths {
 					if _, existed := baselineMembers[path]; existed {
 						continue
 					}
-					// Codegen flattens an input wrapper's members into Spec and
-					// sends nothing outside it, so outside members are skipped
-					// and inside ones lose the wrapper prefix.
-					crdPath := path
-					if !side.isOutput && wrapper != "" {
-						rest, under := strings.CutPrefix(path, wrapper+".")
-						if !under {
-							continue
-						}
-						crdPath = rest
+					if slices.Contains(paging, path) {
+						continue
+					}
+					// Checks and grouping use the field as the CRD spells it
+					// for this operation; generator.yaml's ignore and from
+					// entries name SDK paths, so those use path.
+					crdPath, ok := crdFieldPath(latest, in, kind, opName, side.latestRef, side.isOutput, path)
+					if !ok {
+						continue
 					}
 					// A child of a new field belongs to that field's finding,
 					// and shares its suppressions.
 					if hasNewAncestor(path, latestMembers, baselineMembers) {
 						continue
 					}
-					if exposedInCRD(in, kind, crdPath) {
+					if exposedAt(in, kind, crdPath) {
 						continue
 					}
-					if underDeclinedParent(in, kind, opName, path, wrapper, baselineMembers) {
+					if underDeclinedParent(latest, in, kind, opName, side.latestRef, side.isOutput,
+						path, wrapper, baselineMembers) {
 						continue
 					}
 					// Absent from the CRD is not missing if generator.yaml or a
@@ -1213,16 +1296,15 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 					if side.isOutput && isACKManagedARN(kind, path) {
 						continue
 					}
-					// Keyed by the path as the CRD sees it, so one field reached
-					// through different wrappers (`Table.X`, `TableDescription.X`)
-					// is one finding. An output wrapper the CRD itself models
-					// stays in the path.
+					// Keyed by the CRD path, so one field reached through different
+					// wrappers (`Table.X`, `TableDescription.X`) or renames is one
+					// finding.
 					key := crdPath
-					if side.isOutput && wrapper != "" && !exposedInCRD(in, kind, wrapper) {
-						key = unwrapped(path, wrapper)
-					}
 					if !slices.Contains(opsByPath[key], opName) {
 						opsByPath[key] = append(opsByPath[key], opName)
+					}
+					if path != key {
+						sdkPaths[key] = append(sdkPaths[key], opName+"="+path)
 					}
 					if rolesByPath[key] == nil {
 						rolesByPath[key] = &fieldRoles{}
@@ -1245,6 +1327,7 @@ func findAddedFields(latest, baseline *SmithyModel, in *ControllerInputs) []Find
 				Detail:      detail,
 				NewSincePin: true,
 				Evidence:    newEvidence(opNames),
+				SDKPaths:    newEvidence(sdkPaths[path]),
 			})
 		}
 	}
@@ -1331,19 +1414,28 @@ func hasNewAncestor(path string, latestMembers, baselineMembers map[string]Membe
 
 // outputWrapper returns the response member codegen unwraps before mapping a
 // response onto a resource, or "" when it reads the response as-is. Mirrors
-// code-generator's SetResource: a configured output_wrapper_field_path wins;
+// code-generator's SetResource: a configured output_wrapper_field_path wins; a
+// ReadMany response is read from its resource list (setResourceReadMany);
 // otherwise a response whose only member is a structure is unwrapped.
 func outputWrapper(m *SmithyModel, in *ControllerInputs, opName string, output *SmithyMemberRef) string {
+	declared := []string{}
 	if in.Config != nil {
 		if override, ok := in.Config.Operations[opName]; ok && override.OutputWrapperFieldPath != "" {
-			return override.OutputWrapperFieldPath
+			return modelSpelling(m, output, override.OutputWrapperFieldPath)
 		}
+		declared = in.Config.ResourceNames()
 	}
 	if output == nil {
 		return ""
 	}
 	shape, ok := m.Shapes[output.Target]
-	if !ok || len(shape.Members) != 1 {
+	if !ok {
+		return ""
+	}
+	if opTypes, _ := in.ClassifyOpWithOverrides(opName, declared); opTypes.Has(OpTypeList) {
+		return readManyList(m, opName, shape)
+	}
+	if len(shape.Members) != 1 {
 		return ""
 	}
 	for name, member := range shape.Members {
@@ -1352,6 +1444,162 @@ func outputWrapper(m *SmithyModel, in *ControllerInputs, opName string, output *
 		}
 	}
 	return ""
+}
+
+// inputWrapper returns the request member codegen flattens into Spec for an
+// operation, spelled as the model spells it. See
+// operationOverride.InputWrapperFieldPath.
+func inputWrapper(m *SmithyModel, in *ControllerInputs, opName string, input *SmithyMemberRef) string {
+	if in == nil {
+		return ""
+	}
+	return modelSpelling(m, input, in.Config.inputWrapper(opName))
+}
+
+// modelSpelling resolves a generator.yaml member path under root to the model's
+// spelling. Codegen matches wrapper paths case-insensitively against exported Go
+// names, so emrcontainers' `VirtualCluster` names Smithy's `virtualCluster`. An
+// unresolvable path is returned as given.
+func modelSpelling(m *SmithyModel, root *SmithyMemberRef, path string) string {
+	if root == nil || path == "" {
+		return path
+	}
+	shapeID := root.Target
+	var out []string
+	for _, segment := range strings.Split(path, ".") {
+		shape := m.Shapes[elementShape(m, shapeID)]
+		found := ""
+		if member, ok := shape.Members[segment]; ok {
+			found, shapeID = segment, member.Target
+		}
+		for name, member := range shape.Members {
+			if found == "" && strings.EqualFold(name, segment) {
+				found, shapeID = name, member.Target
+			}
+		}
+		if found == "" {
+			return path
+		}
+		out = append(out, found)
+	}
+	return strings.Join(out, ".")
+}
+
+// readManyList returns the top-level list member a ReadMany response holds its
+// resources in. Codegen takes the first list member in Go map order; the
+// paginated trait's `items` names it deterministically where present, and
+// otherwise the first in sorted order stands in.
+func readManyList(m *SmithyModel, opName string, output SmithyShape) string {
+	isList := func(name string) bool {
+		member, ok := output.Members[name]
+		return ok && m.Shapes[member.Target].Type == "list"
+	}
+	if items := operationPagination(m, opName).Items; isList(items) {
+		return items
+	}
+	names := make([]string, 0, len(output.Members))
+	for name := range output.Members {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if isList(name) {
+			return name
+		}
+	}
+	return ""
+}
+
+// pagination is Smithy's paginated trait: the request token and page size, and
+// the response token and item list, as member paths.
+type pagination struct {
+	InputToken  string `json:"inputToken"`
+	OutputToken string `json:"outputToken"`
+	PageSize    string `json:"pageSize"`
+	Items       string `json:"items"`
+}
+
+// operationPagination returns an operation's own paginated trait, or zero.
+func operationPagination(m *SmithyModel, opName string) pagination {
+	var p pagination
+	if op, ok := m.Operation(opName); ok {
+		if raw, ok := op.Traits[paginatedTraitKey]; ok {
+			_ = json.Unmarshal(raw, &p)
+		}
+	}
+	return p
+}
+
+const paginatedTraitKey = "smithy.api#paginated"
+
+// paginationMembers returns the request or response members an operation pages
+// with, which are call plumbing rather than resource state. Tokens and page
+// size the operation leaves out come from the service's trait (lambda declares
+// Marker/NextMarker/MaxItems once there), as Smithy merges them.
+func paginationMembers(m *SmithyModel, opName string, service pagination, isOutput bool) []string {
+	if op, ok := m.Operation(opName); !ok || op.Traits[paginatedTraitKey] == nil {
+		return nil
+	}
+	p := operationPagination(m, opName)
+	pick := func(own, fallback string) string {
+		if own != "" {
+			return own
+		}
+		return fallback
+	}
+	if isOutput {
+		return []string{pick(p.OutputToken, service.OutputToken)}
+	}
+	return []string{pick(p.InputToken, service.InputToken), pick(p.PageSize, service.PageSize)}
+}
+
+// servicePagination returns the service shape's paginated trait, or zero.
+func servicePagination(m *SmithyModel) pagination {
+	var p pagination
+	for _, shape := range m.Shapes {
+		if raw, ok := shape.Traits[paginatedTraitKey]; ok && shape.Type == "service" {
+			_ = json.Unmarshal(raw, &p)
+			break
+		}
+	}
+	return p
+}
+
+// crdFieldPath maps a member path of an operation's request or response onto
+// the CRD field path codegen generates for it: the input or output wrapper
+// (for ReadMany, the resource list) is stripped, then that operation's renames
+// applied. ok is false for a request member outside an input wrapper, which
+// codegen never sends.
+func crdFieldPath(
+	m *SmithyModel,
+	in *ControllerInputs,
+	kind, opName string,
+	ref *SmithyMemberRef,
+	isOutput bool,
+	path string,
+) (string, bool) {
+	wrapper := inputWrapper(m, in, opName, ref)
+	if isOutput {
+		wrapper = outputWrapper(m, in, opName, ref)
+	}
+	rel := path
+	if wrapper != "" {
+		rest, under := strings.CutPrefix(path, wrapper+".")
+		if !isOutput && !under {
+			return "", false
+		}
+		if under {
+			rel = rest
+		}
+	}
+	segments := in.Config.renamedPath(kind, opName, strings.Split(rel, "."))
+	// An output wrapper the CRD models as a field stays in the path (s3's
+	// objectLockConfiguration, which hooks read), unless the CRD also has the
+	// unwrapped member, as acm's certificate PEM beside options does.
+	if isOutput && rel != path && exposedInCRD(in, kind, wrapper) && !exposedAt(in, kind, segments[0]) {
+		return path, true
+	}
+	return strings.Join(segments, "."), true
 }
 
 // unwrapped strips wrapper from the front of an output member path, if present.
@@ -1370,8 +1618,12 @@ func unwrapped(path, wrapper string) string {
 // field only as part of its parent's type, so regeneration cannot add it. Only
 // the nearest pre-existing ancestor decides; the wrapper never does.
 func underDeclinedParent(
+	m *SmithyModel,
 	in *ControllerInputs,
-	kind, opName, path, wrapper string,
+	kind, opName string,
+	ref *SmithyMemberRef,
+	isOutput bool,
+	path, wrapper string,
 	baselineMembers map[string]MemberInfo,
 ) bool {
 	for i := strings.LastIndex(path, "."); i > 0; i = strings.LastIndex(path[:i], ".") {
@@ -1382,10 +1634,8 @@ func underDeclinedParent(
 		if ancestor == wrapper {
 			return false
 		}
-		// Check both spellings: a CRD can model the wrapper itself (s3's
-		// `objectLockConfiguration`).
-		return !exposedInCRD(in, kind, ancestor) &&
-			!exposedInCRD(in, kind, unwrapped(ancestor, wrapper)) &&
+		crdPath, ok := crdFieldPath(m, in, kind, opName, ref, isOutput, ancestor)
+		return !(ok && exposedAt(in, kind, crdPath)) &&
 			!sourcedAsCRDField(in, kind, opName, ancestor)
 	}
 	return false
@@ -1435,18 +1685,22 @@ func dedupeFindings(findings []Finding) []Finding {
 
 // fingerprintFindings hashes the identity of a finding set so a later run can
 // recognise it in an existing issue. It covers the service (all controllers file
-// into one repo) and each finding's Class name, Kind, Subject and Evidence, but
-// not Detail, so prose and version changes do not churn issues. Callers pass only
-// actionable findings.
+// into one repo) and each finding's Class name, Kind and Subject. Evidence and
+// Detail are left out: a new operation can grow either without changing what a
+// maintainer must do, so it rewords the body silently instead of notifying. Class
+// stays in because a reclassification (spec to status field, possible to new
+// resource) changes the work. Callers pass only actionable findings.
 //
 // The hashed bytes are a wire format stored in open issues; changing them
 // re-files every issue. TestFingerprintFormatLock pins it.
 func fingerprintFindings(service string, findings []Finding) string {
 	lines := make([]string, 0, len(findings))
 	for _, f := range findings {
-		lines = append(lines, fmt.Sprintf("%q|%q|%q|%q", f.Class.String(), f.Kind, f.Subject, f.Evidence))
+		lines = append(lines, fmt.Sprintf("%q|%q|%q", f.Class.String(), f.Kind, f.Subject))
 	}
 	sort.Strings(lines)
+	// Findings differing only in unhashed fields would otherwise count twice.
+	lines = slices.Compact(lines)
 
 	h := sha256.New()
 	fmt.Fprintf(h, "%q\n", service)
@@ -2354,11 +2608,52 @@ func reconcileIssue(
 			return issueOutcomeNone, err
 		}
 
+		// GitHub has no conditional PATCH, so re-read and re-merge right before it:
+		// a maintainer's edit or close during the comment would otherwise be
+		// overwritten, and a closed issue left carrying want would suppress it.
+		merged, err = remergeAfterComment(ctx, client, owner, repo, service, existing, body, want)
+		if err != nil {
+			return issueOutcomeNone, err
+		}
 		if err := updateGithubIssueBody(ctx, client, owner, repo, number, merged); err != nil {
 			return issueOutcomeNone, err
 		}
 	}
 	return issueUpdated, nil
+}
+
+// remergeAfterComment re-reads the issue reconcileIssue has just commented on and
+// merges region into its current body. It refuses, so the PATCH is skipped, if the
+// issue no longer passes refetchManagedIssue or its fingerprint was changed by
+// someone other than this tool.
+func remergeAfterComment(
+	ctx context.Context,
+	client *github.Client,
+	owner, repo, service string,
+	existing *github.Issue,
+	region, want string,
+) (string, error) {
+	number := existing.GetNumber()
+	fresh, err := refetchManagedIssue(ctx, client, owner, repo, service, existing)
+	if err != nil {
+		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: %w",
+			owner, repo, number, err)
+	}
+	if got := parseFingerprint(fresh.GetBody()); got != parseFingerprint(existing.GetBody()) && got != want {
+		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: "+
+			"its fingerprint was edited during the refresh", owner, repo, number)
+	}
+	merged, err := replaceGeneratedRegion(fresh.GetBody(), region)
+	if err != nil {
+		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: %w",
+			owner, repo, number, err)
+	}
+	if len(merged) > githubMaxIssueBody {
+		return "", fmt.Errorf("commented on issue %s/%s#%d but left its body as is: "+
+			"the refreshed body would be %d bytes, over GitHub's %d-byte limit",
+			owner, repo, number, len(merged), githubMaxIssueBody)
+	}
+	return merged, nil
 }
 
 // getAPINotificationServices reads api_notification_services from

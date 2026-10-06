@@ -225,6 +225,38 @@ func TestIgnoresMember(t *testing.T) {
 	assert.False(t, none.ignoresMember(m, "CreateWidget", nil, false, "Extra", nil))
 }
 
+func TestIgnoresMemberThroughMapValue(t *testing.T) {
+	// codegen's field paths look through map values as through lists.
+	m := mapModel(t, true)
+	shape, ok := m.Operation("DescribeFirewall")
+	require.True(t, ok)
+	members := m.WalkMembers(shape.Output.Target, maxWalkDepth)
+	cfg := &generatorConfig{Ignore: ignoreConfig{FieldPaths: []string{"SyncState.NatGatewayAttachments"}}}
+
+	assert.True(t, cfg.ignoresMember(m, "DescribeFirewall", shape.Output, true,
+		"FirewallStatus.SyncStates.NatGatewayAttachments", members))
+	assert.False(t, cfg.ignoresMember(m, "DescribeFirewall", shape.Output, true,
+		"FirewallStatus.SyncStates.Attachment", members))
+}
+
+func TestFindAddedFieldsDescendsIntoMapValues(t *testing.T) {
+	// The field a map value gained is reported; the one the CRD already has
+	// through additionalProperties is not.
+	in := &ControllerInputs{
+		Config: &generatorConfig{},
+		CRDFields: map[string]map[string]bool{"Firewall": {
+			"firewallarn": true, "firewallstatus": true, "firewallstatus.status": true,
+			"firewallstatus.syncstates": true, "firewallstatus.syncstates.attachment": true,
+			"firewallstatus.labels": true, "firewallstatus.tree": true,
+		}},
+		UsedOps: map[string]map[string]bool{"firewall": {"DescribeFirewall": true}},
+	}
+	got := findAddedFields(mapModel(t, true), mapModel(t, false), in)
+	require.Len(t, got, 1)
+	assert.Equal(t, "FirewallStatus.SyncStates.NatGatewayAttachments", got[0].Subject)
+	assert.Equal(t, ClassStatusField, got[0].Class)
+}
+
 func TestSetterFieldCandidatesHonoursIgnores(t *testing.T) {
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
 		"demo#UpdateWidgetOptions": {"type": "operation", "input": {"target": "demo#UpdateWidgetOptionsRequest"}},
@@ -241,7 +273,7 @@ func TestSetterFieldCandidatesHonoursIgnores(t *testing.T) {
 		FieldPaths: []string{"UpdateWidgetOptionsInput.Level"},
 	}}}
 
-	got := setterFieldCandidates(m, in, "Widget", "UpdateWidgetOptions", OpTypes{OpTypeUpdate})
+	got := setterFieldCandidates(m, in, "Widget", "UpdateWidgetOptions", OpTypes{OpTypeUpdate}, nil)
 	assert.Equal(t, []string{"Note"}, subjects(got, ClassLifecycleField))
 	assert.Empty(t, subjects(got, ClassSpecField))
 }

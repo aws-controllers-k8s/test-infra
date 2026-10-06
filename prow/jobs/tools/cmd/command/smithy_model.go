@@ -35,7 +35,9 @@ type SmithyShape struct {
 	Members map[string]SmithyMemberRef `json:"members"`
 	// Member is a `list` shape's element. Smithy encodes it as a top-level
 	// "member" key, not inside "members".
-	Member *SmithyMemberRef           `json:"member"`
+	Member *SmithyMemberRef `json:"member"`
+	// Value is a `map` shape's value; keys are always strings, so not kept.
+	Value  *SmithyMemberRef           `json:"value"`
 	Input  *SmithyMemberRef           `json:"input"`
 	Output *SmithyMemberRef           `json:"output"`
 	Traits map[string]json.RawMessage `json:"traits"`
@@ -125,8 +127,8 @@ type MemberInfo struct {
 }
 
 // WalkMembers returns every member reachable from shapeID, keyed by dotted
-// path. Lists are transparent (no index segment). maxDepth is capped at
-// maxWalkDepth.
+// path. Lists and map values are transparent (no index or key segment).
+// maxDepth is capped at maxWalkDepth.
 //
 // Cycles are guarded per branch, not globally, so distinct paths to the same
 // shape (two fields targeting Tag) are all reported.
@@ -165,9 +167,12 @@ func (m *SmithyModel) walk(
 		return
 	}
 
-	// Maps are leaves: ACK renders them as additionalProperties, so per-key
-	// paths could never match a CRD field.
+	// Maps are transparent too: ACK renders a structured value as
+	// additionalProperties, whose fields readCRDFields records at the map's path.
 	if shape.Type == "map" {
+		if shape.Value != nil {
+			m.walk(shape.Value.Target, prefix, remaining, onBranch, out)
+		}
 		return
 	}
 

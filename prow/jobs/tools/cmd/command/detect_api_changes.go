@@ -282,11 +282,16 @@ func reconcileServices(
 	// Tracked explicitly: an abort on the last service leaves attempted equal to
 	// len(services).
 	var aborted bool
+	// The context error that stopped the run before every service was attempted.
+	var cutShort error
 
 	// Deferred so the closing tally is also logged on the abort path.
 	defer func() {
 		scope := fmt.Sprintf("%d services", len(services))
-		if aborted || attempted < len(services) {
+		switch {
+		case cutShort != nil:
+			scope = fmt.Sprintf("%d of %d services (run cut short: %v)", attempted, len(services), cutShort)
+		case aborted || attempted < len(services):
 			scope = fmt.Sprintf("%d of %d services (run stopped early)", attempted, len(services))
 		}
 		// Every attempted service lands in exactly one bucket. The aborting service
@@ -313,6 +318,14 @@ func reconcileServices(
 	}()
 
 	for _, service := range services {
+		// Checked here, not only in requests: analysis scans the controller checkout
+		// before its first request, so a cancelled run would otherwise keep going.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			cutShort = ctxErr
+			return analysisFailures, writeFailures, skippedAtCap,
+				fmt.Errorf("run cut short before %s, %d of %d services not attempted: %w",
+					service, len(services)-attempted, len(services), ctxErr)
+		}
 		attempted++
 		findings, baselineVersion, latestVersion, analyzeErr := analyze(ctx, service)
 		if analyzeErr != nil {
@@ -547,6 +560,7 @@ func mergeEvidence(findings []Finding) []Finding {
 			continue
 		}
 		out[i].Evidence = newEvidence(append(out[i].evidenceOps(), f.evidenceOps()...))
+		out[i].SDKPaths = joinSDKPaths(out[i].SDKPaths, f.SDKPaths)
 		out[i].NewSincePin = out[i].NewSincePin || f.NewSincePin
 	}
 	return out

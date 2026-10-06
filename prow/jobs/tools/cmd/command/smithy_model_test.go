@@ -112,3 +112,65 @@ func TestSmithyModel_WalkMembersFlattensLists(t *testing.T) {
 	assert.NotContains(t, paths, "Rules.Tier.STANDARD")
 	assert.NotContains(t, paths, "Rules.Tier.ARCHIVE")
 }
+
+// mapModel is networkfirewall's FirewallStatus.SyncStates map[string]SyncState,
+// plus a scalar map and a self-referencing one for the cycle guard.
+func mapModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	syncState := `"Attachment": {"target": "smithy.api#String"}`
+	if latest {
+		syncState += `, "NatGatewayAttachments": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"fw#DescribeFirewall": {"type": "operation", "input": {"target": "fw#DescribeFirewallRequest"},
+			"output": {"target": "fw#DescribeFirewallResponse"}},
+		"fw#DescribeFirewallRequest": {"type": "structure", "members": {"FirewallArn": {"target": "smithy.api#String"}}},
+		"fw#DescribeFirewallResponse": {"type": "structure", "members": {
+			"FirewallArn": {"target": "smithy.api#String"},
+			"FirewallStatus": {"target": "fw#FirewallStatus"}}},
+		"fw#FirewallStatus": {"type": "structure", "members": {
+			"Status": {"target": "smithy.api#String"},
+			"SyncStates": {"target": "fw#SyncStates"},
+			"Labels": {"target": "fw#Labels"},
+			"Tree": {"target": "fw#Tree"}}},
+		"fw#SyncStates": {"type": "map", "key": {"target": "smithy.api#String"}, "value": {"target": "fw#SyncState"}},
+		"fw#SyncState": {"type": "structure", "members": {` + syncState + `}},
+		"fw#Labels": {"type": "map", "key": {"target": "smithy.api#String"}, "value": {"target": "smithy.api#String"}},
+		"fw#Tree": {"type": "map", "key": {"target": "smithy.api#String"}, "value": {"target": "fw#Tree"}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestSmithyModel_WalkMembersFlattensMapValues(t *testing.T) {
+	m := mapModel(t, true)
+
+	got := m.WalkMembers("fw#FirewallStatus", 4)
+	paths := make([]string, 0, len(got))
+	for p := range got {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	// Structured values appear at the map's path; scalar values and the
+	// self-referencing Tree add nothing beneath it.
+	assert.Equal(t, []string{
+		"Labels",
+		"Status",
+		"SyncStates",
+		"SyncStates.Attachment",
+		"SyncStates.NatGatewayAttachments",
+		"Tree",
+	}, paths)
+	assert.Equal(t, "fw#SyncStates", got["SyncStates"].Target)
+
+	// A map does not consume depth, as with lists.
+	assert.Contains(t, m.WalkMembers("fw#FirewallStatus", 2), "SyncStates.NatGatewayAttachments")
+	assert.NotContains(t, m.WalkMembers("fw#FirewallStatus", 1), "SyncStates.NatGatewayAttachments")
+}
+
+func TestElementShapeUnwrapsMapValues(t *testing.T) {
+	m := mapModel(t, true)
+	assert.Equal(t, "fw#SyncState", elementShape(m, "fw#SyncStates"))
+	assert.Equal(t, "smithy.api#String", elementShape(m, "fw#Labels"))
+}

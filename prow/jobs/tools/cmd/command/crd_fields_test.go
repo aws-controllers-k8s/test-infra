@@ -96,6 +96,53 @@ spec:
 	assert.Nil(t, got, "no partial field set may escape")
 }
 
+func TestReadCRDFieldsFlattensMapValues(t *testing.T) {
+	// A structured map value is recorded at the map's own path, as WalkMembers
+	// reports it; the boolean additionalProperties form has no fields.
+	root := t.TempDir()
+	dir := filepath.Join(root, "config", "crd", "bases")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "firewalls.yaml"), []byte(
+		`apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: firewalls.networkfirewall.services.k8s.aws
+spec:
+  names:
+    kind: Firewall
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          status:
+            type: object
+            properties:
+              syncStates:
+                type: object
+                additionalProperties:
+                  properties:
+                    attachment:
+                      properties:
+                        subnetID:
+                          type: string
+                      type: object
+                  type: object
+              labels:
+                type: object
+                additionalProperties: true
+`), 0o644))
+
+	got, err := readCRDFields(root)
+	require.NoError(t, err)
+	fw := got["Firewall"]
+	for _, want := range []string{"syncstates", "syncstates.attachment", "syncstates.attachment.subnetid", "labels"} {
+		assert.True(t, fw[want], "expected field path %q", want)
+	}
+	assert.False(t, fw["syncstates.natgatewayattachments"])
+}
+
 func TestReadCRDFieldsNoDir(t *testing.T) {
 	got, err := readCRDFields("../../../testdata/does-not-exist")
 	require.NoError(t, err)

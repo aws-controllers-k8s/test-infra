@@ -42,6 +42,20 @@ type crdProps struct {
 	Type       string              `yaml:"type"`
 	Properties map[string]crdProps `yaml:"properties"`
 	Items      *crdProps           `yaml:"items"`
+	// AdditionalProperties is a map's value schema; empty when the CRD gives a
+	// boolean.
+	AdditionalProperties *crdProps `yaml:"additionalProperties"`
+}
+
+// UnmarshalYAML accepts the boolean form of additionalProperties, which has no
+// fields to record.
+func (p *crdProps) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		*p = crdProps{}
+		return nil
+	}
+	type plain crdProps
+	return node.Decode((*plain)(p))
 }
 
 // readCRDFields returns, per resource kind, the set of field paths the
@@ -101,10 +115,14 @@ func readCRDFields(controllerPath string) (map[string]map[string]bool, error) {
 }
 
 // flattenCRDProps adds every property path under node to fields. Array items
-// are transparent, so "rules.prefix" rather than "rules[].prefix".
+// and map values are transparent, so "rules.prefix" rather than "rules[].prefix",
+// matching WalkMembers.
 func flattenCRDProps(node crdProps, prefix string, fields map[string]bool) {
 	if node.Items != nil {
 		flattenCRDProps(*node.Items, prefix, fields)
+	}
+	if node.AdditionalProperties != nil {
+		flattenCRDProps(*node.AdditionalProperties, prefix, fields)
 	}
 	for name, child := range node.Properties {
 		path := strings.ToLower(name)

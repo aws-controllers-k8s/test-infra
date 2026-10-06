@@ -102,6 +102,17 @@ func TestAnnotateFieldsFoldsReadBacks(t *testing.T) {
 	assert.Equal(t, "CreateFirewall,DescribeFirewall", got[0].Evidence)
 	assert.Equal(t, "CreateFirewall", got[0].SetBy)
 	assert.Equal(t, "DescribeFirewall", got[0].ReadBy, "a read is durable read-back")
+
+	// s3vectors: a new setter's Spec field, and the read's Status finding already
+	// keyed behind its wrapper.
+	got = annotateFields(m, &ControllerInputs{Config: &generatorConfig{}}, []Finding{
+		{Kind: "Firewall", Class: ClassSpecField, Subject: "TransitGatewayId", NewSincePin: true, Evidence: "CreateFirewall"},
+		{Kind: "Firewall", Class: ClassStatusField, Subject: "TransitGatewayId", NewSincePin: true,
+			Evidence: "DescribeFirewall", SDKPaths: "DescribeFirewall=Firewall.TransitGatewayId"},
+	})
+	require.Len(t, got, 1)
+	assert.Equal(t, "CreateFirewall,DescribeFirewall", got[0].Evidence)
+	assert.Equal(t, "DescribeFirewall=Firewall.TransitGatewayId", got[0].SDKPaths)
 }
 
 // TestAnnotateFieldsAddsUpdateOperations: a field changed by operations other than
@@ -356,4 +367,11 @@ func TestAnnotateFieldsAttributesRolesByPath(t *testing.T) {
 	assert.Equal(t, "ModifyVpcEndpointPayerResponsibility=PayerResponsibilities.Scope", got[0].ReturnedBy)
 	assert.Equal(t, "DescribeVpcEndpoints", got[1].ReadBy)
 	assert.Equal(t, "ModifyVpcEndpointPayerResponsibility", got[1].ReturnedBy)
+}
+
+func TestCanSetExcludesReadsAndDeletes(t *testing.T) {
+	assert.True(t, canSet(OpTypes{OpTypeUpdate}, "PutWidgetConfig"))
+	assert.True(t, canSet(OpTypes{OpTypeCreate, OpTypeDelete}, "ChangeWidget"))
+	assert.False(t, canSet(OpTypes{OpTypeList}, "ListWidgets"))
+	assert.False(t, canSet(OpTypes{OpTypeDelete}, "DeleteWidget"))
 }

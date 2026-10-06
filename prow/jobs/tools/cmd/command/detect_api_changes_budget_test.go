@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -78,6 +79,54 @@ func TestReconcileIssueNewOperationRewordsSilently(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.True(t, patched)
+}
+
+// withDescribeGizmo is sampleFindings after a release adds DescribeGizmo: it is
+// folded into the resource's Evidence, also returns an existing field, and is
+// listed as a new operation.
+func withDescribeGizmo() []Finding {
+	findings := sampleFindings()
+	findings[0].Evidence = "CreateGizmo,DeleteGizmo,DescribeGizmo"
+	findings[2].Evidence = "CreateWidget,DescribeGizmo"
+	return append(findings,
+		Finding{Kind: "Gizmo", Class: ClassNewOperation, Subject: "DescribeGizmo", NewSincePin: true})
+}
+
+func TestFingerprintIgnoresOperationEvidence(t *testing.T) {
+	// The operation reaches resource and field Evidence too, which must not re-file
+	// a closed issue either.
+	_, closed := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+	_, got := renderIssueBody("demo", "v1.41.5", "v1.44.0", withDescribeGizmo())
+	assert.Equal(t, closed, got)
+
+	outcome, err := reconcileIssue(context.Background(), nil, "o", "community", "demo",
+		"v1.41.5", "v1.44.0", withDescribeGizmo(), nil, map[string]bool{closed: true}, 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueSuppressedByClosed, outcome)
+}
+
+func TestReconcileIssueEvidenceGrowthRewordsSilently(t *testing.T) {
+	// The grown Evidence still reaches an open issue's body, without a comment.
+	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
+
+	var patchedBody string
+	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42" {
+			var payload struct{ Body string }
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			patchedBody = payload.Body
+			fmt.Fprint(w, `{}`)
+			return
+		}
+		t.Errorf("only a silent PATCH expected, got %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.41.5", "v1.44.0", withDescribeGizmo(), issueFor(42, filed), nil, 10, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, issueUpdated, outcome)
+	assert.Contains(t, patchedBody, "DescribeGizmo")
 }
 
 func TestReconcileServicesTreatsOperationsAloneAsNothingToFile(t *testing.T) {

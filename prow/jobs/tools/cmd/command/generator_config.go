@@ -15,6 +15,7 @@ package command
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -181,47 +182,48 @@ func (c *generatorConfig) resource(kind string) (resourceConfig, bool) {
 	return resourceConfig{}, false
 }
 
-// RenamesForResource returns a flat AWS-member-name to ACK-field-name map for
-// one resource, collapsed across operations and across input and output
-// fields. ACK keeps renames consistent within a resource, so collapsing is
-// safe and keeps the suppression lookup simple.
-func (c *generatorConfig) RenamesForResource(kind string) map[string]string {
+// renamesFor returns the AWS-member-name to ACK-field-name renames of one
+// operation of a resource. Per operation, as in code-generator's
+// GetResourceFieldName (Organizations renames Account's `Id` differently on
+// CreateAccount and DescribeAccount); input_fields win over output_fields on
+// either side, as there.
+func (c *generatorConfig) renamesFor(kind, opName string) map[string]string {
 	res, ok := c.resource(kind)
 	if !ok {
 		return nil
 	}
-
-	// Merge in sorted order so conflicting renames resolve deterministically.
-	opNames := make([]string, 0, len(res.Renames.Operations))
-	for opName := range res.Renames.Operations {
-		opNames = append(opNames, opName)
-	}
-	sort.Strings(opNames)
-
-	out := map[string]string{}
-	for _, opName := range opNames {
-		op := res.Renames.Operations[opName]
-		for from, to := range op.InputFields {
-			out[from] = to
-		}
-		for from, to := range op.OutputFields {
-			out[from] = to
-		}
-	}
-	if len(out) == 0 {
+	op, ok := res.Renames.Operations[opName]
+	if !ok || len(op.InputFields)+len(op.OutputFields) == 0 {
 		return nil
 	}
+	out := make(map[string]string, len(op.InputFields)+len(op.OutputFields))
+	maps.Copy(out, op.OutputFields)
+	maps.Copy(out, op.InputFields)
 	return out
 }
 
-// renamedPath applies a resource's renames to an AWS member path, segment by
+// renamedOps returns, sorted, the operations a resource declares renames for.
+func (c *generatorConfig) renamedOps(kind string) []string {
+	res, ok := c.resource(kind)
+	if !ok {
+		return nil
+	}
+	ops := make([]string, 0, len(res.Renames.Operations))
+	for opName := range res.Renames.Operations {
+		ops = append(ops, opName)
+	}
+	sort.Strings(ops)
+	return ops
+}
+
+// renamedPath applies one operation's renames to an AWS member path, segment by
 // segment. A key is a member name or a dotted path renaming its last segment;
 // a dotted key's parents may be spelled as in AWS or already renamed (as in
 // firehose), so both are tried. Keys match exactly, as in code-generator's
 // GetResourceFieldName.
-func (c *generatorConfig) renamedPath(kind string, segments []string) []string {
+func (c *generatorConfig) renamedPath(kind, opName string, segments []string) []string {
 	out := slices.Clone(segments)
-	renames := c.RenamesForResource(kind)
+	renames := c.renamesFor(kind, opName)
 	if len(renames) == 0 {
 		return out
 	}

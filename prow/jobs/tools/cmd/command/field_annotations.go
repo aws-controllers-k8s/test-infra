@@ -95,10 +95,19 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		slices.Sort(ops)
 		var setBy, readBy, returnedBy []string
 		for _, opID := range slices.Compact(ops) {
-			if _, ok := roles.find(opID, false, f.Kind, f.Subject); ok {
+			sdkPaths := f.sdkPaths(opID)
+			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
+			_, set := roles.find(opID, false, f.Kind, f.Subject)
+			if !set {
+				_, set = roles.findSDKPath(opID, false, sdkPaths)
+			}
+			if set && canSet(opTypes, opID) {
 				setBy = append(setBy, opID)
 			}
 			path, ok := roles.find(opID, true, f.Kind, f.Subject)
+			if !ok {
+				path, ok = roles.findSDKPath(opID, true, sdkPaths)
+			}
 			if !ok {
 				continue
 			}
@@ -106,7 +115,6 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 			if path != "" {
 				entry += "=" + path
 			}
-			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
 			if isReadOp(opTypes, opID) {
 				readBy = append(readBy, entry)
 			} else {
@@ -137,6 +145,36 @@ func newRoleIndex(m *SmithyModel) *roleIndex {
 // Elsewhere the path matters: Scope returned only as `PayerResponsibilities.Scope`
 // is per entry, which is why reconciling it needs custom code.
 func (r *roleIndex) find(opID string, output bool, kind, field string) (string, bool) {
+	walk := r.walk(opID, output)
+	nested := ""
+	for p := range walk {
+		wrapper, rest, wrapped := strings.Cut(p, ".")
+		if p == field || (wrapped && rest == field &&
+			(strings.Contains(field, ".") || r.resourceWrapper(walk, kind, wrapper))) {
+			return "", true
+		}
+		if !strings.Contains(field, ".") && lastSegment(p) == field && (nested == "" || p < nested) {
+			nested = p
+		}
+	}
+	return nested, nested != ""
+}
+
+// findSDKPath reports the first of a field's recorded SDK paths (Finding.SDKPaths)
+// an operation's request (or response) carries, for fields find cannot locate by
+// their renamed Subject.
+func (r *roleIndex) findSDKPath(opID string, output bool, paths []string) (string, bool) {
+	walk := r.walk(opID, output)
+	for _, path := range paths {
+		if _, ok := walk[path]; ok {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+// walk returns, cached, the members of an operation's request or response.
+func (r *roleIndex) walk(opID string, output bool) map[string]MemberInfo {
 	key := opID + "/in"
 	if output {
 		key = opID + "/out"
@@ -155,18 +193,7 @@ func (r *roleIndex) find(opID string, output bool, kind, field string) (string, 
 		}
 		r.walks[key] = walk
 	}
-	nested := ""
-	for p := range walk {
-		wrapper, rest, wrapped := strings.Cut(p, ".")
-		if p == field || (wrapped && rest == field &&
-			(strings.Contains(field, ".") || r.resourceWrapper(walk, kind, wrapper))) {
-			return "", true
-		}
-		if !strings.Contains(field, ".") && lastSegment(p) == field && (nested == "" || p < nested) {
-			nested = p
-		}
-	}
-	return nested, nested != ""
+	return walk
 }
 
 // resourceWrapper reports whether a top-level member of a walked shape stands for
@@ -184,24 +211,29 @@ func (r *roleIndex) resourceWrapper(walk map[string]MemberInfo, kind, name strin
 	return true
 }
 
-// foldReadBacks folds each Status finding `W.X` into the resource's Spec finding X
-// when W is a response structure. A list W is a per-element observation and stays.
+// foldReadBacks folds each Status finding X, or `W.X` when W is a response
+// structure, into the resource's Spec finding X: a read returning a field another
+// producer reports as Spec. A list W is a per-element observation and stays.
 func foldReadBacks(latest *SmithyModel, findings []Finding) []Finding {
 	spec := map[[2]string]int{}
 	for i, f := range findings {
-		if f.Class == ClassSpecField && !strings.Contains(f.Subject, ".") {
+		if f.Class == ClassSpecField {
 			spec[[2]string{f.Kind, f.Subject}] = i
 		}
 	}
 	out := findings[:0:0]
 	for _, f := range findings {
-		wrapper, field, nested := strings.Cut(f.Subject, ".")
-		i, paired := spec[[2]string{f.Kind, field}]
-		if f.Class != ClassStatusField || !nested || !paired || !responseStructure(latest, f.evidenceOps(), wrapper) {
+		i, paired := spec[[2]string{f.Kind, f.Subject}]
+		if wrapper, field, nested := strings.Cut(f.Subject, "."); !paired && nested {
+			i, paired = spec[[2]string{f.Kind, field}]
+			paired = paired && !strings.Contains(field, ".") && responseStructure(latest, f.evidenceOps(), wrapper)
+		}
+		if f.Class != ClassStatusField || !paired {
 			out = append(out, f)
 			continue
 		}
 		findings[i].Evidence = newEvidence(append(findings[i].evidenceOps(), f.evidenceOps()...))
+		findings[i].SDKPaths = joinSDKPaths(findings[i].SDKPaths, f.SDKPaths)
 	}
 	// Indices into findings were taken before filtering; copy the updated Spec
 	// findings across.
@@ -462,6 +494,12 @@ func findStateView(m *SmithyModel, f Finding) stateView {
 	return view
 }
 
+// canSet reports whether an operation's request can change a field: a read's
+// request only filters or identifies, and so does a Delete's.
+func canSet(opTypes OpTypes, opID string) bool {
+	return !isReadOp(opTypes, opID) && !opTypes.Only(OpTypeDelete)
+}
+
 // customSetterDetail notes when a Spec field is changed by an operation other than
 // the resource's own Update, which codegen does not call. It returns "" for fields
 // only a Create sends, or that the generated Update sends; a hand-written Update
@@ -483,7 +521,9 @@ func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string,
 			return ""
 		case opTypes.Has(OpTypeCreate, OpTypeCreateBatch):
 		default:
-			setters = append(setters, opID)
+			if canSet(opTypes, opID) {
+				setters = append(setters, opID)
+			}
 		}
 	}
 	if len(setters) == 0 {
@@ -594,7 +634,7 @@ func requestCarries(m *SmithyModel, in *ControllerInputs, opID, path string) boo
 	if in == nil {
 		return false
 	}
-	wrapper := in.Config.inputWrapper(opID)
+	wrapper := inputWrapper(m, in, opID, op.Input)
 	if wrapper == "" {
 		return false
 	}

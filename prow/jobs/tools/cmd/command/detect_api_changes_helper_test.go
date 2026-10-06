@@ -484,6 +484,13 @@ func TestSourcedAsCRDField(t *testing.T) {
 	// A different path on the declared operation is not covered either.
 	assert.False(t, sourcedAsCRDField(in, "Bucket", "PutBucketAbac", "ChecksumAlgorithm"))
 	assert.False(t, sourcedAsCRDField(in, "Gizmo", "PutBucketAbac", "AbacStatus"))
+
+	// applicationautoscaling's `..` steps into a list element.
+	in.Config.Resources["ScalingPolicy"] = resourceConfig{Fields: map[string]resourceFieldConfig{
+		"CreationTime": {From: &resourceFieldFrom{
+			Operation: "DescribeScalingPolicies", Path: "ScalingPolicies..CreationTime"}},
+	}}
+	assert.True(t, sourcedAsCRDField(in, "ScalingPolicy", "DescribeScalingPolicies", "ScalingPolicies.CreationTime"))
 }
 
 func TestIsACKManagedARN(t *testing.T) {
@@ -575,9 +582,11 @@ func TestFindAddedFieldsFollowsCodegenOutputUnwrapping(t *testing.T) {
 		{Kind: "Bucket", Class: ClassStatusField, NewSincePin: true,
 			Subject: "ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold", Evidence: "GetLock"},
 		{Kind: "Group", Class: ClassStatusField, NewSincePin: true,
-			Subject: "SourceRoleTemplate", Evidence: "GetGroup"},
+			Subject: "SourceRoleTemplate", Evidence: "GetGroup",
+			SDKPaths: "GetGroup=Group.SourceRoleTemplate"},
 		{Kind: "Role", Class: ClassSpecField, NewSincePin: true,
-			Subject: "SourceRoleTemplate", Evidence: "CreateRole,GetRole,UpdateRole"},
+			Subject: "SourceRoleTemplate", Evidence: "CreateRole,GetRole,UpdateRole",
+			SDKPaths: "CreateRole=Role.SourceRoleTemplate,GetRole=Role.SourceRoleTemplate"},
 	}, got,
 		"Profile must report nothing: its CRD does not model Roles, so a new field "+
 			"inside Roles cannot reach it; Bucket must still report, because its CRD "+
@@ -641,9 +650,11 @@ func TestFindAddedFieldsFollowsCodegenInputWrapper(t *testing.T) {
 	got := findAddedFields(inputWrapperModel(t, true), inputWrapperModel(t, false), in)
 	assert.Equal(t, []Finding{
 		{Kind: "BackupPlan", Class: ClassSpecField, NewSincePin: true,
-			Subject: "Rules.IndexActions", Evidence: "CreateBackupPlan"},
+			Subject: "Rules.IndexActions", Evidence: "CreateBackupPlan",
+			SDKPaths: "CreateBackupPlan=BackupPlan.Rules.IndexActions"},
 		{Kind: "BackupPlan", Class: ClassSpecField, NewSincePin: true,
-			Subject: "ScanSettings", Evidence: "CreateBackupPlan"},
+			Subject: "ScanSettings", Evidence: "CreateBackupPlan",
+			SDKPaths: "CreateBackupPlan=BackupPlan.ScanSettings"},
 	}, got,
 		"members inside the wrapper are reported without it, and OuterOption, which "+
 			"codegen leaves out of Spec, not at all")
@@ -654,6 +665,226 @@ func TestFindAddedFieldsFollowsCodegenInputWrapper(t *testing.T) {
 	assert.True(t, requestCarries(m, in, "CreateBackupPlan", "OuterOption"))
 	assert.False(t, requestCarries(m, nil, "CreateBackupPlan", "ScanSettings"))
 	assert.True(t, fieldInModel(m, in, "CreateBackupPlan", "Rules.IndexActions"))
+}
+
+// readManyModel has applicationautoscaling's DescribeScalingPolicies. latest
+// adds a policy member and the paginated trait's members; Alarms sorts before
+// the resource list, so only the trait's `items` picks ScalingPolicies.
+func readManyModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	request, response := `"ServiceNamespace": {"target": "smithy.api#String"}`, `"Alarms": {"target": "demo#Alarms"}, "ScalingPolicies": {"target": "demo#Policies"}`
+	policy := `"PolicyName": {"target": "smithy.api#String"}`
+	if latest {
+		request += `, "NextToken": {"target": "smithy.api#String"}, "MaxResults": {"target": "smithy.api#Integer"}`
+		response += `, "NextToken": {"target": "smithy.api#String"}`
+		policy += `, "NewField": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#DescribeScalingPolicies": {"type": "operation",
+			"input": {"target": "demo#DescribeIn"}, "output": {"target": "demo#DescribeOut"},
+			"traits": {"smithy.api#paginated": {"inputToken": "NextToken", "outputToken": "NextToken",
+				"pageSize": "MaxResults", "items": "ScalingPolicies"}}},
+		"demo#DescribeIn": {"type": "structure", "members": {` + request + `}},
+		"demo#DescribeOut": {"type": "structure", "members": {` + response + `}},
+		"demo#Alarms": {"type": "list", "member": {"target": "demo#Alarm"}},
+		"demo#Alarm": {"type": "structure", "members": {"AlarmName": {"target": "smithy.api#String"}}},
+		"demo#Policies": {"type": "list", "member": {"target": "demo#Policy"}},
+		"demo#Policy": {"type": "structure", "members": {` + policy + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestFindAddedFieldsUnwrapsReadManyList(t *testing.T) {
+	in := &ControllerInputs{
+		Config:    &generatorConfig{},
+		CRDFields: map[string]map[string]bool{"ScalingPolicy": {"policyname": true}},
+		UsedOps:   map[string]map[string]bool{"scalingpolicy": {"DescribeScalingPolicies": true}},
+	}
+	latest := readManyModel(t, true)
+
+	op, _ := latest.Operation("DescribeScalingPolicies")
+	assert.Equal(t, "ScalingPolicies", outputWrapper(latest, in, "DescribeScalingPolicies", op.Output))
+
+	got := findAddedFields(latest, readManyModel(t, false), in)
+	assert.Equal(t, []Finding{
+		{Kind: "ScalingPolicy", Class: ClassStatusField, NewSincePin: true,
+			Subject: "NewField", Evidence: "DescribeScalingPolicies",
+			SDKPaths: "DescribeScalingPolicies=ScalingPolicies.NewField"},
+	}, got, "the policy list is not a declined parent, and pagination members are plumbing")
+
+	assert.True(t, fieldInModel(latest, in, "DescribeScalingPolicies", "NewField"))
+}
+
+func TestPaginationMembersFallBackToTheService(t *testing.T) {
+	// lambda's: the service trait names the tokens, ListAliases only its items.
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#Lambda": {"type": "service", "traits": {"smithy.api#paginated":
+			{"inputToken": "Marker", "outputToken": "NextMarker", "pageSize": "MaxItems"}}},
+		"demo#ListAliases": {"type": "operation", "traits": {"smithy.api#paginated": {"items": "Aliases"}}},
+		"demo#GetAlias": {"type": "operation"}
+	}}`))
+	require.NoError(t, err)
+	svc := servicePagination(m)
+
+	assert.Equal(t, []string{"Marker", "MaxItems"}, paginationMembers(m, "ListAliases", svc, false))
+	assert.Equal(t, []string{"NextMarker"}, paginationMembers(m, "ListAliases", svc, true))
+	assert.Empty(t, paginationMembers(m, "GetAlias", svc, true), "an unpaginated operation pages with nothing")
+}
+
+// widgetModel has a GetWidget response wrapping the resource beside another
+// member, so only output_wrapper_field_path unwraps it. latest adds Color and
+// Shade inside the wrapper.
+func widgetModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	widget := `"Name": {"target": "smithy.api#String"}`
+	if latest {
+		widget += `, "Color": {"target": "smithy.api#String"}, "Shade": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#GetWidget": {"type": "operation", "output": {"target": "demo#GetWidgetOut"}},
+		"demo#GetWidgetOut": {"type": "structure", "members": {
+			"Widget": {"target": "demo#Widget"}, "RequestId": {"target": "smithy.api#String"}}},
+		"demo#Widget": {"type": "structure", "members": {` + widget + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestFindAddedFieldsChecksTheCRDBehindAConfiguredWrapper(t *testing.T) {
+	in := &ControllerInputs{
+		Config: &generatorConfig{Operations: map[string]operationOverride{
+			"GetWidget": {OutputWrapperFieldPath: "Widget"},
+		}},
+		CRDFields: map[string]map[string]bool{"Widget": {"name": true, "color": true}},
+		UsedOps:   map[string]map[string]bool{"widget": {"GetWidget": true}},
+	}
+
+	got := findAddedFields(widgetModel(t, true), widgetModel(t, false), in)
+	assert.Equal(t, []Finding{
+		{Kind: "Widget", Class: ClassStatusField, NewSincePin: true,
+			Subject: "Shade", Evidence: "GetWidget", SDKPaths: "GetWidget=Widget.Shade"},
+	}, got, "Widget.Color is the CRD's existing color field")
+
+	// emrcontainers configures `VirtualCluster` for Smithy's `virtualCluster`.
+	in.Config.Operations["GetWidget"] = operationOverride{OutputWrapperFieldPath: "widget"}
+	assert.Equal(t, got, findAddedFields(widgetModel(t, true), widgetModel(t, false), in),
+		"wrapper paths match the model case-insensitively, as in codegen")
+	in.Config.Operations["CreateWidget"] = operationOverride{InputWrapperFieldPath: "WIDGET"}
+	m := widgetModel(t, true)
+	assert.Equal(t, "Widget", inputWrapper(m, in, "CreateWidget", &SmithyMemberRef{Target: "demo#GetWidgetOut"}))
+	assert.Equal(t, "Widget.Name", modelSpelling(m, &SmithyMemberRef{Target: "demo#GetWidgetOut"}, "widget.NAME"))
+	assert.Equal(t, "Nope", modelSpelling(m, &SmithyMemberRef{Target: "demo#GetWidgetOut"}, "Nope"))
+}
+
+func TestCRDFieldPathKeepsAModelledWrapper(t *testing.T) {
+	m := wrapperModel(t, true)
+	ref := &SmithyMemberRef{Target: "demo#GetRoleOut"}
+	path := func(fields ...string) string {
+		crd := map[string]bool{}
+		for _, f := range fields {
+			crd[f] = true
+		}
+		in := &ControllerInputs{CRDFields: map[string]map[string]bool{"Role": crd}}
+		got, ok := crdFieldPath(m, in, "Role", "GetRole", ref, true, "Role.SourceRoleTemplate")
+		require.True(t, ok)
+		return got
+	}
+
+	assert.Equal(t, "SourceRoleTemplate", path())
+	assert.Equal(t, "Role.SourceRoleTemplate", path("role"), "s3: the CRD models the wrapper")
+	assert.Equal(t, "SourceRoleTemplate", path("role", "sourceroletemplate"),
+		"acm: the CRD's certificate is another field; its options are the unwrapped member")
+}
+
+// accountModel has organizations' CreateAccount and DescribeAccount; latest adds
+// an `Id` to both responses, which generator.yaml renames differently per operation.
+func accountModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	create, describe := `"State": {"target": "smithy.api#String"}`, `"Name": {"target": "smithy.api#String"}`
+	if latest {
+		create += `, "Id": {"target": "smithy.api#String"}`
+		describe += `, "Id": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#CreateAccount": {"type": "operation", "output": {"target": "demo#CreateOut"}},
+		"demo#CreateOut": {"type": "structure", "members": {` + create + `}},
+		"demo#DescribeAccount": {"type": "operation", "output": {"target": "demo#DescribeOut"}},
+		"demo#DescribeOut": {"type": "structure", "members": {` + describe + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestFindAddedFieldsAppliesEachOperationsRenames(t *testing.T) {
+	in := &ControllerInputs{
+		Config: &generatorConfig{Resources: map[string]resourceConfig{
+			"Account": {Renames: resourceRenames{Operations: map[string]operationRenames{
+				"CreateAccount":   {OutputFields: map[string]string{"Id": "CreateAccountRequestId"}},
+				"DescribeAccount": {OutputFields: map[string]string{"Id": "AccountID"}},
+			}}},
+		}},
+		CRDFields: map[string]map[string]bool{"Account": {"accountid": true, "name": true, "state": true}},
+		UsedOps:   map[string]map[string]bool{"account": {"CreateAccount": true, "DescribeAccount": true}},
+	}
+
+	got := findAddedFields(accountModel(t, true), accountModel(t, false), in)
+	want := Finding{Kind: "Account", Class: ClassStatusField, NewSincePin: true,
+		Subject: "CreateAccountRequestId", Evidence: "CreateAccount", SDKPaths: "CreateAccount=Id"}
+	assert.Equal(t, []Finding{want}, got,
+		"DescribeAccount's Id is the CRD's accountID; CreateAccount's is a field the CRD lacks")
+
+	marked := markPreexisting(got, accountModel(t, true), in)
+	assert.False(t, marked[0].NewSincePin, "the renamed field is found in the release by its SDK path")
+	marked = markPreexisting(got, accountModel(t, false), in)
+	assert.True(t, marked[0].NewSincePin)
+}
+
+// thingModel reaches one CRD field through an input wrapper on Create, an
+// inferred output wrapper on the read and a rename on Update.
+func thingModel(t *testing.T, latest bool) *SmithyModel {
+	t.Helper()
+	thing, update := `"Name": {"target": "smithy.api#String"}`, `"Name": {"target": "smithy.api#String"}`
+	if latest {
+		thing += `, "Mode": {"target": "smithy.api#String"}`
+		update += `, "ThingMode": {"target": "smithy.api#String"}`
+	}
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#CreateThing": {"type": "operation", "input": {"target": "demo#CreateIn"}},
+		"demo#CreateIn": {"type": "structure", "members": {
+			"Thing": {"target": "demo#Thing"}, "ClientToken": {"target": "smithy.api#String"}}},
+		"demo#GetThing": {"type": "operation", "output": {"target": "demo#GetOut"}},
+		"demo#GetOut": {"type": "structure", "members": {"Thing": {"target": "demo#Thing"}}},
+		"demo#UpdateThing": {"type": "operation", "input": {"target": "demo#UpdateIn"}},
+		"demo#UpdateIn": {"type": "structure", "members": {` + update + `}},
+		"demo#Thing": {"type": "structure", "members": {` + thing + `}}
+	}}`))
+	require.NoError(t, err)
+	return m
+}
+
+func TestFindAddedFieldsGroupsByCRDPath(t *testing.T) {
+	in := &ControllerInputs{
+		Config: &generatorConfig{
+			Operations: map[string]operationOverride{"CreateThing": {InputWrapperFieldPath: "Thing"}},
+			Resources: map[string]resourceConfig{
+				"Thing": {Renames: resourceRenames{Operations: map[string]operationRenames{
+					"UpdateThing": {InputFields: map[string]string{"ThingMode": "Mode"}},
+				}}},
+			},
+		},
+		CRDFields: map[string]map[string]bool{"Thing": {"name": true}},
+		UsedOps: map[string]map[string]bool{
+			"thing": {"CreateThing": true, "GetThing": true, "UpdateThing": true},
+		},
+	}
+
+	got := findAddedFields(thingModel(t, true), thingModel(t, false), in)
+	assert.Equal(t, []Finding{
+		{Kind: "Thing", Class: ClassSpecField, NewSincePin: true,
+			Subject: "Mode", Evidence: "CreateThing,GetThing,UpdateThing",
+			SDKPaths: "CreateThing=Thing.Mode,GetThing=Thing.Mode,UpdateThing=ThingMode"},
+	}, got, "one CRD field, however each operation spells it")
 }
 
 func TestConfigLookupsIgnoreKindCase(t *testing.T) {
@@ -740,22 +971,33 @@ func TestFingerprintStability(t *testing.T) {
 	detailChanged[0].Detail = "completely different prose"
 	assert.Equal(t, a, fingerprintFindings("demo", detailChanged))
 
-	// Evidence does change it: a resource gaining an operation, or a field turning
-	// up in another one, is new information for the issue.
+	// Nor must Evidence: a resource or field gaining an operation is not new work,
+	// so it only rewords the body (TestReconcileIssueEvidenceGrowthRewordsSilently).
 	evidenceChanged := sampleFindings()
 	evidenceChanged[0].Evidence = "CreateGizmo,DeleteGizmo,DescribeGizmos"
-	assert.NotEqual(t, a, fingerprintFindings("demo", evidenceChanged))
+	evidenceChanged[2].Evidence = "CreateWidget,DescribeGizmos"
+	assert.Equal(t, a, fingerprintFindings("demo", evidenceChanged))
+
+	// Two findings with one identity are one entry, whatever their Evidence.
+	splitEvidence := append(sampleFindings(), sampleFindings()[2])
+	splitEvidence[len(splitEvidence)-1].Evidence = "UpdateWidget"
+	assert.Equal(t, a, fingerprintFindings("demo", splitEvidence))
 
 	// A genuinely different finding must change it.
 	extra := append(sampleFindings(), Finding{Kind: "Widget", Class: ClassSpecField, Subject: "Extra", NewSincePin: true})
 	assert.NotEqual(t, a, fingerprintFindings("demo", extra))
+
+	// So must a field moving from Spec to Status: the work it implies differs.
+	moved := sampleFindings()
+	moved[2].Class = ClassStatusField
+	assert.NotEqual(t, a, fingerprintFindings("demo", moved))
 }
 
 // TestFingerprintFormatLock pins the digest layout. Fingerprints live in open
 // issue bodies, so a change recreates every open issue once; make it on purpose.
 func TestFingerprintFormatLock(t *testing.T) {
 	assert.Equal(t,
-		"6a33b980472badea0ddd5fc5ec52c1631722aedb28eb0076e953069a149ffaf2",
+		"5f55652de53c20d6de431b6bd956aa4921ff4e489e747d981f76f9df731af393",
 		fingerprintFindings("demo", sampleFindings()),
 	)
 }
@@ -842,7 +1084,7 @@ func TestRenderIssueBody(t *testing.T) {
 		"\n" +
 		"---\n" +
 		"Compared aws-sdk-go-v2 v1.41.5 -> v1.44.0\n" +
-		"<!-- ack-api-change-fingerprint: a6da4ed51f81f99e4a84c4d69b18dd5f049faf1f78134d71d2dca1e561ab41ef -->\n" +
+		"<!-- ack-api-change-fingerprint: 03b60f4f7efc4e51e585d73b1e52f70ada4e24ab62be85f278db34e53975de49 -->\n" +
 		"<!-- ack-api-change-end -->\n"
 
 	body, fingerprint := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
@@ -1183,7 +1425,7 @@ func TestReconcileIssueNoopWhenFingerprintMatches(t *testing.T) {
 func TestReconcileIssueUpdatesWhenFingerprintDiffers(t *testing.T) {
 	var calls []string
 	var commentBody string
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, staleIssueBody())}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42":
 			calls = append(calls, "patch")
@@ -1198,7 +1440,7 @@ func TestReconcileIssueUpdatesWhenFingerprintDiffers(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, 10, 0, false)
@@ -1224,7 +1466,7 @@ func TestReconcileIssueFailedPatchReportsNoOutcome(t *testing.T) {
 	// Comment posted, then the PATCH fails: the outcome must be no-decision, or the
 	// caller records a refresh that never happened.
 	var calls []string
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, staleIssueBody())}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/comments"):
 			calls = append(calls, "comment")
@@ -1237,7 +1479,7 @@ func TestReconcileIssueFailedPatchReportsNoOutcome(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()), nil, 10, 0, false)
@@ -1284,7 +1526,7 @@ func TestReconcileIssueCapBlocksCreationOnly(t *testing.T) {
 func TestReconcileIssueCapStillAllowsUpdates(t *testing.T) {
 	var patched bool
 	// Strict about unexpected requests, so a create at the cap cannot pass.
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, staleIssueBody())}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPatch && r.URL.Path == "/repos/o/community/issues/42":
 			patched = true
@@ -1295,7 +1537,7 @@ func TestReconcileIssueCapStillAllowsUpdates(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-	}))
+	})))
 
 	// At the cap, but the issue already exists — updating does not grow the
 	// count, so it must proceed.
@@ -1339,14 +1581,14 @@ func TestReconcileIssueUpdatePreservesMaintainerText(t *testing.T) {
 	existingBody := region + "\n\n`CreateBucketMetadataTableConfiguration` is intentionally unsupported.\n"
 
 	var patchedBody string
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, existingBody)}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch {
 			var payload struct{ Body string }
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 			patchedBody = payload.Body
 		}
 		fmt.Fprint(w, `{}`)
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, existingBody), nil, 10, 0, false)
@@ -1383,10 +1625,10 @@ func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
 		"the body must not be patched once the notification has failed")
 
 	var dayTwoCalls []string
-	dayTwo := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	dayTwo := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": existing}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dayTwoCalls = append(dayTwoCalls, r.Method+" "+r.URL.Path)
 		fmt.Fprint(w, `{}`)
-	}))
+	})))
 
 	// Same issue, unchanged because day 1 never wrote to it.
 	outcome, err = reconcileIssue(context.Background(), dayTwo, "o", "community",
@@ -1458,12 +1700,12 @@ func TestReconcileIssueOpenIssueBeatsAClosedFingerprint(t *testing.T) {
 	// A service with both takes the update path: the open issue is the live one.
 	_, want := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	var patched bool
-	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newTestGitHubClient(t, serveListedIssues(t, map[string]*github.Issue{"demo": issueFor(42, staleIssueBody())}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch {
 			patched = true
 		}
 		fmt.Fprint(w, `{}`)
-	}))
+	})))
 
 	outcome, err := reconcileIssue(context.Background(), client, "o", "community",
 		"demo", "v1.41.5", "v1.44.0", sampleFindings(), issueFor(42, staleIssueBody()),
@@ -2552,4 +2794,98 @@ func TestReconcileServicesDoesNotCountARejectedCreate(t *testing.T) {
 	assert.Equal(t, []string{"svc1"}, writeFailures)
 	assert.Equal(t, 3, creates)
 	assert.Empty(t, skipped)
+}
+
+// refreshAfterComment runs a fingerprint-changing refresh of issue 42 against a
+// server whose GET serves what edit makes of the issue, as if changed during the
+// comment. It returns the request methods in order and the PATCHed body, or "".
+func refreshAfterComment(t *testing.T, edit func(*github.Issue)) ([]string, string, error) {
+	t.Helper()
+	listed := issueFor(42, staleIssueBody())
+	var calls []string
+	var patchedBody string
+	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method)
+		switch r.Method {
+		case http.MethodGet:
+			served := *listed
+			served.Labels = []*github.Label{
+				{Name: github.String(apiChangeLabel)},
+				{Name: github.String("service/demo")},
+			}
+			edit(&served)
+			require.NoError(t, json.NewEncoder(w).Encode(served))
+		case http.MethodPatch:
+			var payload struct{ Body string }
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+			patchedBody = payload.Body
+			fmt.Fprint(w, `{}`)
+		default:
+			fmt.Fprint(w, `{}`)
+		}
+	}))
+	_, err := reconcileIssue(context.Background(), client, "o", "community",
+		"demo", "v1.41.5", "v1.44.0", sampleFindings(), listed, nil, 10, 0, false)
+	return calls, patchedBody, err
+}
+
+func TestReconcileIssueMergesIntoTheBodyAsItIsAfterTheComment(t *testing.T) {
+	// A maintainer note added while the comment was posted must survive the PATCH.
+	calls, patched, err := refreshAfterComment(t, func(issue *github.Issue) {
+		issue.Body = github.String(issue.GetBody() + "\n\nNote added during the comment.\n")
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"POST", "GET", "PATCH"}, calls)
+	assert.Contains(t, patched, "Note added during the comment.")
+	assert.Contains(t, patched, "### Spec field candidates", "the refreshed region must land")
+}
+
+func TestReconcileIssueSkipsThePatchWhenTheIssueChangedDuringTheComment(t *testing.T) {
+	// No PATCH may overwrite a maintainer's decision; closing in particular must not
+	// leave the closed issue carrying the new fingerprint, which would suppress it.
+	for name, edit := range map[string]func(*github.Issue){
+		"closed": func(issue *github.Issue) { issue.State = github.String("closed") },
+		"ownership label removed": func(issue *github.Issue) {
+			issue.Labels = []*github.Label{{Name: github.String("service/demo")}}
+		},
+		"fingerprint edited": func(issue *github.Issue) {
+			other, _ := renderIssueBody("demo", "v1.40.0", "v1.41.5", sampleFindings()[2:3])
+			issue.Body = github.String(other)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls, patched, err := refreshAfterComment(t, edit)
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "commented on issue o/community#42 but left its body as is")
+			assert.Equal(t, []string{"POST", "GET"}, calls)
+			assert.Empty(t, patched)
+		})
+	}
+}
+
+func TestReconcileServicesStopsOnceTheContextIsDone(t *testing.T) {
+	// The run deadline must bound the loop itself: analysis scans a checkout before
+	// any request could notice the cancellation.
+	logged := captureLog(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	var analyzed []string
+	analyze := func(_ context.Context, service string) ([]Finding, string, string, error) {
+		analyzed = append(analyzed, service)
+		cancel()
+		return nil, "v1.41.5", "v1.44.0", nil
+	}
+
+	_, _, _, err := reconcileServices(ctx, nil, "o", "community",
+		[]string{"svc1", "svc2", "svc3"}, nil, nil, 10, 0, analyze, false, "")
+	require.ErrorIs(t, err, context.Canceled)
+	assert.ErrorContains(t, err, "run cut short before svc2, 2 of 3 services not attempted")
+	assert.Equal(t, []string{"svc1"}, analyzed)
+	assert.Contains(t, logged.String(), "1 of 3 services (run cut short: context canceled): ")
+
+	// Already cancelled: nothing is analyzed.
+	analyzed = nil
+	_, _, _, err = reconcileServices(ctx, nil, "o", "community",
+		[]string{"svc1"}, nil, nil, 10, 0, analyze, false, "")
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, analyzed)
 }

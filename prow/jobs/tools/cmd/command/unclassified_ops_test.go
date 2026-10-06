@@ -282,7 +282,7 @@ func TestSetterFieldCandidatesSkipRequestPlumbing(t *testing.T) {
 		},
 	})
 	in := &ControllerInputs{Config: &generatorConfig{}, CRDFields: map[string]map[string]bool{"Bucket": {}}}
-	got := setterFieldCandidates(m, in, "Bucket", "UpdateBucketMetadataAnnotationTableConfiguration", OpTypes{OpTypeUpdate})
+	got := setterFieldCandidates(m, in, "Bucket", "UpdateBucketMetadataAnnotationTableConfiguration", OpTypes{OpTypeUpdate}, nil)
 	require.Len(t, got, 1)
 	assert.Equal(t, "AnnotationTableConfiguration", got[0].Subject)
 }
@@ -344,6 +344,30 @@ func TestReadStatusCandidates(t *testing.T) {
 		Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeInstanceStatus"}}, got)
 }
 
+func TestSetterFieldCandidatesIgnoreNonReadResponses(t *testing.T) {
+	// Mode is echoed by the setter and by UpdateWidget, but no read returns it, so
+	// the next reconciliation could not observe it.
+	m := responsesModel(t,
+		map[string][]string{
+			"PutWidgetMode": {"WidgetId", "Mode", "Color"},
+			"UpdateWidget":  {"WidgetId"},
+			"GetWidget":     {"WidgetId"},
+		},
+		map[string][]string{"PutWidgetMode": {"Mode"}, "UpdateWidget": {"Mode"}, "GetWidget": {"Color"}})
+	in := &ControllerInputs{
+		Config:    &generatorConfig{},
+		CRDFields: map[string]map[string]bool{"Widget": {}},
+		UsedOps:   map[string]map[string]bool{"widget": {"GetWidget": true, "UpdateWidget": true}},
+	}
+	got := setterFieldCandidates(m, in, "Widget", "PutWidgetMode", OpTypes{OpTypeUnknown}, nil)
+	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
+	assert.Equal(t, []Finding{
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetMode"},
+		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Mode", NewSincePin: true, Evidence: "PutWidgetMode",
+			Detail: "not returned at this path, so reconciling it needs custom code"},
+	}, got)
+}
+
 func TestSetterFieldCandidatesReturnedUnderTheSameNameAreSpec(t *testing.T) {
 	m := responsesModel(t,
 		map[string][]string{"PutWidgetColor": {"WidgetId", "Color", "Shade"}, "GetWidget": {"WidgetId"}},
@@ -353,13 +377,60 @@ func TestSetterFieldCandidatesReturnedUnderTheSameNameAreSpec(t *testing.T) {
 		CRDFields: map[string]map[string]bool{"Widget": {}},
 		UsedOps:   map[string]map[string]bool{"widget": {"GetWidget": true}},
 	}
-	got := setterFieldCandidates(m, in, "Widget", "PutWidgetColor", OpTypes{OpTypeUnknown})
+	got := setterFieldCandidates(m, in, "Widget", "PutWidgetColor", OpTypes{OpTypeUnknown}, nil)
 	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
 	assert.Equal(t, []Finding{
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetColor"},
 		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Shade", NewSincePin: true, Evidence: "PutWidgetColor",
 			Detail: "not returned at this path, so reconciling it needs custom code"},
 	}, got)
+}
+
+func TestSetterFieldCandidatesReadBackUnderResourceMember(t *testing.T) {
+	// DescribeFirewall returns ProxySettings as Firewall.ProxySettings beside
+	// FirewallStatus, so there is no single wrapper to look through.
+	m, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#UpdateWidgetColor": {"type": "operation", "input": {"target": "demo#UpdateWidgetColorRequest"}},
+		"demo#UpdateWidgetColorRequest": {"type": "structure", "members": {
+			"WidgetId": {"target": "smithy.api#String"}, "Color": {"target": "smithy.api#String"}}},
+		"demo#DescribeWidget": {"type": "operation", "output": {"target": "demo#DescribeWidgetResponse"}},
+		"demo#DescribeWidgetResponse": {"type": "structure", "members": {
+			"Widget": {"target": "demo#Widget"}, "WidgetStatus": {"target": "demo#Widget"}}},
+		"demo#Widget": {"type": "structure", "members": {"Color": {"target": "smithy.api#String"}}}
+	}}`))
+	require.NoError(t, err)
+	in := &ControllerInputs{
+		Config:    &generatorConfig{},
+		CRDFields: map[string]map[string]bool{"Widget": {}},
+		UsedOps:   map[string]map[string]bool{"widget": {"DescribeWidget": true}},
+	}
+	got := setterFieldCandidates(m, in, "Widget", "UpdateWidgetColor", OpTypes{OpTypeUpdate}, nil)
+	require.Len(t, got, 1)
+	assert.Equal(t, ClassSpecField, got[0].Class)
+}
+
+func TestFindNewOperationsSetterReadBackByNewRead(t *testing.T) {
+	// cloudtrail's PutEventConfiguration arrived with GetEventConfiguration; the
+	// controller would call both, so the new read counts as reading Color back.
+	requests := map[string][]string{
+		"CreateWidget":   {"WidgetId"},
+		"PutWidgetColor": {"WidgetId", "Color", "Shade"},
+		"GetWidgetColor": {"WidgetId"},
+	}
+	latest := responsesModel(t, requests, map[string][]string{"PutWidgetColor": {"Shade"}, "GetWidgetColor": {"Color"}})
+	baseline := responsesModel(t, map[string][]string{"CreateWidget": {"WidgetId"}}, nil)
+	in := &ControllerInputs{
+		Config:       &generatorConfig{},
+		CRDFields:    map[string]map[string]bool{"Widget": {}},
+		UsedOps:      map[string]map[string]bool{"widget": {"CreateWidget": true}},
+		kindsByLower: map[string]string{"widget": "Widget"},
+	}
+	classes := map[string]FindingClass{}
+	for _, f := range findNewOperations(latest, baseline, in) {
+		classes[f.Subject] = f.Class
+	}
+	assert.Equal(t, ClassSpecField, classes["Color"])
+	assert.Equal(t, ClassLifecycleField, classes["Shade"], "only the setter itself returns Shade")
 }
 
 func TestPossibleResourcesIncludeGenericReads(t *testing.T) {
