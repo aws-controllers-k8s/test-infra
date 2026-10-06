@@ -71,17 +71,18 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		if field, opID := customSourcedSibling(latest, in, *f); field != "" {
 			f.Detail = fmt.Sprintf("sent with `%s` on `%s`, which custom code reconciles: "+
 				"adding it means updating that hook, not only regenerating", field, opID)
+			f.Work = workFromSibling
 			continue
 		}
 		if createOnly(latest, in, declared, newOps[f.Kind], *f) {
-			f.Detail = "create-only: no operation changes it after creation, so it is immutable"
+			f.Detail, f.Work = createOnlyDetail, workCreateOnly
 		}
 	}
 
 	for i := range findings {
 		f := &findings[i]
 		if f.Class == ClassSpecField && f.Detail == "" {
-			f.Detail = customSetterDetail(latest, in, declared, *f)
+			f.Detail, f.Work = customSetterDetail(latest, in, declared, *f)
 		}
 	}
 
@@ -294,24 +295,25 @@ func pairChangeLists(latest *SmithyModel, in *ControllerInputs, findings []Findi
 			if !strings.EqualFold(field.Subject, base) && !strings.EqualFold(pluralizer.Singular(field.Subject), base) {
 				continue
 			}
-			field.Class = ClassSpecField
+			field.Class, field.Work = ClassSpecField, workChangeList
 			field.Detail = fmt.Sprintf("custom reconciliation: %s changes it only through the change list `%s`, "+
 				"so diffing and updating it needs custom code", quoteOps(updaters), list.Subject)
 			ops := append(append(field.evidenceOps(), list.evidenceOps()...), updaters...)
 			desired, observed := entryMembers(latest, in.Config, ops, field.Subject, list.Subject)
 			if len(observed) > 0 {
 				field.Detail += fmt.Sprintf("; Spec needs a normalized entry shape holding %s, "+
-					"with the observed-only members listed under Status", quoteOps(desired))
+					"with the observed-only members as their own Status candidates", quoteOps(desired))
 			}
 			for _, member := range observed {
 				added = append(added, Finding{
 					Kind: field.Kind, Class: ClassStatusField, Subject: field.Subject + "." + member.name,
-					NewSincePin: true, Evidence: newEvidence(member.ops),
-					Detail: fmt.Sprintf("observed-only member of each `%s` entry: no request sends it", field.Subject),
+					NewSincePin: true, Evidence: newEvidence(member.ops), Work: workChangeList,
+					Detail: fmt.Sprintf("observed-only member of each `%s` entry: no request sends it, "+
+						"so it needs a Status entry shape beside Spec's normalized one", field.Subject),
 				})
 			}
-			list.Detail = fmt.Sprintf("internal change list %s applies to `%s`: a reconciliation detail, "+
-				"not a field to expose", quoteOps(updaters), field.Subject)
+			list.Detail = fmt.Sprintf("internal change list %s applies to `%s`: not a field to expose; "+
+				"the custom update for `%s` builds it", quoteOps(updaters), field.Subject, field.Subject)
 		}
 	}
 	return append(findings, added...)
@@ -382,7 +384,7 @@ func entryMembers(
 func foldSecondaryViews(latest *SmithyModel, findings []Finding) []Finding {
 	stem := func(f Finding) string { return strings.ToLower(pluralizer.Singular(lastSegment(f.Subject))) }
 	secondary := func(f Finding) bool {
-		return f.Class == ClassStatusField && strings.HasPrefix(f.Detail, secondaryReadDetail)
+		return f.Class == ClassStatusField && f.Work == workSecondaryRead
 	}
 	groups := map[[2]string][]int{}
 	for i, f := range findings {
@@ -501,10 +503,11 @@ func canSet(opTypes OpTypes, opID string) bool {
 }
 
 // customSetterDetail notes when a Spec field is changed by an operation other than
-// the resource's own Update, which codegen does not call. It returns "" for fields
+// the resource's own Update, which codegen does not call, and the work that means.
+// It returns "" for fields
 // only a Create sends, or that the generated Update sends; a hand-written Update
 // (update_operation.custom_method_name) must send the field itself.
-func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string, f Finding) string {
+func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string, f Finding) (string, fieldWork) {
 	custom := customUpdateMethod(in, f.Kind)
 	var setters []string
 	for _, opID := range f.evidenceOps() {
@@ -516,9 +519,9 @@ func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string,
 			if custom != "" {
 				return fmt.Sprintf("custom reconciliation: sent on `%s`, the resource's own Update, but that "+
 					"update is the hand-written `%s`, so adding it means changing that code, not only regenerating",
-					opID, custom)
+					opID, custom), workCustomUpdate
 			}
-			return ""
+			return "", workNone
 		case opTypes.Has(OpTypeCreate, OpTypeCreateBatch):
 		default:
 			if canSet(opTypes, opID) {
@@ -527,24 +530,27 @@ func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string,
 		}
 	}
 	if len(setters) == 0 {
-		return ""
+		return "", workNone
 	}
 	// Setters the controller already calls from its own update code: that code is
 	// what changes, not a new hook.
 	if custom != "" &&
 		!slices.ContainsFunc(setters, func(op string) bool { return !in.UsedOps[kindToResourceDir(f.Kind)][op] }) {
 		return fmt.Sprintf("custom reconciliation: set through %s, which the hand-written update `%s` calls, "+
-			"so adding it means changing that code, not only regenerating", quoteOps(setters), custom)
+			"so adding it means changing that code, not only regenerating", quoteOps(setters), custom), workCustomUpdate
 	}
 	pair := slices.ContainsFunc(setters, func(op string) bool { return strings.HasPrefix(op, "Associate") }) &&
 		slices.ContainsFunc(setters, func(op string) bool { return strings.HasPrefix(op, "Disassociate") })
 	if pair {
 		return fmt.Sprintf("custom reconciliation: changed through %s, not the resource's own Update, "+
-			"so an update hook must diff the list and call them", quoteOps(setters))
+			"so an update hook must diff the list and call them", quoteOps(setters)), workListDiff
 	}
 	return fmt.Sprintf("custom reconciliation: changed only through %s, not the resource's own Update, "+
-		"so it needs a dedicated update hook", quoteOps(setters))
+		"so it needs a dedicated update hook", quoteOps(setters)), workDedicatedSetter
 }
+
+// createOnlyDetail is the work a field only a Create sends needs.
+const createOnlyDetail = "set only on Create; add `is_immutable: true`"
 
 // customUpdateMethod returns the resource's update_operation.custom_method_name,
 // or "" when codegen generates its update.

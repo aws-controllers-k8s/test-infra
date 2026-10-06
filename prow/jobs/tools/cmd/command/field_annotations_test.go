@@ -53,17 +53,20 @@ func TestAnnotateFieldsPairsChangeLists(t *testing.T) {
 	// RegionName is sent inside the change list, so it is the desired identity;
 	// WitnessStatus is only ever returned, so it is a Status candidate of its own.
 	assert.Equal(t, []Finding{
-		{Kind: "Table", Class: ClassSpecField, Subject: "GlobalTableWitnesses",
+		{Kind: "Table", Class: ClassSpecField, Subject: "GlobalTableWitnesses", Work: workChangeList,
 			Detail: "custom reconciliation: `UpdateTable` changes it only through the change list " +
 				"`GlobalTableWitnessUpdates`, so diffing and updating it needs custom code; Spec needs a " +
-				"normalized entry shape holding `RegionName`, with the observed-only members listed under Status",
+				"normalized entry shape holding `RegionName`, with the observed-only members as their own " +
+				"Status candidates",
 			NewSincePin: true, Evidence: "DescribeTable", ReadBy: "DescribeTable"},
 		{Kind: "Table", Class: ClassLifecycleField, Subject: "GlobalTableWitnessUpdates",
 			Detail: "internal change list `UpdateTable` applies to `GlobalTableWitnesses`: " +
-				"a reconciliation detail, not a field to expose",
+				"not a field to expose; the custom update for `GlobalTableWitnesses` builds it",
 			NewSincePin: true, Evidence: "UpdateTable", SetBy: "UpdateTable"},
 		{Kind: "Table", Class: ClassStatusField, Subject: "GlobalTableWitnesses.WitnessStatus",
-			Detail:      "observed-only member of each `GlobalTableWitnesses` entry: no request sends it",
+			Work: workChangeList,
+			Detail: "observed-only member of each `GlobalTableWitnesses` entry: no request sends it, " +
+				"so it needs a Status entry shape beside Spec's normalized one",
 			NewSincePin: true, Evidence: "DescribeTable", ReadBy: "DescribeTable"},
 	}, got)
 }
@@ -137,6 +140,23 @@ func TestAnnotateFieldsAddsUpdateOperations(t *testing.T) {
 	assert.Equal(t, "custom reconciliation: changed through `AssociateAvailabilityZones`, "+
 		"`DisassociateAvailabilityZones`, not the resource's own Update, so an update hook must diff "+
 		"the list and call them", got[0].Detail)
+	assert.Equal(t, workListDiff, got[0].Work)
+}
+
+// TestAnnotateFieldsFlagsDedicatedSetter: a field only a non-Update setter changes
+// needs its own update hook.
+func TestAnnotateFieldsFlagsDedicatedSetter(t *testing.T) {
+	m := opsModel(t, map[string][]string{
+		"CreateFirewall":      {"FirewallName", "ProxySettings"},
+		"UpdateProxySettings": {"FirewallArn", "ProxySettings"},
+	})
+	got := annotateFields(m, &ControllerInputs{Config: &generatorConfig{}}, []Finding{
+		{Kind: "Firewall", Class: ClassSpecField, Subject: "ProxySettings", NewSincePin: true, Evidence: "CreateFirewall"},
+		{Kind: "Firewall", Class: ClassNewOperation, Subject: "UpdateProxySettings", NewSincePin: true},
+	})
+	assert.Equal(t, "custom reconciliation: changed only through `UpdateProxySettings`, not the resource's "+
+		"own Update, so it needs a dedicated update hook", got[0].Detail)
+	assert.Equal(t, workDedicatedSetter, got[0].Work)
 }
 
 // TestAnnotateFieldsFlagsCustomSourcedSiblings: a new field on an operation that
@@ -158,6 +178,7 @@ func TestAnnotateFieldsFlagsCustomSourcedSiblings(t *testing.T) {
 	})
 	assert.Equal(t, "sent with `LoggingConfiguration` on `UpdateLoggingConfiguration`, which custom code "+
 		"reconciles: adding it means updating that hook, not only regenerating", got[0].Detail)
+	assert.Equal(t, workFromSibling, got[0].Work)
 }
 
 // TestAnnotateFieldsMarksCreateOnlyFields: a field only Create sends is
@@ -177,8 +198,10 @@ func TestAnnotateFieldsMarksCreateOnlyFields(t *testing.T) {
 		{Kind: "Function", Class: ClassSpecField, Subject: "Runtime", NewSincePin: true, Evidence: "CreateFunction"},
 		{Kind: "Function", Class: ClassSpecField, Subject: "StorageMode", NewSincePin: true, Evidence: "CreateFunction"},
 	})
-	assert.Equal(t, "create-only: no operation changes it after creation, so it is immutable", got[0].Detail)
+	assert.Equal(t, createOnlyDetail, got[0].Detail)
+	assert.Equal(t, workCreateOnly, got[0].Work)
 	assert.Empty(t, got[1].Detail)
+	assert.Equal(t, workNone, got[1].Work)
 }
 
 // TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly: an operation declared
@@ -212,6 +235,7 @@ func TestAnnotateFieldsFlagsHandWrittenUpdate(t *testing.T) {
 
 	generated := annotateFields(m, &ControllerInputs{Config: &generatorConfig{}, UsedOps: usedOps}, findings)
 	assert.Empty(t, generated[0].Detail)
+	assert.Equal(t, workNone, generated[0].Work)
 
 	widget := resourceConfig{}
 	widget.UpdateOperation.CustomMethodName = "customUpdateWidget"
@@ -223,6 +247,7 @@ func TestAnnotateFieldsFlagsHandWrittenUpdate(t *testing.T) {
 	assert.Equal(t, "custom reconciliation: sent on `UpdateWidget`, the resource's own Update, but that "+
 		"update is the hand-written `customUpdateWidget`, so adding it means changing that code, not only "+
 		"regenerating", got[0].Detail)
+	assert.Equal(t, workCustomUpdate, got[0].Work)
 }
 
 // TestAnnotateFieldsSeparatesSummaryAndDetailedViews: ec2's detailed
@@ -252,9 +277,11 @@ func TestAnnotateFieldsSeparatesSummaryAndDetailedViews(t *testing.T) {
 
 	got := annotateFields(m, &ControllerInputs{Config: &generatorConfig{}}, []Finding{
 		{Kind: "Instance", Class: ClassStatusField, Subject: "ApplicationStatuses",
-			Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeApplicationStatus"},
+			Detail: secondaryReadDetail, Work: workSecondaryRead, NewSincePin: true,
+			Evidence: "DescribeApplicationStatus"},
 		{Kind: "Instance", Class: ClassStatusField, Subject: "InstanceStatuses.ApplicationStatus",
-			Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeInstanceStatus"},
+			Detail: secondaryReadDetail, Work: workSecondaryRead, NewSincePin: true,
+			Evidence: "DescribeInstanceStatus"},
 	})
 	require.Len(t, got, 2, "a summary beside a detailed view is two candidates")
 	assert.Equal(t, secondaryReadDetail+"; candidate field `ApplicationStatus`, the detailed view: "+
@@ -284,9 +311,10 @@ func TestAnnotateFieldsFoldsIdenticalViews(t *testing.T) {
 
 	got := annotateFields(m, &ControllerInputs{Config: &generatorConfig{}}, []Finding{
 		{Kind: "Widget", Class: ClassStatusField, Subject: "Healths",
-			Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeHealth"},
+			Detail: secondaryReadDetail, Work: workSecondaryRead, NewSincePin: true, Evidence: "DescribeHealth"},
 		{Kind: "Widget", Class: ClassStatusField, Subject: "Widgets.Health",
-			Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeWidgetStatus"},
+			Detail: secondaryReadDetail, Work: workSecondaryRead, NewSincePin: true,
+			Evidence: "DescribeWidgetStatus"},
 	})
 	require.Len(t, got, 1)
 	assert.Equal(t, "DescribeHealth,DescribeWidgetStatus", got[0].Evidence)

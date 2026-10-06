@@ -498,6 +498,47 @@ func (c FindingClass) String() string {
 	return fmt.Sprintf("unnamed-class-%d", int(c))
 }
 
+// fieldWork is the custom work a Spec or Status field candidate needs. It lets
+// rendering bucket fields by work without parsing Detail.
+type fieldWork int
+
+const (
+	workNone fieldWork = iota
+	// workDedicatedSetter: changed only through an operation codegen does not call.
+	workDedicatedSetter
+	// workListDiff: changed through an Associate/Disassociate pair.
+	workListDiff
+	// workCustomUpdate: sent by a hand-written update_operation.custom_method_name.
+	workCustomUpdate
+	// workFromSibling: sent beside a generator.yaml `from:` field.
+	workFromSibling
+	// workChangeList: changed through, or a member of, a `<Field>Updates` list.
+	workChangeList
+	// workSecondaryRead: returned only by a read the controller does not call.
+	workSecondaryRead
+	// workCreateOnly: set only on Create, so it needs is_immutable.
+	workCreateOnly
+)
+
+// lifecycleReason is the work every request-only field needs.
+const lifecycleReason = "no read returns it, so drift can't be detected; needs custom read/compare code"
+
+// needsWork reports whether a field candidate needs config or code beyond a
+// regeneration, and what and why. Resource and operation findings are not fields
+// and report false.
+func needsWork(f Finding) (string, bool) {
+	switch {
+	case f.Class == ClassLifecycleField:
+		if f.Detail != "" {
+			return f.Detail, true
+		}
+		return lifecycleReason, true
+	case !isFieldCandidate(f.Class) || f.Work == workNone:
+		return "", false
+	}
+	return f.Detail, true
+}
+
 // Finding is one detected change.
 type Finding struct {
 	// Kind is the resource kind, or "" when not attributable to one resource.
@@ -508,6 +549,9 @@ type Finding struct {
 	// Detail is human-readable supporting text, or "" when the section heading
 	// says enough.
 	Detail string
+	// Work is why a field needs config or code beyond regeneration, set beside
+	// the Detail that explains it. Not hashed. See needsWork.
+	Work fieldWork
 	// NewSincePin records whether the subject is new since the SDK release the
 	// controller builds against. Only new findings drive the notification. See
 	// markPreexisting.
@@ -947,11 +991,11 @@ func readStatusCandidates(latest, baseline *SmithyModel, in *ControllerInputs, k
 		}
 		f := Finding{
 			Kind: kind, Class: ClassStatusField, Subject: path, NewSincePin: true, Evidence: opID,
-			Detail: secondaryReadDetail,
+			Detail: secondaryReadDetail, Work: workSecondaryRead,
 		}
 		if history {
 			f.Class = ClassDroppedField
-			f.Detail = dropGeneratedHistory
+			f.Detail, f.Work = dropGeneratedHistory, workNone
 		}
 		out = append(out, f)
 	}
@@ -1068,9 +1112,9 @@ func setterFieldCandidates(
 			continue
 		}
 		f := Finding{Kind: kind, Class: ClassSpecField, Subject: member, NewSincePin: true, Evidence: opID}
+		// needsWork gives a lifecycle field its reason.
 		if !readable[strings.ToLower(member)] {
 			f.Class = ClassLifecycleField
-			f.Detail = "not returned at this path, so reconciling it needs custom code"
 		}
 		out = append(out, f)
 	}
@@ -1854,21 +1898,39 @@ func overflowSummary(omittedResources, omittedFindings int) string {
 	return ""
 }
 
-// resourceSection pairs a finding class with its heading in a resource's block.
+// resourceSection is a heading in a resource's block and the findings under it.
 // resourceSections is in rendering order.
 type resourceSection struct {
-	class  FindingClass
 	header string
+	holds  func(Finding) bool
 }
 
+func ofClass(c FindingClass) func(Finding) bool {
+	return func(f Finding) bool { return f.Class == c }
+}
+
+// Fields are grouped by the work they need, not by Spec or Status: codegen
+// places them itself, so only whether a regeneration suffices matters.
 var resourceSections = []resourceSection{
-	{ClassNewResource, "New resource"},
-	{ClassTransientResource, "Transient resource (manual review)"},
-	{ClassPossibleResource, "Possible new resource (manual review)"},
-	{ClassSpecField, "Spec field candidates"},
-	{ClassStatusField, "Status field candidates"},
-	{ClassLifecycleField, "Lifecycle and request-only fields (manual review)"},
-	{ClassNewOperation, "Related new operations"},
+	{"New resource", ofClass(ClassNewResource)},
+	{"Transient resource (manual review)", ofClass(ClassTransientResource)},
+	{"Possible new resource (manual review)", ofClass(ClassPossibleResource)},
+	{needsWorkHeader, func(f Finding) bool { _, ok := needsWork(f); return ok }},
+	{regenerateHeader, func(f Finding) bool { _, ok := needsWork(f); return isFieldCandidate(f.Class) && !ok }},
+	{"Related new operations", ofClass(ClassNewOperation)},
+}
+
+const (
+	needsWorkHeader  = "Needs config or code"
+	regenerateHeader = "Regenerate is enough"
+)
+
+// fieldRoleTag names where codegen puts a field, so a bullet keeps that hint
+// without a heading per role.
+var fieldRoleTag = map[FindingClass]string{
+	ClassSpecField:      "Spec",
+	ClassStatusField:    "Status",
+	ClassLifecycleField: "request-only",
 }
 
 // renderIssueBody renders the issue body, wrapped in the generated-region markers,
@@ -1924,8 +1986,10 @@ func renderIssueBody(
 	b.WriteString(generatedRegionBegin + "\n")
 	fmt.Fprintf(&b, "AWS SDK releases since %s, the version the `%s` controller builds against, add "+
 		"resources and fields the controller does not represent. These are candidate additions for "+
-		"maintainer review; not every item is necessarily appropriate for the CRD API.\n\n",
-		baselineVersion, service)
+		"maintainer review; not every item is necessarily appropriate for the CRD API. Fields under "+
+		"\"%s\" are wired end to end by the SDK bump and `make build-controller`; each under "+
+		"\"%s\" says what to add and why.\n\n",
+		baselineVersion, service, regenerateHeader, needsWorkHeader)
 
 	// Each block takes what it can of the remaining budget. A block too large
 	// renders partially rather than being dropped, and reserves[i] holds back
@@ -2256,13 +2320,16 @@ func blockOmissionNote(omitted, total int) string {
 		omitted, total)
 }
 
-// writeBullet writes a finding's bullet line without the trailing newline. A
-// field's operations follow on the same line; a resource's go on a nested line
-// (see buildResourceBlock).
-func writeBullet(text *strings.Builder, f Finding) {
+// writeBullet writes a finding's bullet line, with detail as its supporting text,
+// without the trailing newline. A field's role tag and operations follow on the
+// same line; a resource's operations go on a nested line (see buildResourceBlock).
+func writeBullet(text *strings.Builder, f Finding, detail string) {
 	fmt.Fprintf(text, "- `%s`", f.Subject)
-	if f.Detail != "" {
-		fmt.Fprintf(text, " — %s", f.Detail)
+	if tag := fieldRoleTag[f.Class]; tag != "" {
+		fmt.Fprintf(text, " (%s)", tag)
+	}
+	if detail != "" {
+		fmt.Fprintf(text, " — %s", detail)
 	}
 	if f.SetBy != "" || f.ReadBy != "" || f.ReturnedBy != "" {
 		var roles []string
@@ -2306,15 +2373,19 @@ func isResourceClass(c FindingClass) bool {
 func buildResourceBlock(kind string, findings []Finding) issueBlock {
 	blk := issueBlock{heading: fmt.Sprintf("## Resource: %s", kind)}
 	for _, section := range resourceSections {
-		items := filterFindings(findings, section.class)
+		items := filterFindings(findings, section.holds)
 		if len(items) == 0 {
 			continue
 		}
 
 		entries := make([]issueEntry, 0, len(items))
 		for _, f := range items {
+			detail := f.Detail
+			if reason, ok := needsWork(f); ok {
+				detail = reason
+			}
 			var text strings.Builder
-			writeBullet(&text, f)
+			writeBullet(&text, f, detail)
 			text.WriteString("\n")
 			if isResourceClass(f.Class) && f.Evidence != "" {
 				fmt.Fprintf(&text, "  - Operations: %s\n", quoteOps(f.evidenceOps()))
@@ -2336,7 +2407,7 @@ func buildCatchAllBlock(findings []Finding) issueBlock {
 	unplaced := make([]Finding, 0, len(findings))
 	for _, f := range findings {
 		placed := f.Kind != "" && slices.ContainsFunc(resourceSections,
-			func(s resourceSection) bool { return s.class == f.Class })
+			func(s resourceSection) bool { return s.holds(f) })
 		if !placed {
 			unplaced = append(unplaced, f)
 		}
@@ -2349,7 +2420,7 @@ func buildCatchAllBlock(findings []Finding) issueBlock {
 	section := issueSection{heading: "### Unclassified operations"}
 	for _, f := range unplaced {
 		var text strings.Builder
-		writeBullet(&text, f)
+		writeBullet(&text, f, f.Detail)
 		// A finding with a Kind lands here only when its class has no section.
 		if f.Kind != "" {
 			fmt.Fprintf(&text, " (kind `%s`)", f.Kind)
@@ -2360,12 +2431,12 @@ func buildCatchAllBlock(findings []Finding) issueBlock {
 	return issueBlock{heading: "## Unattributed", sections: []issueSection{section}}
 }
 
-// filterFindings returns the findings of one class, ordered by lessFinding so the
+// filterFindings returns the findings keep holds, ordered by lessFinding so the
 // body is reproducible despite producers walking maps.
-func filterFindings(findings []Finding, class FindingClass) []Finding {
+func filterFindings(findings []Finding, keep func(Finding) bool) []Finding {
 	var out []Finding
 	for _, f := range findings {
-		if f.Class == class {
+		if keep(f) {
 			out = append(out, f)
 		}
 	}
@@ -2373,8 +2444,8 @@ func filterFindings(findings []Finding, class FindingClass) []Finding {
 	return out
 }
 
-// lessFinding orders findings by Subject, then Detail, Class, Kind, Evidence and
-// NewSincePin. The order must be total: sort.Slice is unstable, and ties would
+// lessFinding orders findings by Subject, then Detail, Class, Work, Kind, Evidence
+// and NewSincePin. The order must be total: sort.Slice is unstable, and ties would
 // reorder the body between runs without changing the fingerprint.
 func lessFinding(a, b Finding) bool {
 	if a.Subject != b.Subject {
@@ -2385,6 +2456,9 @@ func lessFinding(a, b Finding) bool {
 	}
 	if a.Class != b.Class {
 		return a.Class < b.Class
+	}
+	if a.Work != b.Work {
+		return a.Work < b.Work
 	}
 	if a.Kind != b.Kind {
 		return a.Kind < b.Kind

@@ -341,7 +341,8 @@ func TestReadStatusCandidates(t *testing.T) {
 	}
 	got := findNewOperations(latest, baseline, in)
 	assert.Equal(t, []Finding{{Kind: "Instance", Class: ClassStatusField, Subject: "ApplicationStatus",
-		Detail: secondaryReadDetail, NewSincePin: true, Evidence: "DescribeInstanceStatus"}}, got)
+		Detail: secondaryReadDetail, Work: workSecondaryRead, NewSincePin: true,
+		Evidence: "DescribeInstanceStatus"}}, got)
 }
 
 func TestSetterFieldCandidatesIgnoreNonReadResponses(t *testing.T) {
@@ -363,8 +364,7 @@ func TestSetterFieldCandidatesIgnoreNonReadResponses(t *testing.T) {
 	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
 	assert.Equal(t, []Finding{
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetMode"},
-		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Mode", NewSincePin: true, Evidence: "PutWidgetMode",
-			Detail: "not returned at this path, so reconciling it needs custom code"},
+		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Mode", NewSincePin: true, Evidence: "PutWidgetMode"},
 	}, got)
 }
 
@@ -381,8 +381,7 @@ func TestSetterFieldCandidatesReturnedUnderTheSameNameAreSpec(t *testing.T) {
 	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
 	assert.Equal(t, []Finding{
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetColor"},
-		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Shade", NewSincePin: true, Evidence: "PutWidgetColor",
-			Detail: "not returned at this path, so reconciling it needs custom code"},
+		{Kind: "Widget", Class: ClassLifecycleField, Subject: "Shade", NewSincePin: true, Evidence: "PutWidgetColor"},
 	}, got)
 }
 

@@ -1061,7 +1061,9 @@ func TestRenderIssueBody(t *testing.T) {
 	want := "<!-- ack-api-change-begin -->\n" +
 		"AWS SDK releases since v1.41.5, the version the `demo` controller builds against, add " +
 		"resources and fields the controller does not represent. These are candidate additions for " +
-		"maintainer review; not every item is necessarily appropriate for the CRD API.\n" +
+		"maintainer review; not every item is necessarily appropriate for the CRD API. Fields under " +
+		"\"Regenerate is enough\" are wired end to end by the SDK bump and `make build-controller`; each " +
+		"under \"Needs config or code\" says what to add and why.\n" +
 		"\n" +
 		"## Resource: Gizmo\n" +
 		"\n" +
@@ -1071,8 +1073,8 @@ func TestRenderIssueBody(t *testing.T) {
 		"\n" +
 		"## Resource: Widget\n" +
 		"\n" +
-		"### Spec field candidates\n" +
-		"- `Description` — `CreateWidget`\n" +
+		"### Regenerate is enough\n" +
+		"- `Description` (Spec) — `CreateWidget`\n" +
 		"\n" +
 		"### Related new operations\n" +
 		"- `PutWidgetPolicy`\n" +
@@ -1090,6 +1092,66 @@ func TestRenderIssueBody(t *testing.T) {
 	body, fingerprint := renderIssueBody("demo", "v1.41.5", "v1.44.0", sampleFindings())
 	assert.Equal(t, want, body)
 	assert.Equal(t, fingerprintFindings("demo", actionable(sampleFindings())), fingerprint)
+}
+
+func TestNeedsWork(t *testing.T) {
+	field := func(class FindingClass, work fieldWork, detail string) Finding {
+		return Finding{Kind: "Widget", Class: class, Subject: "Color", Work: work, Detail: detail, NewSincePin: true}
+	}
+	for _, tc := range []struct {
+		name   string
+		f      Finding
+		reason string
+		ok     bool
+	}{
+		{"plain spec", field(ClassSpecField, workNone, ""), "", false},
+		{"plain status", field(ClassStatusField, workNone, ""), "", false},
+		{"lifecycle", field(ClassLifecycleField, workNone, ""), lifecycleReason, true},
+		{"lifecycle change list", field(ClassLifecycleField, workNone, "change list"), "change list", true},
+		{"dedicated setter", field(ClassSpecField, workDedicatedSetter, "hook"), "hook", true},
+		{"list diff", field(ClassSpecField, workListDiff, "diff"), "diff", true},
+		{"custom update", field(ClassSpecField, workCustomUpdate, "custom"), "custom", true},
+		{"from sibling", field(ClassSpecField, workFromSibling, "sibling"), "sibling", true},
+		{"change list field", field(ClassSpecField, workChangeList, "list"), "list", true},
+		{"change list entry member", field(ClassStatusField, workChangeList, "entry"), "entry", true},
+		{"secondary read", field(ClassStatusField, workSecondaryRead, secondaryReadDetail), secondaryReadDetail, true},
+		{"create only", field(ClassSpecField, workCreateOnly, createOnlyDetail), createOnlyDetail, true},
+		// A Detail alone is not custom work, and resources are not fields.
+		{"detail without work", field(ClassSpecField, workNone, "not present in the CRD"), "", false},
+		{"new resource", Finding{Kind: "Gizmo", Class: ClassNewResource, Subject: "Gizmo", Work: workCustomUpdate}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reason, ok := needsWork(tc.f)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.reason, reason)
+		})
+	}
+}
+
+func TestBuildResourceBlockGroupsFieldsByWork(t *testing.T) {
+	blk := buildResourceBlock("Table", []Finding{
+		{Kind: "Table", Class: ClassStatusField, Subject: "TableStatus", NewSincePin: true,
+			Evidence: "DescribeTable", ReadBy: "DescribeTable"},
+		{Kind: "Table", Class: ClassSpecField, Subject: "BillingMode", NewSincePin: true,
+			Evidence: "CreateTable", SetBy: "CreateTable"},
+		{Kind: "Table", Class: ClassSpecField, Subject: "Replicas", NewSincePin: true, Work: workCustomUpdate,
+			Detail: "hand-written update", Evidence: "UpdateTable", SetBy: "UpdateTable"},
+		{Kind: "Table", Class: ClassLifecycleField, Subject: "QuoteId", NewSincePin: true,
+			Evidence: "DeleteTable", SetBy: "DeleteTable"},
+		{Kind: "Table", Class: ClassNewOperation, Subject: "GetTablePolicy", NewSincePin: true},
+	})
+	assert.Equal(t, "## Resource: Table\n\n"+
+		"### Needs config or code\n"+
+		"- `QuoteId` (request-only) — "+lifecycleReason+" — set by `DeleteTable`\n"+
+		"- `Replicas` (Spec) — hand-written update — set by `UpdateTable`\n"+
+		"\n"+
+		"### Regenerate is enough\n"+
+		"- `BillingMode` (Spec) — set by `CreateTable`\n"+
+		"- `TableStatus` (Status) — read back by `DescribeTable`\n"+
+		"\n"+
+		"### Related new operations\n"+
+		"- `GetTablePolicy`\n"+
+		"\n", blk.renderWhole())
 }
 
 func TestRenderIssueBodyDedupes(t *testing.T) {
@@ -1129,7 +1191,7 @@ func TestRenderIssueBodyRespectsGitHubLimit(t *testing.T) {
 	assert.Less(t, len(body), githubMaxIssueBody)
 	// A truncated body must still be worth reading.
 	assert.Contains(t, body, "## Resource: ")
-	assert.Contains(t, body, "### Spec field candidates")
+	assert.Contains(t, body, "### Regenerate is enough")
 	// Whole resources were dropped, so both counts appear. Only this test reaches
 	// this branch.
 	assert.Contains(t, body, "further resource(s) and")
@@ -1158,7 +1220,7 @@ func TestRenderIssueBodyTruncatesInsideOneOversizedResource(t *testing.T) {
 
 	assert.Less(t, len(body), githubMaxIssueBody)
 	assert.Contains(t, body, "## Resource: OneBigThing")
-	assert.Contains(t, body, "### Spec field candidates")
+	assert.Contains(t, body, "### Regenerate is enough")
 	assert.Contains(t, body, "SomeReasonablyLongFieldPath0")
 	assert.Contains(t, body, "omitted")
 	assert.Equal(t, fingerprint, parseFingerprint(body))
@@ -1595,9 +1657,9 @@ func TestReconcileIssueUpdatePreservesMaintainerText(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, issueUpdated, outcome)
 	assert.Contains(t, patchedBody, "intentionally unsupported")
-	// The refreshed region really did land: "### Spec field candidates" is absent from the
+	// The refreshed region really did land: "### Regenerate is enough" is absent from the
 	// one-finding body this issue started with.
-	assert.Contains(t, patchedBody, "### Spec field candidates")
+	assert.Contains(t, patchedBody, "### Regenerate is enough")
 }
 
 func TestReconcileIssueFailedCommentLeavesTheFingerprintStale(t *testing.T) {
@@ -2632,7 +2694,7 @@ func TestReconcileIssueRewordsSilentlyWhenOnlyTheTextChanged(t *testing.T) {
 	// the finding set, and so the fingerprint, is unchanged.
 	findings := sampleFindings()
 	filed, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", findings)
-	findings[0].Detail = "create-only: no operation changes it after creation, so it is immutable"
+	findings[0].Detail, findings[0].Work = createOnlyDetail, workCreateOnly
 
 	var patched bool
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2837,7 +2899,7 @@ func TestReconcileIssueMergesIntoTheBodyAsItIsAfterTheComment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"POST", "GET", "PATCH"}, calls)
 	assert.Contains(t, patched, "Note added during the comment.")
-	assert.Contains(t, patched, "### Spec field candidates", "the refreshed region must land")
+	assert.Contains(t, patched, "### Regenerate is enough", "the refreshed region must land")
 }
 
 func TestReconcileIssueSkipsThePatchWhenTheIssueChangedDuringTheComment(t *testing.T) {

@@ -170,7 +170,7 @@ func TestRenderIssueBodyBoundsAnOversizedDroppedAppendix(t *testing.T) {
 
 	assert.Less(t, len(body), githubMaxIssueBody)
 	assert.Contains(t, body, "## Resource: Gizmo")
-	assert.Contains(t, body, "- `Description` — `CreateWidget`")
+	assert.Contains(t, body, "- `Description` (Spec) — `CreateWidget`")
 	assert.Contains(t, body, "- `ResetWidget`")
 	assert.Contains(t, body, "<summary>2000 new operations not reported, each with the reason</summary>")
 	assert.Regexp(t, `- _and \d+ more_\n\n</details>\n\n---\n`, body)
