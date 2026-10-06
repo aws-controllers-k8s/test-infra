@@ -21,6 +21,7 @@ aws_services:
 - acmpca
 - apigateway
 - apigatewayv2
+- appconfig
 - applicationautoscaling
 - athena
 - autoscaling
