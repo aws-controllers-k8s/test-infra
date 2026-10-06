@@ -22,7 +22,8 @@
         command:
           - commenter
         args:
-          - --query=org:${TEST_INFRA_ORG} -label:lifecycle/frozen label:lifecycle/rotten
+          # ack/api-change-detected is exempt; see periodic-stale.
+          - --query=org:${TEST_INFRA_ORG} -label:lifecycle/frozen -label:ack/api-change-detected label:lifecycle/rotten
           - --updated=1440h
           - --token=/etc/github/token
           - |-

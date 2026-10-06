@@ -54,8 +54,8 @@ func TestClassifyOpWithOverrides(t *testing.T) {
 	require.NoError(t, err)
 
 	// No override: falls back to name inference.
-	opType, resName := in.ClassifyOpWithOverrides("CreateWidget", nil)
-	assert.Equal(t, OpTypeCreate, opType)
+	opTypes, resName := in.ClassifyOpWithOverrides("CreateWidget", nil)
+	assert.Equal(t, OpTypes{OpTypeCreate}, opTypes)
 	assert.Equal(t, "Widget", resName)
 
 	// Override with a scalar resource_name and a list operation_type. Without
@@ -64,9 +64,32 @@ func TestClassifyOpWithOverrides(t *testing.T) {
 	bare, _ := ClassifyOp("ChangeGadgetSettings", nil)
 	assert.Equal(t, OpTypeUnknown, bare, "precondition: name alone must not classify")
 
-	opType, resName = in.ClassifyOpWithOverrides("ChangeGadgetSettings", nil)
-	assert.Equal(t, OpTypeCreate, opType)
+	// operation_type: [Create, Delete] holds both roles, as code-generator's
+	// GetOperationMap registers it under each: Gadget is created *and* deleted by
+	// it, so it must not look undeletable.
+	opTypes, resName = in.ClassifyOpWithOverrides("ChangeGadgetSettings", nil)
+	assert.Equal(t, OpTypes{OpTypeCreate, OpTypeDelete}, opTypes)
+	assert.True(t, opTypes.Has(OpTypeCreate))
+	assert.True(t, opTypes.Has(OpTypeDelete))
+	assert.False(t, opTypes.Has(OpTypeUpdate))
+	assert.False(t, opTypes.Only(OpTypeCreate, OpTypeCreateBatch))
 	assert.Equal(t, "Gadget", resName)
+}
+
+func TestClassifyOpWithOverridesDedupesTypes(t *testing.T) {
+	in := &ControllerInputs{
+		Config: &generatorConfig{
+			Operations: map[string]operationOverride{
+				"PutThing": {
+					OperationType: stringArray{"Create", "CREATE", "Frobnicate", "Update"},
+					ResourceName:  stringArray{"Thing"},
+				},
+			},
+		},
+	}
+	opTypes, _ := in.ClassifyOpWithOverrides("PutThing", nil)
+	assert.Equal(t, OpTypes{OpTypeCreate, OpTypeUpdate}, opTypes,
+		"each recognised type once, unrecognised ones skipped")
 }
 
 func TestClassifyOpWithOverridesMultiResourceName(t *testing.T) {
@@ -98,7 +121,7 @@ func TestClassifyOpWithOverridesMultiResourceName(t *testing.T) {
 	}
 
 	opType, resName := in.ClassifyOpWithOverrides("DeleteFunction", nil)
-	assert.Equal(t, OpTypeDelete, opType)
+	assert.Equal(t, OpTypes{OpTypeDelete}, opType)
 	assert.Equal(t, "Function", resName,
 		"the inferred name must win over resource_name[0]")
 
@@ -129,14 +152,14 @@ func TestClassifyOpWithOverridesUnrecognisedOperationType(t *testing.T) {
 	inferredType, _ := ClassifyOp("CreateFooThing", nil)
 
 	opType, resName := in.ClassifyOpWithOverrides("CreateFooThing", nil)
-	assert.Equal(t, inferredType, opType, "unrecognised types must fall back to inference")
+	assert.Equal(t, OpTypes{inferredType}, opType, "unrecognised types must fall back to inference")
 	assert.Equal(t, "Thing", resName, "resource_name still applies")
 }
 
 func TestClassifyOpWithOverridesNilConfig(t *testing.T) {
 	in := &ControllerInputs{}
 	opType, resName := in.ClassifyOpWithOverrides("CreateBucket", nil)
-	assert.Equal(t, OpTypeCreate, opType)
+	assert.Equal(t, OpTypes{OpTypeCreate}, opType)
 	assert.Equal(t, "Bucket", resName)
 }
 

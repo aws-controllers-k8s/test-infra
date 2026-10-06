@@ -78,8 +78,13 @@ func issueSearchHandler(t *testing.T, openPage, closedPage string) http.HandlerF
 func TestListAPIChangeIssuesSkipsUnfingerprintedIssues(t *testing.T) {
 	// The failure this guards: `kind/api-change` and `service/s3` are both
 	// addedBy:anyone, so a maintainer triaging a contributor's issue used to make
-	// it a candidate for wholesale body replacement. A human issue has no
-	// fingerprint marker.
+	// it a candidate for wholesale body replacement. An issue with no fingerprint
+	// marker is never managed.
+	//
+	// The search is scoped to the bot's author and ownership label, so #7 here is
+	// the bot's own issue with its fingerprint edited away — and it is still open in
+	// the public backlog. It counts against the cap: skipping the count let another
+	// issue be filed past it for every such issue.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	client := newTestGitHubClient(t, issueSearchHandler(t, fmt.Sprintf(
 		`{"total_count": 2, "incomplete_results": false, "items": [
@@ -90,15 +95,13 @@ func TestListAPIChangeIssuesSkipsUnfingerprintedIssues(t *testing.T) {
 	openByService, openCount, closed, warnings, err := listAPIChangeIssues(
 		context.Background(), client, "o", "community", "ack-bot", testKnownServices("s3"))
 	require.NoError(t, err)
-	assert.Equal(t, 1, openCount, "the human-filed issue must not be counted against the cap")
+	assert.Equal(t, 2, openCount, "an open issue the search returned holds a slot, fingerprint or not")
 	assert.Empty(t, closed)
 	require.Contains(t, openByService, "s3")
 	assert.Equal(t, 42, openByService["s3"].GetNumber())
 
-	// Skipping it is right, but silently skipping it is not: the same shape occurs
-	// when the bot's own issue has an unreadable body, and that orphan then gets a
-	// duplicate filed against it and never counts towards the cap. A human has to
-	// see it.
+	// Skipping it is right, but silently skipping it is not: an orphan with an
+	// unreadable body gets a duplicate filed against it. A human has to see it.
 	require.Len(t, warnings, 1)
 	assert.Contains(t, warnings[0], "#7")
 	assert.Contains(t, warnings[0], "no readable fingerprint")
@@ -435,7 +438,7 @@ func TestListAPIChangeIssuesPaginatesTheClosedPassToo(t *testing.T) {
 
 func TestListAPIChangeIssuesPaginatesPastAFullyFilteredPage(t *testing.T) {
 	// Pagination must not be tied to having kept anything: a first page of nothing
-	// but human-filed issues would otherwise end the listing, and every service on
+	// but unmanageable issues would otherwise end the listing, and every service on
 	// the later pages would look uncovered and be re-filed.
 	body, _ := renderIssueBody("s3", "v1.41.5", "v1.44.0", sampleFindings())
 	var pages int
@@ -452,7 +455,8 @@ func TestListAPIChangeIssuesPaginatesPastAFullyFilteredPage(t *testing.T) {
 		context.Background(), client, "o", "community", "ack-bot", testKnownServices("s3"))
 	require.NoError(t, err)
 	assert.Equal(t, 2, pages)
-	assert.Equal(t, 1, openCount)
+	// #7 is unmanageable but still open, so it holds a slot.
+	assert.Equal(t, 2, openCount)
 	require.Contains(t, openByService, "s3")
 	assert.Equal(t, 42, openByService["s3"].GetNumber())
 }
@@ -625,4 +629,48 @@ func TestNewGithubClientFromEnv(t *testing.T) {
 	client, err := newGithubClientFromEnv()
 	require.NoError(t, err)
 	assert.NotNil(t, client)
+}
+
+func TestCreateGithubIssueClassifiesFailures(t *testing.T) {
+	// Only a failure GitHub answered with a 4xx is known not to have filed anything.
+	// A 5xx or a dropped connection may follow a committed create.
+	for name, tc := range map[string]struct {
+		handler       http.HandlerFunc
+		indeterminate bool
+	}{
+		"422": {func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			fmt.Fprint(w, `{"message": "Validation Failed"}`)
+		}, false},
+		"403": {func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message": "Forbidden"}`)
+		}, false},
+		"502": {func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+			fmt.Fprint(w, `{"message": "Bad Gateway"}`)
+		}, true},
+		"connection dropped": {func(w http.ResponseWriter, r *http.Request) {
+			panic(http.ErrAbortHandler)
+		}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := newTestGitHubClient(t, tc.handler)
+			_, err := createGithubIssueWithClient(context.Background(), client, "o", "community",
+				"t", "b", []string{apiChangeLabel})
+			require.Error(t, err)
+			assert.Equal(t, tc.indeterminate, errors.Is(err, errIssueCreateIndeterminate), "%v", err)
+		})
+	}
+}
+
+func TestRefetchManagedIssueReportsAFailedRead(t *testing.T) {
+	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"message": "Not Found"}`)
+	}))
+	listed := &github.Issue{Number: github.Int(42), User: &github.User{Login: github.String("ack-bot")}}
+	_, err := refetchManagedIssue(context.Background(), client, "o", "community", "s3", listed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "#42")
 }

@@ -19,8 +19,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/google/go-github/v63/github"
 	"github.com/spf13/cobra"
@@ -31,6 +34,13 @@ var detectAPIChangesCMD = &cobra.Command{
 	Short: "detect-api-changes - compares AWS API models against ACK controllers and files issues for gaps",
 	RunE:  detectAPIChanges,
 }
+
+// detectAPIChangesRunTimeout bounds one whole run. It sits below the ProwJob's
+// decoration timeout (see detect-api-changes.tpl) so that a stalled run fails here,
+// with this tool's own error and closing tally, rather than being interrupted by
+// Prow. Timeout plus grace period fit inside the template's 30m retry interval, so a
+// hung run has ended before its retry is due, let alone the next 24h run.
+const detectAPIChangesRunTimeout = 20 * time.Minute
 
 var (
 	OptControllersRoot string
@@ -114,7 +124,19 @@ func detectAPIChanges(cmd *cobra.Command, args []string) error {
 	// and its log is the only thing it produces.
 	log.SetPrefix("detect-api-changes: ")
 
+	// cmd is nil when a test calls this directly. Under Prow, Execute leaves Cobra's
+	// context as Background, so the run deadline and SIGTERM/SIGINT are what actually
+	// end a stalled run: the entrypoint interrupts the process at the job's
+	// decoration timeout, and this lets in-flight requests return instead of being
+	// killed mid-write after the grace period.
 	ctx := context.Background()
+	if cmd != nil && cmd.Context() != nil {
+		ctx = cmd.Context()
+	}
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, detectAPIChangesRunTimeout)
+	defer cancel()
 
 	services, configuredCap, err := getAPINotificationServices(OptJobsConfigPath)
 	if err != nil {
@@ -418,22 +440,50 @@ func reconcileServices(
 		// every decision and count below is about the reportable ones. Otherwise a
 		// service whose only change is a new Start* operation would file an issue.
 		reported := len(reportable(findings))
+		// New operations are counted in reported but are not on their own a reason to
+		// file or refresh: eligibility needs a resource or field finding. See actionable.
+		eligible := len(actionable(findings)) > 0
 		// Only short-circuit when there is also nothing open. A service with no findings
 		// but an open issue is the issueStaleOpenIssue case: its issue asserts changes
 		// that no longer exist and is holding a cap slot another service could use, and
 		// skipping the call here made that outcome unreachable. Falling through
 		// unconditionally instead would log "issue already up to date" for a service with
 		// neither findings nor an issue, which is false.
-		if reported == 0 && existingByService[service] == nil {
-			log.Printf("%s: no changes (%s -> %s)", service, baselineVersion, latestVersion)
+		if !eligible && existingByService[service] == nil {
+			if reported > 0 {
+				log.Printf("%s: %d operation finding(s) only, no resource or field changes; "+
+					"nothing to file (%s -> %s)", service, reported, baselineVersion, latestVersion)
+			} else {
+				log.Printf("%s: no changes (%s -> %s)", service, baselineVersion, latestVersion)
+			}
 			unchanged++
 			continue
 		}
 		// Guarded, because the condition above now admits a zero-findings service that
 		// has an open issue. "0 findings" would read as a detector failure rather than as
 		// the stale-issue line the switch below prints for it.
-		if reported > 0 {
+		if eligible {
 			log.Printf("%s: %d findings (%s -> %s)", service, reported, baselineVersion, latestVersion)
+		}
+
+		// Re-read the open issue now, after analysis and immediately before anything is
+		// compared against or merged into its body. The listing ran before the first
+		// service was analysed, so its copy can be minutes old, and a maintainer note
+		// added since would be missing from the merged body and overwritten by the
+		// PATCH. Only when there are findings: the stale-issue path writes nothing, so
+		// the listed copy serves it and the GET would be a wasted request.
+		//
+		// A read, so it runs under dryRun too, and the preview below merges into the
+		// same body a real run would.
+		existing := existingByService[service]
+		if existing != nil && reported > 0 {
+			fresh, refetchErr := refetchManagedIssue(ctx, client, owner, repo, service, existing)
+			if refetchErr != nil {
+				log.Printf("ERROR %s: %s", service, refetchErr)
+				writeFailures = append(writeFailures, service)
+				continue
+			}
+			existing = fresh
 		}
 
 		// Written before reconcileIssue decides, and for every service with findings
@@ -447,7 +497,7 @@ func reconcileServices(
 		// the region below is the same one a real run would render. What gets written is
 		// that region resolved down the path this service would actually take; the tests
 		// pin both paths.
-		if dryRun && outputDir != "" && reported > 0 {
+		if dryRun && outputDir != "" && eligible {
 			// The service name is validated against the AWS service list before it
 			// reaches here, so it is a single path segment.
 			path := filepath.Join(outputDir, service+".md")
@@ -465,8 +515,15 @@ func reconcileServices(
 			// body that could not be posted, which is what a reader needs in order to see
 			// why — so this is written before reconcileIssue decides, not after.
 			preview, previewKind := body, "new"
-			if existing := existingByService[service]; existing != nil {
-				preview, previewKind = replaceGeneratedRegion(existing.GetBody(), body), "refreshed"
+			if existing != nil {
+				// An unmanageable body has no merged form to show, so the region alone
+				// is written and labelled as such; reconcileIssue then refuses the
+				// refresh and the service lands in writeFailures, as in a real run.
+				if merged, mergeErr := replaceGeneratedRegion(existing.GetBody(), body); mergeErr != nil {
+					previewKind = "unmergeable (region only)"
+				} else {
+					preview, previewKind = merged, "refreshed"
+				}
 			}
 			if writeErr := os.WriteFile(path, []byte(preview), 0o644); writeErr != nil {
 				// A write failure, and it fails the run in dry-run too: the preview
@@ -494,7 +551,7 @@ func reconcileServices(
 		outcome, reconcileErr := reconcileIssue(
 			ctx, client, owner, repo,
 			service, baselineVersion, latestVersion, findings,
-			existingByService[service], closedFingerprints[service],
+			existing, closedFingerprints[service],
 			maxOpen, openCount, dryRun,
 		)
 		if reconcileErr != nil {
@@ -512,6 +569,14 @@ func reconcileServices(
 				aborted = true
 				return analysisFailures, writeFailures, skippedAtCap,
 					fmt.Errorf("aborting after %s: %w", service, reconcileErr)
+			}
+			// A create whose response was lost may still have filed the issue, so it
+			// holds a cap slot as though it had. Not counting it let every later
+			// service create past the cap, once per lost response. Counting it is
+			// enough: no later service can duplicate this one within the run, and the
+			// next run's listing sees the issue if it exists.
+			if errors.Is(reconcileErr, errIssueCreateIndeterminate) {
+				openCount++
 			}
 			log.Printf("ERROR %s: %s", service, reconcileErr)
 			writeFailures = append(writeFailures, service)
@@ -593,7 +658,7 @@ func analyzeService(
 		return nil, "", "", err
 	}
 
-	latestServiceVersion, err := latestVersions.resolve(ctx, client, in.PackageName)
+	candidates, err := latestVersions.resolve(ctx, client, in.PackageName)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -611,12 +676,25 @@ func analyzeService(
 		releaseVersion = baselineServiceVersion
 	}
 	series := "service/" + in.PackageName + "/"
-	latestVersion := series + latestServiceVersion
 	baselineVersion := series + releaseVersion
 	if releaseVersion == "" {
 		baselineVersion = in.SDKVersion
 	}
-	if releaseVersion == latestServiceVersion {
+
+	// The latest model is fetched before the baseline so that the up-to-date case
+	// still costs no model request, as it did when only the highest tag was considered.
+	latestServiceVersion, latest, found, err := latestModel(
+		ctx, cacheDir, in.ModelName, in.PackageName, releaseVersion, candidates,
+	)
+	if latestServiceVersion == "" {
+		// No candidate had the model; report against the newest tag that was tried.
+		latestServiceVersion = candidates[0]
+	}
+	latestVersion := series + latestServiceVersion
+	if err != nil {
+		return nil, baselineVersion, latestVersion, err
+	}
+	if !found {
 		return nil, baselineVersion, latestVersion, nil
 	}
 
@@ -627,14 +705,7 @@ func analyzeService(
 		return nil, baselineVersion, latestVersion, err
 	}
 
-	latestModel, err := fetchModel(
-		ctx, cacheDir, in.ModelName, in.PackageName, "", latestServiceVersion,
-	)
-	if err != nil {
-		return nil, baselineVersion, latestVersion, err
-	}
-
-	findings := collectFindings(latestModel, baselineModel, in)
+	findings := collectFindings(latest, baselineModel, in)
 	if releaseVersion != "" {
 		releaseModel, err := fetchModel(ctx, cacheDir, in.ModelName, in.PackageName, "", releaseVersion)
 		if err != nil {

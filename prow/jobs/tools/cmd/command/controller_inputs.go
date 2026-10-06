@@ -15,6 +15,7 @@ package command
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -150,37 +151,32 @@ func (in *ControllerInputs) CanonicalKind(kind string) (string, bool) {
 // it as the create operation for a resource. Without reading the override we
 // would drop it into the "needs review" bucket on every run.
 //
-// When an override lists several operation types, the first that maps onto a
-// type this tool understands wins; ordering in generator.yaml is significant
-// only in that we report one classification per operation.
+// When an override lists several operation types, the operation holds every
+// one of them, as in code-generator, whose GetOperationMap registers it under
+// each declared type: route53's ChangeResourceRecordSets is RecordSet's Create
+// *and* its Delete, and 12 controllers declare a multi-valued operation_type.
+// Keeping only the first would make such a resource look undeletable, and a
+// field sent on a [Create, Update] operation look immutable. Callers therefore
+// ask whether an operation holds a role, with OpTypes.Has, rather than
+// comparing a single type.
 //
-// Two deliberate divergences from code-generator, both verified to have no
-// effect on any controller in the corpus:
-//
-//   - codegen registers a multi-typed operation under *every* listed type, so
-//     route53's ChangeResourceRecordSets is simultaneously RecordSet's Create
-//     and Delete operation. 12 controllers declare a multi-valued
-//     operation_type. We return one classification, so a consumer asking "what
-//     is this resource's Delete operation?" can get a false negative. Acceptable
-//     here because the consumers only ask whether an operation is a Create (to
-//     infer a CRD) and which resource it belongs to.
-//   - codegen ignores an override entirely unless both operation_type and
-//     resource_name are set; we apply whichever is present. No controller
-//     declares one without the other.
+// One deliberate divergence from code-generator, verified to have no effect on
+// any controller in the corpus: codegen ignores an override entirely unless
+// both operation_type and resource_name are set; we apply whichever is present.
+// No controller declares one without the other.
 func (in *ControllerInputs) ClassifyOpWithOverrides(
 	opID string,
 	configResources []string,
-) (OpType, string) {
+) (OpTypes, string) {
+	inferredType, inferredName := ClassifyOp(opID, configResources)
 	if in.Config == nil {
-		return ClassifyOp(opID, configResources)
+		return OpTypes{inferredType}, inferredName
 	}
 
 	override, ok := in.Config.Operations[opID]
 	if !ok {
-		return ClassifyOp(opID, configResources)
+		return OpTypes{inferredType}, inferredName
 	}
-
-	inferredType, inferredName := ClassifyOp(opID, configResources)
 
 	// Resolve the resource name. When the override lists several, prefer the
 	// one name inference already arrived at, and only fall back to the first
@@ -204,12 +200,30 @@ func (in *ControllerInputs) ClassifyOpWithOverrides(
 		resName = firstMatchOrDefault(override.ResourceName, inferredName)
 	}
 
+	var types OpTypes
 	for _, declared := range override.OperationType {
-		if opType, known := opTypeFromConfigString(declared); known {
-			return opType, resName
+		if opType, known := opTypeFromConfigString(declared); known && !types.Has(opType) {
+			types = append(types, opType)
 		}
 	}
-	return inferredType, resName
+	if len(types) == 0 {
+		return OpTypes{inferredType}, resName
+	}
+	return types, resName
+}
+
+// OpTypes is every operation type an operation is registered under. It is never
+// empty: an operation that does not classify is {OpTypeUnknown}.
+type OpTypes []OpType
+
+// Has reports whether the operation holds any of the given types.
+func (t OpTypes) Has(want ...OpType) bool {
+	return slices.ContainsFunc(t, func(opType OpType) bool { return slices.Contains(want, opType) })
+}
+
+// Only reports whether every type the operation holds is one of the given types.
+func (t OpTypes) Only(want ...OpType) bool {
+	return !slices.ContainsFunc(t, func(opType OpType) bool { return !slices.Contains(want, opType) })
 }
 
 // firstMatchOrDefault returns the declared name matching want, case-insensitively,

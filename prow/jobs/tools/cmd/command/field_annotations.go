@@ -60,7 +60,7 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		}
 		var setters []string
 		for _, opID := range newOps[f.Kind] {
-			if requestCarries(latest, opID, f.Subject) {
+			if requestCarries(latest, in, opID, f.Subject) {
 				setters = append(setters, opID)
 			}
 		}
@@ -69,7 +69,7 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		}
 	}
 
-	findings = pairChangeLists(latest, findings)
+	findings = pairChangeLists(latest, in, findings)
 	findings = foldSecondaryViews(latest, findings)
 
 	declared := []string{}
@@ -122,8 +122,8 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 			if path != "" {
 				entry += "=" + path
 			}
-			opType, _ := in.ClassifyOpWithOverrides(opID, declared)
-			if isReadOp(opType, opID) {
+			opTypes, _ := in.ClassifyOpWithOverrides(opID, declared)
+			if isReadOp(opTypes, opID) {
 				readBy = append(readBy, entry)
 			} else {
 				returnedBy = append(returnedBy, entry)
@@ -268,7 +268,7 @@ func isFieldCandidate(c FindingClass) bool {
 // Backfilling, IndexArn, IndexSizeBytes and ItemCount, none of which any request
 // carries. They were invisible before because a child of a new field is part of
 // that field's finding (see hasNewAncestor).
-func pairChangeLists(latest *SmithyModel, findings []Finding) []Finding {
+func pairChangeLists(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	var added []Finding
 	for i := range findings {
 		list := &findings[i]
@@ -278,7 +278,7 @@ func pairChangeLists(latest *SmithyModel, findings []Finding) []Finding {
 		}
 		var updaters []string
 		for _, opID := range list.evidenceOps() {
-			if requestCarries(latest, opID, list.Subject) {
+			if requestCarries(latest, in, opID, list.Subject) {
 				updaters = append(updaters, opID)
 			}
 		}
@@ -495,18 +495,26 @@ func findStateView(m *SmithyModel, f Finding) stateView {
 // networkfirewall's AvailabilityZoneMappings is changed by
 // AssociateAvailabilityZones and DisassociateAvailabilityZones, so the hook must
 // diff the list; its ProxySettings by UpdateProxySettings alone, so it needs a
-// dedicated update hook. A field the resource's own Update also sends, or only a
-// Create sends, gets nothing here.
+// dedicated update hook. A field only a Create sends gets nothing here, nor does
+// one the resource's own Update also sends — unless that Update is hand-written
+// (update_operation.custom_method_name), when codegen does not send the field and
+// the custom method must.
 func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string, f Finding) string {
+	custom := customUpdateMethod(in, f.Kind)
 	var setters []string
 	for _, opID := range f.evidenceOps() {
-		if !requestCarries(m, opID, f.Subject) {
+		if !requestCarries(m, in, opID, f.Subject) {
 			continue
 		}
-		switch opType, name := in.ClassifyOpWithOverrides(opID, declared); {
-		case opType == OpTypeCreate || opType == OpTypeCreateBatch:
-		case opType == OpTypeUpdate && strings.EqualFold(name, f.Kind):
+		switch opTypes, name := in.ClassifyOpWithOverrides(opID, declared); {
+		case opTypes.Has(OpTypeUpdate) && strings.EqualFold(name, f.Kind):
+			if custom != "" {
+				return fmt.Sprintf("custom reconciliation: sent on `%s`, the resource's own Update, but that "+
+					"update is the hand-written `%s`, so adding it means changing that code, not only regenerating",
+					opID, custom)
+			}
 			return ""
+		case opTypes.Has(OpTypeCreate, OpTypeCreateBatch):
 		default:
 			setters = append(setters, opID)
 		}
@@ -516,12 +524,10 @@ func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string,
 	}
 	// Setters the controller already calls from its own update code: that code is
 	// what changes, not a new hook.
-	if in.Config != nil {
-		if custom := in.Config.Resources[f.Kind].UpdateOperation.CustomMethodName; custom != "" &&
-			!slices.ContainsFunc(setters, func(op string) bool { return !in.UsedOps[kindToResourceDir(f.Kind)][op] }) {
-			return fmt.Sprintf("custom reconciliation: set through %s, which the hand-written update `%s` calls, "+
-				"so adding it means changing that code, not only regenerating", quoteOps(setters), custom)
-		}
+	if custom != "" &&
+		!slices.ContainsFunc(setters, func(op string) bool { return !in.UsedOps[kindToResourceDir(f.Kind)][op] }) {
+		return fmt.Sprintf("custom reconciliation: set through %s, which the hand-written update `%s` calls, "+
+			"so adding it means changing that code, not only regenerating", quoteOps(setters), custom)
 	}
 	pair := slices.ContainsFunc(setters, func(op string) bool { return strings.HasPrefix(op, "Associate") }) &&
 		slices.ContainsFunc(setters, func(op string) bool { return strings.HasPrefix(op, "Disassociate") })
@@ -533,13 +539,17 @@ func customSetterDetail(m *SmithyModel, in *ControllerInputs, declared []string,
 		"so it needs a dedicated update hook", quoteOps(setters))
 }
 
+// customUpdateMethod returns the resource's update_operation.custom_method_name,
+// or "" when codegen generates its update.
+func customUpdateMethod(in *ControllerInputs, kind string) string {
+	res, _ := in.Config.resource(kind)
+	return res.UpdateOperation.CustomMethodName
+}
+
 // customSourcedSibling returns the generator.yaml `from:` field f is sent beside,
 // and the operation both are sent on, or "" when there is none.
 func customSourcedSibling(latest *SmithyModel, in *ControllerInputs, f Finding) (string, string) {
-	if in.Config == nil {
-		return "", ""
-	}
-	res, ok := in.Config.Resources[f.Kind]
+	res, ok := in.Config.resource(f.Kind)
 	if !ok {
 		return "", ""
 	}
@@ -553,7 +563,7 @@ func customSourcedSibling(latest *SmithyModel, in *ControllerInputs, f Finding) 
 		if field.From == nil || !slices.Contains(f.evidenceOps(), field.From.Operation) {
 			continue
 		}
-		if requestCarries(latest, field.From.Operation, f.Subject) {
+		if requestCarries(latest, in, field.From.Operation, f.Subject) {
 			return name, field.From.Operation
 		}
 	}
@@ -576,12 +586,12 @@ func createOnly(latest *SmithyModel, in *ControllerInputs, declared []string, ne
 		if !requestCarriesName(latest, opID, lastSegment(f.Subject)) {
 			continue
 		}
-		switch opType, _ := in.ClassifyOpWithOverrides(opID, declared); opType {
-		case OpTypeCreate, OpTypeCreateBatch:
-			created = true
-		default:
+		// Every role counts: an operation_type: [Create, Update] operation is also
+		// how the field changes.
+		if opTypes, _ := in.ClassifyOpWithOverrides(opID, declared); !opTypes.Only(OpTypeCreate, OpTypeCreateBatch) {
 			return false
 		}
+		created = true
 	}
 	return created
 }
@@ -606,13 +616,26 @@ func lastSegment(path string) string {
 	return path[strings.LastIndex(path, ".")+1:]
 }
 
-// requestCarries reports whether an operation's request has a member at path.
-func requestCarries(m *SmithyModel, opID, path string) bool {
+// requestCarries reports whether an operation's request has a member at path, as
+// spelled or, as findAddedFields keys it, relative to the operation's configured
+// input wrapper.
+func requestCarries(m *SmithyModel, in *ControllerInputs, opID, path string) bool {
 	op, ok := m.Operation(opID)
 	if !ok || op.Input == nil {
 		return false
 	}
-	_, ok = m.WalkMembers(op.Input.Target, maxWalkDepth)[path]
+	members := m.WalkMembers(op.Input.Target, maxWalkDepth)
+	if _, ok := members[path]; ok {
+		return true
+	}
+	if in == nil {
+		return false
+	}
+	wrapper := in.Config.inputWrapper(opID)
+	if wrapper == "" {
+		return false
+	}
+	_, ok = members[wrapper+"."+path]
 	return ok
 }
 
@@ -642,8 +665,8 @@ func annotateResources(latest *SmithyModel, in *ControllerInputs, findings []Fin
 		var parts, tokenReads []string
 		ownUpdate := false
 		for _, opID := range f.evidenceOps() {
-			opType, name := in.ClassifyOpWithOverrides(opID, declared)
-			if isReadOp(opType, opID) {
+			opTypes, name := in.ClassifyOpWithOverrides(opID, declared)
+			if isReadOp(opTypes, opID) {
 				// Not requestMembers on the response side: UpdateToken is a
 				// non-identifier it strips. The same holds for requests below.
 				if op, ok := latest.Operation(opID); ok && op.Output != nil {
@@ -654,7 +677,7 @@ func annotateResources(latest *SmithyModel, in *ControllerInputs, findings []Fin
 				continue
 			}
 			if strings.EqualFold(name, f.Kind) {
-				ownUpdate = ownUpdate || opType == OpTypeUpdate
+				ownUpdate = ownUpdate || opTypes.Has(OpTypeUpdate)
 				continue
 			}
 			parts = append(parts, opID)
@@ -675,7 +698,7 @@ func annotateResources(latest *SmithyModel, in *ControllerInputs, findings []Fin
 		}
 		var sources []string
 		for _, opID := range parts {
-			if !requestCarries(latest, opID, "UpdateToken") {
+			if !requestCarries(latest, in, opID, "UpdateToken") {
 				continue
 			}
 			if read := tokenSource(latest, opID, tokenReads); read != "" {

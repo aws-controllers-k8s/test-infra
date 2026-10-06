@@ -175,6 +175,53 @@ func TestAnnotateFieldsMarksCreateOnlyFields(t *testing.T) {
 	assert.Empty(t, got[1].Detail)
 }
 
+// TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly: an operation declared
+// operation_type: [Create, Update] is also the resource's Update, so a field only
+// it sends changes after creation and needs no custom work.
+func TestAnnotateFieldsMultiRoleOperationIsNotCreateOnly(t *testing.T) {
+	m := opsModel(t, map[string][]string{"PutWidget": {"WidgetName", "Color"}})
+	in := &ControllerInputs{
+		Config: &generatorConfig{Operations: map[string]operationOverride{
+			"PutWidget": {OperationType: stringArray{"Create", "Update"}, ResourceName: stringArray{"Widget"}},
+		}},
+		UsedOps: map[string]map[string]bool{"widget": {"PutWidget": true}},
+	}
+
+	got := annotateFields(m, in, []Finding{
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidget"},
+	})
+	assert.Empty(t, got[0].Detail)
+}
+
+// TestAnnotateFieldsFlagsHandWrittenUpdate: a field the resource's own Update sends
+// needs no hook when codegen writes that Update, but does when generator.yaml
+// replaces it with update_operation.custom_method_name — codegen then sends
+// nothing, and the hand-written method must.
+func TestAnnotateFieldsFlagsHandWrittenUpdate(t *testing.T) {
+	m := opsModel(t, map[string][]string{
+		"CreateWidget": {"WidgetName"},
+		"UpdateWidget": {"WidgetName", "Color"},
+	})
+	findings := []Finding{
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "UpdateWidget"},
+	}
+	usedOps := map[string]map[string]bool{"widget": {"CreateWidget": true, "UpdateWidget": true}}
+
+	generated := annotateFields(m, &ControllerInputs{Config: &generatorConfig{}, UsedOps: usedOps}, findings)
+	assert.Empty(t, generated[0].Detail)
+
+	widget := resourceConfig{}
+	widget.UpdateOperation.CustomMethodName = "customUpdateWidget"
+	in := &ControllerInputs{
+		Config:  &generatorConfig{Resources: map[string]resourceConfig{"Widget": widget}},
+		UsedOps: usedOps,
+	}
+	got := annotateFields(m, in, findings)
+	assert.Equal(t, "custom reconciliation: sent on `UpdateWidget`, the resource's own Update, but that "+
+		"update is the hand-written `customUpdateWidget`, so adding it means changing that code, not only "+
+		"regenerating", got[0].Detail)
+}
+
 // TestAnnotateFieldsSeparatesSummaryAndDetailedViews is ec2's Instance application
 // health with the real shapes: DescribeApplicationStatus returns, per instance, the
 // detailed ApplicationStatus; DescribeInstanceStatus the two-member

@@ -10,6 +10,17 @@
   retry:
     attempts: 2
     interval: 30m
+  # One run at a time: a scheduled run or retry that comes due while another is still
+  # going waits for it rather than racing it on the same issues.
+  max_concurrency: 1
+  # Bounds a stalled run well inside the 30m retry interval instead of the 48h
+  # default_decoration_configs timeout. The tool's own deadline
+  # (detectAPIChangesRunTimeout, 20m) fires first so it exits with its own error and
+  # tally; this is the backstop, after which the entrypoint interrupts the process
+  # and kills it at the end of the grace period.
+  decoration_config:
+    timeout: 25m
+    grace_period: 5m
   annotations:
     description: Compares the latest AWS API models against ACK controllers and opens a github issue in the community repository when new resources, operations, or fields are found
     # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394

@@ -289,7 +289,7 @@ func TestSetterFieldCandidatesSkipRequestPlumbing(t *testing.T) {
 		},
 	})
 	in := &ControllerInputs{Config: &generatorConfig{}, CRDFields: map[string]map[string]bool{"Bucket": {}}}
-	got := setterFieldCandidates(m, in, "Bucket", "UpdateBucketMetadataAnnotationTableConfiguration", OpTypeUpdate)
+	got := setterFieldCandidates(m, in, "Bucket", "UpdateBucketMetadataAnnotationTableConfiguration", OpTypes{OpTypeUpdate})
 	require.Len(t, got, 1)
 	assert.Equal(t, "AnnotationTableConfiguration", got[0].Subject)
 }
@@ -361,7 +361,7 @@ func TestSetterFieldCandidatesReturnedUnderTheSameNameAreSpec(t *testing.T) {
 		CRDFields: map[string]map[string]bool{"Widget": {}},
 		UsedOps:   map[string]map[string]bool{"widget": {"GetWidget": true}},
 	}
-	got := setterFieldCandidates(m, in, "Widget", "PutWidgetColor", OpTypeUnknown)
+	got := setterFieldCandidates(m, in, "Widget", "PutWidgetColor", OpTypes{OpTypeUnknown})
 	sort.Slice(got, func(i, j int) bool { return got[i].Subject < got[j].Subject })
 	assert.Equal(t, []Finding{
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "PutWidgetColor"},

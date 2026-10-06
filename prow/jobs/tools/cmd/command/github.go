@@ -19,14 +19,21 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v63/github"
 )
+
+// githubRequestTimeout bounds each GitHub API request. go-github's default client
+// has none, so without it one stalled response holds an unattended job until
+// Prow's timeout instead of failing that one request.
+const githubRequestTimeout = 60 * time.Second
 
 const (
 // baseBranch default is now controlled via --base-branch flag (OptBaseBranch)
@@ -239,7 +246,7 @@ func newGithubClientFromEnv() (*github.Client, error) {
 	if token == "" {
 		return nil, fmt.Errorf("environment variable GITHUB_TOKEN is not provided")
 	}
-	return github.NewClient(nil).WithAuthToken(token), nil
+	return github.NewClient(&http.Client{Timeout: githubRequestTimeout}).WithAuthToken(token), nil
 }
 
 // fingerprintedOnly reports whether an issue carries this detector's fingerprint
@@ -358,16 +365,6 @@ func listAPIChangeIssues(
 	// only the attributable ones let a run file past the cap whenever a service was
 	// dropped from api_notification_services with its issue still open.
 	attribute := func(issue *github.Issue, wantState string) (service string, inWantState, manage bool) {
-		if !fingerprintedOnly(issue) {
-			// Labelled and authored by us but unreadable: skipping is right — we
-			// will not rewrite a body we cannot identify — but silence here meant
-			// a duplicate got filed and the orphan never appeared in any log.
-			// Not an issue this job filed, so it does not hold a slot either.
-			warnings = append(warnings, fmt.Sprintf(
-				"issue #%d carries %s but no readable fingerprint; not managing it",
-				issue.GetNumber(), apiChangeLabel))
-			return "", false, false
-		}
 		// Only "open" means open and only "closed" means closed. Reading anything
 		// else as closed — which `GetState() != "open"` did — suppressed filing
 		// *and* skipped updating, so the service went quiet with no log line.
@@ -390,6 +387,22 @@ func listAPIChangeIssues(
 				"issue #%d reports state %q, not the %q the search asked for; not managing it",
 				issue.GetNumber(), state, wantState))
 			return "", false, false
+		}
+		if !fingerprintedOnly(issue) {
+			// Labelled and authored by us but unreadable: skipping is right — we
+			// will not rewrite a body we cannot identify — but silence here meant
+			// a duplicate got filed and the orphan never appeared in any log.
+			//
+			// Checked after the state, and reported as in that state, because the
+			// fingerprint decides only whether the body is safe to manage. Both
+			// searches are scoped to this author and this label, so a removed or
+			// damaged fingerprint is still one of our issues sitting open in the
+			// public backlog; returning before the count let a run file past the
+			// cap for every such issue.
+			warnings = append(warnings, fmt.Sprintf(
+				"issue #%d carries %s but no readable fingerprint; not managing it",
+				issue.GetNumber(), apiChangeLabel))
+			return "", true, false
 		}
 		service, err := serviceFromLabels(issue, knownServices)
 		if err != nil {
@@ -666,6 +679,10 @@ func createGithubIssueWithClient(
 	}
 	issue, _, err := client.Issues.Create(ctx, owner, repo, request)
 	if err != nil {
+		if !createDefinitelyRejected(err) {
+			return nil, fmt.Errorf("unable to create issue in %s/%s: %w: %w",
+				owner, repo, errIssueCreateIndeterminate, err)
+		}
 		return nil, fmt.Errorf("unable to create issue in %s/%s: %w", owner, repo, err)
 	}
 	if slices.Contains(labels, apiChangeLabel) && !issueHasLabel(issue, apiChangeLabel) {
@@ -680,6 +697,83 @@ func createGithubIssueWithClient(
 		)
 	}
 	return issue, nil
+}
+
+// errIssueCreateIndeterminate reports that an issue POST failed in a way that does
+// not establish whether GitHub filed the issue: a transport error, a timeout, or a
+// 5xx. GitHub can commit the create and still lose the response, so the caller must
+// treat the issue as possibly existing — in particular, as holding a slot against the
+// open-issue cap. Counting it as not filed let every later service in the run create
+// past the cap, once per lost response, and the job-level retry multiplies the chances.
+var errIssueCreateIndeterminate = errors.New("the create may have been committed")
+
+// createDefinitelyRejected reports whether a failed issue POST is known not to have
+// filed anything: GitHub answered with a 4xx, which it sends before committing.
+// Rate-limit refusals are 4xx too but carry their own error types.
+func createDefinitelyRejected(err error) bool {
+	var rateLimit *github.RateLimitError
+	var abuse *github.AbuseRateLimitError
+	if errors.As(err, &rateLimit) || errors.As(err, &abuse) {
+		return true
+	}
+	var resp *github.ErrorResponse
+	if errors.As(err, &resp) && resp.Response != nil {
+		return resp.Response.StatusCode >= 400 && resp.Response.StatusCode < 500
+	}
+	return false
+}
+
+// refetchManagedIssue re-reads an issue the listing attributed to service and
+// re-checks everything the listing established, so that a refresh merges into the
+// body as it stands now rather than as the search saw it.
+//
+// The listing runs once, before any service is analysed, and analysis takes minutes
+// per service. A maintainer note added in that window was absent from the listed body,
+// so merging into it and PATCHing silently deleted the note. The GET narrows that
+// window to the few seconds between here and the write.
+//
+// Ownership is re-checked rather than assumed because the interval also lets the
+// issue be closed, relabelled, or have its fingerprint edited away, and each of those
+// is a reason the listing would not have handed it over in the first place. Author
+// cannot change on GitHub, so comparing it guards against the wrong issue coming back
+// rather than against a transfer.
+func refetchManagedIssue(
+	ctx context.Context,
+	client *github.Client,
+	owner, repo, service string,
+	listed *github.Issue,
+) (*github.Issue, error) {
+	number := listed.GetNumber()
+	fresh, _, err := client.Issues.Get(ctx, owner, repo, number)
+	if err != nil {
+		return nil, fmt.Errorf("unable to re-read issue %s/%s#%d before refreshing it: %w",
+			owner, repo, number, err)
+	}
+	var problems []string
+	if fresh.GetState() != "open" {
+		problems = append(problems, fmt.Sprintf("its state is now %q", fresh.GetState()))
+	}
+	if fresh.IsPullRequest() {
+		problems = append(problems, "it is a pull request")
+	}
+	if want := listed.GetUser().GetLogin(); want == "" || fresh.GetUser().GetLogin() != want {
+		problems = append(problems, fmt.Sprintf("its author is %q, not %q",
+			fresh.GetUser().GetLogin(), want))
+	}
+	if !issueHasLabel(fresh, apiChangeLabel) {
+		problems = append(problems, "it no longer carries "+apiChangeLabel)
+	}
+	if !issueHasLabel(fresh, "service/"+service) {
+		problems = append(problems, "it no longer carries service/"+service)
+	}
+	if !fingerprintedOnly(fresh) {
+		problems = append(problems, "its fingerprint is no longer readable")
+	}
+	if len(problems) > 0 {
+		return nil, fmt.Errorf("not refreshing issue %s/%s#%d: %s",
+			owner, repo, number, strings.Join(problems, "; "))
+	}
+	return fresh, nil
 }
 
 // issueHasLabel reports whether an issue carries a label.

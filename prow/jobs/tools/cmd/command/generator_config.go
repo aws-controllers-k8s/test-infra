@@ -17,7 +17,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -121,6 +123,12 @@ type operationOverride struct {
 	// OutputWrapperFieldPath names the response member codegen reads the
 	// resource's fields from, e.g. iam's GetGroup declares `Group`.
 	OutputWrapperFieldPath string `yaml:"output_wrapper_field_path"`
+	// InputWrapperFieldPath is its request-side counterpart: codegen flattens
+	// the members of this request member into Spec and leaves every other
+	// request member out. backup's CreateBackupPlan and UpdateBackupPlan
+	// declare `BackupPlan`, so the CRD's fields are BackupPlan's members and
+	// the request's other top-level members are not Spec fields at all.
+	InputWrapperFieldPath string `yaml:"input_wrapper_field_path"`
 }
 
 // stringArray accepts either a YAML scalar or a YAML sequence, mirroring
@@ -185,12 +193,37 @@ func (c *generatorConfig) ResourceNames() []string {
 	return names
 }
 
+// resource returns the config block for a resource kind, matched
+// case-insensitively as code-generator's GetResourceConfig matches it.
+//
+// Callers hold CRD kinds, which uppercase acronyms, while generator.yaml is
+// keyed by the name inferred from the AWS operation: ec2's CRD kinds are
+// VPCEndpoint and DHCPOptions, its config blocks VpcEndpoint and DhcpOptions.
+// An exact lookup silently drops such a resource's renames, sourced fields, and
+// custom update, so every lookup by kind goes through here. An exact match
+// wins; otherwise the first case-insensitive match in sorted order, so the
+// result is deterministic even if two keys differ only in case.
+func (c *generatorConfig) resource(kind string) (resourceConfig, bool) {
+	if c == nil {
+		return resourceConfig{}, false
+	}
+	if res, ok := c.Resources[kind]; ok {
+		return res, true
+	}
+	for _, name := range c.ResourceNames() {
+		if strings.EqualFold(name, kind) {
+			return c.Resources[name], true
+		}
+	}
+	return resourceConfig{}, false
+}
+
 // RenamesForResource returns a flat AWS-member-name to ACK-field-name map for
 // one resource, collapsed across operations and across input and output
 // fields. ACK keeps renames consistent within a resource, so collapsing is
 // safe and keeps the suppression lookup simple.
 func (c *generatorConfig) RenamesForResource(kind string) map[string]string {
-	res, ok := c.Resources[kind]
+	res, ok := c.resource(kind)
 	if !ok {
 		return nil
 	}
@@ -221,4 +254,41 @@ func (c *generatorConfig) RenamesForResource(kind string) map[string]string {
 		return nil
 	}
 	return out
+}
+
+// renamedPath applies a resource's renames to an AWS member path, segment by
+// segment. A rename key is either a top-level member name, `WidgetName`, or a
+// full dotted path whose final segment it renames, as firehose's
+// `HttpEndpointDestinationConfiguration.S3Update: S3Configuration`. A dotted
+// key may spell its parents as AWS names them or as already renamed —
+// firehose's spells its parent renamed, from UpdateDestination's
+// `HttpEndpointDestinationUpdate` — so both prefixes are tried. Keys are
+// matched exactly, as code-generator's GetResourceFieldName matches them.
+func (c *generatorConfig) renamedPath(kind string, segments []string) []string {
+	out := slices.Clone(segments)
+	renames := c.RenamesForResource(kind)
+	if len(renames) == 0 {
+		return out
+	}
+	for i := range segments {
+		original := strings.Join(segments[:i+1], ".")
+		renamed, ok := renames[original]
+		if !ok && i > 0 {
+			renamed, ok = renames[strings.Join(out[:i], ".")+"."+segments[i]]
+		}
+		if ok {
+			out[i] = renamed
+		}
+	}
+	return out
+}
+
+// inputWrapper returns the request member codegen flattens into Spec for an
+// operation, or "" when it reads the request as-is. See
+// operationOverride.InputWrapperFieldPath.
+func (c *generatorConfig) inputWrapper(opName string) string {
+	if c == nil {
+		return ""
+	}
+	return c.Operations[opName].InputWrapperFieldPath
 }
