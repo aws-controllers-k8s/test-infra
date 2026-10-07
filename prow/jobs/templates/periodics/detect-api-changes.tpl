@@ -1,6 +1,8 @@
 - name: detect-api-changes
   decorate: true
-  interval: 24h
+  # UTC. aws-sdk-go-v2 releases on weekdays around 18:15-19:30 (occasionally later);
+  # 20:00 catches the day's release and 08:00 picks up late ones.
+  cron: "0 8,20 * * *"
   # Retry transient GitHub/network errors. Safe to re-run: the fingerprint prevents
   # duplicate issues; at worst one "change set has changed" comment repeats.
   retry:
