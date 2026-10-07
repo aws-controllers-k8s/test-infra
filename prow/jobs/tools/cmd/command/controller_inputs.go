@@ -29,9 +29,6 @@ type ControllerInputs struct {
 	SDKVersion string
 	// ServiceSDKVersion is the per-service tag, empty for most controllers.
 	ServiceSDKVersion string
-	// GoModServiceVersion is the service module version go.mod requires, the
-	// baseline for what is new. Empty when go.mod does not require it.
-	GoModServiceVersion string
 	// ModelName is the aws-models JSON file base name, which can differ from
 	// the service alias (route53 -> route-53, opensearchservice -> opensearch).
 	ModelName string
@@ -88,28 +85,22 @@ func ReadControllerInputs(root, service string) (*ControllerInputs, error) {
 		packageName = service
 	}
 
-	goModServiceVersion, err := readGoModServiceVersion(controllerPath, packageName)
-	if err != nil {
-		return nil, err
-	}
-
 	kindsByLower := make(map[string]string, len(crdFields))
 	for kind := range crdFields {
 		kindsByLower[strings.ToLower(kind)] = kind
 	}
 
 	return &ControllerInputs{
-		Service:             service,
-		SDKVersion:          sdkVersion,
-		ServiceSDKVersion:   serviceSDKVersion,
-		GoModServiceVersion: goModServiceVersion,
-		ModelName:           modelName,
-		PackageName:         packageName,
-		Config:              cfg,
-		CRDFields:           crdFields,
-		CRDStatusFields:     crdStatusFields,
-		UsedOps:             usedOps,
-		kindsByLower:        kindsByLower,
+		Service:           service,
+		SDKVersion:        sdkVersion,
+		ServiceSDKVersion: serviceSDKVersion,
+		ModelName:         modelName,
+		PackageName:       packageName,
+		Config:            cfg,
+		CRDFields:         crdFields,
+		CRDStatusFields:   crdStatusFields,
+		UsedOps:           usedOps,
+		kindsByLower:      kindsByLower,
 	}, nil
 }
 

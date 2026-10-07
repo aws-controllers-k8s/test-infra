@@ -67,34 +67,3 @@ func TestReadGenerateMetadataNeitherVersion(t *testing.T) {
 	assert.Contains(t, err.Error(), "aws_sdk_go_version")
 	assert.Contains(t, err.Error(), "aws_service_sdk_version")
 }
-
-func TestReadGoModServiceVersion(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte(`module github.com/aws-controllers-k8s/ec2-controller
-
-go 1.25
-
-require github.com/aws/aws-sdk-go-v2/service/ec2iface v1.0.0
-
-require (
-	github.com/aws/aws-sdk-go-v2 v1.41.2
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.290.1
-)
-`), 0o644))
-
-	got, err := readGoModServiceVersion(dir, "ec2")
-	require.NoError(t, err)
-	assert.Equal(t, "v1.290.1", got, "the exact module, not one it prefixes")
-
-	got, err = readGoModServiceVersion(dir, "ec2iface")
-	require.NoError(t, err)
-	assert.Equal(t, "v1.0.0", got, "a single-line require")
-
-	got, err = readGoModServiceVersion(dir, "s3")
-	require.NoError(t, err)
-	assert.Empty(t, got)
-
-	got, err = readGoModServiceVersion(t.TempDir(), "ec2")
-	require.NoError(t, err)
-	assert.Empty(t, got, "no go.mod is not an error")
-}

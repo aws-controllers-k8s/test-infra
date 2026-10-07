@@ -520,24 +520,17 @@ func analyzeService(
 		return nil, "", "", err
 	}
 
-	// Two baselines. The generation model (the pin in ack-generate-metadata.yaml)
-	// decides what is a gap. The release model (the service module version in
-	// go.mod) decides what is new and is what the issue reports against, since it
-	// shares the latest model's tag series.
-	baselineServiceVersion := in.ServiceSDKVersion
-	releaseVersion := in.GoModServiceVersion
-	if releaseVersion == "" {
-		releaseVersion = baselineServiceVersion
-	}
+	// The baseline is the generation pin in ack-generate-metadata.yaml, which
+	// build-controller.sh regenerates from; go.mod plays no part.
 	series := "service/" + in.PackageName + "/"
-	baselineVersion := series + releaseVersion
-	if releaseVersion == "" {
+	baselineVersion := series + in.ServiceSDKVersion
+	if in.ServiceSDKVersion == "" {
 		baselineVersion = in.SDKVersion
 	}
 
 	// Fetched before the baseline so an up-to-date service costs no model request.
 	latestServiceVersion, latest, found, err := latestModel(
-		ctx, cacheDir, in.ModelName, in.PackageName, releaseVersion, candidates,
+		ctx, cacheDir, in.ModelName, in.PackageName, in.ServiceSDKVersion, candidates,
 	)
 	if latestServiceVersion == "" {
 		// No candidate had the model; report against the newest tag that was tried.
@@ -552,21 +545,13 @@ func analyzeService(
 	}
 
 	baselineModel, err := fetchModel(
-		ctx, cacheDir, in.ModelName, in.PackageName, in.SDKVersion, baselineServiceVersion,
+		ctx, cacheDir, in.ModelName, in.PackageName, in.SDKVersion, in.ServiceSDKVersion,
 	)
 	if err != nil {
 		return nil, baselineVersion, latestVersion, err
 	}
 
-	findings := collectFindings(latest, baselineModel, in)
-	if releaseVersion != "" {
-		releaseModel, err := fetchModel(ctx, cacheDir, in.ModelName, in.PackageName, "", releaseVersion)
-		if err != nil {
-			return nil, baselineVersion, latestVersion, err
-		}
-		findings = markPreexisting(findings, releaseModel, in)
-	}
-	return findings, baselineVersion, latestVersion, nil
+	return collectFindings(latest, baselineModel, in), baselineVersion, latestVersion, nil
 }
 
 // collectFindings runs every producer over one pair of models.

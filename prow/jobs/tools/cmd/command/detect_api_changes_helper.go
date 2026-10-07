@@ -191,15 +191,15 @@ func (c *latestVersionCache) resolve(
 
 // latestModel returns the newest of candidates (highest first) whose model file
 // exists, and that model. Only a 404 moves on to the next candidate; other errors
-// are returned. Reaching releaseVersion returns found false and no error: the
-// controller already ships the newest SDK that has the model.
+// are returned. Reaching pinnedServiceVersion returns found false and no error:
+// the controller is already generated from the newest SDK that has the model.
 func latestModel(
 	ctx context.Context,
-	cacheDir, modelName, packageName, releaseVersion string,
+	cacheDir, modelName, packageName, pinnedServiceVersion string,
 	candidates []string,
 ) (version string, model *SmithyModel, found bool, err error) {
 	for _, candidate := range candidates {
-		if candidate == releaseVersion {
+		if candidate == pinnedServiceVersion {
 			return candidate, nil, false, nil
 		}
 		model, err := fetchModel(ctx, cacheDir, modelName, packageName, "", candidate)
@@ -367,7 +367,7 @@ func (c FindingClass) isOperation() bool {
 	return c == ClassNewOperation || c == ClassUnknownOperation
 }
 
-// reportable returns the findings new since the controller's SDK release and not
+// reportable returns the findings new since the generation pin and not
 // dropped. The rest are shown in the issue for transparency only, so counts and
 // rendering of findings go through here.
 func reportable(findings []Finding) []Finding {
@@ -392,82 +392,6 @@ func actionable(findings []Finding) []Finding {
 		}
 	}
 	return out
-}
-
-// markPreexisting clears NewSincePin on every finding the release model already
-// has. release is the model at the service module version in the controller's
-// go.mod; nil leaves findings unchanged.
-//
-// Producers diff against the generation model, which answers "is this a gap" but
-// not "is this new": a controller can build against a much newer service module
-// than it was generated from.
-func markPreexisting(findings []Finding, release *SmithyModel, in *ControllerInputs) []Finding {
-	if release == nil {
-		return findings
-	}
-	releaseResources := createResourceNames(release, in, in.Config.ResourceNames())
-	inRelease := func(opID string) bool {
-		_, ok := release.Operation(opID)
-		return ok
-	}
-	out := slices.Clone(findings)
-	for i, f := range out {
-		var old bool
-		switch f.Class {
-		case ClassNewResource, ClassTransientResource:
-			old = releaseResources[f.Subject]
-		case ClassPossibleResource:
-			// Only its own operations decide; a generic read in Evidence can be
-			// far older than the resource.
-			old = slices.ContainsFunc(f.evidenceOps(), func(opID string) bool {
-				return strings.Contains(opID, f.Subject) && inRelease(opID)
-			})
-		case ClassNewOperation, ClassUnknownOperation, ClassDroppedOperation:
-			old = inRelease(f.Subject)
-		case ClassSpecField, ClassStatusField, ClassLifecycleField, ClassDroppedField:
-			old = slices.ContainsFunc(f.evidenceOps(), func(opID string) bool {
-				return fieldInModel(release, in, opID, f.Subject) ||
-					slices.ContainsFunc(f.sdkPaths(opID), func(path string) bool {
-						return fieldInModel(release, in, opID, path)
-					})
-			})
-		}
-		if old {
-			out[i].NewSincePin = false
-		}
-	}
-	return out
-}
-
-// fieldInModel reports whether an operation's request or response carries a member
-// path, spelled as findAddedFields keys it (relative to any unwrapped wrapper).
-func fieldInModel(m *SmithyModel, in *ControllerInputs, opID, path string) bool {
-	op, ok := m.Operation(opID)
-	if !ok {
-		return false
-	}
-	for _, side := range []struct {
-		ref      *SmithyMemberRef
-		isOutput bool
-	}{{op.Input, false}, {op.Output, true}} {
-		if side.ref == nil {
-			continue
-		}
-		members := m.WalkMembers(side.ref.Target, maxWalkDepth)
-		if _, ok := members[path]; ok {
-			return true
-		}
-		wrapper := inputWrapper(m, in, opID, side.ref)
-		if side.isOutput {
-			wrapper = outputWrapper(m, in, opID, side.ref)
-		}
-		if wrapper != "" {
-			if _, ok := members[wrapper+"."+path]; ok {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // String returns the stable name of a finding class. Names are hashed into issue
@@ -552,9 +476,8 @@ type Finding struct {
 	// Work is why a field needs config or code beyond regeneration, set beside
 	// the Detail that explains it. Not hashed. See needsWork.
 	Work fieldWork
-	// NewSincePin records whether the subject is new since the SDK release the
-	// controller builds against. Only new findings drive the notification. See
-	// markPreexisting.
+	// NewSincePin records whether the subject is new since the generation pin.
+	// Only new findings drive the notification.
 	NewSincePin bool
 	// Evidence is the sorted, comma-separated operations supporting the finding.
 	// Like Detail it is not hashed into the fingerprint. A string so that Finding
@@ -2056,12 +1979,12 @@ func renderIssueRegion(
 
 	var b strings.Builder
 	b.WriteString(generatedRegionBegin + "\n")
-	fmt.Fprintf(&b, "AWS SDK releases since %s, the version the `%s` controller builds against, add "+
+	fmt.Fprintf(&b, "AWS SDK releases since %s, the version the `%s` controller was generated from, add "+
 		"resources and fields the controller does not represent. These are candidate additions for "+
 		"maintainer review; not every item is necessarily appropriate for the CRD API. Fields under "+
 		"\"%s\" are wired end to end by the SDK bump and `make build-controller`; each under "+
 		"\"%s\" says what to add and why.\n\n",
-		baselineVersion, service, regenerateHeader, needsWorkHeader)
+		sdkVersionLabel(baselineVersion), service, regenerateHeader, needsWorkHeader)
 
 	// Each block takes what it can of the remaining budget. A block too large
 	// renders partially rather than being dropped, and reserves[i] holds back
@@ -2190,8 +2113,17 @@ var preexistingLabels = map[FindingClass]string{
 	ClassLifecycleField:    "lifecycle field",
 }
 
-// preexistingBlock renders, collapsed, the candidates already in the SDK release
-// the controller builds against, or "" when there are none. They are real gaps but
+// sdkVersionLabel names the module a version belongs to: a core pin such as
+// v1.41.1 reads `aws-sdk-go-v2 v1.41.1`; a service tag is already qualified.
+func sdkVersionLabel(version string) string {
+	if strings.HasPrefix(version, "service/") {
+		return version
+	}
+	return "aws-sdk-go-v2 " + version
+}
+
+// preexistingBlock renders, collapsed, the candidates already in the model the
+// controller was generated from, or "" when there are none. They are real gaps but
 // not news, so they do not count (see reportable). At most limit bytes.
 func preexistingBlock(findings []Finding, baselineVersion string, limit int) string {
 	var old []Finding
@@ -2211,8 +2143,8 @@ func preexistingBlock(findings []Finding, baselineVersion string, limit int) str
 	})
 
 	head := fmt.Sprintf("<details>\n<summary>%s already in %s and missing from the controller</summary>\n\n",
-		plural(len(old), "candidate", "candidates"), baselineVersion) +
-		"These predate the SDK release the controller builds against, so they do not drive this notification.\n\n"
+		plural(len(old), "candidate", "candidates"), sdkVersionLabel(baselineVersion)) +
+		"These predate the model the controller was generated from, so they do not drive this notification.\n\n"
 	entries := make([]string, 0, len(old))
 	for _, f := range old {
 		where := ""

@@ -14,12 +14,9 @@
 package command
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,29 +49,4 @@ func readGenerateMetadata(controllerPath string) (string, string, error) {
 		)
 	}
 	return meta.AWSSDKGoVersion, meta.AWSServiceSDKVersion, nil
-}
-
-// readGoModServiceVersion returns the version of the service's aws-sdk-go-v2
-// module the controller's go.mod requires, or "" when it requires none or has no
-// go.mod. This can be much newer than the generation pin (ec2: core v1.41.1 vs
-// service/ec2 v1.290.1), and it is what the controller actually builds against.
-//
-// A line scan avoids depending on golang.org/x/mod: a require line is
-// `<path> <version>` inside or outside a block.
-func readGoModServiceVersion(controllerPath, packageName string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(controllerPath, "go.mod"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("unable to read go.mod: %s", err)
-	}
-	module := "github.com/aws/aws-sdk-go-v2/service/" + packageName
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(line), "require "))
-		if len(fields) >= 2 && fields[0] == module {
-			return fields[1], nil
-		}
-	}
-	return "", nil
 }

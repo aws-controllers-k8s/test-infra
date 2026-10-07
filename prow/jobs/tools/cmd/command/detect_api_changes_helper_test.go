@@ -745,7 +745,6 @@ func TestFindAddedFieldsFollowsCodegenInputWrapper(t *testing.T) {
 		"a finding's Subject is spelled relative to the input wrapper")
 	assert.True(t, requestCarries(m, in, "CreateBackupPlan", "OuterOption"))
 	assert.False(t, requestCarries(m, nil, "CreateBackupPlan", "ScanSettings"))
-	assert.True(t, fieldInModel(m, in, "CreateBackupPlan", "Rules.IndexActions"))
 }
 
 // readManyModel has applicationautoscaling's DescribeScalingPolicies. latest
@@ -793,8 +792,6 @@ func TestFindAddedFieldsUnwrapsReadManyList(t *testing.T) {
 			Subject: "NewField", Evidence: "DescribeScalingPolicies",
 			SDKPaths: "DescribeScalingPolicies=ScalingPolicies.NewField"},
 	}, got, "the policy list is not a declined parent, and pagination members are plumbing")
-
-	assert.True(t, fieldInModel(latest, in, "DescribeScalingPolicies", "NewField"))
 }
 
 func TestPaginationMembersFallBackToTheService(t *testing.T) {
@@ -914,11 +911,6 @@ func TestFindAddedFieldsAppliesEachOperationsRenames(t *testing.T) {
 		Subject: "CreateAccountRequestId", Evidence: "CreateAccount", SDKPaths: "CreateAccount=Id"}
 	assert.Equal(t, []Finding{want}, got,
 		"DescribeAccount's Id is the CRD's accountID; CreateAccount's is a field the CRD lacks")
-
-	marked := markPreexisting(got, accountModel(t, true), in)
-	assert.False(t, marked[0].NewSincePin, "the renamed field is found in the release by its SDK path")
-	marked = markPreexisting(got, accountModel(t, false), in)
-	assert.True(t, marked[0].NewSincePin)
 }
 
 // thingModel reaches one CRD field through an input wrapper on Create, an
@@ -1203,7 +1195,7 @@ func TestFindingClassString(t *testing.T) {
 func TestRenderIssueBody(t *testing.T) {
 	// Exact body: pins section order, bullet text, footer and region markers.
 	want := "<!-- ack-api-change-begin -->\n" +
-		"AWS SDK releases since v1.41.5, the version the `demo` controller builds against, add " +
+		"AWS SDK releases since aws-sdk-go-v2 v1.41.5, the version the `demo` controller was generated from, add " +
 		"resources and fields the controller does not represent. These are candidate additions for " +
 		"maintainer review; not every item is necessarily appropriate for the CRD API. Fields under " +
 		"\"Regenerate is enough\" are wired end to end by the SDK bump and `make build-controller`; each " +
@@ -2260,7 +2252,7 @@ func TestRenderIssueBodySeparatesPreexistingFindings(t *testing.T) {
 		append(sampleFindings(), old...))
 
 	assert.Contains(t, body, "<details>\n<summary>2 candidates already in service/demo/v1.290.1 and missing from the controller</summary>\n\n"+
-		"These predate the SDK release the controller builds against, so they do not drive this notification.\n\n"+
+		"These predate the model the controller was generated from, so they do not drive this notification.\n\n"+
 		"- Instance Spec field `SecondaryInterfaces` — `RunInstances`\n"+
 		"- resource `SecondaryNetwork` — `CreateSecondaryNetwork`, `DeleteSecondaryNetwork`\n")
 	assert.NotContains(t, body, "## Resource: SecondaryNetwork")
@@ -2269,34 +2261,23 @@ func TestRenderIssueBodySeparatesPreexistingFindings(t *testing.T) {
 	assert.Empty(t, reportable(old))
 }
 
-func TestMarkPreexisting(t *testing.T) {
-	// The release model has CreateGizmo, the field Name on CreateWidget, and the
-	// operation ResetWidget; everything else is new in latest.
-	release := opsModel(t, map[string][]string{
-		"CreateGizmo":  {"Name"},
-		"CreateWidget": {"Name"},
-		"ResetWidget":  nil,
-	})
-	in := &ControllerInputs{Config: &generatorConfig{}, kindsByLower: map[string]string{}}
-	got := markPreexisting([]Finding{
-		{Kind: "Gizmo", Class: ClassNewResource, Subject: "Gizmo", NewSincePin: true},
-		{Kind: "Doodad", Class: ClassNewResource, Subject: "Doodad", NewSincePin: true},
-		{Kind: "Widget", Class: ClassSpecField, Subject: "Name", NewSincePin: true, Evidence: "CreateWidget"},
-		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "CreateWidget"},
-		{Kind: "Widget", Class: ClassNewOperation, Subject: "ResetWidget", NewSincePin: true},
-		{Kind: "Widget", Class: ClassNewOperation, Subject: "PolishWidget", NewSincePin: true},
-		{Kind: "Asset", Class: ClassPossibleResource, Subject: "Asset", NewSincePin: true, Evidence: "PutAsset"},
-		// Its generic read is old; only its own operations decide.
-		{Kind: "Gadget", Class: ClassPossibleResource, Subject: "Gadget", NewSincePin: true, Evidence: "AcceptGadget,ResetWidget"},
-	}, release, in)
-	var stillNew []string
-	for _, f := range got {
-		if f.NewSincePin {
-			stillNew = append(stillNew, f.Subject)
-		}
+func TestCollectFindingsCountsGapsSinceTheGenerationPin(t *testing.T) {
+	// ec2: generated at core v1.41.1 while go.mod requires a newer service/ec2.
+	// Color is in that newer release but not the generation model, so it is new.
+	generation := opsModel(t, map[string][]string{"CreateWidget": {"Name"}})
+	latest := opsModel(t, map[string][]string{"CreateWidget": {"Name", "Color", "Size"}})
+	in := &ControllerInputs{
+		Config:       &generatorConfig{},
+		CRDFields:    map[string]map[string]bool{"Widget": {"name": true}},
+		UsedOps:      map[string]map[string]bool{"widget": {"CreateWidget": true}},
+		kindsByLower: map[string]string{"widget": "Widget"},
 	}
-	assert.Equal(t, []string{"Doodad", "Color", "PolishWidget", "Asset", "Gadget"}, stillNew)
-	assert.Len(t, markPreexisting(got, nil, in), len(got), "no release model leaves findings alone")
+	got := collectFindings(latest, generation, in)
+	require.Len(t, got, 2)
+	for _, f := range got {
+		assert.True(t, f.NewSincePin, f.Subject)
+	}
+	assert.Equal(t, []string{"Color", "Size"}, subjects(got, ClassSpecField))
 }
 
 func TestReconcileIssueFilesNothingForDroppedOperationsAlone(t *testing.T) {
@@ -3288,6 +3269,13 @@ func TestParseComparedVersionsReadsOnlyTheGeneratedRegion(t *testing.T) {
 
 	_, _, ok = parseComparedVersions(strings.ReplaceAll(region, "\n", "\r\n"))
 	assert.True(t, ok, "a body saved from the web UI is CRLF")
+
+	// A core generation pin against a per-service latest tag.
+	mixed, _ := renderIssueBody("ec2", "v1.41.1", "service/ec2/v1.338.1", sampleFindings())
+	baseline, latest, ok = parseComparedVersions(mixed)
+	require.True(t, ok)
+	assert.Equal(t, "v1.41.1", baseline)
+	assert.Equal(t, "service/ec2/v1.338.1", latest)
 }
 
 func TestReconcileIssueIgnoresAQuotedFooterOutsideTheRegion(t *testing.T) {

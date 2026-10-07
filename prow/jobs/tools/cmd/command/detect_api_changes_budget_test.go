@@ -197,7 +197,7 @@ func TestRenderIssueBodyBoundsAnOversizedPreexistingAppendix(t *testing.T) {
 	body, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", append(sampleFindings(), old...))
 	assert.Less(t, len(body), githubMaxIssueBody)
 	assert.Contains(t, body, "## Resource: Gizmo")
-	assert.Contains(t, body, "already in v1.41.5 and missing from the controller")
+	assert.Contains(t, body, "already in aws-sdk-go-v2 v1.41.5 and missing from the controller")
 }
 
 func TestRenderIssueBodyBoundsOversizedFindingsAndAppendixTogether(t *testing.T) {
