@@ -51,6 +51,8 @@ type SmithyModel struct {
 
 	// opsByName maps an operation's short name to its absolute shape ID.
 	opsByName map[string]string
+	// raw is the document as fetched, for code-generator to load itself.
+	raw []byte
 }
 
 // LoadSmithyModel parses a Smithy JSON model document.
@@ -62,6 +64,7 @@ func LoadSmithyModel(data []byte) (*SmithyModel, error) {
 	if len(m.Shapes) == 0 {
 		return nil, fmt.Errorf("smithy model contains no shapes")
 	}
+	m.raw = data
 	m.opsByName = map[string]string{}
 	for id, shape := range m.Shapes {
 		if shape.Type == "operation" {

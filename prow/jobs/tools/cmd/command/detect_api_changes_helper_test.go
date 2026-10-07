@@ -1221,7 +1221,7 @@ func TestRenderIssueBody(t *testing.T) {
 		"- `ResetWidget`\n" +
 		"\n" +
 		"---\n" +
-		"Compared aws-sdk-go-v2 v1.41.5 -> v1.44.0\n" +
+		"Compared aws-sdk-go-v2 v1.41.5 -> v1.44.0 with code-generator " + codeGeneratorVersion + "\n" +
 		"<!-- ack-api-change-fingerprint: 03b60f4f7efc4e51e585d73b1e52f70ada4e24ab62be85f278db34e53975de49 -->\n" +
 		"<!-- ack-api-change-end -->\n"
 
@@ -1252,6 +1252,7 @@ func TestNeedsWork(t *testing.T) {
 		{"change list entry member", field(ClassStatusField, workChangeList, "entry"), "entry", true},
 		{"secondary read", field(ClassStatusField, workSecondaryRead, secondaryReadDetail), secondaryReadDetail, true},
 		{"create only", field(ClassSpecField, workCreateOnly, createOnlyDetail), createOnlyDetail, true},
+		{"not generated", field(ClassStatusField, workNotGenerated, "no from"), "no from", true},
 		// A Detail alone is not custom work, and resources are not fields.
 		{"detail without work", field(ClassSpecField, workNone, "not present in the CRD"), "", false},
 		{"new resource", Finding{Kind: "Gizmo", Class: ClassNewResource, Subject: "Gizmo", Work: workCustomUpdate}, "", false},

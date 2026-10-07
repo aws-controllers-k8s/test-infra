@@ -442,6 +442,9 @@ const (
 	workSecondaryRead
 	// workCreateOnly: set only on Create, so it needs is_immutable.
 	workCreateOnly
+	// workNotGenerated: code-generator does not add it on regeneration; see
+	// reconcileWithCodegen.
+	workNotGenerated
 )
 
 // lifecycleReason is the work every request-only field needs.
@@ -1815,8 +1818,10 @@ func replaceGeneratedRegion(existingBody, newRegion string) (string, error) {
 // githubMaxIssueBody is GitHub's limit on an issue body; exceeding it is a 422.
 const githubMaxIssueBody = 65536
 
-// comparedVersionsRE reads back the versions issueFooter wrote.
-var comparedVersionsRE = regexp.MustCompile(`\nCompared aws-sdk-go-v2 (\S+) -> (\S+)\r?\n`)
+// comparedVersionsRE reads back the versions issueFooter wrote. The
+// code-generator suffix is optional so issues filed before it still parse.
+var comparedVersionsRE = regexp.MustCompile(
+	`\nCompared aws-sdk-go-v2 (\S+) -> (\S+)(?: with code-generator \S+)?\r?\n`)
 
 // parseComparedVersions returns the versions an issue's footer names. Only one
 // line inside the unique generated region counts, so a maintainer's note quoting
@@ -1843,12 +1848,14 @@ func bytesOutsideRegion(body string) int {
 	return len(body) - (end - start)
 }
 
-// issueFooter ends every generated region: the comparison line, then the
-// fingerprint marker. It is a function so issueBodyBudget can reserve exactly its
-// length; truncation must never reach the marker.
+// issueFooter ends every generated region: the comparison line, naming the
+// code-generator that decided what regeneration adds, then the fingerprint
+// marker. It is a function so issueBodyBudget can reserve exactly its length;
+// truncation must never reach the marker. A code-generator bump changes the line,
+// so it silently rewords each open issue once.
 func issueFooter(baselineVersion, latestVersion, fingerprint string) string {
-	return fmt.Sprintf("---\nCompared aws-sdk-go-v2 %s -> %s\n%s%s -->\n",
-		baselineVersion, latestVersion, fingerprintPrefix, fingerprint)
+	return fmt.Sprintf("---\nCompared aws-sdk-go-v2 %s -> %s with code-generator %s\n%s%s -->\n",
+		baselineVersion, latestVersion, codeGeneratorVersion, fingerprintPrefix, fingerprint)
 }
 
 // issueBodyBudget is how many bytes the blocks may spend: the GitHub limit, less

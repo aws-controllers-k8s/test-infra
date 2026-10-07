@@ -199,6 +199,13 @@ func detectAPIChanges(cmd *cobra.Command, args []string) error {
 		log.Printf("WARNING needs a human: %s", warning)
 	}
 
+	// Logged at both ends of the run so the closing tally carries it too.
+	codegenWarning := codeGeneratorReleaseWarning(ctx, client, codeGeneratorVersion)
+	if codegenWarning != "" {
+		log.Printf("WARNING %s", codegenWarning)
+	}
+	log.Printf("deciding what regeneration adds with code-generator %s", codeGeneratorVersion)
+
 	// Shared by every service in the run; see latestVersionCache.
 	latestVersions := newLatestVersionCache()
 	analyze := func(ctx context.Context, service string) ([]Finding, string, string, error) {
@@ -211,6 +218,9 @@ func detectAPIChanges(cmd *cobra.Command, args []string) error {
 		OptMaxOpenIssues, openCount, analyze,
 		OptDryRun, OptDryRunOutputDir,
 	)
+	if codegenWarning != "" {
+		log.Printf("WARNING %s", codegenWarning)
+	}
 	return runError(err, OptMaxOpenIssues, skippedAtCap, analysisFailures, writeFailures, OptDryRun)
 }
 
@@ -551,7 +561,13 @@ func analyzeService(
 		return nil, baselineVersion, latestVersion, err
 	}
 
-	return collectFindings(latest, baselineModel, in), baselineVersion, latestVersion, nil
+	// Run only when the model moved, so an up-to-date service costs no codegen.
+	view, err := runCodegenOracle(in, baselineModel, latest)
+	if err != nil {
+		return nil, baselineVersion, latestVersion, err
+	}
+	findings := reconcileWithCodegen(latest, collectFindings(latest, baselineModel, in), in, view)
+	return findings, baselineVersion, latestVersion, nil
 }
 
 // collectFindings runs every producer over one pair of models.

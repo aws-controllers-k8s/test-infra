@@ -37,6 +37,9 @@ type ControllerInputs struct {
 	PackageName string
 	// Config is the generator.yaml subset.
 	Config *generatorConfig
+	// GeneratorConfigPath is the controller's generator.yaml, which
+	// code-generator loads itself.
+	GeneratorConfigPath string
 	// CRDFields maps resource kind to the set of lowercased dotted field
 	// paths its CRD's Spec exposes. It has an entry for every kind.
 	CRDFields map[string]map[string]bool
@@ -91,16 +94,17 @@ func ReadControllerInputs(root, service string) (*ControllerInputs, error) {
 	}
 
 	return &ControllerInputs{
-		Service:           service,
-		SDKVersion:        sdkVersion,
-		ServiceSDKVersion: serviceSDKVersion,
-		ModelName:         modelName,
-		PackageName:       packageName,
-		Config:            cfg,
-		CRDFields:         crdFields,
-		CRDStatusFields:   crdStatusFields,
-		UsedOps:           usedOps,
-		kindsByLower:      kindsByLower,
+		Service:             service,
+		SDKVersion:          sdkVersion,
+		ServiceSDKVersion:   serviceSDKVersion,
+		ModelName:           modelName,
+		PackageName:         packageName,
+		Config:              cfg,
+		GeneratorConfigPath: filepath.Join(controllerPath, "generator.yaml"),
+		CRDFields:           crdFields,
+		CRDStatusFields:     crdStatusFields,
+		UsedOps:             usedOps,
+		kindsByLower:        kindsByLower,
 	}, nil
 }
 
