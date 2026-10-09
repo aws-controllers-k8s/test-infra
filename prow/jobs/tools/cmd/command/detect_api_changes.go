@@ -46,6 +46,8 @@ var (
 	OptModelCacheDir   string
 	OptDryRun          bool
 	OptDryRunOutputDir string
+	OptMetricsNS       string
+	OptMetricsRegion   string
 )
 
 // dryRunCaveat states what a dry run cannot verify. errCannotLabelIssues is only
@@ -97,6 +99,15 @@ func init() {
 		"with --dry-run, write each service's would-be issue body to <dir>/<service>.md; "+
 			"existing files are left alone, so check the run's log for which ones it wrote",
 	)
+	// Off by default so local and dry runs publish nothing; the ProwJob sets both.
+	detectAPIChangesCMD.PersistentFlags().StringVar(
+		&OptMetricsNS, "metrics-namespace", "",
+		"CloudWatch namespace for the RunSucceeded metric; empty publishes nothing",
+	)
+	detectAPIChangesCMD.PersistentFlags().StringVar(
+		&OptMetricsRegion, "metrics-region", "",
+		"AWS region for the RunSucceeded metric; required with --metrics-namespace",
+	)
 	rootCmd.AddCommand(detectAPIChangesCMD)
 }
 
@@ -115,6 +126,33 @@ func detectAPIChanges(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, detectAPIChangesRunTimeout)
 	defer cancel()
 
+	if OptMetricsNS != "" && OptMetricsRegion == "" {
+		return fmt.Errorf("--metrics-region is required with --metrics-namespace")
+	}
+	// A dry run writes nothing, and that includes the metric.
+	if OptMetricsNS == "" || OptDryRun {
+		return runDetectAPIChanges(ctx)
+	}
+	runErr := runDetectAPIChanges(ctx)
+	// Best effort: a publish failure is logged, not returned, so it cannot turn a
+	// good run red. The missing-data alarm catches a publisher that keeps failing.
+	pubCtx, pubCancel := context.WithTimeout(context.Background(), runMetricTimeout)
+	defer pubCancel()
+	value := runSucceededValue(runErr)
+	putter, err := newMetricPutter(pubCtx, OptMetricsRegion)
+	if err == nil {
+		err = publishRunSucceeded(pubCtx, putter, OptMetricsNS, value)
+	}
+	if err != nil {
+		log.Printf("WARNING unable to publish %s/%s=%v: %s", OptMetricsNS, runSucceededMetric, value, err)
+	} else {
+		log.Printf("published %s/%s=%v", OptMetricsNS, runSucceededMetric, value)
+	}
+	return runErr
+}
+
+// runDetectAPIChanges is one run; detectAPIChanges wraps it to publish the result.
+func runDetectAPIChanges(ctx context.Context) error {
 	services, configuredCap, err := getAPINotificationServices(OptJobsConfigPath)
 	if err != nil {
 		return err
@@ -258,6 +296,8 @@ func runError(
 		return fmt.Errorf("%w; also %s%s", abortErr, joined, remediation)
 	case abortErr != nil:
 		return abortErr
+	case len(reasons) == 1 && remediation != "":
+		return capReachedError(joined + remediation)
 	case joined != "":
 		return errors.New(joined + remediation)
 	}
