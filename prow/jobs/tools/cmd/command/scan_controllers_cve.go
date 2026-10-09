@@ -29,6 +29,7 @@ var scanCveCMD = &cobra.Command{
 var (
 	OptGithubIssueOwner string
 	OptGithubIssueRepo  string
+	OptTrivyIgnoreFile  string
 )
 
 func init() {
@@ -40,6 +41,9 @@ func init() {
 	)
 	scanCveCMD.PersistentFlags().StringVar(
 		&OptGithubIssueRepo, "github-issues-repo", "community", "repository where the github issue will be created",
+	)
+	scanCveCMD.PersistentFlags().StringVar(
+		&OptTrivyIgnoreFile, "trivy-ignorefile", "./prow/jobs/.trivyignore.yaml", "path to the Trivy ignore file listing suppressed/false-positive vulnerability IDs; set to empty to disable",
 	)
 	rootCmd.AddCommand(scanCveCMD)
 }
@@ -59,7 +63,7 @@ func scanControllersCve(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Println("Scanning All controllers for CVEs")
-	detectedVulnerabilities, cveSummaries, err := scanControllersForCves(controllerTagsMap)
+	detectedVulnerabilities, cveSummaries, err := scanControllersForCves(controllerTagsMap, OptTrivyIgnoreFile)
 	if err != nil {
 		return err
 	}
