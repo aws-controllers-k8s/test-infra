@@ -46,12 +46,16 @@
           requests:
             cpu: 1
             memory: "1Gi"
+        # RunSucceeded in ACK/APIChangeNotification is watched by the
+        # ACK-APIChangeNotification alarms (ACKTestInfraCDK).
         command: ["ack-build-tools", "detect-api-changes",
             "--jobs-config-path", "./prow/jobs/jobs_config.yaml",
             "--controllers-root", "..",
             "--github-issues-owner", "${TEST_INFRA_ORG}",
             "--github-issues-repo", "community",
-            "--max-open-issues", "{{ $.Config.APINotificationMaxOpenIssues }}"]
+            "--max-open-issues", "{{ $.Config.APINotificationMaxOpenIssues }}",
+            "--metrics-namespace", "ACK/APIChangeNotification",
+            "--metrics-region", "us-west-2"]
         volumeMounts:
           - name: github-token-censor
             mountPath: /etc/github-censor

@@ -310,6 +310,22 @@ spec:
           }
         ]
       }
+    # detect-api-changes publishes RunSucceeded for its alarms. PutMetricData has no
+    # resource-level permissions, so the namespace condition is what scopes it.
+    CloudWatchAPIChangeNotificationMetrics: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["cloudwatch:PutMetricData"],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {"cloudwatch:namespace": "ACK/APIChangeNotification"}
+            }
+          }
+        ]
+      }
 ---
 # Workflow Runner Role - used by agent workflow job pods in test-pods
 # to mount the SecretProviderClass via the Secrets Store CSI driver.
