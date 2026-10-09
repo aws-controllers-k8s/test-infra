@@ -300,6 +300,8 @@ def run_e2e(cfg: Config, agents: AgentSet) -> E2EResult:
         fix = str(agents.implementer(_fix_prompt(cfg, status, excerpt, artifacts)))
         rec.fix_summary = fix
         result.fix_summaries.append(fix)
+        # TODO: Review each E2E-driven fix and route REVISE feedback back to the
+        # implementer before consuming another E2E attempt.
         print(f"[e2e] implementer responded ({len(fix)} chars); re-running.", flush=True)
 
     return result
