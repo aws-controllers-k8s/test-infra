@@ -8,9 +8,9 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Role-based add-resource harness.
+"""Role-based ACK workflow harness.
 
-Implements the ack-dev-skills add-resource workflow as a Strands multi-agent
+Implements the ack-dev-skills add-resource and add-field workflows as a Strands
 Graph running a Planner -> Plan-Review -> Implementer -> Review -> E2E loop.
 The four role agents compose their system prompts at runtime from an
 ack-dev-skills checkout (nothing vendored), so the role SOPs and schemas remain

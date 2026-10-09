@@ -224,6 +224,23 @@ make workflow-add-resource SERVICE=s3 RESOURCE=AccessPoint
 uv run python -m workflows resource-addition --service s3 --resource AccessPoint
 ```
 
+#### ACK Field Addition Workflow
+
+Add one field to an existing resource in an ACK service controller:
+
+```bash
+# Using make
+make workflow-add-field SERVICE=s3 RESOURCE=Bucket FIELD=BucketKeyEnabled
+
+# Or directly
+uv run python -m workflows field-addition \
+  --service s3 --resource Bucket --field BucketKeyEnabled
+```
+
+The field workflow reuses the add-resource Planner, Reviewer, Implementer, and
+E2E graph. It substitutes the dedicated field planner plus the field-specific
+plan schema and `field-addition.md` guidance at runtime.
+
 ### Available Arguments
 
 - `--region`: AWS region for Bedrock (default: us-west-2)

@@ -91,7 +91,7 @@ def _role_agent(cfg: Config, *, name: str, model_id: str, system_prompt: str, to
     model = create_enhanced_bedrock_model(
         model_id=model_id,
         region_name=cfg.region,
-        temperature=cfg.temperature if cfg.temperature is not None else 0.2,
+        temperature=cfg.temperature,
         max_tokens=cfg.max_tokens,
     )
     return Agent(
@@ -101,6 +101,20 @@ def _role_agent(cfg: Config, *, name: str, model_id: str, system_prompt: str, to
         tools=tools,
         conversation_manager=_conversation_manager(),
         callback_handler=None,
+    )
+
+
+def _pr_writer_prompt() -> str:
+    return (
+        "You write concise, reader-facing GitHub pull request descriptions for "
+        "ACK service-controller changes. You are given the implementation plan, "
+        "the implementer's change summary, the reviewer's verdict, and the e2e "
+        "result. Output GitHub-flavored markdown only, with no preamble. "
+        "Structure it as: a 2-3 sentence summary of what was added; a "
+        "'## Key design decisions' bulleted list containing only decisions from "
+        "the plan that actually apply; then a short '## Testing' line with the "
+        "e2e result. Be factual and terse; never invent details not present in "
+        "the inputs."
     )
 
 
@@ -115,9 +129,9 @@ def build_agents(cfg: Config) -> AgentSet:
 
     planner = _role_agent(
         cfg,
-        name="ack-planner",
+        name=cfg.workflow.planner_name,
         model_id=cfg.planner_model,
-        system_prompt=context.planner_system_prompt(ctx),
+        system_prompt=context.planner_system_prompt(ctx, cfg.workflow),
         # Planner researches but does not write: read, search, shell, web.
         tools=[file_read, shell, http_request],
     )
@@ -126,7 +140,7 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-implementer",
         model_id=cfg.implementer_model,
-        system_prompt=context.implementer_system_prompt(ctx),
+        system_prompt=context.implementer_system_prompt(ctx, cfg.workflow),
         # Implementer is the only writer. file_editor reads + writes + edits.
         tools=[file_editor, shell],
     )
@@ -135,7 +149,11 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-plan-reviewer",
         model_id=cfg.reviewer_model,
-        system_prompt=context.reviewer_system_prompt(ctx, mode="plan"),
+        system_prompt=context.reviewer_system_prompt(
+            ctx,
+            cfg.workflow,
+            mode="plan",
+        ),
         # Reviewer reads and runs builds/tests but never writes.
         tools=[file_read, shell],
     )
@@ -144,7 +162,11 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-impl-reviewer",
         model_id=cfg.reviewer_model,
-        system_prompt=context.reviewer_system_prompt(ctx, mode="impl"),
+        system_prompt=context.reviewer_system_prompt(
+            ctx,
+            cfg.workflow,
+            mode="impl",
+        ),
         tools=[file_read, shell],
     )
 
@@ -153,18 +175,7 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-pr-writer",
         model_id=cfg.reviewer_model,
-        system_prompt=(
-            "You write concise, reader-facing GitHub pull request descriptions for "
-            "ACK service-controller changes that add a new resource. You are given "
-            "the implementation plan, the implementer's change summary, the "
-            "reviewer's verdict, and the e2e result. Output GitHub-flavored markdown "
-            "only, with no preamble. Structure it as: a 2-3 sentence summary of what "
-            "was added; a '## Key design decisions' bulleted list drawn from the plan "
-            "(CRUD operation mapping, immutable and ignored/deprecated fields, tags "
-            "handling, custom hooks, terminal error codes) — include only decisions "
-            "that actually apply; and a short '## Testing' line with the e2e result. "
-            "Be factual and terse; never invent details not present in the inputs."
-        ),
+        system_prompt=_pr_writer_prompt(),
         tools=[],
     )
 

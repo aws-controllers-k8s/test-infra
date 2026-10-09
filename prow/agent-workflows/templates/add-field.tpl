@@ -1,11 +1,10 @@
-    add-resource:
-        description: "ACK resource addition workflow"
+    add-field:
+        description: "ACK field addition workflow"
+        # The field and resource workflows share one role-harness image. Their
+        # CLI command selects field-specific prompts, schemas, and reporting.
         image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "add-resource") }}
-        # Absolute path: with extra_refs, Prow's decoration runs the entrypoint
-        # from a clonerefs checkout dir, not the image's /app, so a relative
-        # "./prow-job.sh" would not resolve.
         command: ["/app/prow-job.sh"]
-        required_args: ["service", "resource"]
+        required_args: ["service", "resource", "field"]
         optional_args: ["model", "aws-sdk-version"]
         environment:
             GITHUB_ORG: ${TEST_INFRA_ORG}
@@ -20,10 +19,6 @@
         resources:
             cpu: "6"
             memory: "10Gi"
-        # Stable repo dependencies mounted into the pod by Prow's clonerefs init
-        # container. The service controller is NOT listed here — prow-job.sh forks
-        # and clones it dynamically per run. `env` injects each ref's checkout path
-        # so the workflow reads exactly where clonerefs placed the repo.
         extra_refs:
             - org: aws-controllers-k8s
               repo: code-generator
