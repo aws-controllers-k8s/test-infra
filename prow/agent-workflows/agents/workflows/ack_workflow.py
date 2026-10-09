@@ -60,6 +60,7 @@ class ACKWorkflowRunner:
             service=request.service,
             resource=request.resource,
             field=request.field,
+            aws_sdk_version=request.aws_sdk_version,
             require_field=request.definition.requires_field,
         )
         if input_problems:

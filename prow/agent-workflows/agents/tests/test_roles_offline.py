@@ -283,10 +283,38 @@ def test_workflow_input_validation():
             service="bedrockagentcorecontrol",
             resource="AgentRuntime",
             field="targetConfiguration.mcp.connector",
+            aws_sdk_version="v1.41.0",
             require_field=True,
         ),
         [],
     )
+    check(
+        "valid AWS SDK version without v prefix",
+        validate_inputs(
+            service="bedrockagentcorecontrol",
+            resource="AgentRuntime",
+            field="targetConfiguration.mcp.connector",
+            aws_sdk_version="1.41.0",
+            require_field=True,
+        ),
+        [],
+    )
+    for invalid_version in (
+        "v1.41",
+        "v1.41.0-beta",
+        "v1.41.0;echo",
+        "latest",
+    ):
+        problems = validate_inputs(
+            service="s3control",
+            resource="AccessPoint",
+            aws_sdk_version=invalid_version,
+        )
+        check(
+            f"invalid AWS SDK version rejected: {invalid_version!r}",
+            any("aws-sdk-version" in problem for problem in problems),
+            True,
+        )
     for invalid_field in (
         "targetConfiguration..connector",
         ".targetConfiguration",

@@ -11,8 +11,8 @@
 """Validation for untrusted workflow invocation values.
 
 This module intentionally uses only the Python standard library so prow-job.sh
-can invoke it before using service, resource, or field values in repository
-paths and Git commands.
+can invoke it before using service, resource, field, or AWS SDK version values
+in repository paths, Git commands, or agent prompts.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import re
 _SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _GO_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 _FIELD_PATH_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$")
+_AWS_SDK_VERSION_RE = re.compile(r"^v?[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 def validate_inputs(
@@ -30,6 +31,7 @@ def validate_inputs(
     service: str,
     resource: str,
     field: str | None = None,
+    aws_sdk_version: str | None = None,
     require_field: bool = False,
 ) -> list[str]:
     """Return validation problems for one workflow invocation.
@@ -50,6 +52,8 @@ def validate_inputs(
             "field must be an identifier or dotted path of identifiers "
             "(for example targetConfiguration.mcp.connector)"
         )
+    if aws_sdk_version is not None and not _AWS_SDK_VERSION_RE.fullmatch(aws_sdk_version):
+        problems.append("aws-sdk-version must be a semantic version such as v1.41.0")
     return problems
 
 
@@ -58,6 +62,7 @@ def main() -> int:
     parser.add_argument("--service", required=True)
     parser.add_argument("--resource", required=True)
     parser.add_argument("--field")
+    parser.add_argument("--aws-sdk-version")
     parser.add_argument("--require-field", action="store_true")
     args = parser.parse_args()
 
@@ -65,6 +70,7 @@ def main() -> int:
         service=args.service,
         resource=args.resource,
         field=args.field,
+        aws_sdk_version=args.aws_sdk_version,
         require_field=args.require_field,
     )
     if problems:

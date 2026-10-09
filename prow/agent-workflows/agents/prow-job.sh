@@ -64,6 +64,7 @@ done
 # the workflow selected by the plugin instead of inferring it from optional data.
 WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
+[ -n "$AWS_SDK_VERSION" ] && VALIDATION_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
 case "${WORKFLOW_NAME:-}" in
   add-resource)
     if [ -n "$FIELD" ]; then
