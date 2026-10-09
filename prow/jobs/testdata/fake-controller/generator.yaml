@@ -1,0 +1,35 @@
+ignore:
+  resource_names:
+    - Object
+    - Session
+  operations:
+    - PutBucketTagging
+  shape_names:
+    - Ignored
+  field_paths:
+    - CreateWidgetInput.DeclinedField
+sdk_names:
+  model_name: demo-service
+  package_name: demoservice
+operations:
+  ChangeGadgetSettings:
+    operation_type:
+    - Create
+    - Delete
+    resource_name: Gadget
+resources:
+  Widget:
+    fields:
+      Sourced:
+        from:
+          operation: CreateWidget
+          path: SourcedMember
+    renames:
+      operations:
+        CreateWidget:
+          input_fields:
+            WidgetName: Name
+        DescribeWidget:
+          output_fields:
+            WidgetArn: ARN
+  Gadget: {}

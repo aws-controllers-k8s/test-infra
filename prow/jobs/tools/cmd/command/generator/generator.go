@@ -42,6 +42,8 @@ type JobsConfig struct {
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`
 	ACKTestPresubmitServices      []string `yaml:"acktest_presubmit_services"`
+	APINotificationServices       []string `yaml:"api_notification_services"`
+	APINotificationMaxOpenIssues  int      `yaml:"api_notification_max_open_issues"`
 	// PresubmitCluster routes pre-submit jobs to a named Prow build cluster
 	// (the kubeconfig context name, e.g. "build"). Empty => jobs omit the
 	// `cluster:` field and run on the implicit in-cluster "default" cluster.
@@ -72,7 +74,79 @@ func loadConfig(configPath string) (*JobsConfig, error) {
 	if err = yaml.Unmarshal(fileData, &config); err != nil {
 		return nil, fmt.Errorf("unable to unmarshall imageConfig: %v", err)
 	}
+	if err := validateJobsConfig(config); err != nil {
+		return nil, err
+	}
 	return config, nil
+}
+
+// validateJobsConfig rejects configurations that would generate broken jobs.
+//
+// TODO: also validate the *PresubmitServices lists, which emit extra_refs to
+// `<service>-controller` repos and so break on a typo.
+func validateJobsConfig(config *JobsConfig) error {
+	// yaml.Unmarshal leaves config nil for an empty or comment-only document.
+	if config == nil {
+		return fmt.Errorf("jobs_config.yaml parsed to nothing; it is empty or contains only comments")
+	}
+
+	if len(config.APINotificationServices) == 0 {
+		return nil
+	}
+
+	if err := ValidateAPINotificationServices(config.APINotificationServices, config.AWSServices); err != nil {
+		return err
+	}
+
+	// Zero is not "unlimited", so the cap cannot be lost by omission.
+	if config.APINotificationMaxOpenIssues <= 0 {
+		return fmt.Errorf(
+			"api_notification_max_open_issues must be greater than zero when " +
+				"api_notification_services is non-empty",
+		)
+	}
+
+	// A run files at most one issue per service, so a cap above the list length
+	// can never bind and is a typo. A cap equal to it is allowed: the open count
+	// also includes duplicate and stale issues, so it can still be reached.
+	if config.APINotificationMaxOpenIssues > len(config.APINotificationServices) {
+		return fmt.Errorf(
+			"api_notification_max_open_issues is %d, which cannot bind: only %d service(s) "+
+				"are listed in api_notification_services, so the run can never file that many issues",
+			config.APINotificationMaxOpenIssues, len(config.APINotificationServices))
+	}
+	return nil
+}
+
+// ValidateAPINotificationServices checks the service list the API change detector
+// acts on. It is exported because the running job reads jobs_config.yaml directly,
+// bypassing `make prow-gen`. It omits the cap check: the job takes its cap from a
+// flag and enforces it in reconcileIssue.
+func ValidateAPINotificationServices(services, awsServices []string) error {
+	// Only aws_services entries have a service/<svc> label and a pinned
+	// controller to diff. This also rejects empty, miscased and untrimmed entries.
+	for _, service := range services {
+		if !contains(awsServices, service) {
+			return fmt.Errorf(
+				"api_notification_services lists %q, which is not in aws_services, so the job "+
+					"has no pinned controller to diff and no service/%s label to apply; "+
+					"onboard it in aws_services first",
+				service, service,
+			)
+		}
+	}
+
+	seen := make(map[string]bool, len(services))
+	for _, service := range services {
+		if seen[service] {
+			return fmt.Errorf(
+				"api_notification_services lists %q more than once; the run resolves each "+
+					"service's existing issue once, so a repeat would file a second issue for it",
+				service)
+		}
+		seen[service] = true
+	}
+	return nil
 }
 
 func contains(arr []string, s string) bool {

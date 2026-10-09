@@ -147,3 +147,14 @@ acktest_presubmit_services:
 - ecr
 - iam
 - s3
+
+# Services whose AWS API is monitored by detect-api-changes; changes are filed as
+# issues in the community repo.
+api_notification_services:
+- s3
+
+# Max open `ack/api-change-detected` issues. At the cap, no new issues are filed but
+# existing ones are still updated. Required when api_notification_services is
+# non-empty; must not exceed its length. A lower value is fine: services past the
+# cap are skipped until a slot frees.
+api_notification_max_open_issues: 1
