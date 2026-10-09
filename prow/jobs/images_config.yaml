@@ -11,7 +11,7 @@ images:
     kubectl: prow-kubectl-0.0.4
     olm-bundle-pr: prow-olm-bundle-pr-0.0.37
     olm-test: prow-olm-test-0.0.36
-    scan-controllers-cve: prow-scan-controllers-cve-0.0.30
+    scan-controllers-cve: prow-scan-controllers-cve-0.0.31
     soak-test: prow-soak-0.0.35
     unit-test: prow-unit-0.0.40
     upgrade-go-version: prow-upgrade-go-version-0.0.38
