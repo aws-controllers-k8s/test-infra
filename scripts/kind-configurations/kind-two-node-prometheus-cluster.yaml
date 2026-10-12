@@ -8,7 +8,14 @@ nodes:
         kind: ClusterConfiguration
         metadata:
           name: config
+      - |
+        kind: KubeletConfiguration
+        containerLogMaxSize: 500Mi
   - role: worker
+    kubeadmConfigPatches:
+      - |
+        kind: KubeletConfiguration
+        containerLogMaxSize: 500Mi
     extraPortMappings: # Host machine to Prometheus service reachability
       - containerPort: 30900
         hostPort: 9090

@@ -10,8 +10,10 @@ nodes:
     - |
       kind: KubeletConfiguration
       cgroupDriver: cgroupfs
+      containerLogMaxSize: 500Mi
   - role: worker
     kubeadmConfigPatches:
     - |
       kind: KubeletConfiguration
       cgroupDriver: cgroupfs
+      containerLogMaxSize: 500Mi
