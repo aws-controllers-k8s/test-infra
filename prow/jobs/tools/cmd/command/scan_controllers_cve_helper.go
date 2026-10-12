@@ -168,22 +168,37 @@ func getCveSummaries(controller string, results []Result, cveSummaries map[strin
 	}
 }
 
-func scanControllersForCves(controllerTagsMap map[string]string) (map[string][]string, map[string]CVESummary, error) {
+func scanControllersForCves(controllerTagsMap map[string]string, trivyIgnoreFile string) (map[string][]string, map[string]CVESummary, error) {
 
 	app := "trivy"
+
+	// baseArgs are shared across every controller image scan. When a Trivy
+	// ignore file is configured and present, pass --ignorefile so documented
+	// false positives (e.g. the module-level golang.org/x/crypto/openpgp
+	// advisory, which the controllers do not import) are suppressed.
+	baseArgs := []string{
+		"image",
+		"--format",
+		"json",
+		"-q",
+	}
+	if trivyIgnoreFile != "" {
+		if _, err := os.Stat(trivyIgnoreFile); err == nil {
+			log.Printf("Using Trivy ignore file: %s\n", trivyIgnoreFile)
+			baseArgs = append(baseArgs, "--ignorefile", trivyIgnoreFile)
+		} else {
+			log.Printf("WARNING: Trivy ignore file %q not found (%v); scanning without suppressions\n", trivyIgnoreFile, err)
+		}
+	}
 
 	cveSummaries := make(map[string]CVESummary)
 	detectedVulnerabilities := make(map[string][]string)
 
 	for controller, tag := range controllerTagsMap {
 
-		args := []string{
-			"image",
-			"--format",
-			"json",
-			"-q",
+		args := append(append([]string{}, baseArgs...),
 			fmt.Sprintf(getScanControllerImageFormat(), controller, tag),
-		}
+		)
 		cmd := exec.Command(app, args...)
 		stdout, err := cmd.CombinedOutput()
 		//TODO: return error for now, revist later

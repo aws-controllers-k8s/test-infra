@@ -1,0 +1,32 @@
+# Trivy vulnerability suppressions for the scan-controllers-cve job.
+#
+# Each entry must document WHY the finding is suppressed (statement) and SHOULD
+# carry an expired_at so the suppression is periodically re-reviewed rather than
+# silently living forever. IDs are matched against the VulnerabilityID that Trivy
+# reports in its JSON output; purls narrows a suppression to a specific package
+# so it cannot hide an unrelated finding that happens to reuse the same ID.
+vulnerabilities:
+  # golang.org/x/crypto/openpgp is unmaintained (GO-2026-5932).
+  #
+  # False positive for ACK controllers. The advisory is reported at the MODULE
+  # level on golang.org/x/crypto, but the vulnerable openpgp package is never
+  # built or reachable. acm-controller (the only controller currently flagged)
+  # pulls golang.org/x/crypto in transitively for pbkdf2:
+  #   pkg/resource/certificate -> github.com/youmark/pkcs8 -> x/crypto/pbkdf2
+  # `go mod why golang.org/x/crypto` reports "main module does not need package
+  # golang.org/x/crypto", and `go list -deps ./... | grep openpgp` is empty, so
+  # the openpgp package is not in the controller's build graph.
+  #
+  # Scoped via purls to the x/crypto module so only this module-level advisory is
+  # suppressed, and so any other controller that later pulls x/crypto for the
+  # same reason is covered without a new entry. The purl match is a prefix match:
+  # "pkg:golang/golang.org/x/crypto" matches the versioned purl Trivy emits
+  # (e.g. "...@v0.53.0"), so no version suffix is needed and this does not need
+  # updating when the x/crypto version bumps.
+  - id: GO-2026-5932
+    purls:
+      - "pkg:golang/golang.org/x/crypto"
+    statement: >-
+      x/crypto/openpgp is not in any controller's build graph (used only for
+      pbkdf2 via youmark/pkcs8). Module-level false positive. Re-review on expiry.
+    expired_at: 2027-04-09
