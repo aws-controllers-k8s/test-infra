@@ -36,9 +36,11 @@
           limits:
             cpu: 8
             memory: "3072Mi"
+          # Below the limits: these jobs average ~1 core and peak at 5-6 only
+          # while building the image, so they burst into spare node CPU.
           requests:
-            cpu: 8
-            memory: "3072Mi"
+            cpu: 4
+            memory: "2048Mi"
         env:
         - name: SERVICE
           value: {{ $service }}
@@ -93,9 +95,11 @@
           limits:
             cpu: 8
             memory: "3072Mi"
+          # Below the limits: these jobs average ~1 core and peak at 5-6 only
+          # while building the image, so they burst into spare node CPU.
           requests:
-            cpu: 8
-            memory: "3072Mi"
+            cpu: 4
+            memory: "2048Mi"
         env:
         - name: SERVICE
           value: {{ $service }}
