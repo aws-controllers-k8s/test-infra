@@ -1,0 +1,23 @@
+# Minimal image for jobs that read AWS APIs and write Kubernetes objects: kubectl, the AWS
+# CLI v2, jq and bash.
+FROM public.ecr.aws/docker/library/debian:trixie-slim
+ARG KUBECTL_VERSION=v1.35.5
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        curl \
+        jq \
+        unzip \
+    && curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
+    && echo "$(curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256")  /usr/local/bin/kubectl" | sha256sum -c - \
+    && chmod +x /usr/local/bin/kubectl \
+    && curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/awscliv2.zip /tmp/aws \
+    && apt-get remove -y curl unzip \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+ENV AWS_PAGER=""

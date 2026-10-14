@@ -1,0 +1,31 @@
+# Lets the addon-version-updater periodic (prow/jobs/templates/periodics) set
+# spec.addonVersion on the Addon CRs whose version it owns. Scoped by name to those CRs;
+# patch is what server-side apply sends. The build cluster's CR is declared in
+# ack-build-infra but lives in this namespace too.
+#
+# Argo CD can create this only because bootstrap/argocd-rbac.tf gives it the same verbs on
+# addons in ack-system: escalation prevention refuses a Role granting more than the
+# applier holds in in-cluster RBAC.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: addon-version-updater
+rules:
+- apiGroups: ["eks.services.k8s.aws"]
+  resources: ["addons"]
+  resourceNames: ["secrets-store-csi", "build-cluster-secrets-store-csi"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: addon-version-updater
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: addon-version-updater
+subjects:
+- kind: ServiceAccount
+  name: periodic-service-account
+  namespace: test-pods

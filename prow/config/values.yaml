@@ -5,6 +5,9 @@ controllerEcrRegistry: ""
 ecrPublicAccountId: ""
 ecrPublicReaderRoleArn: ""
 stage: ""
+# ack-test-infra-<stage>, the prefix of every resource this stack owns. Supplied by the
+# Application; reaches jobs that set preset-stack-name as $STACK_NAME.
+stackName: ""
 
 github:
   # Per-environment: the org Prow watches. Supplied by the Application.
