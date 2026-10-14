@@ -27,9 +27,10 @@
           - |
             set -Eeuo pipefail
 
-            # From Prow: AWS_REGION via decoration, STACK_NAME via preset-stack-name. No
-            # defaults, which would silently target the wrong region or stack.
-            : "${AWS_REGION:?not set -- expected from Prow job decoration}"
+            # AWS_REGION comes from the EKS Pod Identity webhook, via periodic-service-account's
+            # association; STACK_NAME from the preset-stack-name preset. No defaults, which
+            # would silently target the wrong region or stack.
+            : "${AWS_REGION:?not set -- expected from the EKS Pod Identity webhook}"
             : "${STACK_NAME:?not set -- expected from the preset-stack-name preset}"
 
             MANAGER=addon-version-updater
