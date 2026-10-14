@@ -46,9 +46,9 @@ def create_enhanced_boto_config() -> BotocoreConfig:
 def create_enhanced_bedrock_model(
     model_id: str = DEFAULT_MODEL_ID,
     region_name: str = DEFAULT_REGION,
-    temperature: float = DEFAULT_TEMPERATURE,
+    temperature: Optional[float] = DEFAULT_TEMPERATURE,
     max_tokens: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> BedrockModel:
     """
     Create a BedrockModel with enhanced reliability settings.
@@ -56,7 +56,7 @@ def create_enhanced_bedrock_model(
     Args:
         model_id: The Bedrock model ID to use
         region_name: AWS region for Bedrock
-        temperature: Temperature for model generation
+        temperature: Sampling temperature (optional; omitted by default)
         max_tokens: Maximum tokens to generate (optional)
         **kwargs: Additional BedrockModel configuration parameters
         
@@ -68,11 +68,13 @@ def create_enhanced_bedrock_model(
     model_config = {
         "model_id": model_id,
         "region_name": region_name,
-        "temperature": temperature,
         "boto_client_config": boto_config,
-        **kwargs
+        **kwargs,
     }
-    
+
+    if temperature is not None:
+        model_config["temperature"] = temperature
+
     if max_tokens is not None:
         model_config["max_tokens"] = max_tokens
     
@@ -84,9 +86,9 @@ def create_enhanced_agent(
     system_prompt: str,
     model_id: str = DEFAULT_MODEL_ID,
     region_name: str = DEFAULT_REGION,
-    temperature: float = DEFAULT_TEMPERATURE,
+    temperature: Optional[float] = DEFAULT_TEMPERATURE,
     max_tokens: Optional[int] = None,
-    **model_kwargs
+    **model_kwargs,
 ) -> Agent:
     """
     Create an Agent with an enhanced BedrockModel configuration.
@@ -96,7 +98,7 @@ def create_enhanced_agent(
         system_prompt: System prompt for the agent
         model_id: The Bedrock model ID to use
         region_name: AWS region for Bedrock
-        temperature: Temperature for model generation
+        temperature: Sampling temperature (optional; omitted by default)
         max_tokens: Maximum tokens to generate (optional)
         **model_kwargs: Additional BedrockModel configuration parameters
         
@@ -108,7 +110,7 @@ def create_enhanced_agent(
         region_name=region_name,
         temperature=temperature,
         max_tokens=max_tokens,
-        **model_kwargs
+        **model_kwargs,
     )
     
     return Agent(

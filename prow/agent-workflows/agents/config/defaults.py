@@ -19,7 +19,10 @@ MAX_LOG_LINES_TO_RETURN = 100
 # CLI defaults for the agent
 DEFAULT_REGION = "us-west-2"
 DEFAULT_MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
-DEFAULT_TEMPERATURE = 0.2
+# Sampling parameters are omitted by default because newer Claude models reject
+# non-default temperature values. Set AGENT_TEMPERATURE only for a model that
+# explicitly supports it.
+DEFAULT_TEMPERATURE: float | None = None
 
 # Boto client configuration defaults for better reliability
 DEFAULT_MAX_RETRY_ATTEMPTS = 20

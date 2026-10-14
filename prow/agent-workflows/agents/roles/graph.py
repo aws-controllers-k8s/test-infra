@@ -8,7 +8,7 @@
 # or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-"""Strands Graph topology + deterministic loop control for add-resource.
+"""Strands Graph topology and deterministic loop control for ACK workflows.
 
 Phases 1, 1.5, and 2 of workflows/add-resource.md run as a Strands Graph:
 
@@ -166,7 +166,7 @@ def build_graph(cfg: Config, agents: AgentSet) -> Graph:
     b.set_max_node_executions(expected + 4)
     b.set_execution_timeout(cfg.extra.get("graph_timeout_s", 3600))
     b.set_node_timeout(cfg.extra.get("node_timeout_s", 1800))
-    b.set_graph_id("ack-add-resource")
+    b.set_graph_id(f"ack-{cfg.workflow_name}")
 
     return b.build()
 

@@ -21,6 +21,7 @@ aws_services:
 - acmpca
 - apigateway
 - apigatewayv2
+- appconfig
 - applicationautoscaling
 - athena
 - autoscaling
@@ -90,6 +91,7 @@ aws_services:
 - sns
 - sqs
 - ssm
+- transfer
 - vpclattice
 - wafv2
 
