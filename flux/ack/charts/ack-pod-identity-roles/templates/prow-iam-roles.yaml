@@ -310,11 +310,12 @@ spec:
           }
         ]
       }
-    # Read-only EKS access for the addon-version-report periodic.
+    # Read-only EKS access for the addon-version-updater periodic, which reads each
+    # cluster's Kubernetes version and the default addon version for it. Its writes go to
+    # the Addon CRs through in-cluster RBAC, never to EKS.
     #
     # DescribeAddonVersions is a catalog call with no resource to scope to, so "*" is the
-    # only form EKS accepts. The rest are scoped to this stack's two clusters. No
-    # eks:ListClusters -- the job names its clusters rather than discovering them.
+    # only form EKS accepts.
     EKSAddonVersionRead: |
       {
         "Version": "2012-10-17",
@@ -326,12 +327,10 @@ spec:
           },
           {
             "Effect": "Allow",
-            "Action": ["eks:DescribeCluster", "eks:DescribeAddon", "eks:ListAddons"],
+            "Action": ["eks:DescribeCluster"],
             "Resource": [
               "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-cluster",
-              "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-build-cluster",
-              "arn:aws:eks:{{ $region }}:{{ $accountId }}:addon/{{ $stackName }}-cluster/*/*",
-              "arn:aws:eks:{{ $region }}:{{ $accountId }}:addon/{{ $stackName }}-build-cluster/*/*"
+              "arn:aws:eks:{{ $region }}:{{ $accountId }}:cluster/{{ $stackName }}-build-cluster"
             ]
           }
         ]
