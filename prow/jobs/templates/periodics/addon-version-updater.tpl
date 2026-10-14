@@ -13,8 +13,7 @@
   spec:
     serviceAccountName: periodic-service-account
     containers:
-      # integration-test for its AWS CLI, kubectl and jq.
-      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "aws-kubectl") }}
         resources:
           limits:
             cpu: 1
