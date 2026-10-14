@@ -1,6 +1,7 @@
 from typing import List, Union
 import boto3
 import logging
+import time
 
 from dataclasses import dataclass, field
 
@@ -9,6 +10,13 @@ from .. import resources
 
 # Subnets inside the default VPC CIDR block will be of form 10.0.*.0/24
 VPC_CIDR_BLOCK = "10.0.0.0/16"
+
+# Set on bootstrapped transit gateways so a leaked one is easy to recognize.
+TRANSIT_GATEWAY_DESCRIPTION = "ACK e2e bootstrap transit gateway"
+# How long, and how often, cleanup waits for a transit gateway to become
+# deletable. Attachments usually finish deleting within a few minutes.
+TRANSIT_GATEWAY_DELETABLE_TIMEOUT_SECONDS = 600
+TRANSIT_GATEWAY_DELETABLE_POLL_SECONDS = 15
 
 @dataclass
 class TransitGateway(Bootstrappable):
@@ -27,15 +35,67 @@ class TransitGateway(Bootstrappable):
     def bootstrap(self):
         """Creates a transit gateway.
         """
-        transit_gateway = self.ec2_client.create_transit_gateway()
+        transit_gateway = self.ec2_client.create_transit_gateway(
+            Description=TRANSIT_GATEWAY_DESCRIPTION,
+        )
         self.transit_gateway_id = transit_gateway['TransitGateway']['TransitGatewayId']
 
     def cleanup(self):
         """Deletes a transit gateway.
+
+        EC2 refuses to delete a transit gateway that is still pending or that
+        has an attachment still being deleted. Tests delete their attachments
+        just before cleanup runs, and EC2 takes minutes to finish, so wait for
+        that first. Deleting straight away failed every retry at once and
+        leaked the transit gateway.
         """
         super().cleanup()
 
+        self._wait_until_deletable()
         self.ec2_client.delete_transit_gateway(TransitGatewayId=self.transit_gateway_id)
+
+    def _wait_until_deletable(self):
+        """Waits, up to TRANSIT_GATEWAY_DELETABLE_TIMEOUT_SECONDS, while the
+        transit gateway is pending or any of its attachments is deleting.
+
+        Other attachment states are not waited on, since nothing will move
+        them to deleted; the delete then fails as it would have before.
+        """
+        deadline = time.monotonic() + TRANSIT_GATEWAY_DELETABLE_TIMEOUT_SECONDS
+        while True:
+            blockers = self._transient_deletion_blockers()
+            if not blockers:
+                return
+            if time.monotonic() >= deadline:
+                logging.warning(
+                    f"Transit gateway {self.transit_gateway_id} still not deletable after "
+                    f"{TRANSIT_GATEWAY_DELETABLE_TIMEOUT_SECONDS}s: {', '.join(blockers)}")
+                return
+            logging.info(
+                f"Waiting to delete transit gateway {self.transit_gateway_id}: {', '.join(blockers)}")
+            time.sleep(TRANSIT_GATEWAY_DELETABLE_POLL_SECONDS)
+
+    def _transient_deletion_blockers(self) -> List[str]:
+        """Returns why the transit gateway cannot be deleted yet, limited to
+        states that resolve on their own.
+        """
+        ec2_client = self.ec2_client
+        blockers = []
+        transit_gateways = ec2_client.describe_transit_gateways(
+            TransitGatewayIds=[self.transit_gateway_id],
+        )['TransitGateways']
+        if transit_gateways and transit_gateways[0]['State'] == 'pending':
+            blockers.append(f"{self.transit_gateway_id} is pending")
+
+        paginator = ec2_client.get_paginator('describe_transit_gateway_attachments')
+        pages = paginator.paginate(Filters=[
+            {'Name': 'transit-gateway-id', 'Values': [self.transit_gateway_id]},
+            {'Name': 'state', 'Values': ['deleting']},
+        ])
+        for page in pages:
+            for attachment in page['TransitGatewayAttachments']:
+                blockers.append(f"{attachment['TransitGatewayAttachmentId']} is {attachment['State']}")
+        return blockers
 
 @dataclass
 class InternetGateway(Bootstrappable):
