@@ -13,21 +13,12 @@ metadata:
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
     helm.sh/resource-policy: keep
+    # spec.addonVersion is set by the addon-version-updater periodic, not git. Do not add
+    # it here: Argo CD would reassert a pinned value and the job would stop updating it.
+    addon-version-updater.ack.aws.dev/owner: addon-version-updater
 spec:
   clusterName: {{ $stackName }}-cluster
   name: aws-secrets-store-csi-driver-provider
-  # Keep this at the newest version supported by THIS cluster's Kubernetes
-  # version. The addon bundles the upstream secrets-store-csi-driver image, so an
-  # old bundle leaves the driver DaemonSet running outdated OS packages.
-  #
-  # Always pass --kubernetes-version when checking; the unfiltered output lists
-  # versions for newer Kubernetes releases too, and picking one of those puts the
-  # Addon CR into ACK.Terminal with "Addon version specified is not supported":
-  #   aws eks describe-addon-versions \
-  #     --addon-name aws-secrets-store-csi-driver-provider \
-  #     --kubernetes-version 1.35 --region us-west-2 \
-  #     --query 'addons[0].addonVersions[].addonVersion'
-  addonVersion: v3.1.4-eksbuild.1
   configurationValues: |-
     {
       "secrets-store-csi-driver": {
