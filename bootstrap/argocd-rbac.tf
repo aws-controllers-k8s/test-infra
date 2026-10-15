@@ -252,6 +252,16 @@ resource "kubernetes_role_v1" "argocd_grantor_ack_system" {
     resources  = ["clusters"]
     verbs      = ["get", "list", "watch"]
   }
+
+  # Lets Argo CD create the ack-addons chart's addon-version-updater Role, which grants
+  # these verbs. AmazonEKSACKPolicy already lets Argo CD use them, but escalation
+  # prevention reads only in-cluster RBAC, so the Role is refused without this copy. No new
+  # access - see the header of this file.
+  rule {
+    api_groups = ["eks.services.k8s.aws"]
+    resources  = ["addons"]
+    verbs      = ["get", "patch"]
+  }
 }
 
 # prow: the secrets path declares a SecretProviderClass here, and prow-config's Roles

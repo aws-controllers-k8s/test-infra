@@ -21,7 +21,18 @@ source "$SCRIPTS_DIR/controller-setup.sh"
 _assert_pod_running() {
     local __chart_namespace=$1
 
-    local controller_pod_name=$(kubectl get pods -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name")
+    # The chart install rotates the controller's credentials, which restarts
+    # the Deployment just before these checks run. Wait for that rollout and
+    # skip pods that are being replaced, so the pod checked below is the one
+    # that is serving rather than an old or barely started one.
+    local controller_deployment_name=$(kubectl get deployments -n $__chart_namespace -ojson | jq -r ".items[0].metadata.name // empty")
+    [[ -z "$controller_deployment_name" ]] && { error_msg "Unable to find controller deployment"; return 1; }
+    if ! kubectl rollout status deployment/"$controller_deployment_name" -n $__chart_namespace --timeout=3m 1>/dev/null; then
+        error_msg "Controller deployment $__chart_namespace/$controller_deployment_name did not finish rolling out"
+        return 1
+    fi
+
+    local controller_pod_name=$(kubectl get pods -n $__chart_namespace -ojson | jq -r "[.items[] | select(.metadata.deletionTimestamp == null)][0].metadata.name // empty")
     [[ -z "$controller_pod_name" ]] && { error_msg "Unable to find controller pod"; return 1; }
 
     debug_msg "ACK $AWS_SERVICE controller pod name is $__chart_namespace/$controller_pod_name"
@@ -32,7 +43,15 @@ _assert_pod_running() {
 
     info_msg "Verifying that there are no ERROR in controller logs ... "
 
-    local controller_logs=$(kubectl logs pod/"$controller_pod_name" -n $__chart_namespace)
+    # A container that has only just started may not have written its first
+    # line yet, so give it a few seconds before treating the logs as missing.
+    local controller_logs=""
+    local attempt
+    for attempt in 1 2 3 4 5 6; do
+        controller_logs=$(kubectl logs pod/"$controller_pod_name" -n $__chart_namespace)
+        [[ -n "$controller_logs" ]] && break
+        sleep 5
+    done
     [[ -z "$controller_logs" ]] && { error_msg "Unable to find controller logs"; return 1; }
 
     if (echo "$controller_logs" | grep -q "ERROR"); then

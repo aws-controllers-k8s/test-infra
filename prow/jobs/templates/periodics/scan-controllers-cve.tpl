@@ -29,4 +29,5 @@
         command: ["ack-build-tools", "scan-controllers-cve",
             "--jobs-config-path", "./prow/jobs/jobs_config.yaml",
             "--github-issues-owner", "${TEST_INFRA_ORG}",
-            "--github-issues-repo", "community"]
+            "--github-issues-repo", "community",
+            "--trivy-ignorefile", "./prow/jobs/.trivyignore.yaml"]

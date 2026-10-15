@@ -274,7 +274,10 @@ applications:
     path: prow/config
     targetNamespace: prow
     wave: 5
-    values: [controllerEcrRegistry, stage, kubernetesOrg, redhatOrg, ecrPublicReaderRoleArn]
+    #
+    # stackName backs the preset-stack-name preset, which gives a job $STACK_NAME so it can
+    # address this stack's AWS resources without hardcoding the stage.
+    values: [controllerEcrRegistry, stage, kubernetesOrg, redhatOrg, ecrPublicReaderRoleArn, stackName]
 
     # Chart paths whose value name differs from the key in chartValues. --set reads the dots
     # as a path, which is what is wanted.
