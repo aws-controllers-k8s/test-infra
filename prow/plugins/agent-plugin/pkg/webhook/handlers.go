@@ -140,6 +140,9 @@ func (s *Server) processAgentCommand(
 	if err := agentCmd.ValidateRequiredArgs(workflow.RequiredArgs); err != nil {
 		return postComment(err.Error())
 	}
+	if err := agentCmd.ValidateArgs(workflow.RequiredArgs, workflow.OptionalArgs); err != nil {
+		return postComment(err.Error())
+	}
 	if err := agentCmd.ValidateTimeout(); err != nil {
 		return postComment(err.Error())
 	}

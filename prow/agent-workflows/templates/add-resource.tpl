@@ -16,7 +16,7 @@
                 name: agent-github-pat-token
                 key: token
         e2e: true
-        timeout: "90m"
+        timeout: "5h"
         resources:
             cpu: "6"
             memory: "10Gi"

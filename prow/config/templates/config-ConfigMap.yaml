@@ -197,6 +197,15 @@ data:
           - name: github-token
             mountPath: /etc/github
             readOnly: true
+      # This stack's name, the prefix of every resource it owns. A preset rather than an
+      # entry in default_decoration_configs.env: only the jobs that address the stack's own
+      # AWS resources need it, and opting in by label keeps that dependency visible on the
+      # job instead of implicit for all of them.
+      - labels:
+          preset-stack-name: "true"
+        env:
+          - name: STACK_NAME
+            value: {{ .Values.stackName | required "stackName is required" | quote }}
       - labels:
           preset-controller-registry: "true"
         env:

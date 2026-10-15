@@ -16,6 +16,7 @@ package command
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -39,6 +40,33 @@ func (c *AgentCommand) ValidateRequiredArgs(required []string) error {
 		return fmt.Errorf("missing required arguments: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// ValidateArgs rejects arguments that the selected workflow does not declare.
+func (c *AgentCommand) ValidateArgs(required, optional []string) error {
+	allowed := make(map[string]struct{}, len(required)+len(optional))
+	for _, arg := range required {
+		allowed[arg] = struct{}{}
+	}
+	for _, arg := range optional {
+		allowed[arg] = struct{}{}
+	}
+
+	var unsupported []string
+	for arg := range c.Args {
+		if _, ok := allowed[arg]; !ok {
+			unsupported = append(unsupported, arg)
+		}
+	}
+	if len(unsupported) == 0 {
+		return nil
+	}
+	sort.Strings(unsupported)
+	return fmt.Errorf(
+		"unsupported arguments for workflow %s: %s",
+		c.WorkflowName,
+		strings.Join(unsupported, ", "),
+	)
 }
 
 // ValidateTimeout validates the timeout format if present
