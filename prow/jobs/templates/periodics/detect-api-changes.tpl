@@ -16,7 +16,7 @@
     timeout: 25m
     grace_period: 5m
   annotations:
-    description: Compares the latest AWS API models against ACK controllers and opens a github issue in the community repository when new resources, operations, or fields are found
+    description: Compares the latest AWS API models against ACK controllers and opens a github issue in the ack-private repository when new resources, operations, or fields are found
     # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
     karpenter.sh/do-not-disrupt: "true"
   extra_refs:
@@ -48,11 +48,15 @@
             memory: "1Gi"
         # RunSucceeded in ACK/APIChangeNotification is watched by the
         # ACK-APIChangeNotification alarms (ACKTestInfraCDK).
+        #
+        # TODO: file in community instead of ack-private once maintainers trust the
+        # findings. Issues stay where they are filed: moving repos re-files every
+        # service, since the bot only finds its issues in the repo it is pointed at.
         command: ["ack-build-tools", "detect-api-changes",
             "--jobs-config-path", "./prow/jobs/jobs_config.yaml",
             "--controllers-root", "..",
             "--github-issues-owner", "${TEST_INFRA_ORG}",
-            "--github-issues-repo", "community",
+            "--github-issues-repo", "ack-private",
             "--max-open-issues", "{{ $.Config.APINotificationMaxOpenIssues }}",
             "--metrics-namespace", "ACK/APIChangeNotification",
             "--metrics-region", "us-west-2"]

@@ -850,12 +850,29 @@ func findNewOperations(latest, baseline *SmithyModel, in *ControllerInputs) []Fi
 			Kind:        name,
 			Class:       ClassPossibleResource,
 			Subject:     name,
-			Detail:      "no Create operation, so a controller cannot create it; modelling it needs an `operations:` override",
+			Detail:      possibleResourceDetail(latest, name, opIDs, resources),
 			NewSincePin: true,
 			Evidence:    newEvidence(append(allOps, reads...)),
 		})
 	}
 	return findings
+}
+
+// possibleResourceDetail says why a possible resource needs a person. A Put-managed
+// one has two valid models, and the operations alone cannot choose between them.
+func possibleResourceDetail(m *SmithyModel, name string, opIDs []string, resources map[string]string) string {
+	const noCreate = "no Create operation, so a controller cannot create it; " +
+		"modelling it needs an `operations:` override"
+	put := "Put" + name
+	if !slices.Contains(opIDs, put) || !putManaged(m, name) {
+		return noCreate
+	}
+	detail := fmt.Sprintf("`%s` sets it and `Delete%s` removes it, so it has a lifecycle of its own: "+
+		"it may be a new resource, with an `operations:` override mapping `%s` to create and update", put, name, put)
+	if parent := longestPrefixResource(name, resources); parent != "" {
+		detail += fmt.Sprintf(", or fields of `%s` set by an update hook", parent)
+	}
+	return detail
 }
 
 // genericReads returns the reads of the broader resource a possible resource's

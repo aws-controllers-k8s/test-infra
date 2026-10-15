@@ -127,6 +127,11 @@ func placeUnknownOp(
 	}
 
 	if own := ownResource(model, targets); own != "" {
+		// Checked before the parent: a Put with its own Delete may be a resource
+		// rather than fields of the parent its request names (s3 BucketPolicy).
+		if verb == "Put" && prefix == "" && putManaged(model, own) && len(identifiers) > 0 {
+			return placePossibleResource, own
+		}
 		if parent := parentResource(model, own, request, resources); parent != "" {
 			return placeOnResource, parent
 		}
@@ -187,6 +192,16 @@ func ownResource(model *SmithyModel, targets []string) string {
 		}
 	}
 	return ""
+}
+
+// putManaged reports whether a PutX target is removed by its own DeleteX, so it has
+// a lifecycle of its own. Tags stay fields: ACK manages them on the parent.
+func putManaged(model *SmithyModel, own string) bool {
+	if strings.HasSuffix(own, "Tagging") || strings.HasSuffix(own, "Tags") {
+		return false
+	}
+	_, ok := model.Operation("Delete" + own)
+	return ok
 }
 
 // parentResource returns the longest known resource whose name prefixes own and

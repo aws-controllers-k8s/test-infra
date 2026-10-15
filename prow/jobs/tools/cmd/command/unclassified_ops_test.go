@@ -51,11 +51,17 @@ func opsModel(t *testing.T, ops map[string][]string) *SmithyModel {
 // from the v1.47.1 models because several rules depend on them.
 func TestPlaceUnknownOp(t *testing.T) {
 	model := opsModel(t, map[string][]string{
-		// s3control: AccessPointScope has its own Get/Put/Delete, but the request
-		// carries GetAccessPoint's identifiers, so it configures the AccessPoint.
-		"GetAccessPoint":      {"AccountId", "Name"},
-		"PutAccessPointScope": {"AccountId", "Name", "Scope"},
-		"GetAccessPointScope": {"AccountId", "Name"},
+		// s3control: AccessPointScope's request carries GetAccessPoint's
+		// identifiers, but DeleteAccessPointScope removes it on its own, so it
+		// may be a resource rather than fields of the AccessPoint.
+		"GetAccessPoint":         {"AccountId", "Name"},
+		"PutAccessPointScope":    {"AccountId", "Name", "Scope"},
+		"GetAccessPointScope":    {"AccountId", "Name"},
+		"DeleteAccessPointScope": {"AccountId", "Name"},
+		// s3: tags have their own Delete too, but ACK manages them on the parent.
+		"PutBucketTagging":    {"Bucket", "Tagging"},
+		"GetBucketTagging":    {"Bucket"},
+		"DeleteBucketTagging": {"Bucket"},
 		// ec2: the attachment shares TransitGateway's name prefix but is
 		// addressed by its own ID, so it is its own resource.
 		"DescribeTransitGateways":                    {"TransitGatewayIds", "Filters", "DryRun"},
@@ -64,7 +70,7 @@ func TestPlaceUnknownOp(t *testing.T) {
 		// networkfirewall: no name match at all; FirewallArn identifies it.
 		"AssociateAvailabilityZones": {"UpdateToken", "FirewallArn", "FirewallName", "AvailabilityZoneMappings"},
 		"StartFlowCapture":           {"FirewallArn"},
-		// cloudwatchlogs: its own Get/Put, attributed by logGroupIdentifier.
+		// cloudwatchlogs: its own Get/Put but no Delete, attributed by logGroupIdentifier.
 		"PutSyslogConfiguration": {"logGroupIdentifier", "vpcEndpointId"},
 		"GetSyslogConfiguration": {"logGroupIdentifier"},
 		// Exact names: a new resource takes even an action verb; an existing one does not.
@@ -98,7 +104,7 @@ func TestPlaceUnknownOp(t *testing.T) {
 	})
 	resources := map[string]string{}
 	existing := map[string]bool{}
-	for _, kind := range []string{"AccessPoint", "Firewall", "Instance", "LogGroup", "Role", "TransitGateway"} {
+	for _, kind := range []string{"AccessPoint", "Bucket", "Firewall", "Instance", "LogGroup", "Role", "TransitGateway"} {
 		resources[strings.ToLower(kind)] = kind
 		existing[kind] = true
 	}
@@ -114,7 +120,8 @@ func TestPlaceUnknownOp(t *testing.T) {
 		placement opPlacement
 		name      string
 	}{
-		{"PutAccessPointScope", placeOnResource, "AccessPoint"},
+		{"PutAccessPointScope", placePossibleResource, "AccessPointScope"},
+		{"PutBucketTagging", placeOnResource, "Bucket"},
 		{"AcceptTransitGatewayClientVpnAttachment", placePossibleResource, "TransitGatewayClientVpnAttachment"},
 		{"AssociateAvailabilityZones", placeOnResource, "Firewall"},
 		{"PutSyslogConfiguration", placeOnResource, "LogGroup"},
@@ -599,4 +606,21 @@ func TestIgnoredNameYieldsToRequestEvidence(t *testing.T) {
 	assert.Contains(t, got, Finding{Class: ClassDroppedOperation, Subject: "GetObjectAcl",
 		Detail: "concerns `Object`, which generator.yaml ignores", NewSincePin: true})
 	assert.Equal(t, []string{"GetObjectLockConfiguration"}, subjects(got, ClassNewOperation))
+}
+
+// A Put-managed possible resource names both ways to model it; any other keeps
+// the generic reason.
+func TestPossibleResourceDetail(t *testing.T) {
+	model := opsModel(t, map[string][]string{
+		"PutAccessPointScope":    {"AccountId", "Name", "Scope"},
+		"DeleteAccessPointScope": {"AccountId", "Name"},
+		"PutAsset":               {"DomainIdentifier", "Name"},
+	})
+	resources := map[string]string{"accesspoint": "AccessPoint"}
+
+	detail := possibleResourceDetail(model, "AccessPointScope", []string{"PutAccessPointScope"}, resources)
+	assert.Contains(t, detail, "`PutAccessPointScope` sets it and `DeleteAccessPointScope` removes it")
+	assert.Contains(t, detail, "or fields of `AccessPoint` set by an update hook")
+
+	assert.Contains(t, possibleResourceDetail(model, "Asset", []string{"PutAsset"}, resources), "no Create operation")
 }
