@@ -1,0 +1,11 @@
+ignore:
+  resource_names:
+    - Gizmo
+resources:
+  Widget:
+    fields:
+      SubnetId:
+        references:
+          resource: Subnet
+          service_name: ec2
+          path: Status.SubnetID

@@ -7,9 +7,11 @@ gen-all: prow-gen
 
 # Assumes python3 is installed as default python on the host.
 prow-gen: ## Compiles the Prow jobs
-	@go run ./prow/jobs/generator.go && \
-		echo "Success! Templates for ProwJobs, Plugins, and Agent Workflows re-generated." || \
-		echo "Error while generating Prow templates";
+	@go run ./prow/jobs/generator.go
+	@echo "Success! Templates for ProwJobs, Plugins, and Agent Workflows re-generated."
+
+unit-test-tools: ## Run Go unit tests for ack-build-tools
+	@go test ./prow/jobs/tools/... -count=1
 
 kind-test: ## Run functional tests for SERVICE
 	@AWS_SERVICE=$(AWS_SERVICE) ./scripts/run-e2e-tests.sh
