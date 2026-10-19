@@ -46,8 +46,7 @@
           requests:
             cpu: 1
             memory: "1Gi"
-        # RunSucceeded in ACK/APIChangeNotification is watched by the
-        # ACK-APIChangeNotification alarms (ACKTestInfraCDK).
+        # RunSucceeded in ACK/APIChangeNotification feeds the job's CloudWatch alarms.
         #
         # TODO: file in community instead of ack-private once maintainers trust the
         # findings. Issues stay where they are filed: moving repos re-files every
