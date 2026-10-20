@@ -225,7 +225,12 @@ class Subnets(Bootstrappable):
         """
         # You must delete the subnet before you can delete any of its dependencies
         for subnet in self.subnet_ids:
-            self.ec2_client.delete_subnet(SubnetId=subnet)
+            try:
+                self.ec2_client.delete_subnet(SubnetId=subnet)
+            except self.ec2_client.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] != "InvalidSubnetID.NotFound":
+                    raise
+                logging.info(f"Subnet {subnet} is already deleted; continuing")
 
         super().cleanup()
 
@@ -299,12 +304,19 @@ class SecurityGroup(Bootstrappable):
             )
 
     def cleanup(self):
-        """Deletes the subnets.
+        """Deletes the security group.
         """
         # You must delete the securityGroup before you can delete any of its dependencies
-        self.ec2_client.delete_security_group(
-            GroupId=self.group_id,
-        )
+        try:
+            self.ec2_client.delete_security_group(
+                GroupId=self.group_id,
+            )
+        except self.ec2_client.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] != "InvalidGroup.NotFound":
+                raise
+            logging.info(
+                f"Security group {self.group_id} is already deleted; continuing"
+            )
         super().cleanup()
 
 @dataclass
