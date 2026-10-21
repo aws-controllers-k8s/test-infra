@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"os"
@@ -17,7 +17,7 @@ func TestReadGenerateMetadata(t *testing.T) {
 }
 
 func TestReadGenerateMetadataMissing(t *testing.T) {
-	_, _, err := readGenerateMetadata("../../../testdata/does-not-exist")
+	_, _, err := readGenerateMetadata("testdata/does-not-exist")
 	assert.Error(t, err)
 }
 

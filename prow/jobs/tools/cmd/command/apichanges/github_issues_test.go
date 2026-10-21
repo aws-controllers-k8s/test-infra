@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"context"
@@ -501,7 +501,7 @@ func TestCreateGithubIssueAcceptsLabelsThatStuck(t *testing.T) {
 }
 
 func TestCreateGithubIssueDoesNotRequireLabelsItWasNotAskedFor(t *testing.T) {
-	// Other callers (scan_controllers_cve.go) use their own labels; the check must not fire.
+	// Only apiChangeLabel is checked; an issue filed without it must not trip the check.
 	client := newTestGitHubClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"number": 99}`)
 	}))

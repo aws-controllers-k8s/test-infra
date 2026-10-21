@@ -17,6 +17,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges"
 )
 
 const (
@@ -80,6 +82,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(
 		&OptPushImages, "push-images", "true", "option to push images to ECR or not. accepts only true or false",
 	)
+	rootCmd.AddCommand(apichanges.Command)
 }
 
 func Execute() {

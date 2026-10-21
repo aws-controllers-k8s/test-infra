@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const codegenFixtures = "../../../testdata/codegen_oracle/"
+const codegenFixtures = "testdata/codegen_oracle/"
 
 // codegenFixtureInputs is a controller for the fixture models with a CRD for
 // Widget only.

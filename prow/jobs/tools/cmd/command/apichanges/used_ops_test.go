@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"os"
@@ -60,7 +60,7 @@ func TestScanUsedOpsFailsOnUnreadableFile(t *testing.T) {
 }
 
 func TestScanUsedOpsNoDir(t *testing.T) {
-	got, err := scanUsedOps("../../../testdata/does-not-exist")
+	got, err := scanUsedOps("testdata/does-not-exist")
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }

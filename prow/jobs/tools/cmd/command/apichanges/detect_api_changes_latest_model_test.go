@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package apichanges
 
 import (
 	"context"
@@ -90,7 +90,7 @@ func demoModelPath(version string) string {
 func TestLatestModelSkipsATagWithoutTheModel(t *testing.T) {
 	// A module tag can exist without the model file; fall back to the next tag that has it.
 	requests := withModelTransport(t,
-		map[string]string{demoModelPath("v1.2.0"): "../../../testdata/smithy_basic.json"}, nil)
+		map[string]string{demoModelPath("v1.2.0"): "testdata/smithy_basic.json"}, nil)
 	_ = captureLog(t)
 
 	version, model, found, err := latestModel(context.Background(), t.TempDir(),
@@ -120,7 +120,7 @@ func TestLatestModelStopsAtTheReleaseVersion(t *testing.T) {
 func TestLatestModelDoesNotSkipOtherFailures(t *testing.T) {
 	// Only a 404 means the model is absent; a 500 must not step back to an older model.
 	requests := withModelTransport(t,
-		map[string]string{demoModelPath("v1.2.0"): "../../../testdata/smithy_basic.json"},
+		map[string]string{demoModelPath("v1.2.0"): "testdata/smithy_basic.json"},
 		map[string]int{demoModelPath("v1.3.0"): http.StatusInternalServerError})
 
 	_, _, found, err := latestModel(context.Background(), t.TempDir(),

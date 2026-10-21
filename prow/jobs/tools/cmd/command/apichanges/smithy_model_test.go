@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 
 func loadTestModel(t *testing.T, name string) *SmithyModel {
 	t.Helper()
-	data, err := os.ReadFile("../../../testdata/" + name)
+	data, err := os.ReadFile("testdata/" + name)
 	require.NoError(t, err)
 	m, err := LoadSmithyModel(data)
 	require.NoError(t, err)

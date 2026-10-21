@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"os"
@@ -149,7 +149,7 @@ spec:
 }
 
 func TestReadCRDFieldsNoDir(t *testing.T) {
-	got, status, err := readCRDFields("../../../testdata/does-not-exist")
+	got, status, err := readCRDFields("testdata/does-not-exist")
 	require.NoError(t, err)
 	assert.Empty(t, got)
 	assert.Empty(t, status)

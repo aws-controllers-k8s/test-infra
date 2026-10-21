@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package apichanges
 
 import (
 	"context"
@@ -2634,7 +2634,7 @@ func reconcileIssue(
 			apiChangeLabel,
 			"kind/api-change",
 			fmt.Sprintf("service/%s", service),
-			defaultProwAutoGenLabel,
+			prowAutoGenLabel,
 		}
 		// A create whose labels GitHub dropped leaves an issue the listing cannot
 		// see. Find it first, so a Prow retry labels it (or aborts) instead of

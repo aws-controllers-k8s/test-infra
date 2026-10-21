@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"bytes"
@@ -132,7 +132,7 @@ func TestFetchModelUsesCache(t *testing.T) {
 	cachePath := filepath.Join(cacheDir, "core", "demoservice", "v1.41.5", "demo-service.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(cachePath), 0o755))
 
-	data, err := os.ReadFile("../../../testdata/smithy_basic.json")
+	data, err := os.ReadFile("testdata/smithy_basic.json")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(cachePath, data, 0o644))
 
@@ -178,7 +178,7 @@ func subjects(findings []Finding, class FindingClass) []string {
 func TestFindNewResources(t *testing.T) {
 	baseline := loadTestModel(t, "smithy_basic.json")
 	latest := loadTestModel(t, "smithy_latest.json")
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	got := findNewResources(latest, baseline, in)
@@ -208,7 +208,7 @@ func TestFindNewResourcesMultiRoleOperation(t *testing.T) {
 func TestFindNewOperations(t *testing.T) {
 	baseline := loadTestModel(t, "smithy_basic.json")
 	latest := loadTestModel(t, "smithy_latest.json")
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	got := findNewOperations(latest, baseline, in)
@@ -243,7 +243,7 @@ func TestFindNewOperationsSkipsOperationsPredatingThePin(t *testing.T) {
 	// Same model on both sides: operations older than the pin are not news, even
 	// when uncalled (as sns's ListTopics was).
 	latest := loadTestModel(t, "smithy_latest.json")
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	got := findNewOperations(latest, latest, in)
@@ -299,7 +299,7 @@ func TestNamesIgnoredResourceSparesLongerKnownResources(t *testing.T) {
 }
 
 func TestExposedInCRD(t *testing.T) {
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	// Direct case-insensitive match against the CRD.
@@ -1046,7 +1046,7 @@ func TestConfigLookupsIgnoreKindCase(t *testing.T) {
 func TestFindAddedFields(t *testing.T) {
 	baseline := loadTestModel(t, "smithy_basic.json")
 	latest := loadTestModel(t, "smithy_latest.json")
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	got := findAddedFields(latest, baseline, in)
@@ -1945,7 +1945,7 @@ func TestIssueOutcomeValuesAreDistinct(t *testing.T) {
 }
 
 func TestGetAPINotificationConfig(t *testing.T) {
-	services, configuredCap, err := getAPINotificationServices("../../../jobs_config.yaml")
+	services, configuredCap, err := getAPINotificationServices("../../../../jobs_config.yaml")
 	require.NoError(t, err)
 	// Order matters: it decides which services win when the cap binds.
 	assert.Equal(t, []string{"s3"}, services)
@@ -2423,7 +2423,7 @@ func TestDetectAPIChangesRejectsNonPositiveCap(t *testing.T) {
 
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
 		OptJobsConfigPath, OptMaxOpenIssues)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../jobs_config.yaml", 0
+	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 0
 
 	err := detectAPIChanges(nil, nil)
 	require.ErrorContains(t, err, "--max-open-issues must be positive")
@@ -2434,7 +2434,7 @@ func TestDetectAPIChangesWarnsWhenTheCapDisagreesWithTheConfig(t *testing.T) {
 	// the mismatch must be logged.
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
 		OptJobsConfigPath, OptMaxOpenIssues)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../jobs_config.yaml", 5
+	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 5
 	// Cleared so a token in the environment cannot reach api.github.com.
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -2659,7 +2659,7 @@ func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
 	_ = captureLog(t)
 	defer func(p string, c int, d bool) { OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = p, c, d }(
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun)
-	OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = "../../../jobs_config.yaml", 0, true
+	OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = "../../../../jobs_config.yaml", 0, true
 
 	require.ErrorContains(t, detectAPIChanges(nil, nil), "--max-open-issues must be positive")
 }
@@ -2672,7 +2672,7 @@ func TestDetectAPIChangesRejectsAnOutputDirWithoutDryRun(t *testing.T) {
 	defer func(p string, c int, d bool, o string) {
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun, OptDryRunOutputDir = p, c, d, o
 	}(OptJobsConfigPath, OptMaxOpenIssues, OptDryRun, OptDryRunOutputDir)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../jobs_config.yaml", 1
+	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 1
 	OptDryRun, OptDryRunOutputDir = false, t.TempDir()
 
 	err := detectAPIChanges(nil, nil)

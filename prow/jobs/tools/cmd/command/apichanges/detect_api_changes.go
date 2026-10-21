@@ -11,7 +11,7 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package command
+package apichanges
 
 import (
 	"context"
@@ -29,7 +29,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var detectAPIChangesCMD = &cobra.Command{
+// Command is the detect-api-changes subcommand; the command package registers it.
+var Command = &cobra.Command{
 	Use:   "detect-api-changes",
 	Short: "detect-api-changes - compares AWS API models against ACK controllers and files issues for gaps",
 	RunE:  detectAPIChanges,
@@ -41,18 +42,18 @@ var detectAPIChangesCMD = &cobra.Command{
 const detectAPIChangesRunTimeout = 20 * time.Minute
 
 var (
-	OptControllersRoot string
-	OptMaxOpenIssues   int
-	OptModelCacheDir   string
-	OptDryRun          bool
-	OptDryRunOutputDir string
-	OptMetricsNS       string
-	OptMetricsRegion   string
+	OptJobsConfigPath   string
+	OptGithubIssueOwner string
+	OptGithubIssueRepo  string
+	OptControllersRoot  string
+	OptMaxOpenIssues    int
+	OptModelCacheDir    string
+	OptDryRun           bool
+	OptDryRunOutputDir  string
+	OptMetricsNS        string
+	OptMetricsRegion    string
 )
 
-// dryRunCaveat states what a dry run cannot verify. errCannotLabelIssues is only
-// detected after the POST, so a clean dry run does not prove a real run will file
-// issues that later runs can find.
 const dryRunCaveat = "DRY RUN caveats: nothing was written, so two things stay " +
 	"unverified. Whether the token can label issues — that check runs after the issue " +
 	"is POSTed, by re-reading it, so a dry run cannot reach it and a clean preview does " +
@@ -60,55 +61,54 @@ const dryRunCaveat = "DRY RUN caveats: nothing was written, so two things stay "
 	"would succeed at all: permissions, rate limits, a locked issue."
 
 func init() {
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptJobsConfigPath, "jobs-config-path", "jobs_config.yaml",
 		"path to jobs_config.yaml where jobs configurations are stored",
 	)
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptControllersRoot, "controllers-root", "..",
 		"directory containing the <service>-controller clones",
 	)
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptGithubIssueOwner, "github-issues-owner", "aws-controllers-k8s",
 		"user/org that owns the github repository where the issue will be created",
 	)
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptGithubIssueRepo, "github-issues-repo", "community",
 		"repository where the github issue will be created",
 	)
 	// Defaults to 1, the value that writes least. The ProwJob passes
 	// api_notification_max_open_issues; the cap is not read from jobs_config.yaml
 	// at runtime because only the config-time validator bounds it.
-	detectAPIChangesCMD.PersistentFlags().IntVar(
+	Command.PersistentFlags().IntVar(
 		&OptMaxOpenIssues, "max-open-issues", 1,
 		"maximum number of open ack/api-change-detected issues this tool may hold open",
 	)
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptModelCacheDir, "model-cache-dir", "",
 		"directory for cached AWS API model JSON; defaults to a temp dir",
 	)
 	// Reads still run; only the create, edit and comment writes are suppressed.
-	detectAPIChangesCMD.PersistentFlags().BoolVar(
+	Command.PersistentFlags().BoolVar(
 		&OptDryRun, "dry-run", false,
 		"report what would be filed without creating, updating, or commenting on any issue",
 	)
 	// Stale files from earlier runs are left in place rather than deleted, since
 	// the path is user-supplied; the log names the files each run wrote.
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptDryRunOutputDir, "dry-run-output-dir", "",
 		"with --dry-run, write each service's would-be issue body to <dir>/<service>.md; "+
 			"existing files are left alone, so check the run's log for which ones it wrote",
 	)
 	// Off by default so local and dry runs publish nothing; the ProwJob sets both.
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptMetricsNS, "metrics-namespace", "",
 		"CloudWatch namespace for the RunSucceeded metric; empty publishes nothing",
 	)
-	detectAPIChangesCMD.PersistentFlags().StringVar(
+	Command.PersistentFlags().StringVar(
 		&OptMetricsRegion, "metrics-region", "",
 		"AWS region for the RunSucceeded metric; required with --metrics-namespace",
 	)
-	rootCmd.AddCommand(detectAPIChangesCMD)
 }
 
 func detectAPIChanges(cmd *cobra.Command, args []string) error {

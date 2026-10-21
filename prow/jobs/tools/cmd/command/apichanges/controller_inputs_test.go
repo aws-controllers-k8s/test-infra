@@ -1,4 +1,4 @@
-package command
+package apichanges
 
 import (
 	"testing"
@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const fakeControllerPath = "../../../testdata/fake-controller"
+const fakeControllerPath = "testdata/fake-controller"
 
 func TestReadControllerInputs(t *testing.T) {
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	assert.Equal(t, "fake", in.Service)
@@ -25,7 +25,7 @@ func TestReadControllerInputs(t *testing.T) {
 }
 
 func TestHasCRDIgnoresCase(t *testing.T) {
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	// Kind lookup is case-insensitive (AWS "VpcEndpoint" vs CRD "VPCEndpoint").
@@ -43,12 +43,12 @@ func TestHasCRDIgnoresCase(t *testing.T) {
 }
 
 func TestReadControllerInputsMissingRepo(t *testing.T) {
-	_, err := ReadControllerInputs("../../../testdata", "nope")
+	_, err := ReadControllerInputs("testdata", "nope")
 	assert.Error(t, err)
 }
 
 func TestClassifyOpWithOverrides(t *testing.T) {
-	in, err := ReadControllerInputs("../../../testdata", "fake")
+	in, err := ReadControllerInputs("testdata", "fake")
 	require.NoError(t, err)
 
 	// No override: falls back to name inference.
