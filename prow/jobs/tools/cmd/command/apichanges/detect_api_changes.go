@@ -237,11 +237,6 @@ func runDetectAPIChanges(ctx context.Context) error {
 		log.Printf("WARNING needs a human: %s", warning)
 	}
 
-	// Logged at both ends of the run so the closing tally carries it too.
-	codegenWarning := codeGeneratorReleaseWarning(ctx, client, codeGeneratorVersion)
-	if codegenWarning != "" {
-		log.Printf("WARNING %s", codegenWarning)
-	}
 	log.Printf("deciding what regeneration adds with code-generator %s", codeGeneratorVersion)
 
 	// Shared by every service in the run; see latestVersionCache.
@@ -256,9 +251,6 @@ func runDetectAPIChanges(ctx context.Context) error {
 		OptMaxOpenIssues, openCount, analyze,
 		OptDryRun, OptDryRunOutputDir,
 	)
-	if codegenWarning != "" {
-		log.Printf("WARNING %s", codegenWarning)
-	}
 	return runError(err, OptMaxOpenIssues, skippedAtCap, analysisFailures, writeFailures, OptDryRun)
 }
 

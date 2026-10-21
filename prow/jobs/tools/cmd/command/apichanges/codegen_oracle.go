@@ -14,7 +14,6 @@
 package apichanges
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,21 +22,29 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aquasecurity/go-version/pkg/semver"
 	awssdkmodel "github.com/aws-controllers-k8s/code-generator/pkg/api"
 	ackgenconfig "github.com/aws-controllers-k8s/code-generator/pkg/config"
 	ackmodel "github.com/aws-controllers-k8s/code-generator/pkg/model"
 	acksdk "github.com/aws-controllers-k8s/code-generator/pkg/sdk"
 	"github.com/aws-controllers-k8s/pkg/names"
-	"github.com/google/go-github/v63/github"
 )
 
-// codeGeneratorModule is the module the oracle runs, pinned in go.mod.
+// codeGeneratorModule is the module the oracle runs. The ProwJob replaces the
+// go.mod pin with a clone of code-generator main, which is what controller
+// releases regenerate with; the pin serves local builds and tests.
 const codeGeneratorModule = "github.com/aws-controllers-k8s/code-generator"
+
+// codeGeneratorRef is set at link time (-ldflags -X) to `git describe` of the
+// code-generator clone the ProwJob builds against. A directory replace carries no
+// version, so without it the build info would report the go.mod pin.
+var codeGeneratorRef string
 
 // codeGeneratorVersion is the code-generator version built into this binary, or
 // "unknown" when the build carries no module information.
 var codeGeneratorVersion = func() string {
+	if codeGeneratorRef != "" {
+		return codeGeneratorRef
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
@@ -454,26 +461,4 @@ func notGeneratedDetail(f Finding, crd *codegenCRD) string {
 	}
 	return fmt.Sprintf("%s only by %s, which the generated code does not call: needs a `from:` field or a hook",
 		verb, quoteOps(ops))
-}
-
-// codeGeneratorReleaseWarning returns a warning when code-generator has a release
-// newer than built (the version in this binary), or "" when it does not. The
-// caller makes it once per run; a failure is itself only a warning, as the oracle
-// still runs on one consistent version.
-func codeGeneratorReleaseWarning(ctx context.Context, client *github.Client, built string) string {
-	release, _, err := client.Repositories.GetLatestRelease(ctx, "aws-controllers-k8s", "code-generator")
-	if err != nil {
-		return fmt.Sprintf("unable to check for a newer code-generator release than %s: %s", built, err)
-	}
-	latest := release.GetTagName()
-	ours, errOurs := semver.Parse(strings.TrimPrefix(built, "v"))
-	theirs, errTheirs := semver.Parse(strings.TrimPrefix(latest, "v"))
-	if errOurs != nil || errTheirs != nil {
-		return fmt.Sprintf("unable to compare code-generator %s with the latest release %q", built, latest)
-	}
-	if theirs.GreaterThan(ours) {
-		return fmt.Sprintf("code-generator %s is released but this binary runs %s; bump it in go.mod "+
-			"so the oracle matches what controllers regenerate with", latest, built)
-	}
-	return ""
 }

@@ -1,9 +1,7 @@
 package apichanges
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -375,25 +373,4 @@ func TestParseComparedVersionsAcceptsBothFooters(t *testing.T) {
 		assert.Equal(t, "v1.41.5", baseline, name)
 		assert.Equal(t, "v1.44.0", latest, name)
 	}
-}
-
-func TestCodeGeneratorReleaseWarning(t *testing.T) {
-	serve := func(status int, body string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/repos/aws-controllers-k8s/code-generator/releases/latest", r.URL.Path)
-			w.WriteHeader(status)
-			fmt.Fprint(w, body)
-		}
-	}
-	ctx := context.Background()
-
-	client := newRawTestGitHubClient(t, serve(http.StatusOK, `{"tag_name": "v0.65.0"}`))
-	assert.Contains(t, codeGeneratorReleaseWarning(ctx, client, "v0.64.0"),
-		"code-generator v0.65.0 is released but this binary runs v0.64.0")
-
-	client = newRawTestGitHubClient(t, serve(http.StatusOK, `{"tag_name": "v0.64.0"}`))
-	assert.Empty(t, codeGeneratorReleaseWarning(ctx, client, "v0.64.0"))
-
-	client = newRawTestGitHubClient(t, serve(http.StatusInternalServerError, `{}`))
-	assert.Contains(t, codeGeneratorReleaseWarning(ctx, client, "v0.64.0"), "unable to check")
 }

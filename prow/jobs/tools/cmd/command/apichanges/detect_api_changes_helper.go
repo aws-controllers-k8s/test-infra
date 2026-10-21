@@ -1868,8 +1868,8 @@ func bytesOutsideRegion(body string) int {
 // issueFooter ends every generated region: the comparison line, naming the
 // code-generator that decided what regeneration adds, then the fingerprint
 // marker. It is a function so issueBodyBudget can reserve exactly its length;
-// truncation must never reach the marker. A code-generator bump changes the line,
-// so it silently rewords each open issue once.
+// truncation must never reach the marker. Each new code-generator main commit
+// changes the line, so it silently rewords each open issue once.
 func issueFooter(baselineVersion, latestVersion, fingerprint string) string {
 	return fmt.Sprintf("---\nCompared aws-sdk-go-v2 %s -> %s with code-generator %s\n%s%s -->\n",
 		baselineVersion, latestVersion, codeGeneratorVersion, fingerprintPrefix, fingerprint)
