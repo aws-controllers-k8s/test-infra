@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Config
+from .inline_skills import INLINE_ROLES, INLINE_SCHEMAS
 from .workflow import WorkflowDefinition
 
 
@@ -42,11 +43,15 @@ class SkillsContext:
         return _read(self.root / "skills" / "ack-dev" / "SKILL.md")
 
     def role(self, name: str) -> str:
-        """name in {planner, implementer, reviewer}."""
+        """name in {planner, field-planner, implementer, reviewer, ...}."""
+        if name in INLINE_ROLES:
+            return INLINE_ROLES[name]
         return _read(self.root / "roles" / f"{name}.md")
 
     def schema(self, name: str) -> str:
-        """name in {plan-output, review-output}."""
+        """name in {plan-output, field-plan-output, review-output, ...}."""
+        if name in INLINE_SCHEMAS:
+            return INLINE_SCHEMAS[name]
         return _read(self.root / "roles" / "schemas" / f"{name}.md")
 
     def workflow(self, name: str) -> str:
@@ -109,6 +114,23 @@ scoped-search constraints as the resource planner. Resolve the SDK module with \
 `go list -m` from CONTROLLER_DIR, then inspect only the relevant operation and \
 shape ranges. NEVER scan `/`, `$HOME`, or the whole module cache."""
 
+_FEEDBACK_PLANNER_FRAME = """You are the ACK Feedback Planner. Your sole job is to \
+read pull request review feedback on an existing ACK controller change, classify \
+every feedback item, and produce a plan for the changes it requires. Follow the \
+SOP methodology exactly. Produce the plan document matching the Feedback Plan \
+Output Schema as your final output.
+
+You must NOT:
+- Write any code
+- Modify any files
+- Push, open pull requests, or post comments
+- Plan changes the feedback does not ask for
+
+CONTEXT BUDGET AND SHELL DISCIPLINE: follow the same surgical SDK-reading and \
+scoped-search constraints as the resource planner. Read the pull request diff \
+with `git diff` from CONTROLLER_DIR, never generated files in full. NEVER scan \
+`/`, `$HOME`, or the whole module cache."""
+
 _IMPLEMENTER_FRAME = """You are the ACK Resource Implementer. You take a structured \
 plan or reviewer feedback and produce working code following ACK conventions. \
 Follow the SOP methodology exactly. Your output is working code that builds \
@@ -164,6 +186,7 @@ def _compose(frame: str, sections: dict[str, str]) -> str:
 _PLANNER_FRAMES = {
     "planner": _PLANNER_FRAME,
     "field-planner": _FIELD_PLANNER_FRAME,
+    "feedback-planner": _FEEDBACK_PLANNER_FRAME,
 }
 
 

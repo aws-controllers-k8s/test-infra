@@ -18,6 +18,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from workflows.ack_feedback_workflow import (
+    FeedbackInput,
+    FeedbackOutput,
+    create_ack_feedback_workflow,
+)
 from workflows.ack_field_workflow import (
     FieldAdditionInput,
     FieldAdditionOutput,
@@ -85,14 +90,45 @@ async def run_field_workflow(
     return await workflow.run(workflow_input)
 
 
-def display_workflow_result(result: ResourceAdditionOutput | FieldAdditionOutput):
-    """Display the workflow result in a formatted way."""
-    field_line = f"\nField: {result.field}" if isinstance(result, FieldAdditionOutput) else ""
-    success_status = (
-        "Successfully added field to existing resource"
-        if isinstance(result, FieldAdditionOutput)
-        else "Successfully added resource to controller"
+async def run_feedback_workflow(
+    service: str,
+    resource: str,
+    field: Optional[str] = None,
+    aws_sdk_version: Optional[str] = None,
+    model: str = DEFAULT_MODEL_ID,
+) -> FeedbackOutput:
+    """Run the ACK address-feedback workflow."""
+    workflow_input = FeedbackInput(
+        service=service,
+        resource=resource,
+        field=field,
+        aws_sdk_version=aws_sdk_version,
+        model_id=model,
     )
+    workflow = create_ack_feedback_workflow()
+
+    console.print("[bold green]Starting ACK Address-Feedback Workflow[/bold green]")
+    console.print(f"Service: {service}")
+    console.print(f"Resource: {resource}")
+    if field:
+        console.print(f"Field: {field}")
+    console.print(f"Model: {model}")
+    if aws_sdk_version:
+        console.print(f"AWS SDK Version: {aws_sdk_version}")
+
+    return await workflow.run(workflow_input)
+
+
+def display_workflow_result(result: ResourceAdditionOutput | FieldAdditionOutput | FeedbackOutput):
+    """Display the workflow result in a formatted way."""
+    field = getattr(result, "field", None)
+    field_line = f"\nField: {field}" if field else ""
+    if isinstance(result, FeedbackOutput):
+        success_status = "Addressed pull request review feedback"
+    elif isinstance(result, FieldAdditionOutput):
+        success_status = "Successfully added field to existing resource"
+    else:
+        success_status = "Successfully added resource to controller"
     if result.success:
         console.print(Panel(
             f"[bold green]Workflow Completed Successfully![/bold green]\n\n"
@@ -139,6 +175,11 @@ async def list_available_workflows():
         "Add one field to an existing ACK resource",
         "workflows field-addition --service bedrockagentcorecontrol "
         "--resource AgentRuntime --field targetConfiguration.mcp.connector"
+    )
+    table.add_row(
+        "address-feedback",
+        "Address review feedback on an agent pull request (run by the Prow job)",
+        "workflows address-feedback --service cloudwatch --resource InsightRule"
     )
     
     # Future workflows can be added here
@@ -191,6 +232,21 @@ def main():
         help="AWS SDK Go version (optional, auto-detected if not set)",
     )
     field_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+
+    feedback_parser = subparsers.add_parser(
+        "address-feedback",
+        help="Address review feedback on an agent pull request",
+    )
+    feedback_parser.add_argument("--service", required=True, help="AWS service name (e.g. s3, ec2)")
+    feedback_parser.add_argument("--resource", required=True, help="Resource the pull request changes (e.g. Bucket)")
+    feedback_parser.add_argument("--field", default=None, help="Field the pull request adds, for add-field pull requests")
+    feedback_parser.add_argument("--model", default=DEFAULT_MODEL_ID, help="Bedrock model ID")
+    feedback_parser.add_argument(
+        "--aws-sdk-version",
+        default=None,
+        help="AWS SDK Go version (optional, auto-detected if not set)",
+    )
+    feedback_parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()
     
@@ -218,6 +274,17 @@ def main():
             sys.exit(1)
     elif args.command == "field-addition":
         result = asyncio.run(run_field_workflow(
+            service=args.service,
+            resource=args.resource,
+            field=args.field,
+            aws_sdk_version=args.aws_sdk_version,
+            model=args.model,
+        ))
+        display_workflow_result(result)
+        if not result.success:
+            sys.exit(1)
+    elif args.command == "address-feedback":
+        result = asyncio.run(run_feedback_workflow(
             service=args.service,
             resource=args.resource,
             field=args.field,

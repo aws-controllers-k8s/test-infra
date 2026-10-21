@@ -44,6 +44,7 @@ type options struct {
 	logLevel               string
 
 	allowedTeam        string
+	prAuthor           string
 	s3BucketName       string
 	webhookSecretFile  string
 	workflowConfigPath string
@@ -60,6 +61,10 @@ func (o *options) Validate() error {
 		return fmt.Errorf("allowed-team is required")
 	}
 
+	if o.prAuthor == "" {
+		return fmt.Errorf("pr-author is required")
+	}
+
 	return nil
 }
 
@@ -69,6 +74,7 @@ func gatherOptions() options {
 	fs.IntVar(&o.port, "port", 8888, "Port to listen on.")
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Dry run for testing. Uses API tokens but does not mutate.")
 	fs.StringVar(&o.allowedTeam, "allowed-team", "", "Team that is allowed to trigger workflows.")
+	fs.StringVar(&o.prAuthor, "pr-author", "", "GitHub login of the account that authors agent PRs. Only reviews on PRs by this author are handled.")
 	fs.StringVar(&o.s3BucketName, "s3-bucket-name", "", "The name of the S3 bucket where ProwJob logs are stored.")
 	fs.StringVar(&o.webhookSecretFile, "hmac-secret-file", "/etc/webhook/hmac", "Path to the file containing the GitHub HMAC secret.")
 	fs.StringVar(&o.workflowConfigPath, "workflow-config-path", "/etc/workflows/workflows.yaml", "Path to the workflow config file.")
@@ -126,6 +132,7 @@ func main() {
 		githubClient,
 		secret.GetTokenGenerator(o.webhookSecretFile),
 		o.allowedTeam,
+		o.prAuthor,
 		o.s3BucketName,
 	)
 	if err != nil {

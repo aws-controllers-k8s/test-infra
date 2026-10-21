@@ -175,7 +175,7 @@ def build_agents(cfg: Config) -> AgentSet:
         cfg,
         name="ack-pr-writer",
         model_id=cfg.reviewer_model,
-        system_prompt=_pr_writer_prompt(),
+        system_prompt=cfg.workflow.pr_writer_prompt or _pr_writer_prompt(),
         tools=[],
     )
 
