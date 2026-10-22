@@ -230,7 +230,7 @@ func buildImages(tagsToBuild map[string]string, buildArgs *BuildConfig, imagesDi
 		if postfix == "build-prow-images" ||
 			postfix == "upgrade-go-version" ||
 			postfix == "scan-controllers-cve" ||
-			// Like the three above, Dockerfile.detect-api-changes builds
+			// Like the three above, Dockerfile.detect-api-changes (#1136) builds
 			// ./prow/jobs/tools/cmd and needs the repo root's go.mod.
 			postfix == "detect-api-changes" {
 			context = "."

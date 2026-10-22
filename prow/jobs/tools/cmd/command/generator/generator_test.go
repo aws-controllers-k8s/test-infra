@@ -147,9 +147,13 @@ func TestValidateAPINotificationServicesDirectly(t *testing.T) {
 }
 
 func TestLoadConfigReadsAndValidatesAPINotificationFields(t *testing.T) {
-	// Pins the yaml tags against the real file; struct-literal tests would miss a tag typo.
+	// Pins the yaml tags by reading a file; struct-literal tests would miss a tag typo.
 	// The loadConfig wiring is covered by TestLoadConfigRejects*.
-	config, err := loadConfig("../../../../jobs_config.yaml")
+	path := filepath.Join(t.TempDir(), "jobs_config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"aws_services:\n  - s3\n  - ecr\napi_notification_services:\n  - s3\n"+
+			"api_notification_max_open_issues: 1\n"), 0o644))
+	config, err := loadConfig(path)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"s3"}, config.APINotificationServices)
 	assert.Equal(t, 1, config.APINotificationMaxOpenIssues)
