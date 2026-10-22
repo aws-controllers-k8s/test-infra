@@ -77,6 +77,7 @@ aws_services:
 - ram
 - rds
 - recyclebin
+- redshift
 - route53
 - route53resolver
 - s3

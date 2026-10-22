@@ -1,6 +1,6 @@
 # Matches go_version in build_config.yaml (CI passes it via --build-arg); the default
 # only affects local builds.
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.2
 
 # The job builds ack-build-tools at run time against code-generator main (see
 # detect-api-changes.tpl), so the image carries the Go toolchain rather than a binary.
