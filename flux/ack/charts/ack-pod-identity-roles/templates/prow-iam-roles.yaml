@@ -335,6 +335,20 @@ spec:
           }
         ]
       }
+    # Read-only ECR access for the bump-prow-patch-revision periodic. Before bumping, it checks
+    # that the current revision reached every mirrored repository, and picks a revision none of
+    # them has used yet. prow-mirror-role does the pushing.
+    ECRMirrorRead: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["ecr:ListImages"],
+            "Resource": "arn:aws:ecr:{{ $region }}:{{ $accountId }}:repository/prow/*"
+          }
+        ]
+      }
 ---
 # Workflow Runner Role - used by agent workflow job pods in test-pods
 # to mount the SecretProviderClass via the Secrets Store CSI driver.

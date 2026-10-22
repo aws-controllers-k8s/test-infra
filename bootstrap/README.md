@@ -155,7 +155,8 @@ Both the version and the patch revision live in a single ConfigMap
 
 # Re-patch the CURRENT Prow version against newly published OS security
 # updates, without moving to a new upstream release. Increments
-# PROW_PATCH_REVISION, which is what makes the mirror Job rebuild.
+# PROW_PATCH_REVISION, which is what makes the mirror Job rebuild, and
+# changes nothing else (no version, tools or CRD update).
 ./scripts/upgrade-prow.sh --bump-patch
 
 # Commit and push
@@ -179,11 +180,40 @@ The mirror Job refuses to publish an image whose base has no `apk`, rather than
 silently shipping it unpatched. If upstream moves a component to a distroless
 base, that component will fail loudly and needs a different patch strategy.
 
+### Automatic OS patching
+
+The `bump-prow-patch-revision` periodic (every other day, 16:00 UTC) does the
+`--bump-patch` flow unattended: it opens a PR from
+`ack-bot/prow-patch-revision-<n>` and merges it itself, without `/lgtm`. It
+never upgrades Prow; moving `PROW_VERSION`, `TOOLS_VERSION` or the CRD stays a
+manual, reviewed change.
+
+What bounds the auto-merge (`scripts/bump-prow-patch-revision.sh`):
+- It only merges PRs its own token opened from that branch prefix.
+- `scripts/verify-prow-patch-revision.sh` must pass against the PR's head commit
+  as GitHub has it: a single commit on the current base that changes the
+  `prowPatchRevision` line in the three values files, nothing else, to a
+  higher number. The job runs the base branch's copy of the verifier, never
+  the PR's.
+- The merge is pinned to the verified commit and skipped if the base branch
+  moved since verification.
+- It won't bump until the current revision is in every mirrored ECR
+  repository, so a failed rebuild turns the job red instead of being stacked on.
+
+The next revision is one above the highest `-ack.<n>` in ECR, not one above git.
+
+- **Pause:** remove the periodic. A `do-not-merge/hold` on an open bot PR also
+  stops it, but the job usually merges in the same run that opens one.
+- **Roll back:** revert the bump. The previous `-ack.<n>` images are still in
+  ECR, so the mirror skips rebuilding and Prow returns to them. Pause the
+  periodic too, or it rebuilds the same packages on its next run.
+
 ### Reacting to an image vulnerability report
 
 **Mirrored Prow components** (`.../prow/<component>`) are almost always outdated
 OS packages in the upstream base image, not a Prow defect. Bumping the Prow
-version alone usually does **not** fix them. Run
+version alone usually does **not** fix them. The `bump-prow-patch-revision`
+periodic picks them up within two days; to act sooner, trigger that job or run
 `./scripts/upgrade-prow.sh --bump-patch`, push, then force-reconcile
 `prow-mirror`.
 

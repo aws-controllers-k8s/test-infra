@@ -13,12 +13,18 @@
 # Prow version against newly published OS security updates without moving to a
 # new upstream release.
 #
+# --bump-patch changes PROW_PATCH_REVISION and nothing else. It leaves the ProwJob
+# CRD alone, because the CRD is fetched from upstream main and so belongs with a
+# Prow upgrade. The bump-prow-patch-revision periodic relies on this.
+#
 # Usage:
 #   ./scripts/upgrade-prow.sh              # auto-detect latest tag
 #   ./scripts/upgrade-prow.sh <tag>        # use a specific tag
 #   ./scripts/upgrade-prow.sh --dry-run    # show what would change
 #   ./scripts/upgrade-prow.sh --crd-only   # only upgrade the CRD
 #   ./scripts/upgrade-prow.sh --bump-patch # re-patch current version (OS updates)
+#   ./scripts/upgrade-prow.sh --bump-patch --patch-revision=<n>
+#                                          # same, to revision <n> instead of +1
 #
 # Requires: curl, yq
 # Optional: crane (faster tag detection), kubectl (CRD validation)
@@ -56,18 +62,34 @@ write_version() {
   done
   case "$key" in
     PROW_VERSION)
-      yq -i ".imageMirror.prowVersion = \"${val}\"" "$CONFIG_VALUES"
-      yq -i ".prowVersion = \"${val}\"" "$JOBS_VALUES"
-      yq -i ".prowVersion = \"${val}\"" "$MIRROR_VALUES" ;;
+      set_value "$CONFIG_VALUES" .imageMirror.prowVersion "$val"
+      set_value "$JOBS_VALUES" .prowVersion "$val"
+      set_value "$MIRROR_VALUES" .prowVersion "$val" ;;
     TOOLS_VERSION)
       # prow-config does not carry toolsVersion; only jobs and mirror consume it
-      yq -i ".toolsVersion = \"${val}\"" "$JOBS_VALUES"
-      yq -i ".toolsVersion = \"${val}\"" "$MIRROR_VALUES" ;;
+      set_value "$JOBS_VALUES" .toolsVersion "$val"
+      set_value "$MIRROR_VALUES" .toolsVersion "$val" ;;
     PROW_PATCH_REVISION)
-      yq -i ".imageMirror.prowPatchRevision = \"${val}\"" "$CONFIG_VALUES"
-      yq -i ".prowPatchRevision = \"${val}\"" "$JOBS_VALUES"
-      yq -i ".prowPatchRevision = \"${val}\"" "$MIRROR_VALUES" ;;
+      set_value "$CONFIG_VALUES" .imageMirror.prowPatchRevision "$val"
+      set_value "$JOBS_VALUES" .prowPatchRevision "$val"
+      set_value "$MIRROR_VALUES" .prowPatchRevision "$val" ;;
   esac
+}
+
+# set_value <file> <yq path> <value>: rewrites the one line holding <path> and
+# nothing else. Not `yq -i`: some yq versions (e.g. v4.52) drop every blank line
+# in the file, turning a one-line bump into a reformat that
+# verify-prow-patch-revision.sh rejects. yq still reads the result back.
+set_value() {
+  local file="$1" path="$2" val="$3" key indent n
+  key="${path##*.}"
+  # Two spaces per level below the root: .a.b is "  b:".
+  indent=$(printf '%*s' $(( 2 * ($(tr -cd . <<< "$path" | wc -c) - 1) )) '')
+  [[ "$val" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ERROR: refusing to write unexpected value '$val'" >&2; exit 1; }
+  n=$(grep -cE "^${indent}${key}: \"[^\"]*\"$" "$file" || true)
+  [[ "$n" == "1" ]] || { echo "ERROR: expected one '${indent}${key}: \"...\"' line in $file, found $n" >&2; exit 1; }
+  sed -i -E "s/^(${indent}${key}: )\"[^\"]*\"$/\1\"${val}\"/" "$file"
+  [[ "$(yq "$path" "$file")" == "$val" ]] || { echo "ERROR: $path in $file did not read back as $val" >&2; exit 1; }
 }
 CRD_FILE="$REPO_ROOT/flux/prow/crds/prowjob_customresourcedefinition.yaml"
 CRD_UPSTREAM="https://raw.githubusercontent.com/kubernetes-sigs/prow/main/config/prow/cluster/prowjob-crd/prowjob_customresourcedefinition.yaml"
@@ -77,6 +99,7 @@ CHART_FILE="$REPO_ROOT/prow/config/Chart.yaml"
 DRY_RUN=false
 CRD_ONLY=false
 BUMP_PATCH=false
+PATCH_REVISION=""
 TARGET_TAG=""
 
 for arg in "$@"; do
@@ -84,8 +107,9 @@ for arg in "$@"; do
     --dry-run)    DRY_RUN=true ;;
     --crd-only)   CRD_ONLY=true ;;
     --bump-patch) BUMP_PATCH=true ;;
+    --patch-revision=*) PATCH_REVISION="${arg#*=}" ;;
     --help|-h)
-      echo "Usage: $0 [--dry-run] [--crd-only] [--bump-patch] [<tag>]"
+      echo "Usage: $0 [--dry-run] [--crd-only] [--bump-patch [--patch-revision=<n>]] [<tag>]"
       echo ""
       echo "Upgrades Prow version and CRD."
       echo ""
@@ -93,7 +117,11 @@ for arg in "$@"; do
       echo "  --dry-run     Show what would change without modifying files"
       echo "  --crd-only    Only upgrade the ProwJob CRD"
       echo "  --bump-patch  Increment PROW_PATCH_REVISION to rebuild the current"
-      echo "                Prow version against new OS security updates"
+      echo "                Prow version against new OS security updates. Changes"
+      echo "                nothing else: no version, tools or CRD update"
+      echo "  --patch-revision=<n>"
+      echo "                With --bump-patch, set the revision to <n> (must be"
+      echo "                greater than the current one) instead of adding 1"
       echo "  <tag>         Specific image tag (e.g., v20260519-c47e31ece)"
       exit 0
       ;;
@@ -104,6 +132,25 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "$BUMP_PATCH" == "true" && -n "$TARGET_TAG" ]]; then
+  echo "error: --bump-patch re-patches the pinned version and takes no tag" >&2
+  exit 1
+fi
+if [[ "$BUMP_PATCH" == "true" && "$CRD_ONLY" == "true" ]]; then
+  echo "error: --bump-patch and --crd-only are mutually exclusive" >&2
+  exit 1
+fi
+if [[ -n "$PATCH_REVISION" ]]; then
+  if [[ "$BUMP_PATCH" != "true" ]]; then
+    echo "error: --patch-revision requires --bump-patch" >&2
+    exit 1
+  fi
+  if [[ ! "$PATCH_REVISION" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: --patch-revision must be a positive integer, got '$PATCH_REVISION'" >&2
+    exit 1
+  fi
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Version upgrade
@@ -242,7 +289,14 @@ if [[ "$CRD_ONLY" == "false" ]]; then
   # guarantees a tag that does not exist yet, so every image gets rebuilt and
   # repatched. Cost is rebuilding images whose upstream tag did not move, which
   # is a fresh patch rather than a regression.
-  if [[ "$VERSION_CHANGED" == "true" || "$BUMP_PATCH" == "true" ]]; then
+  if [[ -n "$PATCH_REVISION" ]]; then
+    if (( 10#$PATCH_REVISION <= 10#$CURRENT_REV )); then
+      echo "error: --patch-revision=$PATCH_REVISION must be greater than the current $CURRENT_REV" >&2
+      exit 1
+    fi
+    TARGET_REV="$PATCH_REVISION"
+    REV_REASON="--patch-revision requested"
+  elif [[ "$VERSION_CHANGED" == "true" || "$BUMP_PATCH" == "true" ]]; then
     TARGET_REV=$((CURRENT_REV + 1))
     if [[ "$VERSION_CHANGED" == "true" ]]; then
       REV_REASON="upstream version changed"
@@ -269,6 +323,13 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # CRD upgrade
 # ─────────────────────────────────────────────────────────────────────────────
+
+if [[ "$BUMP_PATCH" == "true" ]]; then
+  echo "Leaving the ProwJob CRD alone (--bump-patch never moves Prow)."
+  echo ""
+  echo "Done. Review with: git diff"
+  exit 0
+fi
 
 echo "Upgrading ProwJob CRD..."
 
