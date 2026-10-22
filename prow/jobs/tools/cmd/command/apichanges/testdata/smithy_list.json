@@ -1,0 +1,31 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "com.amazonaws.listdemo#PutRulesRequest": {
+      "type": "structure",
+      "members": {
+        "BucketName": {"target": "smithy.api#String"},
+        "Rules": {"target": "com.amazonaws.listdemo#RuleList"}
+      }
+    },
+    "com.amazonaws.listdemo#RuleList": {
+      "type": "list",
+      "member": {"target": "com.amazonaws.listdemo#Rule"}
+    },
+    "com.amazonaws.listdemo#Rule": {
+      "type": "structure",
+      "members": {
+        "Prefix": {"target": "smithy.api#String"},
+        "Status": {"target": "smithy.api#String"},
+        "Tier": {"target": "com.amazonaws.listdemo#TierEnum"}
+      }
+    },
+    "com.amazonaws.listdemo#TierEnum": {
+      "type": "enum",
+      "members": {
+        "STANDARD": {"target": "smithy.api#Unit", "traits": {"smithy.api#enumValue": "standard"}},
+        "ARCHIVE": {"target": "smithy.api#Unit", "traits": {"smithy.api#enumValue": "archive"}}
+      }
+    }
+  }
+}

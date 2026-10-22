@@ -1,0 +1,96 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "com.amazonaws.widgets#Widgets": {
+      "type": "service",
+      "version": "2024-01-01",
+      "operations": [
+        {"target": "com.amazonaws.widgets#CreateWidget"},
+        {"target": "com.amazonaws.widgets#DescribeWidget"},
+        {"target": "com.amazonaws.widgets#DeleteWidget"}
+      ],
+      "traits": {
+        "aws.api#service": {"sdkId": "Widgets"},
+        "aws.protocols#awsJson1_1": {},
+        "smithy.api#documentation": "<p>Widgets.</p>"
+      }
+    },
+    "com.amazonaws.widgets#CreateWidget": {
+      "type": "operation",
+      "input": {"target": "com.amazonaws.widgets#CreateWidgetRequest"},
+      "output": {"target": "com.amazonaws.widgets#CreateWidgetResponse"}
+    },
+    "com.amazonaws.widgets#DescribeWidget": {
+      "type": "operation",
+      "input": {"target": "com.amazonaws.widgets#DescribeWidgetRequest"},
+      "output": {"target": "com.amazonaws.widgets#DescribeWidgetResponse"}
+    },
+    "com.amazonaws.widgets#DeleteWidget": {
+      "type": "operation",
+      "input": {"target": "com.amazonaws.widgets#DeleteWidgetRequest"},
+      "output": {"target": "com.amazonaws.widgets#DeleteWidgetResponse"}
+    },
+    "com.amazonaws.widgets#CreateWidgetRequest": {
+      "type": "structure",
+      "members": {
+        "Name": {"target": "smithy.api#String"},
+        "Type": {"target": "smithy.api#String"},
+        "Config": {"target": "com.amazonaws.widgets#WidgetConfig"},
+        "SubnetId": {"target": "smithy.api#String"}
+      }
+    },
+    "com.amazonaws.widgets#CreateWidgetResponse": {
+      "type": "structure",
+      "members": {
+        "WidgetArn": {"target": "smithy.api#String"},
+        "State": {"target": "smithy.api#String"}
+      }
+    },
+    "com.amazonaws.widgets#DescribeWidgetRequest": {
+      "type": "structure",
+      "members": {
+        "Name": {"target": "smithy.api#String"}
+      }
+    },
+    "com.amazonaws.widgets#DescribeWidgetResponse": {
+      "type": "structure",
+      "members": {
+        "Widget": {"target": "com.amazonaws.widgets#WidgetDetail"}
+      }
+    },
+    "com.amazonaws.widgets#WidgetDetail": {
+      "type": "structure",
+      "members": {
+        "Name": {"target": "smithy.api#String"},
+        "State": {"target": "smithy.api#String"}
+      }
+    },
+    "com.amazonaws.widgets#DeleteWidgetRequest": {
+      "type": "structure",
+      "members": {
+        "Name": {"target": "smithy.api#String"}
+      }
+    },
+    "com.amazonaws.widgets#DeleteWidgetResponse": {
+      "type": "structure",
+      "members": {}
+    },
+    "com.amazonaws.widgets#WidgetConfig": {
+      "type": "structure",
+      "members": {
+        "Size": {"target": "smithy.api#Integer"},
+        "Labels": {"target": "com.amazonaws.widgets#LabelList"}
+      }
+    },
+    "com.amazonaws.widgets#LabelList": {
+      "type": "list",
+      "member": {"target": "com.amazonaws.widgets#Label"}
+    },
+    "com.amazonaws.widgets#Label": {
+      "type": "structure",
+      "members": {
+        "Key": {"target": "smithy.api#String"}
+      }
+    }
+  }
+}

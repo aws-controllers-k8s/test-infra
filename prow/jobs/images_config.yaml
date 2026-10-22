@@ -7,6 +7,7 @@ images:
     controller-release-tag: prow-controller-release-tag-0.0.38
     deploy: prow-deploy-0.0.49
     deploy-docs: prow-deploy-docs-0.0.18
+    detect-api-changes: prow-detect-api-changes-0.0.1
     docs: prow-docs-0.0.43
     integration-test: prow-integration-0.0.61
     kubectl: prow-kubectl-0.0.6

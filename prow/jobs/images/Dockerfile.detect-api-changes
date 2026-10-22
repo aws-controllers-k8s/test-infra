@@ -1,0 +1,30 @@
+# Matches go_version in build_config.yaml (CI passes it via --build-arg); the default
+# only affects local builds.
+ARG GO_VERSION=1.27.3
+
+# The job builds ack-build-tools at run time against code-generator main (see
+# detect-api-changes.tpl), so the image carries the Go toolchain rather than a binary.
+FROM public.ecr.aws/docker/library/golang:${GO_VERSION}-alpine
+
+# Patch base-image CVEs, as the sibling Dockerfiles do.
+RUN apk -U upgrade --no-cache
+
+RUN apk add --no-cache ca-certificates git
+
+ARG GOPROXY=https://proxy.golang.org|direct
+ENV GOPROXY=${GOPROXY}
+
+# Outside GOPATH, which Prow sets to /home/prow/go, so the job finds the warm
+# caches. World-writable in case the pod runs as another user.
+ENV GOMODCACHE=/go/pkg/mod \
+    GOCACHE=/go/cache \
+    CGO_ENABLED=0
+
+# Warm both caches with the pinned build, so a run only fetches and compiles what
+# code-generator main changed.
+WORKDIR /src
+COPY . .
+RUN go build -o /dev/null ./prow/jobs/tools/cmd \
+    && rm -rf /src \
+    && chmod -R a+rwX /go
+WORKDIR /
