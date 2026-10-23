@@ -16,4 +16,4 @@ region: ""
 # never be reset. PROW_VERSION and TOOLS_VERSION move independently but share it.
 prowVersion: "v20260908-104d452f4"
 toolsVersion: "v20260729-f66136c16c"
-prowPatchRevision: "2"
+prowPatchRevision: "3"

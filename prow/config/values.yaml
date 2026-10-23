@@ -92,7 +92,7 @@ imageMirror:
   accountId: ""
   region: ""
   prowVersion: "v20260908-104d452f4"
-  prowPatchRevision: "2"
+  prowPatchRevision: "3"
 
 # Prow component images. EMPTY MEANS COMPOSED from imageMirror above; set one to override it
 # outright, which is what the Flux HelmRelease does for every component.
