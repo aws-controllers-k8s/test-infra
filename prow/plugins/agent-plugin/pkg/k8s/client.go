@@ -25,6 +25,8 @@ import (
 type Client interface {
 	// ProwJob operations
 	SubmitProwJob(ctx context.Context, prowJob *ProwJob, namespace string) error
+	// ListProwJobs returns the ProwJobs in namespace that match labelSelector.
+	ListProwJobs(ctx context.Context, namespace string, labelSelector string) ([]ProwJob, error)
 }
 
 // GetProwJobGVR returns the GroupVersionResource for ProwJobs

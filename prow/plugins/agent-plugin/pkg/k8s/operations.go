@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"log"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -60,6 +62,31 @@ func (c *k8sClient) SubmitProwJob(ctx context.Context, prowJob *ProwJob, namespa
 	log.Printf("Successfully submitted ProwJob: name=%s, namespace=%s",
 		prowJob.Name, namespace)
 	return nil
+}
+
+// ListProwJobs lists the ProwJobs in namespace that match labelSelector. It
+// reads from the API server rather than a cache, so a job submitted a moment
+// ago is included.
+func (c *k8sClient) ListProwJobs(ctx context.Context, namespace string, labelSelector string) ([]ProwJob, error) {
+	if c.dynamicClient == nil {
+		return nil, fmt.Errorf("kubernetes client not initialized")
+	}
+
+	list, err := c.dynamicClient.Resource(GetProwJobGVR()).Namespace(namespace).List(
+		ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ProwJobs: %w", err)
+	}
+
+	jobs := make([]ProwJob, 0, len(list.Items))
+	for i := range list.Items {
+		var job ProwJob
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(list.Items[i].Object, &job); err != nil {
+			return nil, fmt.Errorf("failed to convert ProwJob %s: %w", list.Items[i].GetName(), err)
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
 }
 
 // prowJobToUnstructured converts a ProwJob to unstructured format for dynamic client

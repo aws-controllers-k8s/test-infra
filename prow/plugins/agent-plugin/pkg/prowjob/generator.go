@@ -28,6 +28,14 @@ import (
 	"github.com/aws-controllers-k8s/test-infra/experimental/prow/pkg/k8s"
 )
 
+// Labels set on every generated ProwJob, used to select a workflow's jobs.
+const (
+	WorkflowTypeLabel = "workflow-type"
+	OrgLabel          = "prow.k8s.io/refs.org"
+	RepoLabel         = "prow.k8s.io/refs.repo"
+	IssueNumberLabel  = "workflow-agent/issue-number"
+)
+
 // Generator creates ProwJobs for workflows
 type Generator interface {
 	CreateWorkflowProwJob(
@@ -142,14 +150,17 @@ func (g *DefaultGenerator) CreateWorkflowProwJob(
 			Name:      jobName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				"workflow-type":          workflowName,
+				WorkflowTypeLabel:        workflowName,
 				"triggered-by":           "workflow-agent",
 				"prow.k8s.io/type":       "periodic",
 				"prow.k8s.io/job":        fmt.Sprintf("agent-workflow-%s", workflowName),
-				"prow.k8s.io/refs.org":   repo.Owner.Login,
-				"prow.k8s.io/refs.repo":  repo.Name,
+				OrgLabel:                 repo.Owner.Login,
+				RepoLabel:                repo.Name,
 				"created-by-prow":        "true", // Required label by Prow
 				"app.kubernetes.io/name": fmt.Sprintf("agent-workflow-%s", workflowName),
+				// Lets the plugin find the jobs started for one issue or PR,
+				// e.g. to allow one address-feedback run per PR at a time.
+				IssueNumberLabel: strconv.Itoa(issue.Number),
 			},
 			Annotations: map[string]string{
 				"workflow-agent/workflow-name": workflowName,

@@ -92,6 +92,9 @@ class Config:
     max_impl_iterations: int = DEFAULT_MAX_IMPL_ITERATIONS
     max_replan_attempts: int = DEFAULT_MAX_REPLAN_ATTEMPTS
     max_e2e_fix_attempts: int = DEFAULT_MAX_E2E_FIX_ATTEMPTS
+    # Values of workflow.context_env, read from the environment the job script
+    # prepared. Shown to every role in the task context.
+    inputs: dict[str, str] = dataclass_field(default_factory=dict)
     extra: dict = dataclass_field(default_factory=dict)
 
     @classmethod
@@ -114,6 +117,7 @@ class Config:
         region: str | None = None,
         aws_sdk_go_version: str | None = None,
         run_e2e: bool = False,
+        inputs: dict[str, str] | None = None,
     ) -> "Config":
         """Build a Config, filling unset values from env vars then defaults.
 
@@ -174,7 +178,19 @@ class Config:
             region=region or _first_env("AWS_REGION", "AWS_DEFAULT_REGION") or DEFAULT_REGION,
             aws_sdk_go_version=aws_sdk_go_version or _first_env("AWS_SDK_GO_VERSION"),
             run_e2e=run_e2e,
+            inputs={
+                name: (inputs or {}).get(name) or os.environ.get(name, "")
+                for name in workflow.context_env
+            },
         )
+
+    def input_problems(self) -> list[str]:
+        """Return the workflow's context_env inputs that are not set."""
+        return [
+            f"required workflow input {name} is not set"
+            for name in self.workflow.context_env
+            if not self.inputs.get(name)
+        ]
 
     def validate_paths(self) -> list[str]:
         """Return a list of human-readable problems with the resolved paths.
