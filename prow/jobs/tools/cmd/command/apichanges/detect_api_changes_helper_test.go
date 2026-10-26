@@ -1944,11 +1944,28 @@ func TestIssueOutcomeValuesAreDistinct(t *testing.T) {
 	assert.Equal(t, issueOutcome(0), issueOutcomeNone)
 }
 
+// writeTestJobsConfig writes a minimal jobs_config.yaml, so tests don't break
+// when the real file's service list or cap changes.
+func writeTestJobsConfig(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "jobs_config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`aws_services:
+- s3
+- ecr
+- iam
+api_notification_services:
+- s3
+- iam
+api_notification_max_open_issues: 1
+`), 0o644))
+	return path
+}
+
 func TestGetAPINotificationConfig(t *testing.T) {
-	services, configuredCap, err := getAPINotificationServices("../../../../jobs_config.yaml")
+	services, configuredCap, err := getAPINotificationServices(writeTestJobsConfig(t))
 	require.NoError(t, err)
 	// Order matters: it decides which services win when the cap binds.
-	assert.Equal(t, []string{"s3"}, services)
+	assert.Equal(t, []string{"s3", "iam"}, services)
 	// Returned only so the command can warn when the flag disagrees with it.
 	assert.Equal(t, 1, configuredCap)
 }
@@ -2423,7 +2440,7 @@ func TestDetectAPIChangesRejectsNonPositiveCap(t *testing.T) {
 
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
 		OptJobsConfigPath, OptMaxOpenIssues)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 0
+	OptJobsConfigPath, OptMaxOpenIssues = writeTestJobsConfig(t), 0
 
 	err := detectAPIChanges(nil, nil)
 	require.ErrorContains(t, err, "--max-open-issues must be positive")
@@ -2434,7 +2451,7 @@ func TestDetectAPIChangesWarnsWhenTheCapDisagreesWithTheConfig(t *testing.T) {
 	// the mismatch must be logged.
 	defer func(p string, c int) { OptJobsConfigPath, OptMaxOpenIssues = p, c }(
 		OptJobsConfigPath, OptMaxOpenIssues)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 5
+	OptJobsConfigPath, OptMaxOpenIssues = writeTestJobsConfig(t), 5
 	// Cleared so a token in the environment cannot reach api.github.com.
 	t.Setenv("GITHUB_TOKEN", "")
 
@@ -2659,7 +2676,7 @@ func TestDryRunStillRejectsANonPositiveCap(t *testing.T) {
 	_ = captureLog(t)
 	defer func(p string, c int, d bool) { OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = p, c, d }(
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun)
-	OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = "../../../../jobs_config.yaml", 0, true
+	OptJobsConfigPath, OptMaxOpenIssues, OptDryRun = writeTestJobsConfig(t), 0, true
 
 	require.ErrorContains(t, detectAPIChanges(nil, nil), "--max-open-issues must be positive")
 }
@@ -2672,7 +2689,7 @@ func TestDetectAPIChangesRejectsAnOutputDirWithoutDryRun(t *testing.T) {
 	defer func(p string, c int, d bool, o string) {
 		OptJobsConfigPath, OptMaxOpenIssues, OptDryRun, OptDryRunOutputDir = p, c, d, o
 	}(OptJobsConfigPath, OptMaxOpenIssues, OptDryRun, OptDryRunOutputDir)
-	OptJobsConfigPath, OptMaxOpenIssues = "../../../../jobs_config.yaml", 1
+	OptJobsConfigPath, OptMaxOpenIssues = writeTestJobsConfig(t), 1
 	OptDryRun, OptDryRunOutputDir = false, t.TempDir()
 
 	err := detectAPIChanges(nil, nil)
