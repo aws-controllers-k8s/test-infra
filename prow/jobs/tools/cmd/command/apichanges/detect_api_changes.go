@@ -38,7 +38,7 @@ var Command = &cobra.Command{
 
 // detectAPIChangesRunTimeout bounds one run. It is below the ProwJob's decoration
 // timeout (detect-api-changes.tpl) so a stalled run fails with this tool's own
-// error and tally, and with the grace period it fits inside the 30m retry interval.
+// error and tally.
 const detectAPIChangesRunTimeout = 20 * time.Minute
 
 var (
