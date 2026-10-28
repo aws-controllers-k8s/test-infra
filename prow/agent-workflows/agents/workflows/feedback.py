@@ -64,7 +64,9 @@ _LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 
 # Pagination is not followed. Pull requests with more than 100 reviews,
 # threads or conversation comments are not expected for agent pull requests;
-# `last` keeps the newest ones if that ever happens.
+# `last` keeps the newest ones if that ever happens. Thread comments use
+# `first` to preserve their opening context, and render_feedback refuses to
+# process a thread when totalCount shows that its context was truncated.
 QUERY = """
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -88,6 +90,7 @@ query($owner: String!, $name: String!, $number: Int!) {
           line
           originalLine
           comments(first: 100) {
+            totalCount
             nodes {
               author { __typename login }
               body
@@ -208,7 +211,14 @@ def render_feedback(
     for thread in threads:
         if thread.get("isResolved"):
             continue
-        thread_comments = (thread.get("comments") or {}).get("nodes") or []
+        comments_connection = thread.get("comments") or {}
+        thread_comments = comments_connection.get("nodes") or []
+        if comments_connection.get("totalCount", len(thread_comments)) > len(thread_comments):
+            location = thread.get("path") or thread.get("id") or "unknown"
+            raise RuntimeError(
+                f"review thread {location} has more than 100 comments; "
+                "refusing to act on truncated feedback"
+            )
         kept = [
             (login, c)
             for c in thread_comments
@@ -269,7 +279,7 @@ def fetch_pull_request(owner: str, repo: str, number: int) -> dict[str, Any]:
             "-f", f"name={repo}",
             "-F", f"number={number}",
         ],
-        capture_output=True,
+        stdout=subprocess.PIPE,
         text=True,
         check=True,
         timeout=120,
@@ -305,8 +315,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     # The agent's own review comments are context, never feedback to act on.
     team.discard(pr_author)
 
-    pr = fetch_pull_request(args.owner, args.repo, args.number)
-    feedback = render_feedback(pr, team, pr_author, args.review_id)
+    try:
+        pr = fetch_pull_request(args.owner, args.repo, args.number)
+        feedback = render_feedback(pr, team, pr_author, args.review_id)
+    except (json.JSONDecodeError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f"feedback.py: {exc}", file=sys.stderr)
+        return 1
     Path(args.output).write_text(feedback.markdown)
     if args.targets_output:
         Path(args.targets_output).write_text(json.dumps(feedback.thread_ids, indent=2) + "\n")

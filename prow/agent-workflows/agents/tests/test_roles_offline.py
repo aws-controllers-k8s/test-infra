@@ -566,6 +566,16 @@ def test_feedback_collection():
          "body": "", "submittedAt": "2026-10-19T03:00:00Z", "url": "u/7"}]}}
     check("empty review count", fb.render_feedback(empty, team, agent, review_id=7)[1], 0)
 
+    truncated = {"reviewThreads": {"nodes": [
+        {"id": "PRRT_long", "isResolved": False, "path": "pkg/long.go",
+         "comments": {"totalCount": 101, "nodes": []}},
+    ]}}
+    try:
+        fb.render_feedback(truncated, team, agent, review_id=7)
+        check("truncated thread rejected", "accepted", "RuntimeError")
+    except RuntimeError as exc:
+        check("truncated thread rejected", "more than 100 comments" in str(exc), True)
+
     check("logins normalized", fb.parse_logins("A-b, @c ,,"), {"a-b", "c"})
     for bad in ("a;b", "-lead", "x" * 40):
         try:
@@ -577,6 +587,9 @@ def test_feedback_collection():
     # prow-job.sh writes the marker literally; keep the two in sync.
     script = (_PKG_ROOT / "prow-job.sh").read_text()
     check("prow-job.sh uses REPLY_MARKER", fb.REPLY_MARKER in script, True)
+    check("prow-job.sh configures git credentials", "gh auth setup-git" in script, True)
+    check("prow-job.sh keeps token out of push URL",
+          "GITHUB_TOKEN@github.com" in script, False)
 
 
 def test_feedback_replies():

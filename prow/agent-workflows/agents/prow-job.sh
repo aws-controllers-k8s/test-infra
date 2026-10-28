@@ -169,9 +169,11 @@ if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
     USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${USER_EMAIL}"
 fi
 
-# set the GitHub configuration for using GitHub cli.
+# Configure the commit identity and use GitHub CLI as Git's credential helper,
+# so authenticated remote URLs never contain the token.
 git config --global user.name "${GITHUB_ACTOR}" >/dev/null
 git config --global user.email "${USER_EMAIL}" >/dev/null
+gh auth setup-git
 
 mkdir -p "$REPO_ROOT" && cd "$REPO_ROOT"
 
@@ -207,6 +209,10 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository owner ($HEAD_OWNER), PR author ($PR_AUTHOR) and token user ($TOKEN_USER) must match" >&2
     exit 1
   fi
+  if [ "${HEAD_REPO,,}" != "${REPO_NAME,,}" ]; then
+    echo "$SCRIPT_NAME][ERROR] head repository $HEAD_REPO does not match $REPO_NAME" >&2
+    exit 1
+  fi
   if [ "$HEAD_REF" != "$LOCAL_GIT_BRANCH" ]; then
     echo "$SCRIPT_NAME][ERROR] head branch $HEAD_REF does not match $LOCAL_GIT_BRANCH" >&2
     exit 1
@@ -234,11 +240,14 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   FEEDBACK_FILE="${FEEDBACK_FILE:-/tmp/ack-feedback.md}"
   # Review threads the job may reply in, chosen here before the agents run.
   FEEDBACK_TARGETS_FILE="/tmp/ack-feedback-targets.json"
-  FEEDBACK_COUNT=$(python "$WORKFLOW_DIR/workflows/feedback.py" \
-    --owner "$REPO_OWNER" --repo "$REPO_NAME" --number "$PR_NUMBER" \
-    --review-id "$REVIEW_ID" --team-members "$TEAM_MEMBERS" \
-    --pr-author "$PR_AUTHOR" --output "$FEEDBACK_FILE" \
-    --targets-output "$FEEDBACK_TARGETS_FILE")
+  if ! FEEDBACK_COUNT=$(python "$WORKFLOW_DIR/workflows/feedback.py" \
+      --owner "$REPO_OWNER" --repo "$REPO_NAME" --number "$PR_NUMBER" \
+      --review-id "$REVIEW_ID" --team-members "$TEAM_MEMBERS" \
+      --pr-author "$PR_AUTHOR" --output "$FEEDBACK_FILE" \
+      --targets-output "$FEEDBACK_TARGETS_FILE"); then
+    pr_comment -b "The agent could not collect this feedback. See job \`${PROW_JOB_ID:-unknown}\` for details."
+    exit 1
+  fi
   echo "$SCRIPT_NAME][INFO] collected $FEEDBACK_COUNT feedback item(s) into $FEEDBACK_FILE"
   if [ "$FEEDBACK_COUNT" = "0" ]; then
     echo "$SCRIPT_NAME][INFO] no unresolved feedback from team members; nothing to do"
@@ -381,9 +390,9 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     # No --force: if the branch moved during the run, the push fails instead
     # of overwriting someone else's commits.
     echo "$SCRIPT_NAME][INFO] Pushing to $HEAD_OWNER/$HEAD_REPO:$HEAD_REF..."
-    if ! git push "https://$GITHUB_TOKEN@github.com/$HEAD_OWNER/$HEAD_REPO.git" \
-         "HEAD:refs/heads/$HEAD_REF" &>/dev/null; then
-      pr_comment -b "The agent addressed this feedback but could not push: \`$HEAD_REF\` changed during the run. Submit a new review to try again."
+    if ! git push "https://github.com/$HEAD_OWNER/$HEAD_REPO.git" \
+         "HEAD:refs/heads/$HEAD_REF"; then
+      pr_comment -b "The agent addressed this feedback but could not push the changes. See job \`${PROW_JOB_ID:-unknown}\` for details, then submit a new review to try again."
       exit 1
     fi
     PUSHED_SHA=$(git rev-parse HEAD)
@@ -437,8 +446,8 @@ git commit -am "$COMMIT_MSG" >/dev/null
 
 # Push changes to the forked repository
 echo "$SCRIPT_NAME][INFO] Pushing changes to the forked repository..."
-git push --force "https://$GITHUB_TOKEN@github.com/$GITHUB_ACTOR/$SERVICE_REPO.git" \
-   "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH" &>/dev/null
+git push --force "https://github.com/$GITHUB_ACTOR/$SERVICE_REPO.git" \
+   "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH"
 
 # fetch all remotes to bring changes locally
 git fetch --all >/dev/null
