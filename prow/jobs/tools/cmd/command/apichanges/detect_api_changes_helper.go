@@ -2637,7 +2637,7 @@ func reconcileIssue(
 			prowAutoGenLabel,
 		}
 		// A create whose labels GitHub dropped leaves an issue the listing cannot
-		// see. Find it first, so a Prow retry labels it (or aborts) instead of
+		// see. Find it first, so a later run labels it (or aborts) instead of
 		// filing a second one.
 		orphan, err := findUnlabelledIssue(ctx, client, owner, repo, want)
 		if err != nil {
