@@ -68,7 +68,10 @@ class E2EAttempt:
 
 @dataclass
 class E2EResult:
-    status: str  # "PASS" | "FAIL" | "SKIPPED" | "NOT_RUN" | "ERROR"
+    # "PASS" | "FAIL" | "SKIPPED" | "NOT_RUN" | "ERROR" | "NOT_NEEDED"
+    # NOT_NEEDED means the run made no controller changes, so there was
+    # nothing new to test (for example a review that only needed replies).
+    status: str
     detail: str = ""
     attempts: int = 0
     artifacts_dir: str = ""
@@ -76,6 +79,65 @@ class E2EResult:
     # One record per make kind-test run, in order — carries each run's outcome,
     # the extracted failure, the full-log artifact path, and the agent's fix.
     attempts_detail: list[E2EAttempt] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        """Whether this result lets the workflow succeed."""
+        return self.status in ("PASS", "NOT_NEEDED")
+
+
+# Files that regeneration rewrites with code-generator build info (version,
+# build date) even when the generated code is otherwise identical, so on their
+# own they are not a change. Paths are relative to the controller repo root.
+# prow-job.sh applies the same pattern before committing; keep the two in sync.
+REGEN_ONLY_PATHS = r"^(apis/[^/]+/ack-generate-metadata\.yaml|pkg/version/version\.go)$"
+_REGEN_ONLY_RE = re.compile(REGEN_ONLY_PATHS)
+
+
+def _git(cfg: Config, *args: str) -> str | None:
+    """Run git in the controller checkout. Returns stdout, or None on failure."""
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cfg.controller_dir),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def head_sha(cfg: Config) -> str | None:
+    """The controller checkout's current commit, or None if git cannot say."""
+    out = _git(cfg, "rev-parse", "HEAD")
+    return out.strip() if out else None
+
+
+def controller_has_changes(cfg: Config, since: str | None) -> bool:
+    """Whether the controller checkout has changes worth an e2e run.
+
+    Compares the working tree, plus untracked files, with `since`: the commit
+    the run started from. Comparing with the starting commit rather than the
+    current HEAD means a change still counts if an agent committed or amended
+    it. Files in REGEN_ONLY_PATHS are ignored. Returns True when `since` is
+    unknown or git cannot answer, so an unexpected error runs e2e instead of
+    skipping it.
+    """
+    if not since:
+        return True
+    changed = _git(cfg, "diff", "--name-only", "--no-renames", since, "--")
+    untracked = _git(cfg, "ls-files", "--others", "--exclude-standard")
+    if changed is None or untracked is None:
+        return True
+    for path in (changed + untracked).splitlines():
+        path = path.strip()
+        if path and not _REGEN_ONLY_RE.match(path):
+            return True
+    return False
 
 
 def _to_snake(resource: str) -> str:

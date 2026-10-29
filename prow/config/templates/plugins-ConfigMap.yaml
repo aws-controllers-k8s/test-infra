@@ -66,4 +66,5 @@ data:
         events:
         - issue_comment
         - issues
+        - pull_request_review
 

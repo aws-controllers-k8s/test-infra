@@ -10,6 +10,7 @@
 # decide what it means, instead of the file being silently skipped.
 templates/add-resource.tpl
 templates/add-field.tpl
+templates/address-feedback.tpl
 
 # Not chart inputs. The agent source tree and its Dockerfile are built into the
 # add-resource image; excluding them keeps the chart Argo CD loads small.
