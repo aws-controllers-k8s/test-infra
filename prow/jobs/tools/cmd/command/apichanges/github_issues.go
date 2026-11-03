@@ -439,7 +439,7 @@ func refetchManagedIssue(
 // findUnlabelledIssue returns the token account's open issue that carries
 // fingerprint but not apiChangeLabel, or nil. The listing cannot see such an
 // issue, so without this a create whose labels were dropped is repeated by every
-// retry. `author:@me` is the account the listing's `author:` names.
+// later run. `author:@me` is the account the listing's `author:` names.
 func findUnlabelledIssue(
 	ctx context.Context,
 	client *github.Client,
