@@ -113,6 +113,12 @@ EOF
         FEATURE_GATES=$FEATURE_GATES,"IAMRoleSelector=true"
         ENABLE_CARM="false"
     fi
+    # The ec2 e2e suite tests IgnoreFieldDrift. Turning the gate on from a test
+    # restarts the controller mid-run, so enable it here. Only ec2: runtimes
+    # before v0.62.0 reject the gate as unknown.
+    if [[ "$AWS_SERVICE" = "ec2" ]]; then
+        FEATURE_GATES="${FEATURE_GATES:+$FEATURE_GATES,}IgnoreFieldDrift=true"
+    fi
 
     kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
