@@ -41,7 +41,7 @@ from .verdict import Decision, parse_decision
 
 
 def configure_headless_env(cfg: Config) -> None:
-    """Put the strands_tools shell/editor/file_write tools in non-interactive mode.
+    """Put the strands shell/editor tools in non-interactive mode.
 
     Those tools prompt for confirmation by default; this workflow runs
     unattended (in a ProwJob, or a local background run), so enable the

@@ -246,6 +246,34 @@ def test_config_and_context():
         print("  [skip] ack-dev-skills not present at", SKILLS)
 
 
+def test_build_agents_tools():
+    """build_agents imports its tools and wires the per-role tool sets.
+
+    Catches an upstream tool removal (e.g. strands-agents-tools 0.9.0 turning
+    every tool into an ImportError) offline instead of at Prow run time.
+    Constructing the Bedrock models makes no network calls.
+    """
+    print("build_agents tool sets:")
+    if not SKILLS.is_dir():
+        print("  [skip] ack-dev-skills not present at", SKILLS)
+        return
+    from roles.agents import build_agents
+    cfg = Config.resolve(
+        service="backup",
+        resource="BackupVault",
+        controller_dir="/tmp/backup-controller",
+        codegen_dir="/tmp/code-generator",
+        skills_dir=str(SKILLS),
+    )
+    with patch.dict(os.environ, {"AWS_REGION": cfg.region or "us-west-2"}):
+        agents = build_agents(cfg)
+    check("planner tools", sorted(agents.planner.tool_names), ["http_request", "read", "shell"])
+    check("implementer tools", sorted(agents.implementer.tool_names), ["file_editor", "shell"])
+    check("plan reviewer tools", sorted(agents.plan_reviewer.tool_names), ["read", "shell"])
+    check("impl reviewer tools", sorted(agents.impl_reviewer.tool_names), ["read", "shell"])
+    check("pr writer tools", agents.pr_writer.tool_names, [])
+
+
 def test_field_config_and_context():
     print("field config + context:")
     cfg = Config.resolve(
@@ -962,6 +990,7 @@ def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
                test_replan_no_double_impl, test_config_and_context,
+               test_build_agents_tools,
                test_field_config_and_context,
                test_feedback_config_and_context,
                test_controller_has_changes,

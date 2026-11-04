@@ -20,24 +20,25 @@ subagent definition:
     ack-implementer -> Read, Write, Edit, Grep, Glob, Bash
     ack-reviewer    -> Read, Grep, Glob, Bash
 
-Strands tool equivalents:
-    Read/Grep/Glob  -> file_read (strands_tools; read-only)
-    Write/Edit      -> file_editor (strands.vended_tools; read + write + edit)
-    Bash            -> shell (strands.vended_tools)
-    WebFetch        -> http_request (strands.vended_tools)
+Strands tool equivalents (all from `strands.vended_tools`):
+    Read            -> read (read-only)
+    Grep/Glob       -> shell
+    Write/Edit      -> file_editor (read + write + edit)
+    Bash            -> shell
+    WebFetch        -> http_request
 
-We use the vended tools from strands-agents core (`strands.vended_tools`) rather
-than the deprecated `strands_tools` shell/editor. The vended shell/file_editor
+The deprecated `strands-agents-tools` package (`strands_tools`) is not used:
+since v0.9.0 every tool in it raises ImportError on import. The vended tools
 route through the agent's sandbox; since we never pass `sandbox=` to Agent, that
 resolves to `NotASandboxLocalEnvironment`, which runs commands and file ops
-directly on the host (no isolation) — the same behavior the old tools had, which
-is what the on-host `make build-controller`/`git` steps require.
+directly on the host (no isolation), which is what the on-host
+`make build-controller`/`git` steps require.
 
-`file_read` is kept for the read-only planner/reviewer roles: it enforces the
-"do not modify files" boundary at the tool level and has no vended read-only
-equivalent (file_editor can write). Tools are imported lazily inside
-build_agents so this module (and its importers) load even where the tool
-packages are absent — e.g. the offline logic tests, which never build agents.
+The read-only planner/reviewer roles get `read` instead of `file_editor`: it
+enforces the "do not modify files" boundary at the tool level (file_editor can
+write). `read` takes absolute paths only and pages by offset/limit; search and
+listing go through `shell`. Tools are imported lazily inside build_agents so
+this module (and its importers) load without importing the tool modules.
 """
 
 from __future__ import annotations
@@ -122,8 +123,7 @@ def build_agents(cfg: Config) -> AgentSet:
     """Build the planner/implementer/reviewer agents for one run."""
     # Imported here (not at module top) so importing this module does not require
     # the tool packages to be installed — see the module docstring.
-    from strands.vended_tools import file_editor, http_request, shell
-    from strands_tools import file_read  # read-only; no vended equivalent yet
+    from strands.vended_tools import file_editor, http_request, read, shell
 
     ctx = context.for_config(cfg)
 
@@ -133,7 +133,7 @@ def build_agents(cfg: Config) -> AgentSet:
         model_id=cfg.planner_model,
         system_prompt=context.planner_system_prompt(ctx, cfg.workflow),
         # Planner researches but does not write: read, search, shell, web.
-        tools=[file_read, shell, http_request],
+        tools=[read, shell, http_request],
     )
 
     implementer = _role_agent(
@@ -155,7 +155,7 @@ def build_agents(cfg: Config) -> AgentSet:
             mode="plan",
         ),
         # Reviewer reads and runs builds/tests but never writes.
-        tools=[file_read, shell],
+        tools=[read, shell],
     )
 
     impl_reviewer = _role_agent(
@@ -167,7 +167,7 @@ def build_agents(cfg: Config) -> AgentSet:
             cfg.workflow,
             mode="impl",
         ),
-        tools=[file_read, shell],
+        tools=[read, shell],
     )
 
     # No tools: it summarizes text passed in the prompt, never touches the repo.

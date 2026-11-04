@@ -16,8 +16,7 @@ dependencies = [
     # The role-based harness uses the Strands multi-agent Graph primitive; the
     # progress reporter targets the graph streaming event contract stabilized in
     # strands-agents >= 1.45 (see roles/progress.py).
-    "strands-agents>=1.45",
-    "strands-agents-tools>=0.8",
+    "strands-agents>=1.63",
     "boto3>=1.28.0",
     "gitpython>=3.1.58",
     "pyyaml>=6.0",
