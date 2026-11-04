@@ -94,6 +94,11 @@ ADD_RESOURCE = WorkflowDefinition(
     planner_role="planner",
     plan_schema="plan-output",
     task_template="Add the {resource} resource to the {service} ACK service controller.",
+    references=(
+        "new-resource-checklist",
+        "bug-fix-patterns",
+        "generator-yaml-reference",
+    ),
 )
 
 
