@@ -67,6 +67,7 @@ class WorkflowDefinition:
         field: str | None,
         controller_dir: str,
         codegen_dir: str,
+        skills_dir: str,
         aws_sdk_go_version: str,
         inputs: Mapping[str, str] | None = None,
     ) -> str:
@@ -80,6 +81,7 @@ class WorkflowDefinition:
             (
                 ("CONTROLLER_DIR", controller_dir),
                 ("CODEGEN_DIR", codegen_dir),
+                ("ACK_DEV_SKILLS_DIR", skills_dir),
                 ("AWS_SDK_GO_VERSION", aws_sdk_go_version),
             )
         )

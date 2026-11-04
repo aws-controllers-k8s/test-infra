@@ -277,6 +277,11 @@ def test_field_config_and_context():
         check("reviewer field reference", "Adding a Single Field" in reviewer, True)
         check("planner field reference", "Adding a Single Field" in planner, True)
         check(
+            "task contains skills dir",
+            f"ACK_DEV_SKILLS_DIR={cfg.skills_dir}" in task,
+            True,
+        )
+        check(
             "task contains field",
             "FIELD=targetConfiguration.mcp.connector" in task,
             True,
