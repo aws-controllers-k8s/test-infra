@@ -182,6 +182,21 @@ pr_comment() {
   gh pr comment "$PR_NUMBER" -R "$ORG_REPO" "$@" >/dev/null
 }
 
+# regenerate_attribution refreshes ATTRIBUTION.md from go.mod before committing.
+# It is a no-op when dependencies did not change and required when the agent
+# added or bumped one, so it runs unconditionally rather than being left to the
+# agent. attribution-gen is baked into the image. A failure is logged and
+# skipped, matching cd/lib/attribution.sh.
+regenerate_attribution() {
+  echo -n "$SCRIPT_NAME][INFO] Generating ATTRIBUTION.md for $SERVICE_REPO ... "
+  if attribution-gen --modfile "$SERVICE_REPO_DIR/go.mod" \
+       --output "$SERVICE_REPO_DIR/ATTRIBUTION.md" >/dev/null 2>&1; then
+    echo "ok"
+  else
+    echo "failed (skipping)"
+  fi
+}
+
 if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   PR_NUMBER="$ISSUE_NUMBER"
   # The reviewed PR's repository, as reported by the review event.
@@ -375,6 +390,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo "$SCRIPT_NAME][INFO] the workflow moved HEAD off ${HEAD_SHA:0:7}; folding its commits into one new commit"
     git reset --soft "$HEAD_SHA"
   fi
+  regenerate_attribution
   # Same rule as roles/e2e.py controller_has_changes: regeneration rewrites
   # ack-generate-metadata.yaml and pkg/version/version.go with code-generator
   # build info on every run, so on their own they are not a change. The
@@ -440,6 +456,7 @@ echo "$SCRIPT_NAME][INFO] Creating a new branch..."
 git checkout -b "$LOCAL_GIT_BRANCH" >/dev/null
 
 # Commit changes
+regenerate_attribution
 echo "$SCRIPT_NAME][INFO] Committing changes..."
 git add -A  >/dev/null
 git commit -am "$COMMIT_MSG" >/dev/null

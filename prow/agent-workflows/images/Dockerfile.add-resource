@@ -98,6 +98,10 @@ RUN echo "Installing kind v0.31.0 ..." \
     && go install "sigs.k8s.io/kind@v0.31.0" \
     && mv "${GOPATH}/bin/kind" /usr/bin/kind
 
+RUN echo "Installing attribution-gen ..." \
+    && go install "github.com/awslabs/attribution-gen@latest" \
+    && mv "${GOPATH}/bin/attribution-gen" /usr/bin/attribution-gen
+
 # Create Go directories with proper permissions
 RUN mkdir -p "${GOPATH}/bin" "${GOPATH}/src" "${GOPATH}/pkg" \
     && chown -R prow:prow /home/prow
