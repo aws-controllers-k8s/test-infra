@@ -112,8 +112,15 @@ RUN pip install --no-cache-dir uv
 # Copy project files
 COPY . .
 
-# Install dependencies using uv and set permissions
-RUN uv pip install --system . && \
+# Install the exact dependency versions pinned in uv.lock, then the project
+# itself without re-resolving. A plain `uv pip install .` ignores the lockfile
+# and pulls the newest release of every dependency at image build time, so an
+# upstream breaking release reaches Prow without any change here.
+RUN uv export --frozen --no-dev --no-emit-project -o /tmp/requirements.txt && \
+    uv pip install --system -r /tmp/requirements.txt && \
+    uv pip install --system --no-deps . && \
+    rm /tmp/requirements.txt && \
+    python -c "from strands.vended_tools import file_editor, http_request, read, shell" && \
     chown -R prow:prow /app
 
 # Run as root (no USER switch): the e2e path starts dockerd
