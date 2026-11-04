@@ -70,10 +70,17 @@ def build_task_prompt(cfg: Config) -> str:
             field=cfg.field,
             controller_dir=str(cfg.controller_dir),
             codegen_dir=str(cfg.codegen_dir),
+            skills_dir=str(cfg.skills_dir),
             aws_sdk_go_version=sdk,
             inputs=cfg.inputs,
         ),
     ]
+    task_parts.append(
+        "Relative links in the ack-dev-skills content of your instructions "
+        "resolve against that file's location under ACK_DEV_SKILLS_DIR (role "
+        "SOPs live in roles/, the ack-dev guide in skills/ack-dev/). Read a "
+        "linked file there when you need it."
+    )
     if cfg.workflow.role_instruction:
         task_parts.append(cfg.workflow.role_instruction.strip())
     task_parts.append(

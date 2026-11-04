@@ -238,6 +238,10 @@ def test_config_and_context():
         check("planner prompt nonempty", bool(p and "Planner" in p), True)
         rv = context.reviewer_system_prompt(ctx, cfg.workflow, mode="plan")
         check("plan-review mode injected", "plan-review" in rv, True)
+        implementer = context.implementer_system_prompt(ctx, cfg.workflow)
+        for name in ("NEW RESOURCE CHECKLIST", "BUG FIX PATTERNS", "GENERATOR YAML REFERENCE"):
+            for role, prompt in (("planner", p), ("implementer", implementer), ("reviewer", rv)):
+                check(f"{role} gets {name.lower()}", f"REFERENCE: {name}" in prompt, True)
     else:
         print("  [skip] ack-dev-skills not present at", SKILLS)
 
@@ -271,6 +275,12 @@ def test_field_config_and_context():
         check("field plan schema", "Field Plan Output Schema" in planner, True)
         check("implementer field reference", "Adding a Single Field" in implementer, True)
         check("reviewer field reference", "Adding a Single Field" in reviewer, True)
+        check("planner field reference", "Adding a Single Field" in planner, True)
+        check(
+            "task contains skills dir",
+            f"ACK_DEV_SKILLS_DIR={cfg.skills_dir}" in task,
+            True,
+        )
         check(
             "task contains field",
             "FIELD=targetConfiguration.mcp.connector" in task,

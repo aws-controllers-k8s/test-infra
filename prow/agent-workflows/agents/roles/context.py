@@ -206,14 +206,13 @@ def planner_system_prompt(
 ) -> str:
     role_label = definition.planner_role.replace("-", " ").upper()
     schema_label = definition.plan_schema.replace("-", " ").upper()
-    return _compose(
-        _PLANNER_FRAMES[definition.planner_role],
-        {
-            "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
-            f"ROLE SOP: {role_label}": ctx.role(definition.planner_role),
-            f"OUTPUT SCHEMA: {schema_label}": ctx.schema(definition.plan_schema),
-        },
-    )
+    sections = {
+        "ACK DEVELOPMENT GUIDE (ack-dev SKILL)": ctx.skill_md(),
+        f"ROLE SOP: {role_label}": ctx.role(definition.planner_role),
+        f"OUTPUT SCHEMA: {schema_label}": ctx.schema(definition.plan_schema),
+    }
+    sections.update(_reference_sections(ctx, definition))
+    return _compose(_PLANNER_FRAMES[definition.planner_role], sections)
 
 
 def implementer_system_prompt(
