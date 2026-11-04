@@ -114,12 +114,15 @@ EOF
         ENABLE_CARM="false"
     fi
 
+    # Leader election keeps the old and new pods from reconciling at once when
+    # the Deployment restarts (credential rotation, tests that patch it).
     kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
         AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
         AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
         AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
         ACK_ENABLE_DEVELOPMENT_LOGGING="true" \
         ACK_LOG_LEVEL="debug" \
+        ENABLE_LEADER_ELECTION="true" \
         FEATURE_GATES="$FEATURE_GATES" \
         AWS_REGION="$region" 1>/dev/null \
         ENABLE_CARM="$ENABLE_CARM"
