@@ -29,10 +29,10 @@
         command: ["./scripts/sync-prs-to-project.sh",
             "--org", "${TEST_INFRA_ORG}",
             "--project-number", "17",
-            "--window-hours", "3",
+            "--window-hours", "72",
+            "--exclude-owners-aliases", "OWNERS_ALIASES",
             "--exclude-author", "ack-agent",
             "--exclude-author", "ack-bot",
             "--exclude-author", "backlog-burndown-bot",
             "--exclude-author", "backlog-burndown-agent",
-            "--exclude-author", "dependabot[bot]",
-            "--exclude-repo", "mcp"]
+            "--exclude-author", "dependabot[bot]"]
