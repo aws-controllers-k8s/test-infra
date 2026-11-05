@@ -41,8 +41,10 @@ DEFAULT_MAX_REPLAN_ATTEMPTS = 1
 DEFAULT_MAX_E2E_FIX_ATTEMPTS = 2
 
 # Per-turn output token cap. The role agents emit large plan/review documents,
-# so this is well above the 4000 the old task agents used.
-DEFAULT_MAX_TOKENS = 8192
+# and adaptive thinking (always on for Opus 5.5) counts against the same cap.
+# Bedrock reserves max_tokens against the TPM quota up front but bills only
+# generated tokens.
+DEFAULT_MAX_TOKENS = 32768
 
 # Per-shell-command timeout (seconds). Must fit a legit `make build-controller`
 # (~1-3 min) while capping pathological commands (a `find /` or recursive grep
