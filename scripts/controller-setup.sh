@@ -114,6 +114,15 @@ EOF
         ENABLE_CARM="false"
     fi
 
+    # ec2's test_vpc_ignore_field_drift.py turns this gate on itself when it is
+    # off, which rolls the controller Deployment in the middle of the run. With
+    # leader election the new pod waits for the lease and then works through a
+    # full backlog, so other tests time out. Turning the gate on here makes the
+    # test skip the rollout.
+    if [[ "$AWS_SERVICE" = "ec2" ]]; then
+        FEATURE_GATES="${FEATURE_GATES:+$FEATURE_GATES,}IgnoreFieldDrift=true"
+    fi
+
     # Leader election keeps the old and new pods from reconciling at once when
     # the Deployment restarts (credential rotation, tests that patch it).
     kubectl -n $__controller_namespace set env deployment/ack-"$AWS_SERVICE"-controller \
