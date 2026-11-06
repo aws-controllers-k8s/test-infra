@@ -17,6 +17,13 @@ SERVICE_CONTROLLER_SOURCE_PATH=${SERVICE_CONTROLLER_SOURCE_PATH:-$DEFAULT_SERVIC
 DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_SOURCE_PATH}/test/e2e"
 SERVICE_CONTROLLER_E2E_TEST_PATH="${SERVICE_CONTROLLER_E2E_TEST_PATH:-$DEFAULT_SERVICE_CONTROLLER_E2E_TEST_PATH}"
 
+# With CHAINSAW_TESTS_ENABLED=true, the controller's Chainsaw tests in this
+# directory run instead of its Python bootstrap, tests and cleanup. Prow sets it
+# in a <service>-chainsaw-e2e job of its own, so pytest keeps running in
+# <service>-kind-e2e. A controller without the directory has nothing to run,
+# and passes.
+CHAINSAW_TEST_PATH="${SERVICE_CONTROLLER_E2E_TEST_PATH}/chainsaw"
+
 source "$SCRIPTS_DIR/lib/common.sh"
 source "$SCRIPTS_DIR/lib/config.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
@@ -59,7 +66,54 @@ run_python_tests() {
     return $test_exit_code
 }
 
+is_chainsaw_enabled() {
+    [[ "${CHAINSAW_TESTS_ENABLED:-}" == "true" ]]
+}
+
+run_chainsaw_tests() {
+    # The suite's own config (timeouts, parallelism, default catch) lives
+    # next to its tests
+    local config_args=()
+    if [[ -f "$CHAINSAW_TEST_PATH/.chainsaw.yaml" ]]; then
+        config_args=(--config "$CHAINSAW_TEST_PATH/.chainsaw.yaml")
+    fi
+
+    chainsaw test --test-dir "$CHAINSAW_TEST_PATH" "${config_args[@]}" \
+        --report-format JUNIT-TEST --report-path "${ARTIFACTS:-/tmp}" --report-name junit_chainsaw
+}
+
+run_chainsaw() {
+    if [[ ! -d "$CHAINSAW_TEST_PATH" ]]; then
+        info_msg "CHAINSAW_TESTS_ENABLED is true, but there are no Chainsaw tests in $CHAINSAW_TEST_PATH. Nothing to run."
+        return 0
+    fi
+    info_msg "Running Chainsaw tests in $CHAINSAW_TEST_PATH (Python bootstrap, tests and cleanup are skipped) ..."
+    # Disable exiting on error, so we can catch the Chainsaw result
+    set +e
+
+    run_chainsaw_tests
+    local test_exit_code=$?
+
+    set -Eeo pipefail
+
+    if [[ $test_exit_code -ne 0 ]]; then
+        error_msg "Tests failed with exit code $test_exit_code"
+    else
+        info_msg "Tests succeeded!"
+    fi
+
+    return $test_exit_code
+}
+
 bootstrap_and_run() {
+    if is_chainsaw_enabled; then
+        # run_chainsaw re-enables errexit, so capture its result rather than
+        # exiting here, the same way the pytest path returns its exit code
+        local test_exit_code=0
+        run_chainsaw || test_exit_code=$?
+        return $test_exit_code
+    fi
+
     info_msg "Running test bootstrap ..."
     bootstrap_tests
 
@@ -89,6 +143,13 @@ ensure_inputs() {
 }
 
 ensure_binaries() {
+    if is_chainsaw_enabled; then
+        check_is_installed "chainsaw"
+        check_is_installed "aws"
+        check_is_installed "jq"
+        check_is_installed "kubectl"
+        return
+    fi
     check_is_installed "python"
     check_is_installed "pytest"
 }
