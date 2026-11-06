@@ -38,8 +38,9 @@ import yaml
 from .agents import AgentSet
 from .config import Config
 
-# Default: 45 minutes. E2E runs are 10-30+ minutes per the references.
-_DEFAULT_E2E_TIMEOUT_S = 45 * 60
+# Default: 75 minutes. Larger controller suites can spend more than 45 minutes
+# in pytest alone, before kind setup, image builds, cleanup, and log collection.
+_DEFAULT_E2E_TIMEOUT_S = 75 * 60
 
 # pytest colorizes its summary ("\x1b[32m2 passed\x1b[0m"). The color escape
 # leaves a letter (e.g. the `m` of `\x1b[32m`) immediately before the digit,
@@ -150,12 +151,12 @@ def _to_snake(resource: str) -> str:
 def ensure_test_config(cfg: Config) -> tuple[bool, str]:
     """Ensure test_config.yaml exists and is configured for this resource's test.
 
-    During a normal run the harness cannot know the test method name in advance,
-    so it derives it (`test_<resource>`) and writes it into the config itself.
-    Specifically this:
+    During a normal run the harness derives a pytest selector and writes it into
+    the config itself: the leaf field name for field-scoped workflows, otherwise
+    `test_<resource>`. Specifically this:
       - creates test_config.yaml from the example if missing;
-      - sets tests.methods to [test_<resource>] so the run targets the resource
-        this workflow added (overriding any stale prior filter);
+      - sets tests.methods to the derived field/resource selector, overriding
+        any stale prior filter;
       - enables debug.enabled + debug.dump_controller_logs so failures are
         diagnosable from $ARTIFACTS, per the Phase 3 SOP.
 
@@ -176,14 +177,23 @@ def ensure_test_config(cfg: Config) -> tuple[bool, str]:
         shutil.copyfile(example, config_path)
         created = True
 
-    method = f"test_{_to_snake(cfg.resource)}"
+    # Field-scoped workflows should select tests containing the field name
+    # instead of the resource name. For example, `warm_throughput` selects the
+    # focused Table warm-throughput test, while `test_table` selects the entire
+    # DynamoDB Table suite and can exceed the E2E timeout. For nested paths, use
+    # the leaf field so the value remains a valid pytest `-k` expression.
+    method = (
+        _to_snake(cfg.field.rsplit(".", 1)[-1])
+        if cfg.field
+        else f"test_{_to_snake(cfg.resource)}"
+    )
 
     try:
         data = yaml.safe_load(config_path.read_text()) or {}
     except yaml.YAMLError as exc:
         return False, f"could not parse {config_path}: {exc}"
 
-    # Target only this resource's test.
+    # Target only tests matching this field/resource selector.
     tests = data.setdefault("tests", {})
     tests["methods"] = [method]
 
@@ -264,6 +274,15 @@ def _run_make_kind_test(cfg: Config, artifacts: Path) -> subprocess.CompletedPro
     )
 
 
+def _subprocess_output_text(output: str | bytes | None) -> str:
+    """Normalize captured subprocess output, including TimeoutExpired bytes."""
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode(errors="replace")
+    return output
+
+
 def _fix_prompt(cfg: Config, status: str, output_tail: str, artifacts: Path) -> str:
     workflow_scope = (
         f" {cfg.workflow.role_instruction}" if cfg.workflow.role_instruction else ""
@@ -311,10 +330,32 @@ def run_e2e(cfg: Config, agents: AgentSet) -> E2EResult:
             proc = _run_make_kind_test(cfg, artifacts)
         except subprocess.TimeoutExpired as exc:
             rec.status = result.status = "ERROR"
-            rec.failure_excerpt = result.detail = (
+            timeout_detail = (
                 f"make kind-test timed out after {exc.timeout}s on attempt {attempt}"
             )
-            print(f"[e2e] attempt {attempt}: ERROR (timeout)", flush=True)
+            combined = (
+                _subprocess_output_text(exc.stdout)
+                + "\n"
+                + _subprocess_output_text(exc.stderr)
+            )
+            excerpt = _extract_failure(combined) if combined.strip() else ""
+            rec.failure_excerpt = result.detail = timeout_detail + (
+                f"\n\n{excerpt}" if excerpt else ""
+            )
+            log_path = artifacts / f"e2e-attempt-{attempt}.log"
+            footer = (
+                f"\n=== make kind-test timeout={exc.timeout} classified=ERROR ===\n"
+            )
+            try:
+                log_path.write_text(combined + footer)
+                rec.log_path = str(log_path)
+            except OSError:
+                pass
+            print(
+                f"[e2e] attempt {attempt}: ERROR (timeout)"
+                + (f" (full log: {log_path})" if rec.log_path else ""),
+                flush=True,
+            )
             return result
         except FileNotFoundError:
             rec.status = result.status = "ERROR"

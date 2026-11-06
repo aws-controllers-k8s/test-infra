@@ -26,6 +26,7 @@ import asyncio
 import io
 import os
 import shutil as _sh
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -44,11 +45,13 @@ from roles.config import Config
 from roles.e2e import (
     REGEN_ONLY_PATHS,
     E2EResult,
+    _DEFAULT_E2E_TIMEOUT_S,
     _classify,
     _to_snake,
     controller_has_changes,
     ensure_test_config,
     head_sha,
+    run_e2e,
 )
 from roles.verdict import Decision, parse_decision
 from roles.workflow import ADD_FIELD, ADD_RESOURCE, ADDRESS_FEEDBACK
@@ -952,6 +955,75 @@ def test_ensure_test_config():
         _sh.rmtree(tmp)
 
 
+def test_ensure_test_config_field_selector():
+    """Field workflows target matching field tests instead of a whole resource suite."""
+    print("ensure_test_config field selector:")
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        ti = tmp / "test-infra"; ti.mkdir()
+        controller = tmp / "svc-controller"; controller.mkdir()
+        (ti / "test_config.yaml").write_text(
+            "aws:\n  assumed_role_arn: arn:aws:iam::111:role/r\n"
+            "tests:\n  methods:\n    - test_table\n"
+        )
+        cfg = Config.resolve(
+            service="svc",
+            resource="Table",
+            field="settings.WarmThroughput",
+            workflow=ADDRESS_FEEDBACK,
+            controller_dir=str(controller),
+            codegen_dir=str(tmp / "cg"),
+            skills_dir=str(SKILLS),
+        )
+        ok, _ = ensure_test_config(cfg)
+        data = yaml.safe_load((ti / "test_config.yaml").read_text())
+        check("ok", ok, True)
+        check("field selector", data["tests"]["methods"], ["warm_throughput"])
+    finally:
+        _sh.rmtree(tmp)
+
+
+def test_e2e_timeout_preserves_output():
+    """A timed-out E2E run uploads its captured stdout and stderr."""
+    print("e2e timeout preserves output:")
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        ti = tmp / "test-infra"; ti.mkdir()
+        controller = tmp / "svc-controller"; controller.mkdir()
+        artifacts = tmp / "artifacts"
+        (ti / "test_config.yaml").write_text(
+            "aws:\n  assumed_role_arn: arn:aws:iam::111:role/r\n"
+            "tests:\n  methods: []\n"
+        )
+        cfg = Config.resolve(
+            service="svc",
+            resource="Table",
+            controller_dir=str(controller),
+            codegen_dir=str(tmp / "cg"),
+            skills_dir=str(SKILLS),
+        )
+        timeout = subprocess.TimeoutExpired(
+            cmd=["make", "kind-test"],
+            timeout=_DEFAULT_E2E_TIMEOUT_S,
+            output=b"kind setup output\n",
+            stderr=b"last diagnostic\n",
+        )
+        with patch.dict(os.environ, {"ARTIFACTS": str(artifacts)}):
+            with patch("roles.e2e._run_make_kind_test", side_effect=timeout):
+                result = run_e2e(cfg, object())
+
+        log_path = artifacts / "e2e-attempt-1.log"
+        log = log_path.read_text()
+        check("timeout is 75 minutes", _DEFAULT_E2E_TIMEOUT_S, 75 * 60)
+        check("status", result.status, "ERROR")
+        check("attempt log recorded", result.attempts_detail[0].log_path, str(log_path))
+        check("stdout preserved", "kind setup output" in log, True)
+        check("stderr preserved", "last diagnostic" in log, True)
+        check("timeout footer", "timeout=4500 classified=ERROR" in log, True)
+    finally:
+        _sh.rmtree(tmp)
+
+
 def test_workflow_timeout_budget():
     """Generated workflows must outlive graph and E2E static budgets."""
     print("workflow timeout budget:")
@@ -1002,6 +1074,8 @@ def main():
                test_reporting_no_verdict_vs_revise,
                test_progress_reporter,
                test_ensure_test_config,
+               test_ensure_test_config_field_selector,
+               test_e2e_timeout_preserves_output,
                test_workflow_timeout_budget,
                test_generator_templates_helmignored):
         fn()
