@@ -114,6 +114,11 @@ run_pytest_image() {
         params+=(-e AWS_WEB_IDENTITY_TOKEN_FILE="$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE")
         params+=(-v "$identity_file":"$TEST_CONTAINER_WEB_IDENTITY_TOKEN_FILE")
     fi
+    # Test reports (e.g. Chainsaw JUnit) are written to the job's artifacts dir
+    if [[ -n "${ARTIFACTS:-}" ]]; then
+        mkdir -p "$ARTIFACTS"
+        params+=(-e ARTIFACTS=/artifacts -v "$ARTIFACTS":/artifacts:z)
+    fi
 
     docker run --rm -t \
         --network="host" \
@@ -123,6 +128,7 @@ run_pytest_image() {
         -e TEST_CONFIG_PATH="/root/test-config.yaml" \
         -e SERVICE_CONTROLLER_E2E_TEST_PATH="." \
         -e ASSUMED_ROLE_ARN \
+        -e CHAINSAW_TESTS_ENABLED \
         -e PYTEST_LOG_LEVEL \
         -e PYTEST_NUM_THREADS \
         -e AWS_DEFAULT_REGION="$region" \
