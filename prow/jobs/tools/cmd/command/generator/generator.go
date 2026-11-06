@@ -39,6 +39,7 @@ type JobsConfig struct {
 	CarmTestServices              []string `yaml:"carm_test_services"`
 	IRSTestServices               []string `yaml:"irs_test_services"`
 	IgnoreFieldDriftTestServices  []string `yaml:"ignore_field_drift_test_services"`
+	ChainsawTestServices          []string `yaml:"chainsaw_test_services"`
 	SoakTestOnReleaseServiceNames []string `yaml:"soak_test_on_release_service_names"`
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`
