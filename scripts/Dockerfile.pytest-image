@@ -29,6 +29,16 @@ RUN if [[ "$AWS_SERVICE" = "acm" ]]; then \
 RUN wget https://github.com/mikefarah/yq/releases/download/v4.26.1/yq_linux_amd64.tar.gz -O - |\
   tar xz && mv yq_linux_amd64 /usr/bin/yq
 
+# Chainsaw declarative tests (test/e2e/chainsaw) shell out to kubectl, the AWS
+# CLI and jq for AWS-side checks
+ARG CHAINSAW_VERSION=v0.2.15
+ARG CHAINSAW_SHA256=295d226c89f126c0a97775d364be149f47a810c8a3f9829ee410583d0c1abe3c
+RUN apk add --no-cache aws-cli jq kubectl && \
+  wget -q https://github.com/kyverno/chainsaw/releases/download/${CHAINSAW_VERSION}/chainsaw_linux_amd64.tar.gz -O /tmp/chainsaw.tar.gz && \
+  echo "${CHAINSAW_SHA256}  /tmp/chainsaw.tar.gz" | sha256sum -c - && \
+  tar xzf /tmp/chainsaw.tar.gz -C /usr/local/bin chainsaw && \
+  rm /tmp/chainsaw.tar.gz
+
 # Install python dependencies
 COPY ${CONTROLLER_E2E_PATH}/requirements.txt .
 

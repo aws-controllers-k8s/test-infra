@@ -58,7 +58,58 @@
         - name: FEATURE_GATES
           value: "ResourceAdoption=true"
         command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
-
+{{ if contains $.Config.ChainsawTestServices $service }}
+  - name: {{ $service }}-chainsaw-e2e
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
+    decorate: true
+    # Optional while the generated tests run alongside pytest
+    optional: true
+    always_run: true
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
+    annotations:
+      # karpenter.sh/do-not-evict is deprecated: https://github.com/aws/karpenter-provider-aws/issues/5394
+    karpenter.sh/do-not-disrupt: "true"
+    labels:
+      preset-dind-enabled: "true"
+      preset-kind-volume-mounts: "true"
+      preset-test-config: "true"
+    extra_refs:
+    - org: ${TEST_INFRA_ORG}
+      repo: code-generator
+      base_ref: main
+      workdir: false
+      path_alias: github.com/aws-controllers-k8s/code-generator
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
+      workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "integration-test") }}
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            cpu: 8
+            memory: "3072Mi"
+          requests:
+            cpu: 4
+            memory: "2048Mi"
+        env:
+        - name: SERVICE
+          value: {{ $service }}
+        - name: GOLANG_VERSION
+          value: "1.22.5"
+        - name: CHAINSAW_TESTS_ENABLED
+          value: "true"
+        - name: FEATURE_GATES
+          value: "ResourceAdoption=true"
+        command: ["wrapper.sh", "bash", "-c", "make kind-test SERVICE=$SERVICE"]
+{{ end }}
   - name: {{ $service }}-release-test
 {{- if $.Config.PresubmitCluster }}
     cluster: {{ $.Config.PresubmitCluster }}

@@ -106,6 +106,12 @@ carm_test_services:
 irs_test_services:
 - sqs
 
+# List of services whose generated Chainsaw e2e tests (test/e2e/chainsaw) run
+# in an optional <service>-chainsaw-e2e job, alongside their pytest tests in
+# <service>-kind-e2e
+chainsaw_test_services:
+- ec2
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
