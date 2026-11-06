@@ -211,6 +211,6 @@
           value: "true"
         {{ end -}}
         - name: FEATURE_GATES
-          value: "ResourceAdoption=true"
+          value: "ResourceAdoption=true{{ if contains $.Config.IgnoreFieldDriftTestServices $service }},IgnoreFieldDrift=true{{ end }}"
         command: ["wrapper.sh", "bash", "-c", "./cd/core-validator/generate-test-controller.sh"]
 {{ end }}
