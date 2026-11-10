@@ -18,21 +18,26 @@ configuration for the parts an API's shape can't express.
 ```
 <service>-controller/
 └── test/e2e/chainsaw/          # opts the controller in to Chainsaw tests
-    ├── .chainsaw.yaml          # generated: the suite's Chainsaw configuration
+    ├── .chainsaw.yaml          # the suite's Chainsaw configuration: yours to tune
     ├── _templates/             # generated: step templates the tests share
     └── <resource>/             # e.g. vpc, internet-gateway, security-group
         ├── inputs.yaml         # written by hand
         └── ...                 # generated; don't edit
 ```
 
-- `inputs.yaml` is the only file you write. Everything else is generated, and
-  starts with a `Code generated … DO NOT EDIT.` header.
+- You write `inputs.yaml`, and own `.chainsaw.yaml`. Everything else is
+  generated, and starts with a `Code generated … DO NOT EDIT.` header.
+- `.chainsaw.yaml` is written once, as a starting point, when the directory
+  has none, and is never regenerated. Tune it for the service: the timeouts
+  are upper bounds that must outlast its slowest resource, e.g. `assert` for
+  a create that takes 20 minutes, and `parallel` must keep concurrent tests
+  within the test account's quotas, since each test creates its own
+  dependencies.
 - `<resource>` is the CRD's snake_case name with `_` replaced by `-`, e.g.
   `internet_gateway` becomes `internet-gateway`. The generator lists the
   resources that have no `inputs.yaml`.
-- To change `.chainsaw.yaml` or a step template for one controller, replace
-  it with your own file without the header. The generator keeps a file that
-  doesn't start with it.
+- To change a step template for one controller, replace it with your own file
+  without the header. The generator keeps a file that doesn't start with it.
 - When `test/e2e/chainsaw/` exists, `make build-controller SERVICE=<service>`
   regenerates the tests. To regenerate the tests alone:
 
