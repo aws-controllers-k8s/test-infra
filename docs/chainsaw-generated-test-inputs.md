@@ -18,16 +18,21 @@ configuration for the parts an API's shape can't express.
 ```
 <service>-controller/
 └── test/e2e/chainsaw/          # opts the controller in to Chainsaw tests
-    ├── .chainsaw.yaml          # Chainsaw configuration
-    ├── _templates/             # shared step templates the generated tests use
+    ├── .chainsaw.yaml          # generated: the suite's Chainsaw configuration
+    ├── _templates/             # generated: step templates the tests share
     └── <resource>/             # e.g. vpc, internet-gateway, security-group
         ├── inputs.yaml         # written by hand
         └── ...                 # generated; don't edit
 ```
 
+- `inputs.yaml` is the only file you write. Everything else is generated, and
+  starts with a `Code generated … DO NOT EDIT.` header.
 - `<resource>` is the CRD's snake_case name with `_` replaced by `-`, e.g.
   `internet_gateway` becomes `internet-gateway`. The generator lists the
   resources that have no `inputs.yaml`.
+- To change `.chainsaw.yaml` or a step template for one controller, replace
+  it with your own file without the header. The generator keeps a file that
+  doesn't start with it.
 - When `test/e2e/chainsaw/` exists, `make build-controller SERVICE=<service>`
   regenerates the tests. To regenerate the tests alone:
 
