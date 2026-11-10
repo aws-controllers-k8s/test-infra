@@ -110,6 +110,7 @@ irs_test_services:
 # Enabling it at setup avoids a mid-run controller restart.
 ignore_field_drift_test_services:
 - ec2
+- elbv2
 
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
