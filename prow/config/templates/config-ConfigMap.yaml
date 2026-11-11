@@ -55,6 +55,12 @@ data:
           - build-log.txt
           optional_files:
           - controller_logs
+        # Shows the JUnit reports a job writes to $ARTIFACTS (junit*.xml) as
+        # a list of failed and passed tests on the job page
+        - lens:
+            name: junit
+          required_files:
+          - ^artifacts/junit.*\.xml$
 
     plank:
       job_url_prefix_config:
