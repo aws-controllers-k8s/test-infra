@@ -58,9 +58,12 @@ run_python_tests() {
         # The full test-infra repo is copied into the image as ./acktest (used
         # to pip-install the library). Exclude it from collection so acktest's
         # own unit tests are never discovered as part of a controller's e2e run.
+        # The JUnit report goes to the job's artifacts dir, where Prow shows it
+        # on the job page.
         pytest -n ${PYTEST_NUM_THREADS} --dist no -o log_cli=true --ignore=acktest ${markers_args} \
             ${method_args} --log-cli-level "${PYTEST_LOG_LEVEL}" \
-            --log-level "${PYTEST_LOG_LEVEL}" .
+            --log-level "${PYTEST_LOG_LEVEL}" \
+            --junitxml "${ARTIFACTS:-/tmp}/junit_pytest.xml" .
         local test_exit_code=$?
     popd 1> /dev/null
     return $test_exit_code
