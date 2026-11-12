@@ -623,3 +623,31 @@ func TestIngestLeavesOnceDispatchedItemsAlone(t *testing.T) {
 	Ingest(cfg, []Issue{issueWith(t, 27, false, s3Header, regenABAC)}, items)
 	unchanged("close")
 }
+
+func TestIngestEmptyCommentAuthorIsNeverTeam(t *testing.T) {
+	// Even a Team map that somehow holds "" must not let an authorless
+	// comment (a deleted account, say) act.
+	loose := cfg
+	loose.Team = map[string]bool{"": true}
+	items := map[string]*ledger.WorkItem{}
+	is := issueWith(t, 27, true, s3Header, modeField)
+	Ingest(loose, []Issue{is}, items)
+
+	is.Comments = []Comment{{Author: "", Body: "/autopilot wontfix " + ledger.KeyHash(modeKey)}}
+	Ingest(loose, []Issue{is}, items)
+	assert.Equal(t, ledger.Detected, items[modeKey].State)
+}
+
+func TestIngestEmptyBotLoginTrustsNothing(t *testing.T) {
+	noBot := cfg
+	noBot.BotLogin = ""
+	is := issueWith(t, 27, true, s3Header, modeField)
+	is.Author = ""
+
+	items := map[string]*ledger.WorkItem{}
+	res := Ingest(noBot, []Issue{is}, items)
+	assert.Empty(t, items)
+	assert.Empty(t, res.Changed)
+	require.Len(t, res.Skipped, 1)
+	assert.Contains(t, res.Skipped[0], "#27: no bot login configured")
+}

@@ -36,9 +36,11 @@ type Issue struct {
 }
 
 type Config struct {
-	// BotLogin is the account detect-api-changes files issues as.
+	// BotLogin is the account detect-api-changes files issues as. When empty,
+	// no issue is trusted.
 	BotLogin string
-	// Team holds the logins whose /autopilot commands count.
+	// Team holds the logins whose /autopilot commands count. A comment with
+	// an empty Author never counts, whatever Team holds.
 	Team map[string]bool
 	// Now stamps new history entries (RFC 3339, UTC).
 	Now string
@@ -220,7 +222,8 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			}
 		}
 		for _, c := range is.Comments {
-			if !cfg.Team[c.Author] {
+			// An empty Author (a deleted account, say) is nobody's.
+			if c.Author == "" || !cfg.Team[c.Author] {
 				continue
 			}
 			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {
@@ -317,7 +320,11 @@ func union(a, b []string) []string {
 }
 
 // trusted returns the issue's service, or why the issue must not be read.
+// An empty cfg.BotLogin trusts nothing, so an authorless issue cannot match it.
 func trusted(cfg Config, is Issue) (string, string) {
+	if cfg.BotLogin == "" {
+		return "", "no bot login configured"
+	}
 	if is.Author != cfg.BotLogin {
 		return "", fmt.Sprintf("author %q is not %q", is.Author, cfg.BotLogin)
 	}

@@ -10,18 +10,30 @@ import (
 // FetchIssues lists every issue, open or closed, carrying the detector's label.
 // Pull requests are skipped. Comments are fetched for open issues only.
 // It only reads from GitHub.
+//
+// The listing is not a snapshot: an issue filed, relabelled or edited while
+// pages are being read shifts later pages, so one issue can be listed twice
+// and another missed. FetchIssues fails closed when any number repeats, since
+// a missed issue would look like gone findings.
 func FetchIssues(ctx context.Context, c *github.Client, owner, repo string) ([]Issue, error) {
 	opt := &github.IssueListByRepoOptions{
 		State: "all", Labels: []string{apiChangeLabel},
 		ListOptions: github.ListOptions{PerPage: 100},
 	}
 	var out []Issue
+	seen := map[int]bool{}
 	for {
 		page, resp, err := c.Issues.ListByRepo(ctx, owner, repo, opt)
 		if err != nil {
 			return nil, fmt.Errorf("listing %s/%s issues: %w", owner, repo, err)
 		}
 		for _, gi := range page {
+			// Pull requests share the number space, so they count too.
+			n := gi.GetNumber()
+			if seen[n] {
+				return nil, fmt.Errorf("listing %s/%s issues: #%d listed twice; results shifted during listing", owner, repo, n)
+			}
+			seen[n] = true
 			if gi.IsPullRequest() {
 				continue
 			}
@@ -64,7 +76,8 @@ func fetchComments(ctx context.Context, c *github.Client, owner, repo string, nu
 	}
 }
 
-// FetchTeam returns the logins of an org team's members.
+// FetchTeam returns the logins of an org team's members. An empty login is
+// never added, so an authorless comment cannot match a member.
 func FetchTeam(ctx context.Context, c *github.Client, org, slug string) (map[string]bool, error) {
 	opt := &github.TeamListTeamMembersOptions{ListOptions: github.ListOptions{PerPage: 100}}
 	out := map[string]bool{}
@@ -74,7 +87,9 @@ func FetchTeam(ctx context.Context, c *github.Client, org, slug string) (map[str
 			return nil, fmt.Errorf("listing members of %s/%s: %w", org, slug, err)
 		}
 		for _, u := range page {
-			out[u.GetLogin()] = true
+			if l := u.GetLogin(); l != "" {
+				out[l] = true
+			}
 		}
 		if resp.NextPage == 0 {
 			return out, nil
