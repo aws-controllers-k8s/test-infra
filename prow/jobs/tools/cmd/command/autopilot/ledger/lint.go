@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -57,6 +58,8 @@ func Lint(root string) []error {
 		// catches a key that held invalid bytes. ValidString stays as a guard.
 		case !utf8.ValidString(w.Key) || strings.ContainsRune(w.Key, utf8.RuneError):
 			fail("key is not valid UTF-8")
+		case strings.IndexFunc(w.Key, unicode.IsControl) >= 0:
+			fail("key holds a control character")
 		}
 		if w.Service == "" || w.Source == "" {
 			fail("service and source are required")

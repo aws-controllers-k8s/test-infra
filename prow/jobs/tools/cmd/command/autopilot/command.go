@@ -421,6 +421,9 @@ func postStatus(ctx context.Context, client *github.Client, o statusOptions, out
 		}
 		a := viewstatus.Plan(is, o.CommentLogin, viewstatus.Render(byIssue[is.URL]))
 		fmt.Fprintf(out, "status #%d %s\n", is.Number, a.Kind)
+		for _, id := range a.Duplicates {
+			fmt.Fprintf(out, "status #%d duplicate %d\n", is.Number, id)
+		}
 		if o.DryRun {
 			continue
 		}

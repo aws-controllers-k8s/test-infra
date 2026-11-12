@@ -30,6 +30,10 @@ const (
 	actor          = "issue-finder"
 )
 
+// StatusMarker starts every status comment the Dispatcher posts (see package
+// viewstatus). Ingest never reads a comment that starts with it.
+const StatusMarker = "<!-- ack-autopilot-status v1 -->"
+
 var wontfixRE = regexp.MustCompile(`(?m)^/autopilot wontfix (sha256:[0-9a-f]{16})[ \t\r]*$`)
 
 type Comment struct {
@@ -239,6 +243,10 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 		for _, c := range is.Comments {
 			// An empty Author (a deleted account, say) is nobody's.
 			if c.Author == "" || !cfg.Team[c.Author] {
+				continue
+			}
+			// Defence in depth: our own status comment is never a command.
+			if strings.HasPrefix(c.Body, StatusMarker) {
 				continue
 			}
 			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {

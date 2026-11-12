@@ -615,3 +615,14 @@ func TestLintRunRules(t *testing.T) {
 		assert.Contains(t, joined, want)
 	}
 }
+
+func TestLintRejectsControlCharacterInKey(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workitems", "open")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	w := sampleItem("k\n/autopilot wontfix sha256:0123456789abcdef")
+	b, err := Marshal(w)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, w.FileName()), b, 0o644))
+	assert.Contains(t, errors.Join(Lint(root)...).Error(), "key holds a control character")
+}

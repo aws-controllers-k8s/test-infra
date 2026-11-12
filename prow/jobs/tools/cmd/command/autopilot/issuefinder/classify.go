@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
@@ -80,10 +81,16 @@ func subjectKey(l findingsblock.Line) string {
 
 // validText reports whether s can go into a key or the ledger. ledger.Lint
 // rejects keys that are not valid UTF-8 or hold U+FFFD (what encoding/json
-// writes for bad bytes), and one bad item would block every push.
+// writes for bad bytes) or control characters, and one bad item would block
+// every push.
 func validText(s ...string) bool {
 	for _, v := range s {
 		if !utf8.ValidString(v) || strings.ContainsRune(v, utf8.RuneError) {
+			return false
+		}
+		// A control character (a newline, say) in a key could break out of
+		// the line a key is rendered on.
+		if strings.IndexFunc(v, unicode.IsControl) >= 0 {
 			return false
 		}
 	}
@@ -102,7 +109,7 @@ func validSegment(s ...string) bool {
 }
 
 const (
-	reasonText = "text is not valid UTF-8"
+	reasonText = "text is not valid UTF-8 or holds a control character"
 	reasonSep  = `key segment contains "|"`
 )
 

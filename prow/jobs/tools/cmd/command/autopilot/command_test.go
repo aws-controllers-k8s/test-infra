@@ -435,3 +435,35 @@ func TestPostStatus(t *testing.T) {
 	require.Len(t, posted, 1)
 	assert.Contains(t, posted[0], `"body":"<!-- ack-autopilot-status v1 -->`)
 }
+
+func TestPostStatusReportsDuplicatesWithoutDeleting(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, io.Discard))
+
+	body, err := json.Marshal(issueBody(t))
+	require.NoError(t, err)
+	var methods []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/ack-private/issues", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `[{"number":27,"html_url":"https://x/27","state":"open","user":{"login":"ack-bot"},
+		  "labels":[{"name":"ack/api-change-detected"},{"name":"service/s3"}],"body":%s}]`, body)
+	})
+	mux.HandleFunc("/repos/o/ack-private/issues/27/comments", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methods = append(methods, r.Method)
+		}
+		fmt.Fprint(w, `[{"id":5,"user":{"login":"someone"},"body":"<!-- ack-autopilot-status v1 -->\nspoof"},
+		  {"id":7,"user":{"login":"ack-bot"},"body":"<!-- ack-autopilot-status v1 -->\nold"},
+		  {"id":9,"user":{"login":"ack-bot"},"body":"<!-- ack-autopilot-status v1 -->\ndup"}]`)
+	})
+	mux.HandleFunc("/repos/o/ack-private/issues/comments/7", func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		fmt.Fprint(w, `{"id":7}`)
+	})
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", LedgerDir: dir}
+	var out strings.Builder
+	require.NoError(t, postStatus(context.Background(), newClient(t, mux), so, &out))
+	assert.Equal(t, "status #27 update\nstatus #27 duplicate 9\n", out.String())
+	assert.Equal(t, []string{http.MethodPatch}, methods, "only the first of our comments is edited; nothing is deleted")
+}
