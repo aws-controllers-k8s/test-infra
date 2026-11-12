@@ -33,6 +33,8 @@ const (
 var wontfixRE = regexp.MustCompile(`(?m)^/autopilot wontfix (sha256:[0-9a-f]{16})[ \t\r]*$`)
 
 type Comment struct {
+	// ID is GitHub's comment id; post-status edits its own comment by it.
+	ID           int64
 	Author, Body string
 }
 
