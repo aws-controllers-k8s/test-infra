@@ -174,8 +174,9 @@ func ingest(ctx context.Context, client *github.Client, o ingestOptions, now str
 		fmt.Fprintf(out, "skipped %s\n", s)
 	}
 	for _, k := range res.Changed {
-		// The first four fields are the plan's contract (task 11 reads $4 as
-		// the key); new-or-updated is a fifth field so it cannot shift them.
+		// The line format "changed <key_hash> <state> <key> (new|updated)" is a
+		// stable contract: scripts read field 4 as the key. new-or-updated is
+		// a fifth field so it cannot shift the first four.
 		kind := "new"
 		if existed[k] {
 			kind = "updated"
