@@ -124,7 +124,12 @@ func parse(cfg Config, is Issue) parsed {
 // DETECTED. Finder-owned also covers TRIAGED, QUEUED, BLOCKED and PLAN_PENDING,
 // and from TRIAGED on the classification holds the Dispatcher's triage
 // verdict, which may only be stricter than the detector's; the block must not
-// loosen it.
+// loosen it. The one exception is a detector reclassification: when the
+// detector's Work for a non-DETECTED item differs from the stored DetectorWork
+// (Work is not part of the key, so create-only can become hook), the stored
+// classification may be looser than the detector's current verdict. The item
+// then returns to DETECTED with a DETECTOR_RECLASSIFIED history entry and takes
+// the fresh classification, for the Dispatcher to triage again.
 //
 // The result does not depend on the order of issues; see byPrecedence.
 func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Result {
@@ -191,8 +196,16 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			if !p.complete {
 				ev.Findings = union(cur.Evidence.Findings, ev.Findings)
 			}
+			// ChangeClass comes from (bucket, Work) and Work is not part of the
+			// key, so a changed DetectorWork means Classify now derives a
+			// different classification for this key.
+			reclassified := cur.State != ledger.Detected && cur.DetectorWork != w.DetectorWork
 			cur.Evidence, cur.Links.ViewIssue, cur.DependsOn, cur.DetectorWork = ev, w.Links.ViewIssue, w.DependsOn, w.DetectorWork
 			cur.Resource, cur.FieldPath = w.Resource, w.FieldPath
+			if reclassified {
+				cur.State = ledger.Detected
+				cur.History = append(cur.History, ledger.Transition{TS: cfg.Now, To: ledger.Detected, By: actor, Reason: "DETECTOR_RECLASSIFIED"})
+			}
 			if cur.State == ledger.Detected {
 				cur.ChangeClass, cur.GapClass, cur.AutonomyLevel, cur.PriorityBand = w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand
 			}

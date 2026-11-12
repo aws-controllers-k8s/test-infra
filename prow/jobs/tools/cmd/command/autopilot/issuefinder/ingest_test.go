@@ -195,6 +195,35 @@ func TestIngestRefreshKeepsTriagedClassification(t *testing.T) {
 	assert.Equal(t, ledger.Triaged, w.State)
 }
 
+func TestIngestRetriagesWhenDetectorReclassifies(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+	w := items[modeKey]
+	require.Equal(t, "config-only", w.ChangeClass)
+	require.Equal(t, "create-only", w.DetectorWork)
+	w.State = ledger.Triaged
+	w.History = append(w.History, ledger.Transition{TS: cfg.Now, To: ledger.Triaged, By: "dispatcher"})
+
+	// The detector now says the same key needs a hook.
+	hooked := modeField
+	hooked.Work = "hook"
+	is := issueWith(t, 27, true, s3Header, regenABAC, hooked)
+	res := Ingest(cfg, []Issue{is}, items)
+	assert.Contains(t, res.Changed, modeKey)
+	w = items[modeKey]
+	assert.Equal(t, ledger.Detected, w.State)
+	assert.Equal(t, "hook", w.DetectorWork)
+	assert.Equal(t, "hand-written-code", w.ChangeClass)
+	assert.Equal(t, "human-merge", w.AutonomyLevel)
+	last := w.History[len(w.History)-1]
+	assert.Equal(t, ledger.Detected, last.To)
+	assert.Equal(t, "DETECTOR_RECLASSIFIED", last.Reason)
+	assert.Equal(t, cfg.Now, last.TS)
+
+	res = Ingest(cfg, []Issue{is}, items)
+	assert.Empty(t, res.Changed)
+}
+
 func TestIngestDoesNotSupersedeKeyListedByAnotherOpenIssue(t *testing.T) {
 	seed := func() map[string]*ledger.WorkItem {
 		items := map[string]*ledger.WorkItem{}
