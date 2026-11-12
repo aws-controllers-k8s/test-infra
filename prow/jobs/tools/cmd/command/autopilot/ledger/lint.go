@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -66,6 +67,21 @@ func Lint(root string) []error {
 		}
 		if n := len(w.History); n == 0 || w.History[n-1].To != w.State {
 			fail("last history entry must move the item to its state %s", w.State)
+		}
+		for _, h := range w.History {
+			if _, err := time.Parse(time.RFC3339, h.TS); err != nil {
+				fail("history ts %q is not RFC 3339", h.TS)
+				break
+			}
+		}
+		switch {
+		case w.State.ActiveRun() && (w.Claim == nil || w.Claim.LaunchID == "" || w.Attempts == nil):
+			fail("state %s needs a claim with a launch_id, and attempts", w.State)
+		case !w.State.ActiveRun() && w.Claim != nil:
+			fail("state %s must not hold a claim; only RUNNING, GATING and RETRY_ENV do", w.State)
+		}
+		if a := w.Attempts; a != nil && (a.MaxRuns < 1 || a.Runs < 0 || a.Runs > a.MaxRuns) {
+			fail("attempts runs=%d max_runs=%d out of range", a.Runs, a.MaxRuns)
 		}
 		if other, dup := seen[w.Key]; dup {
 			fail("duplicate key %q (also in %s)", w.Key, other)

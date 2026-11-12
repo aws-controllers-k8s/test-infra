@@ -517,3 +517,73 @@ func TestLoadRejectsMisnamedFile(t *testing.T) {
 	_, err := Load(root)
 	assert.ErrorContains(t, err, "file name")
 }
+
+func runningItem(key string) *WorkItem {
+	w := sampleItem(key)
+	w.State = Running
+	w.Attempts = &Attempts{Runs: 1, MaxRuns: 3}
+	w.Claim = &Claim{LaunchID: "autopilot-0123456789abcdef-r1", Workflow: "sdk-bump", TS: "2026-11-12T09:00:00Z", Deadline: "2026-11-12T14:00:00Z"}
+	w.Links.ProwJobs = []string{"autopilot-0123456789abcdef-r1"}
+	w.History = append(w.History, Transition{TS: "2026-11-12T09:00:00Z", To: Running, By: "dispatcher"})
+	return w
+}
+
+func TestStateHelpers(t *testing.T) {
+	for _, s := range []State{Running, Gating, RetryEnv} {
+		assert.True(t, s.ActiveRun(), s)
+	}
+	for _, s := range []State{Queued, PRReady, HumanReview, Merged} {
+		assert.False(t, s.ActiveRun(), s)
+	}
+	for _, s := range []State{PRReady, HumanReview, Feedback, MergeSoak, Stale} {
+		assert.True(t, s.OpenPR(), s)
+	}
+	assert.False(t, Merged.OpenPR())
+	for _, s := range []State{Merged, Released, Verified, Done} {
+		assert.True(t, s.Landed(), s)
+	}
+	for _, s := range []State{Queued, HumanReview, Superseded, WontFix, Escalated} {
+		assert.False(t, s.Landed(), s)
+	}
+}
+
+func TestRunFieldsRoundTripAndLintClean(t *testing.T) {
+	root := t.TempDir()
+	w := runningItem("sdk-bump|s3|*|v1")
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	assert.FileExists(t, filepath.Join(root, "workitems", "inflight", w.FileName()))
+	got, err := Load(root)
+	require.NoError(t, err)
+	assert.Equal(t, w, got[w.Key])
+	assert.Empty(t, Lint(root))
+}
+
+func TestLintRunRules(t *testing.T) {
+	root := t.TempDir()
+	write := func(w *WorkItem) {
+		dir, _ := w.State.Dir()
+		b, err := Marshal(w)
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems", dir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workitems", dir, w.FileName()), b, 0o644))
+	}
+	noClaim := runningItem("k1")
+	noClaim.Claim = nil
+	write(noClaim)
+	strayClaim := sampleItem("k2")
+	strayClaim.Claim = &Claim{LaunchID: "x"}
+	write(strayClaim)
+	badAttempts := runningItem("k3")
+	badAttempts.Attempts = &Attempts{Runs: 4, MaxRuns: 3}
+	write(badAttempts)
+	badTS := sampleItem("k4")
+	badTS.History[0].TS = "yesterday"
+	write(badTS)
+
+	errs := Lint(root)
+	require.Len(t, errs, 4)
+	joined := errors.Join(errs...).Error()
+	for _, want := range []string{"needs a claim", "must not hold a claim", "attempts runs=4 max_runs=3", `history ts "yesterday"`} {
+		assert.Contains(t, joined, want)
+	}
+}
