@@ -52,6 +52,19 @@ func (o ingestOptions) validate() error {
 	return nil
 }
 
+// requireDir fails unless dir exists and is a directory. It does not look
+// inside: an empty ledger holding only a README is valid.
+func requireDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("--ledger-dir: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("--ledger-dir %q is not a directory", dir)
+	}
+	return nil
+}
+
 var (
 	ingestOpts ingestOptions
 	lintDir    string
@@ -83,6 +96,9 @@ var lintCmd = &cobra.Command{
 	Use:   "lint-ledger",
 	Short: "check every work item file in a ledger",
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if err := requireDir(lintDir); err != nil {
+			return err
+		}
 		errs := ledger.Lint(lintDir)
 		for _, err := range errs {
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
@@ -117,6 +133,13 @@ func ingest(ctx context.Context, client *github.Client, o ingestOptions, now str
 	if err := o.validate(); err != nil {
 		return err
 	}
+	if !o.DryRun {
+		// A mistyped path must not read as an empty ledger. A dry run is exempt:
+		// the periodic runs before the directory is bootstrapped.
+		if err := requireDir(o.LedgerDir); err != nil {
+			return err
+		}
+	}
 	team, err := issuefinder.FetchTeam(ctx, client, o.Owner, o.TeamSlug)
 	if err != nil {
 		return err
@@ -138,11 +161,13 @@ func ingest(ctx context.Context, client *github.Client, o ingestOptions, now str
 		fmt.Fprintf(out, "skipped %s\n", s)
 	}
 	for _, k := range res.Changed {
-		verb := "new"
+		// The first four fields are the plan's contract (task 11 reads $4 as
+		// the key); new-or-updated is a fifth field so it cannot shift them.
+		kind := "new"
 		if existed[k] {
-			verb = "updated"
+			kind = "updated"
 		}
-		fmt.Fprintf(out, "%s %s %s %s\n", verb, items[k].KeyHash, items[k].State, k)
+		fmt.Fprintf(out, "changed %s %s %s (%s)\n", items[k].KeyHash, items[k].State, k, kind)
 	}
 	fmt.Fprintf(out, "%d issue(s) read, %d skipped, %d item(s) changed\n", len(issues), len(res.Skipped), len(res.Changed))
 	if o.DryRun {
