@@ -16,12 +16,15 @@ import (
 	"time"
 
 	"github.com/google/go-github/v63/github"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/issueregion"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/viewstatus"
 )
 
 const (
@@ -387,9 +390,186 @@ func TestDispatchWithoutPolicyStillRoutes(t *testing.T) {
 }
 
 func TestDispatchFailsWhenWrittenPolicyIsMissing(t *testing.T) {
-	// Writing a ledger without policy must not lint clean: writes need policy.
-	err := dispatch(context.Background(), fakeGitHub(t), opts(t.TempDir()), tickTime, io.Discard)
-	assert.ErrorContains(t, err, "does not lint clean")
+	// Writing a ledger without policy must fail before anything is written.
+	dir := t.TempDir()
+	var out strings.Builder
+	err := dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, &out)
+	assert.ErrorContains(t, err, "ledger not written")
+	assert.Contains(t, out.String(), "problem policy: ")
+	entries, _ := os.ReadDir(dir)
+	assert.Empty(t, entries)
+}
+
+// readTree returns every file under dir, by relative path.
+func readTree(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	require.NoError(t, filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, rerr := os.ReadFile(p)
+		require.NoError(t, rerr)
+		rel, _ := filepath.Rel(dir, p)
+		out[rel] = string(b)
+		return nil
+	}))
+	return out
+}
+
+func TestDispatchDryRunLeavesLedgerByteIdentical(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, io.Discard))
+	before := readTree(t, dir)
+	require.NotEmpty(t, before)
+
+	o := opts(dir)
+	o.DryRun = true
+	var out strings.Builder
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), o, tickTime.Add(time.Hour), &out))
+	assert.Contains(t, out.String(), "(shadow)")
+	assert.Equal(t, before, readTree(t, dir))
+}
+
+func TestDispatchReportsUpdatedItem(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	// Ingest alone leaves the bump item DETECTED; dispatch then queues it.
+	require.NoError(t, ingest(context.Background(), fakeGitHub(t), opts(dir), now, io.Discard))
+	var out strings.Builder
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, &out))
+	assert.Contains(t, out.String(), "changed "+ledger.KeyHash(bumpKey)+" QUEUED "+bumpKey+" (updated)\n")
+}
+
+func TestDispatchReportsWaiting(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	f := filepath.Join(dir, "policy", "autopilot.yaml")
+	b, err := os.ReadFile(f)
+	require.NoError(t, err)
+	edited := strings.Replace(string(b), "services: [s3, iam, rds, ec2, eks]", "services: [iam, rds, ec2, eks]", 1)
+	require.NotEqual(t, string(b), edited)
+	require.NoError(t, os.WriteFile(f, []byte(edited), 0o644))
+
+	var out strings.Builder
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, &out))
+	assert.Contains(t, out.String(), "waiting "+ledger.KeyHash(bumpKey)+" "+dispatcher.CapServiceNotEnabled+" "+bumpKey+"\n")
+	assert.NotContains(t, out.String(), "\nlaunch ")
+}
+
+func TestDispatchAndPostStatusFlagsAreRequired(t *testing.T) {
+	for _, c := range []struct {
+		cmd   *cobra.Command
+		flags []string
+	}{
+		{dispatchCmd, []string{"bot-login", "team-slug", "ledger-dir"}},
+		{postStatusCmd, []string{"ledger-dir", "comment-login", "bot-login"}},
+	} {
+		for _, name := range c.flags {
+			f := c.cmd.Flags().Lookup(name)
+			require.NotNil(t, f, "%s --%s", c.cmd.Name(), name)
+			assert.Equal(t, []string{"true"}, f.Annotations[cobra.BashCompOneRequiredFlag], "%s --%s", c.cmd.Name(), name)
+		}
+	}
+	assert.NotNil(t, dispatchCmd.Flags().Lookup("team-owner"))
+	assert.NotNil(t, dispatchCmd.Flags().Lookup("dry-run"))
+}
+
+func TestPostStatusRejectsEmptyBotLogin(t *testing.T) {
+	so := statusOptions{Owner: "o", Repo: "r", CommentLogin: "c", LedgerDir: t.TempDir()}
+	assert.ErrorContains(t, postStatus(context.Background(), nil, so, io.Discard), "--bot-login must not be empty")
+}
+
+// statusServer serves the given issues JSON and per-issue comments JSON, and
+// records every non-GET request as "METHOD path".
+func statusServer(t *testing.T, issues string, comments map[int]string) (*github.Client, *[]string) {
+	t.Helper()
+	var writes []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/ack-private/issues", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, issues)
+	})
+	for n, c := range comments {
+		c := c
+		mux.HandleFunc(fmt.Sprintf("/repos/o/ack-private/issues/%d/comments", n), func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				writes = append(writes, r.Method+" "+r.URL.Path)
+				fmt.Fprint(w, `{"id":1}`)
+				return
+			}
+			fmt.Fprint(w, c)
+		})
+	}
+	mux.HandleFunc("/repos/o/ack-private/issues/comments/7", func(w http.ResponseWriter, r *http.Request) {
+		writes = append(writes, r.Method+" "+r.URL.Path)
+		fmt.Fprint(w, `{"id":7}`)
+	})
+	return newClient(t, mux), &writes
+}
+
+func TestPostStatusSkipsIssuesNotByBot(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, io.Discard))
+	// Point an item at #28, which "someone" filed: it still gets no comment.
+	items, err := ledger.Load(dir)
+	require.NoError(t, err)
+	items[bumpKey].Links.ViewIssue = "https://x/28"
+	require.NoError(t, ledger.Save(dir, items))
+
+	body, _ := json.Marshal(issueBody(t))
+	issues := fmt.Sprintf(`[{"number":28,"html_url":"https://x/28","state":"open","user":{"login":"someone"},
+	  "labels":[{"name":"ack/api-change-detected"}],"body":%s}]`, body)
+	client, writes := statusServer(t, issues, map[int]string{28: `[]`})
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", BotLogin: "ack-bot", LedgerDir: dir}
+	var out strings.Builder
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Empty(t, out.String())
+	assert.Empty(t, *writes)
+}
+
+func TestPostStatusUpdateUnchangedAndClosed(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, io.Discard))
+	items, err := ledger.Load(dir)
+	require.NoError(t, err)
+	var mine []*ledger.WorkItem
+	for _, w := range items {
+		if w.Links.ViewIssue == "https://x/27" {
+			mine = append(mine, w)
+		}
+	}
+	require.NotEmpty(t, mine)
+	current, _ := json.Marshal(viewstatus.Render(mine))
+
+	body, _ := json.Marshal(issueBody(t))
+	issues := func(state string) string {
+		return fmt.Sprintf(`[{"number":27,"html_url":"https://x/27","state":%q,"user":{"login":"ack-bot"},
+		  "labels":[{"name":"ack/api-change-detected"}],"body":%s}]`, state, body)
+	}
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", BotLogin: "ack-bot", LedgerDir: dir}
+
+	client, writes := statusServer(t, issues("open"),
+		map[int]string{27: `[{"id":7,"user":{"login":"ack-bot"},"body":"<!-- ack-autopilot-status v1 -->\nstale"}]`})
+	var out strings.Builder
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Equal(t, "status #27 update\n", out.String())
+	assert.Equal(t, []string{"PATCH /repos/o/ack-private/issues/comments/7"}, *writes)
+
+	client, writes = statusServer(t, issues("open"),
+		map[int]string{27: fmt.Sprintf(`[{"id":7,"user":{"login":"ack-bot"},"body":%s}]`, current)})
+	out.Reset()
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Equal(t, "status #27 unchanged\n", out.String())
+	assert.Empty(t, *writes)
+
+	client, writes = statusServer(t, issues("closed"), map[int]string{27: `[]`})
+	out.Reset()
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Empty(t, out.String())
+	assert.Empty(t, *writes)
 }
 
 func TestPostStatus(t *testing.T) {
@@ -421,7 +601,7 @@ func TestPostStatus(t *testing.T) {
 		fmt.Fprint(w, `[]`)
 	})
 	client := newClient(t, mux)
-	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", LedgerDir: dir, DryRun: true}
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", BotLogin: "ack-bot", LedgerDir: dir, DryRun: true}
 
 	var out strings.Builder
 	require.NoError(t, postStatus(context.Background(), client, so, &out))
@@ -461,7 +641,7 @@ func TestPostStatusReportsDuplicatesWithoutDeleting(t *testing.T) {
 		methods = append(methods, r.Method)
 		fmt.Fprint(w, `{"id":7}`)
 	})
-	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", LedgerDir: dir}
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", BotLogin: "ack-bot", LedgerDir: dir}
 	var out strings.Builder
 	require.NoError(t, postStatus(context.Background(), newClient(t, mux), so, &out))
 	assert.Equal(t, "status #27 update\nstatus #27 duplicate 9\n", out.String())

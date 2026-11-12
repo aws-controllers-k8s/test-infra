@@ -30,6 +30,10 @@ type Config struct {
 	Policy    *policy.Policy
 	PolicyErr error
 	Launcher  Launcher
+	// DryRun makes the launch step use a fresh ShadowLauncher whatever Launcher
+	// is, so a dry run can never start anything. Reconcile still reads run
+	// status through Launcher.
+	DryRun bool
 }
 
 // Launch is one launch the tick made (or, with a shadow launcher, would make).
@@ -71,6 +75,10 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 	p := *cfg.Policy
 	res.Problems = reconcile(ctx, items, cfg.Launcher, p.Budgets, cfg.Now)
 	res.Held = route(items, ts)
+	launcher := cfg.Launcher
+	if cfg.DryRun {
+		launcher = &ShadowLauncher{}
+	}
 	picks, waits := schedule(items, p, cfg.Now)
 	for _, c := range waits {
 		res.Waiting = append(res.Waiting, Wait{Key: c.item.Key, KeyHash: c.item.KeyHash, Cap: c.cap})
@@ -82,12 +90,12 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 			run = w.Attempts.Runs + 1
 		}
 		req := LaunchRequest{LaunchID: launchID(w, run), Workflow: c.lane.Workflow, Args: c.lane.args(w), Timeout: p.Budgets.JobTimeout()}
-		if err := cfg.Launcher.Launch(ctx, req); err != nil {
+		if err := launcher.Launch(ctx, req); err != nil {
 			res.Problems = append(res.Problems, fmt.Sprintf("launch %s for %s: %v", req.LaunchID, w.Key, err))
 			continue
 		}
-		res.Launched = append(res.Launched, Launch{Key: w.Key, KeyHash: w.KeyHash, Workflow: req.Workflow, LaunchID: req.LaunchID, Shadow: cfg.Launcher.Shadow()})
-		if !cfg.Launcher.Shadow() {
+		res.Launched = append(res.Launched, Launch{Key: w.Key, KeyHash: w.KeyHash, Workflow: req.Workflow, LaunchID: req.LaunchID, Shadow: launcher.Shadow()})
+		if !launcher.Shadow() {
 			claim(w, req, p.Budgets, cfg.Now)
 		}
 	}

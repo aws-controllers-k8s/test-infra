@@ -90,10 +90,10 @@ dispatch() {
 post_status() {
   if [ "$COMMENT" = "true" ]; then
     "$BIN" autopilot post-status --issues-owner "$OWNER" --issues-repo "$ISSUES_REPO" \
-      --comment-login "$COMMENT_LOGIN" --ledger-dir "$LEDGER_DIR"
+      --comment-login "$COMMENT_LOGIN" --bot-login "$BOT_LOGIN" --ledger-dir "$LEDGER_DIR"
   else
     "$BIN" autopilot post-status --issues-owner "$OWNER" --issues-repo "$ISSUES_REPO" \
-      --comment-login "$COMMENT_LOGIN" --ledger-dir "$LEDGER_DIR" --dry-run
+      --comment-login "$COMMENT_LOGIN" --bot-login "$BOT_LOGIN" --ledger-dir "$LEDGER_DIR" --dry-run
   fi
 }
 

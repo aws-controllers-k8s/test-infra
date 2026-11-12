@@ -159,3 +159,14 @@ func TestTickReconcileStatusErrorSurfaces(t *testing.T) {
 	assert.Contains(t, res.Problems[0], "api down")
 	assert.Equal(t, ledger.Running, w.State)
 }
+
+func TestTickDryRunNeverLaunches(t *testing.T) {
+	bump := item(bumpKey, "SDK-bump", ledger.Queued)
+	p := testPolicy(t)
+	f := &fakeLauncher{}
+	res := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: f, DryRun: true}, ledgerOf(bump))
+	assert.Empty(t, f.launched)
+	require.Len(t, res.Launched, 1)
+	assert.True(t, res.Launched[0].Shadow)
+	assert.Equal(t, ledger.Queued, bump.State)
+}
