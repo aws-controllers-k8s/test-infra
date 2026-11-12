@@ -111,6 +111,20 @@ func TestParseRejects(t *testing.T) {
 	}
 }
 
+func TestParseReportsUnsupportedVersion(t *testing.T) {
+	good, _ := Format(hdr, []Line{{Class: "spec-field", Kind: "B", Subject: "S", Bucket: BucketRegen}}, 1<<16)
+	_, found, err := Parse(strings.Replace(good, Begin+"v1 ", Begin+"v2 ", 1))
+	assert.True(t, found)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unsupported findings block version "v2"`)
+	assert.NotContains(t, err.Error(), "malformed")
+
+	// A header that is malformed in some other way keeps the old error.
+	_, _, err = Parse(strings.Replace(good, " count=1", "", 1))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "malformed findings header")
+}
+
 func TestParseAcceptsCRLF(t *testing.T) {
 	good, _ := Format(hdr, []Line{{Class: "spec-field", Kind: "B", Subject: "S", Bucket: BucketRegen}}, 1<<16)
 	b, _, err := Parse(strings.ReplaceAll(good, "\n", "\r\n"))
