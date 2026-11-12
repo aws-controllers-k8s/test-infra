@@ -30,12 +30,15 @@ func (w fieldWork) name() string {
 	return ""
 }
 
-// findingBucket mirrors the issue sections in resourceSections.
+// findingBucket mirrors the issue sections in resourceSections. A class with no
+// bucket of its own that is not a field candidate goes to manual review, so a
+// new class is never claimed as regeneration-only by default.
 func findingBucket(f Finding) string {
-	switch f.Class {
-	case ClassNewResource:
+	switch {
+	case f.Class == ClassNewResource:
 		return findingsblock.BucketNewResource
-	case ClassTransientResource, ClassPossibleResource:
+	case f.Class == ClassTransientResource, f.Class == ClassPossibleResource,
+		!isFieldCandidate(f.Class):
 		return findingsblock.BucketManualReview
 	}
 	if _, ok := needsWork(f); ok {
