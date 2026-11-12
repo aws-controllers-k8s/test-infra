@@ -70,7 +70,9 @@ type LaunchRequest struct {
 type Launcher interface {
 	// Launch starts a run. It must be idempotent on LaunchID: the same
 	// LaunchID with an identical request succeeds and starts nothing, so a
-	// tick that launched but lost its ledger push is safe to repeat. The same
+	// tick that launched but lost its ledger push is safe to repeat. That holds
+	// only if the rerun picks the same items; the real launcher must adopt or
+	// reap orphaned runs by id prefix. The same
 	// LaunchID with a different Workflow or Args is an error. A real launcher
 	// must remember the ids it has started even after Prow deletes the job,
 	// so that a relaunch never starts a second run.

@@ -54,7 +54,7 @@ func TestTickShadowChangesNoItemForLaunch(t *testing.T) {
 	assert.Equal(t, p.Budgets.JobTimeout(), l.Requests[0].Timeout)
 
 	before := marshalAll(t, items)
-	again := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: &ShadowLauncher{}}, items)
+	again := Tick(context.Background(), Config{Now: now.Add(30 * time.Minute), Policy: &p, Launcher: &ShadowLauncher{}}, items)
 	assert.Equal(t, before, marshalAll(t, items), "a second shadow tick changes nothing")
 	assert.Len(t, again.Launched, 1)
 }
@@ -109,4 +109,53 @@ func TestTickReportsWaiting(t *testing.T) {
 	p := testPolicy(t)
 	res := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: &ShadowLauncher{}}, ledgerOf(bump))
 	assert.Equal(t, []Wait{{Key: bump.Key, KeyHash: bump.KeyHash, Cap: CapServiceNotEnabled}}, res.Waiting)
+}
+
+func TestTickNilPolicyLeavesRunningItemUntouched(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	claim, hist := *w.Claim, len(w.History)
+	res := Tick(context.Background(), Config{Now: now}, ledgerOf(w))
+	assert.Equal(t, ledger.Running, w.State)
+	assert.Equal(t, claim, *w.Claim)
+	assert.Len(t, w.History, hist)
+	require.Len(t, res.Problems, 1)
+	assert.Contains(t, res.Problems[0], "policy or launcher unavailable")
+	assert.NotContains(t, res.Problems[0], "<nil>")
+}
+
+func TestTickNilLauncherRoutesOnly(t *testing.T) {
+	bump := item(bumpKey, "SDK-bump", ledger.Detected)
+	p := testPolicy(t)
+	res := Tick(context.Background(), Config{Now: now, Policy: &p}, ledgerOf(bump))
+	assert.Equal(t, ledger.Queued, bump.State)
+	assert.Empty(t, res.Launched)
+	require.Len(t, res.Problems, 1)
+	assert.Contains(t, res.Problems[0], "policy or launcher unavailable")
+}
+
+func TestTickLaunchesInScheduleOrder(t *testing.T) {
+	iam := item("sdk-bump|iam|*|v1", "SDK-bump", ledger.Queued)
+	iam.PriorityBand = 3
+	s3 := item("sdk-bump|s3|*|v1", "SDK-bump", ledger.Queued)
+	s3.PriorityBand = 1
+	sqs := item("sdk-bump|sqs|*|v1", "SDK-bump", ledger.Queued)
+	sns := item("sdk-bump|sns|*|v1", "SDK-bump", ledger.Queued)
+	p := testPolicy(t)
+	res := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: &ShadowLauncher{}}, ledgerOf(iam, s3, sqs, sns))
+	require.Len(t, res.Launched, 2)
+	assert.Equal(t, []string{s3.Key, iam.Key}, []string{res.Launched[0].Key, res.Launched[1].Key})
+	assert.Equal(t, []Wait{
+		{Key: sns.Key, KeyHash: sns.KeyHash, Cap: CapServiceNotEnabled},
+		{Key: sqs.Key, KeyHash: sqs.KeyHash, Cap: CapServiceNotEnabled},
+	}, res.Waiting)
+}
+
+func TestTickReconcileStatusErrorSurfaces(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	p := testPolicy(t)
+	f := &fakeLauncher{statusErr: map[string]error{w.Claim.LaunchID: errors.New("api down")}}
+	res := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: f}, ledgerOf(w))
+	require.Len(t, res.Problems, 1)
+	assert.Contains(t, res.Problems[0], "api down")
+	assert.Equal(t, ledger.Running, w.State)
 }

@@ -26,7 +26,7 @@ type Config struct {
 	Now time.Time
 	// Policy is nil when the policy files could not be read. The tick then
 	// only routes: it reconciles nothing (caps and timeouts are unknown) and
-	// launches nothing, and reports PolicyErr.
+	// launches nothing, and reports PolicyErr. A nil Launcher does the same.
 	Policy    *policy.Policy
 	PolicyErr error
 	Launcher  Launcher
@@ -59,8 +59,12 @@ type Result struct {
 func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Result {
 	ts := cfg.Now.UTC().Format(time.RFC3339)
 	var res Result
-	if cfg.Policy == nil {
-		res.Problems = append(res.Problems, fmt.Sprintf("policy: %v; nothing reconciled or launched", cfg.PolicyErr))
+	if cfg.Policy == nil || cfg.Launcher == nil {
+		why := "policy or launcher unavailable"
+		if cfg.PolicyErr != nil {
+			why = fmt.Sprintf("policy: %v", cfg.PolicyErr)
+		}
+		res.Problems = append(res.Problems, why+"; nothing reconciled or launched")
 		res.Held = route(items, ts)
 		return res
 	}
