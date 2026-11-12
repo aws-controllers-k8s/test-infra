@@ -202,6 +202,52 @@ func TestIngestReportsUnmatchedWontfix(t *testing.T) {
 	assert.Contains(t, res.Skipped[0], "matches no finder-owned item")
 }
 
+func TestIngestAppliedWontfixIsSilentOnLaterRuns(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	cmd := "/autopilot wontfix " + ledger.KeyHash(modeKey)
+	// A duplicate command in the same run is also silent once applied.
+	is.Comments = []Comment{{Author: "maintainer", Body: cmd}, {Author: "maintainer", Body: cmd}}
+	res := Ingest(cfg, []Issue{is}, items)
+	assert.Equal(t, []string{modeKey}, res.Changed)
+	assert.Empty(t, res.Skipped)
+	require.Equal(t, ledger.WontFix, items[modeKey].State)
+
+	// The issue still lists the finding and still carries the old comment.
+	res = Ingest(cfg, []Issue{is}, items)
+	assert.Empty(t, res.Changed)
+	assert.Empty(t, res.Skipped)
+}
+
+func TestIngestSameIssueTerminalItemIsSilent(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC)}, items)
+	require.Equal(t, ledger.Superseded, items[modeKey].State)
+
+	// #27 lists the finding again: same issue, so nothing to report.
+	res := Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+	assert.Empty(t, res.Changed)
+	assert.Empty(t, res.Skipped)
+}
+
+func TestIngestReportsWontfixOfDispatchedItem(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+	w := items[modeKey]
+	w.State = ledger.Running
+	w.History = append(w.History, ledger.Transition{TS: cfg.Now, To: ledger.Running, By: "workflow"})
+
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	is.Comments = []Comment{{Author: "maintainer", Body: "/autopilot wontfix " + ledger.KeyHash(modeKey)}}
+	res := Ingest(cfg, []Issue{is}, items)
+	assert.Equal(t, ledger.Running, items[modeKey].State)
+	require.Len(t, res.Skipped, 1)
+	assert.Contains(t, res.Skipped[0], "matches no finder-owned item")
+}
+
 func TestIngestIgnoresWontfixInFencedCode(t *testing.T) {
 	items := map[string]*ledger.WorkItem{}
 	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)

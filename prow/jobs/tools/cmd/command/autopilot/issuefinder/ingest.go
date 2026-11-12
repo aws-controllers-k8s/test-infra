@@ -48,10 +48,11 @@ type Result struct {
 	// Changed lists the keys of items created or modified, sorted.
 	Changed []string
 	// Skipped explains each issue that was not read, each finding Classify
-	// could not turn into an item, each finding that names an item already in a
-	// terminal state (once per key per run), and each team /autopilot wontfix
-	// that matched no item, prefixed with "#<issue number>: ". Ingest changes
-	// no state for any of them.
+	// could not turn into an item, each finding that names an item in a terminal
+	// state linked to a different issue (once per key per run), and each team
+	// /autopilot wontfix that matches neither a finder-owned item nor an
+	// already WONT_FIX item on this issue, prefixed with "#<issue number>: ".
+	// Ingest changes no state for any of them.
 	Skipped []string
 }
 
@@ -131,7 +132,9 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 				continue
 			}
 			if cur.State.Terminal() {
-				if !reported[w.Key] {
+				// The same issue still listing a dismissed finding is the
+				// steady state; only a different issue is a reappearance.
+				if cur.Links.ViewIssue != is.URL && !reported[w.Key] {
 					reported[w.Key] = true
 					skip("%s: finding reappeared but item is %s; not reopened", w.Key, cur.State)
 				}
@@ -160,14 +163,21 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 				continue
 			}
 			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {
-				matched := false
-				for _, w := range fromIssue(items, is.URL) {
-					if w.KeyHash == m[1] {
-						matched = true
+				handled := false
+				for _, w := range items {
+					if w.Source != source || w.Links.ViewIssue != is.URL || w.KeyHash != m[1] {
+						continue
+					}
+					switch {
+					case w.FinderOwned():
+						handled = true
 						move(w, ledger.WontFix, cfg.Now, "wont_fix:product_decision", "MAINTAINER_WONTFIX by "+c.Author)
+					case w.State == ledger.WontFix:
+						// Already dismissed: the comment stays on the issue.
+						handled = true
 					}
 				}
-				if !matched {
+				if !handled {
 					skip("/autopilot wontfix %s by %s matches no finder-owned item on this issue", m[1], c.Author)
 				}
 			}
