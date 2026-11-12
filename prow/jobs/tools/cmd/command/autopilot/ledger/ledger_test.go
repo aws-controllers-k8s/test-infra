@@ -1,6 +1,9 @@
 package ledger
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -49,4 +52,62 @@ func TestMarshalIsDeterministicAndReadable(t *testing.T) {
 	assert.Equal(t, a, b)
 	assert.Contains(t, string(a), `"key": "api-change|s3|Bucket|A->B|needs-config"`)
 	assert.True(t, strings.HasSuffix(string(a), "}\n"))
+}
+
+func TestSaveLoadAndMove(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("api-change|s3|Bucket|Mode|needs-config")
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	assert.FileExists(t, filepath.Join(root, "workitems", "open", w.FileName()))
+
+	w.State = WontFix
+	w.History = append(w.History, Transition{TS: "2026-11-12T08:30:00Z", To: WontFix, By: "issue-finder"})
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	assert.NoFileExists(t, filepath.Join(root, "workitems", "open", w.FileName()))
+	assert.FileExists(t, filepath.Join(root, "workitems", "wontfix", w.FileName()))
+
+	got, err := Load(root)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]*WorkItem{w.Key: w}, got)
+	assert.Empty(t, Lint(root))
+}
+
+func TestLoadEmptyLedger(t *testing.T) {
+	got, err := Load(t.TempDir())
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestLoadRejectsUnknownFields(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workitems", "open")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x.json"), []byte(`{"surprise": 1}`), 0o644))
+	_, err := Load(root)
+	assert.ErrorContains(t, err, "surprise")
+}
+
+func TestLintFindsProblems(t *testing.T) {
+	root := t.TempDir()
+	write := func(dir, name string, w *WorkItem) {
+		b, err := Marshal(w)
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems", dir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workitems", dir, name), b, 0o644))
+	}
+	wrongDir := sampleItem("k1")
+	write("done", wrongDir.FileName(), wrongDir)
+	wrongHash := sampleItem("k2")
+	wrongHash.KeyHash = "sha256:0000000000000000"
+	write("open", wrongHash.FileName(), wrongHash)
+	wrongHistory := sampleItem("k3")
+	wrongHistory.State = Queued
+	write("open", wrongHistory.FileName(), wrongHistory)
+
+	errs := Lint(root)
+	require.Len(t, errs, 3)
+	joined := errors.Join(errs...).Error()
+	for _, want := range []string{"belongs in workitems/open", "key_hash", "last history entry"} {
+		assert.Equal(t, 1, strings.Count(joined, want), want)
+	}
 }
