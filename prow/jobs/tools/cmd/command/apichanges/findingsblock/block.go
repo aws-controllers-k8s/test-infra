@@ -90,22 +90,19 @@ func (l Line) render() string {
 	}, "|") + "\n"
 }
 
-// rank gives a bucket not in bucketOrder the lowest priority, after every known
-// bucket, so it is dropped first when truncating.
-func rank(bucket string) int {
+// Rank orders buckets by priority: 0 is the highest (new-resource), regen is the
+// lowest, and a bucket not in bucketOrder ranks after all of them, so it is
+// dropped first when truncating.
+func Rank(bucket string) int {
 	if r, ok := bucketOrder[bucket]; ok {
 		return r
 	}
 	return len(bucketOrder)
 }
 
-// Rank orders buckets by priority: 0 is the highest (new-resource), regen is the
-// lowest, and an unknown bucket ranks after all of them.
-func Rank(bucket string) int { return rank(bucket) }
-
 func less(a, b Line) bool {
-	if rank(a.Bucket) != rank(b.Bucket) {
-		return rank(a.Bucket) < rank(b.Bucket)
+	if Rank(a.Bucket) != Rank(b.Bucket) {
+		return Rank(a.Bucket) < Rank(b.Bucket)
 	}
 	if a.Kind != b.Kind {
 		return a.Kind < b.Kind
@@ -178,6 +175,10 @@ func Parse(body string) (b Block, found bool, err error) {
 
 	m := headerRE.FindStringSubmatch(strings.TrimRight(lines[0], " \t"))
 	if m == nil {
+		// The block starts with Begin, so the next token is its version.
+		if v, _, _ := strings.Cut(strings.TrimPrefix(lines[0], Begin), " "); v != "" && v != Version {
+			return Block{}, true, fmt.Errorf("unsupported findings block version %q", v)
+		}
 		return Block{}, true, fmt.Errorf("malformed findings header %q", lines[0])
 	}
 	h, err := unquoteAll(m[1:4])
