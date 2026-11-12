@@ -47,8 +47,11 @@ type Config struct {
 type Result struct {
 	// Changed lists the keys of items created or modified, sorted.
 	Changed []string
-	// Skipped explains each issue that was not read, and each finding Classify
-	// could not turn into an item, prefixed with "#<issue number>: ".
+	// Skipped explains each issue that was not read, each finding Classify
+	// could not turn into an item, each finding that names an item already in a
+	// terminal state (once per key per run), and each team /autopilot wontfix
+	// that matched no item, prefixed with "#<issue number>: ". Ingest changes
+	// no state for any of them.
 	Skipped []string
 }
 
@@ -67,10 +70,18 @@ type Result struct {
 // item's Evidence.Findings is the union of what it had and what the block
 // lists, so truncation (which drops regen lines first) never shrinks the bump.
 // A complete block replaces Evidence.Findings outright.
+//
+// Refreshing an existing item also rewrites its classification (ChangeClass,
+// GapClass, AutonomyLevel, PriorityBand, Resource, FieldPath): a finder-owned
+// item is untriaged, so the latest block is the only source for them.
+//
+// The result does not depend on the order of issues; see byPrecedence.
 func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Result {
 	before := snapshot(items)
 	var res Result
-	for _, is := range issues {
+	// Keys already reported as terminal this run.
+	reported := map[string]bool{}
+	for _, is := range byPrecedence(issues) {
 		skip := func(format string, args ...any) {
 			res.Skipped = append(res.Skipped, fmt.Sprintf("#%d: ", is.Number)+fmt.Sprintf(format, args...))
 		}
@@ -119,6 +130,13 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 				items[w.Key] = w
 				continue
 			}
+			if cur.State.Terminal() {
+				if !reported[w.Key] {
+					reported[w.Key] = true
+					skip("%s: finding reappeared but item is %s; not reopened", w.Key, cur.State)
+				}
+				continue
+			}
 			if !cur.FinderOwned() {
 				continue
 			}
@@ -127,6 +145,8 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 				ev.Findings = union(cur.Evidence.Findings, ev.Findings)
 			}
 			cur.Evidence, cur.Links.ViewIssue, cur.DependsOn, cur.DetectorWork = ev, w.Links.ViewIssue, w.DependsOn, w.DetectorWork
+			cur.ChangeClass, cur.GapClass, cur.AutonomyLevel, cur.PriorityBand = w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand
+			cur.Resource, cur.FieldPath = w.Resource, w.FieldPath
 		}
 		if complete {
 			for _, w := range fromIssue(items, is.URL) {
@@ -139,17 +159,78 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			if !cfg.Team[c.Author] {
 				continue
 			}
-			for _, m := range wontfixRE.FindAllStringSubmatch(c.Body, -1) {
+			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {
+				matched := false
 				for _, w := range fromIssue(items, is.URL) {
 					if w.KeyHash == m[1] {
+						matched = true
 						move(w, ledger.WontFix, cfg.Now, "wont_fix:product_decision", "MAINTAINER_WONTFIX by "+c.Author)
 					}
+				}
+				if !matched {
+					skip("/autopilot wontfix %s by %s matches no finder-owned item on this issue", m[1], c.Author)
 				}
 			}
 		}
 	}
 	res.Changed = changed(before, items)
 	return res
+}
+
+// byPrecedence returns issues in the order Ingest applies them: closed issues
+// first, then open ones, each group by ascending Number.
+//
+// Closed first: a maintainer closing an issue dismisses its items (WONT_FIX is
+// terminal) before a newer open issue re-listing the same findings can move
+// them to itself by rewriting Links.ViewIssue, which the close path matches on.
+// Ascending Number among open issues: when two issues for one service list the
+// same key, the newest is applied last and ends up as the item's ViewIssue.
+func byPrecedence(issues []Issue) []Issue {
+	out := slices.Clone(issues)
+	slices.SortStableFunc(out, func(a, b Issue) int {
+		if a.Open != b.Open {
+			if !a.Open {
+				return -1
+			}
+			return 1
+		}
+		return a.Number - b.Number
+	})
+	return out
+}
+
+// outsideFences returns body without the lines of fenced code blocks (``` or
+// ~~~, CommonMark rules: up to three spaces of indent, closed by a fence of
+// the same character at least as long, unclosed runs to the end), so a
+// command quoted as an example is not run.
+func outsideFences(body string) string {
+	var out []string
+	var fence string // the open fence's run of ` or ~, or "" outside one
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		run := ""
+		if len(line)-len(trimmed) <= 3 && len(trimmed) > 0 && (trimmed[0] == '`' || trimmed[0] == '~') {
+			n := len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
+			if n >= 3 {
+				run = trimmed[:n]
+			}
+		}
+		switch {
+		case fence == "" && run != "":
+			// An info string after a backtick fence may not hold a backtick.
+			if run[0] == '~' || !strings.Contains(trimmed[len(run):], "`") {
+				fence = run
+				continue
+			}
+		case fence != "":
+			if run != "" && run[0] == fence[0] && len(run) >= len(fence) && strings.TrimSpace(trimmed[len(run):]) == "" {
+				fence = ""
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 // union returns the sorted, de-duplicated union of a and b, or nil when both
