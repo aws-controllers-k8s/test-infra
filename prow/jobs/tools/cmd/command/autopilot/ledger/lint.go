@@ -3,6 +3,8 @@ package ledger
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
+	"unicode/utf8"
 )
 
 // Lint checks every file under root and returns one error per problem. Jobs
@@ -33,8 +35,16 @@ func Lint(root string) []error {
 		if w.Schema != Schema {
 			fail("schema %q, want %q", w.Schema, Schema)
 		}
-		if w.Key == "" || w.Service == "" || w.Source == "" {
-			fail("key, service and source are required")
+		switch {
+		case w.Key == "":
+			fail("key is empty")
+		// encoding/json replaces invalid bytes with U+FFFD on decode, so a
+		// decoded key is always valid UTF-8; U+FFFD marks a corrupted key.
+		case !utf8.ValidString(w.Key) || strings.ContainsRune(w.Key, utf8.RuneError):
+			fail("key is not valid UTF-8")
+		}
+		if w.Service == "" || w.Source == "" {
+			fail("service and source are required")
 		}
 		if w.KeyHash != KeyHash(w.Key) {
 			fail("key_hash %s does not match key (want %s)", w.KeyHash, KeyHash(w.Key))

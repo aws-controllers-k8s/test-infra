@@ -67,6 +67,24 @@ func (s State) Terminal() bool {
 	return s == Done || s == Superseded || s == WontFix
 }
 
+// EverDispatched reports whether any history entry moved the item into
+// Running, the first state after dispatch (PLAN_PENDING is still pre-dispatch;
+// RUNNING means a workflow picked the item up). An item can later return to
+// BLOCKED or QUEUED (env retry, requeue), so the current state alone cannot
+// tell whether a workflow has ever touched it.
+func (w WorkItem) EverDispatched() bool {
+	for _, h := range w.History {
+		if h.To == Running {
+			return true
+		}
+	}
+	return false
+}
+
+// FinderOwned reports whether the issue finder may still change or close the
+// item: it is in a pre-dispatch state and was never dispatched.
+func (w WorkItem) FinderOwned() bool { return w.State.PreDispatch() && !w.EverDispatched() }
+
 type Evidence struct {
 	SDKFrom string `json:"sdk_from,omitempty"`
 	SDKTo   string `json:"sdk_to,omitempty"`

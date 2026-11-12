@@ -60,6 +60,20 @@ func TestBlockLinesDuplicateTieBreakIsOrderIndependent(t *testing.T) {
 		Class: "spec-field", Kind: "Widget", Subject: "Mode", Bucket: findingsblock.BucketRegen})
 }
 
+func TestBlockLinesDuplicateTieBreakBothNeedsConfig(t *testing.T) {
+	custom := Finding{Kind: "Widget", Class: ClassSpecField, Subject: "Mode", NewSincePin: true, Work: workCustomUpdate}
+	create := Finding{Kind: "Widget", Class: ClassSpecField, Subject: "Mode", NewSincePin: true, Work: workCreateOnly}
+
+	for _, in := range [][]Finding{{custom, create}, {create, custom}} {
+		got := blockLines(in)
+		assert.Len(t, got, 1)
+		// "create-only" < "custom-update", so it wins in either order.
+		assert.Equal(t, []findingsblock.Line{{
+			Class: "spec-field", Kind: "Widget", Subject: "Mode",
+			Bucket: findingsblock.BucketNeedsConfig, Work: "create-only"}}, got)
+	}
+}
+
 func TestFieldWorkNames(t *testing.T) {
 	want := map[fieldWork]string{
 		workDedicatedSetter: "dedicated-setter",
