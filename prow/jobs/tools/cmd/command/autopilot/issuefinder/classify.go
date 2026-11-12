@@ -23,8 +23,7 @@ var configOnlyWork = map[string]bool{
 	"not-generated": true, // a from: field codegen does not add itself
 }
 
-// classToken shortens a detector FindingClass name for use in a key. A class
-// not listed keeps its full name, so it still gets a distinct key.
+// classToken shortens a detector FindingClass name for use in a key.
 var classToken = map[string]string{
 	"spec-field":         "spec",
 	"status-field":       "status",
@@ -33,7 +32,14 @@ var classToken = map[string]string{
 	"possible-resource":  "possible",
 }
 
-// subjectKey is the Subject segment of a needs-config or manual-review key.
+// unknownClassPrefix marks the class segment of a class not in classToken, so
+// an unknown class literally named "spec" ("class=spec") cannot collide with
+// the known spec-field ("spec").
+const unknownClassPrefix = "class="
+
+// subjectKey is the Subject segment of a needs-config or manual-review key:
+// "<class token>:<subject>", where the token is the short name from classToken
+// or "class=<full name>" for a class not listed.
 //
 // A block line's identity is (Class, Kind, Subject), and Subject alone does not
 // tell classes apart: for fields it is the bare member path. The detector can
@@ -44,14 +50,14 @@ var classToken = map[string]string{
 func subjectKey(l findingsblock.Line) string {
 	tok, ok := classToken[l.Class]
 	if !ok {
-		tok = l.Class
+		tok = unknownClassPrefix + l.Class
 	}
 	return tok + ":" + l.Subject
 }
 
-// validText reports whether s can go into a key. ledger.Lint rejects keys that
-// are not valid UTF-8 or hold U+FFFD (what encoding/json writes for bad bytes),
-// and one bad item would block every push.
+// validText reports whether s can go into a key or the ledger. ledger.Lint
+// rejects keys that are not valid UTF-8 or hold U+FFFD (what encoding/json
+// writes for bad bytes), and one bad item would block every push.
 func validText(s ...string) bool {
 	for _, v := range s {
 		if !utf8.ValidString(v) || strings.ContainsRune(v, utf8.RuneError) {
@@ -61,9 +67,43 @@ func validText(s ...string) bool {
 	return true
 }
 
+// validSegment reports whether s can be one segment of a key: valid text with
+// no "|", the key separator.
+func validSegment(s ...string) bool {
+	for _, v := range s {
+		if !validText(v) || strings.Contains(v, "|") {
+			return false
+		}
+	}
+	return true
+}
+
+const (
+	reasonText = "text is not valid UTF-8"
+	reasonSep  = `key segment contains "|"`
+)
+
 // Classify returns the work items one issue's block asks for, and a reason for
-// each line (or batched SDK-bump item) it skipped because its text cannot go
-// into a ledger key. It sets no state or history; Ingest does.
+// each line (or item) it skipped because its key cannot be built.
+//
+// Callers MUST treat a non-empty skipped like Header.Omitted > 0: the issue's
+// desired set is incomplete, so they must not supersede ledger items for that
+// issue that are missing from items.
+//
+// Regen lines are batched into one "sdk-bump|<svc>|*|<to>" item. needs-config
+// lines are new SDK members, so every one depends on that bump, and the bump is
+// emitted whenever there are regen lines, needs-config lines, or Omitted > 0
+// (a truncated block drops regen lines first). Without regen lines its
+// Evidence.Findings is nil. If the bump key is invalid, the bump and every
+// needs-config item are skipped, since they cannot be done without it.
+//
+// A line is skipped only when a field that goes into its key is bad: Class,
+// Kind and Subject (Kind alone for new-resource), which must be valid UTF-8 and
+// hold no "|". Work is not part of any key; a needs-config line whose Work is
+// not valid text is classified hand-written-code with an empty DetectorWork.
+// Lines with the same key collapse to one item; the line that sorts first wins,
+// so the result does not depend on line order. Classify sets no state or
+// history; Ingest does.
 func Classify(b findingsblock.Block, issueURL string) (items []*ledger.WorkItem, skipped []string) {
 	svc := b.Service
 	newItem := func(key, bucket string) *ledger.WorkItem {
@@ -75,36 +115,73 @@ func Classify(b findingsblock.Block, issueURL string) (items []*ledger.WorkItem,
 			Links:    ledger.Links{ViewIssue: issueURL},
 		}
 	}
-	skip := func(what string) {
-		skipped = append(skipped, what+": text is not valid UTF-8")
+	skip := func(what, why string) {
+		skipped = append(skipped, what+": "+why)
 	}
 
-	var needsConfig []*ledger.WorkItem
+	// Sort a copy so duplicate keys resolve the same way for any input order.
+	lines := slices.Clone(b.Lines)
+	slices.SortStableFunc(lines, func(x, y findingsblock.Line) int {
+		return slices.Compare(
+			[]string{x.Class, x.Kind, x.Subject, x.Bucket, x.Work},
+			[]string{y.Class, y.Kind, y.Subject, y.Bucket, y.Work})
+	})
+
+	// The bump key comes from the header alone.
+	bumpKey := fmt.Sprintf("sdk-bump|%s|*|%s", svc, b.To)
+	bumpOK := validSegment(svc, b.To)
+
+	seen := map[string]bool{}
+	needsBump := b.Omitted > 0
 	var regen []string
-	for _, l := range b.Lines {
-		if !validText(l.Class, l.Kind, l.Subject, l.Work) {
-			skip(fmt.Sprintf("finding %q|%q|%q|%q", l.Class, l.Kind, l.Subject, l.Bucket))
+	for _, l := range lines {
+		what := fmt.Sprintf("finding %q|%q|%q|%q", l.Class, l.Kind, l.Subject, l.Bucket)
+		if !validText(l.Class, l.Kind, l.Subject) {
+			skip(what, reasonText)
+			continue
+		}
+		if l.Bucket == findingsblock.BucketRegen {
+			// Kind.Subject goes into the bump's evidence, not into a key.
+			regen = append(regen, l.Kind+"."+l.Subject)
 			continue
 		}
 		var w *ledger.WorkItem
 		switch l.Bucket {
-		case findingsblock.BucketRegen:
-			regen = append(regen, l.Kind+"."+l.Subject)
-			continue
 		case findingsblock.BucketNeedsConfig:
+			if !validSegment(l.Class, l.Kind, l.Subject) || strings.Contains(l.Class, ":") {
+				skip(what, reasonSep)
+				continue
+			}
+			needsBump = true
+			if !bumpOK {
+				skip(what, "SDK-bump key is invalid")
+				continue
+			}
 			w = newItem(fmt.Sprintf("api-change|%s|%s|%s|needs-config", svc, l.Kind, subjectKey(l)), l.Bucket)
-			w.Resource, w.FieldPath, w.DetectorWork = l.Kind, l.Subject, l.Work
+			w.Resource, w.FieldPath = l.Kind, l.Subject
 			w.ChangeClass = "hand-written-code"
-			if configOnlyWork[l.Work] {
-				w.ChangeClass = "config-only"
+			if validText(l.Work) {
+				w.DetectorWork = l.Work
+				if configOnlyWork[l.Work] {
+					w.ChangeClass = "config-only"
+				}
 			}
 			w.AutonomyLevel, w.PriorityBand = "human-merge", 4
+			w.DependsOn = []string{bumpKey}
 		case findingsblock.BucketNewResource:
 			// The detector sets Kind and Subject to the resource name.
+			if !validSegment(l.Kind) {
+				skip(what, reasonSep)
+				continue
+			}
 			w = newItem(fmt.Sprintf("api-change|%s|%s|new-resource", svc, l.Kind), l.Bucket)
 			w.Resource = l.Kind
 			w.ChangeClass, w.AutonomyLevel, w.PriorityBand = "new-resource", "draft", 6
 		case findingsblock.BucketManualReview:
+			if !validSegment(l.Class, l.Kind, l.Subject) || strings.Contains(l.Class, ":") {
+				skip(what, reasonSep)
+				continue
+			}
 			w = newItem(fmt.Sprintf("api-change|%s|%s|%s|manual-review", svc, l.Kind, subjectKey(l)), l.Bucket)
 			w.Resource, w.FieldPath, w.DetectorWork = l.Kind, l.Subject, l.Class
 			w.ChangeClass, w.AutonomyLevel, w.PriorityBand = "unclassified", "observe", 6
@@ -113,29 +190,30 @@ func Classify(b findingsblock.Block, issueURL string) (items []*ledger.WorkItem,
 			continue
 		}
 		// The header (service) is part of every key.
-		if !validText(w.Key) {
-			skip(fmt.Sprintf("item %q", w.Key))
+		if !validSegment(svc) {
+			skip(fmt.Sprintf("item %q", w.Key), reasonText+` or contains "|"`)
 			continue
 		}
-		if l.Bucket == findingsblock.BucketNeedsConfig {
-			needsConfig = append(needsConfig, w)
+		if seen[w.Key] {
+			continue
 		}
+		seen[w.Key] = true
 		items = append(items, w)
 	}
+
+	if len(regen) == 0 && !needsBump {
+		return items, skipped
+	}
+	if !bumpOK {
+		skip(fmt.Sprintf("item %q", bumpKey), reasonText+` or contains "|"`)
+		return items, skipped
+	}
+	bump := newItem(bumpKey, findingsblock.BucketRegen)
+	bump.ChangeClass, bump.AutonomyLevel, bump.PriorityBand = "SDK-bump", "human-merge", 3
 	if len(regen) > 0 {
 		slices.Sort(regen)
-		bump := newItem(fmt.Sprintf("sdk-bump|%s|*|%s", svc, b.To), findingsblock.BucketRegen)
-		if !validText(bump.Key) {
-			skip(fmt.Sprintf("item %q", bump.Key))
-			return items, skipped
-		}
-		bump.ChangeClass, bump.AutonomyLevel, bump.PriorityBand = "SDK-bump", "human-merge", 3
 		// Two classes of one path both needing only regen list it once.
 		bump.Evidence.Findings = slices.Compact(regen)
-		for _, w := range needsConfig {
-			w.DependsOn = []string{bump.Key}
-		}
-		items = append(items, bump)
 	}
-	return items, skipped
+	return append(items, bump), skipped
 }

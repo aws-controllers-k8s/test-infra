@@ -51,6 +51,12 @@ func TestClassify(t *testing.T) {
 	assert.Equal(t, "aws-controllers-k8s/s3-controller", bump.Repo)
 	assert.Equal(t, issue27, bump.Links.ViewIssue)
 	assert.Equal(t, ledger.KeyHash(bump.Key), bump.KeyHash)
+	assert.Equal(t, "regen", bump.GapClass)
+	assert.Equal(t, "api-change", bump.Source)
+	assert.Equal(t, "s3", bump.Service)
+	assert.Equal(t, 1, bump.Generation)
+	assert.Equal(t, "v1.41.5", bump.Evidence.SDKFrom)
+	assert.Equal(t, "service/s3/v1.97.3", bump.Evidence.SDKTo)
 
 	mode := got["api-change|s3|Bucket|spec:Mode|needs-config"]
 	require.NotNil(t, mode)
@@ -59,6 +65,14 @@ func TestClassify(t *testing.T) {
 	assert.Equal(t, []string{bump.Key}, mode.DependsOn)
 	assert.Equal(t, "Bucket", mode.Resource)
 	assert.Equal(t, "Mode", mode.FieldPath)
+	assert.Equal(t, 4, mode.PriorityBand)
+	assert.Equal(t, "human-merge", mode.AutonomyLevel)
+	assert.Equal(t, "needs-config", mode.GapClass)
+	assert.Equal(t, "api-change", mode.Source)
+	assert.Equal(t, "s3", mode.Service)
+	assert.Equal(t, 1, mode.Generation)
+	assert.Equal(t, "v1.41.5", mode.Evidence.SDKFrom)
+	assert.Equal(t, "service/s3/v1.97.3", mode.Evidence.SDKTo)
 
 	require.NotNil(t, got["api-change|s3|Bucket|spec:Policy|needs-config"])
 	assert.Equal(t, "hand-written-code", got["api-change|s3|Bucket|spec:Policy|needs-config"].ChangeClass)
@@ -67,19 +81,59 @@ func TestClassify(t *testing.T) {
 	require.NotNil(t, table)
 	assert.Equal(t, "new-resource", table.ChangeClass)
 	assert.Equal(t, "draft", table.AutonomyLevel)
+	assert.Equal(t, 6, table.PriorityBand)
+	assert.Equal(t, "new-resource", table.GapClass)
+	assert.Equal(t, "api-change", table.Source)
+	assert.Equal(t, "s3", table.Service)
+	assert.Equal(t, 1, table.Generation)
 
 	quote := got["api-change|s3|Quote|transient:Quote|manual-review"]
 	require.NotNil(t, quote)
 	assert.Equal(t, "unclassified", quote.ChangeClass)
 	assert.Equal(t, "observe", quote.AutonomyLevel)
 	assert.Equal(t, "transient-resource", quote.DetectorWork)
+	assert.Equal(t, 6, quote.PriorityBand)
+	assert.Equal(t, "manual-review", quote.GapClass)
+	assert.Equal(t, "api-change", quote.Source)
+	assert.Equal(t, "s3", quote.Service)
+	assert.Equal(t, 1, quote.Generation)
 }
 
-func TestClassifyWithoutRegenHasNoBumpDependency(t *testing.T) {
-	got, skipped := Classify(findingsblock.Block{Header: s3Header, Lines: []findingsblock.Line{modeField}}, issue27)
+const bumpKey = "sdk-bump|s3|*|service/s3/v1.97.3"
+
+// needs-config lines are new SDK members, so they need the bump even when no
+// regen line is present.
+func TestClassifyNeedsConfigWithoutRegenStillDependsOnBump(t *testing.T) {
+	got := classify(t, modeField)
+	require.Len(t, got, 2)
+	bump := got[bumpKey]
+	require.NotNil(t, bump)
+	assert.Empty(t, bump.Evidence.Findings)
+	assert.Equal(t, []string{bumpKey}, got["api-change|s3|Bucket|spec:Mode|needs-config"].DependsOn)
+}
+
+// A truncated block drops regen lines first, so only needs-config lines may
+// remain; the bump must still be emitted.
+func TestClassifyTruncatedBlockStillEmitsBump(t *testing.T) {
+	items, skipped := Classify(findingsblock.Block{Header: s3Header, Omitted: 3, Count: 1, Lines: []findingsblock.Line{modeField}}, issue27)
 	require.Empty(t, skipped)
-	require.Len(t, got, 1)
-	assert.Empty(t, got[0].DependsOn)
+	got := byKey(items)
+	require.Len(t, got, 2)
+	require.NotNil(t, got[bumpKey])
+	assert.Equal(t, []string{bumpKey}, got["api-change|s3|Bucket|spec:Mode|needs-config"].DependsOn)
+
+	// Omitted alone, with no lines at all, also keeps the bump.
+	items, skipped = Classify(findingsblock.Block{Header: s3Header, Omitted: 3}, issue27)
+	require.Empty(t, skipped)
+	require.Len(t, items, 1)
+	assert.Equal(t, bumpKey, items[0].Key)
+}
+
+// Neither regen, needs-config nor omission: no bump.
+func TestClassifyNoBumpWhenNothingNeedsIt(t *testing.T) {
+	got := classify(t, newTable, quoteRes)
+	assert.Len(t, got, 2)
+	assert.Nil(t, got[bumpKey])
 }
 
 func TestClassifyConfigOnlyWork(t *testing.T) {
@@ -113,7 +167,7 @@ func TestClassifyClassesWithSameKindAndSubjectDoNotCollide(t *testing.T) {
 	possible := findingsblock.Line{Class: "possible-resource", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketManualReview}
 
 	got := classify(t, spec, status, life, transient, possible)
-	require.Len(t, got, 5)
+	require.Len(t, got, 6, "five items and the bump")
 	assert.Equal(t, "config-only", got["api-change|s3|Bucket|spec:Mode|needs-config"].ChangeClass)
 	assert.Equal(t, "hand-written-code", got["api-change|s3|Bucket|status:Mode|needs-config"].ChangeClass)
 	assert.Equal(t, "hand-written-code", got["api-change|s3|Bucket|lifecycle:Mode|needs-config"].ChangeClass)
@@ -121,10 +175,11 @@ func TestClassifyClassesWithSameKindAndSubjectDoNotCollide(t *testing.T) {
 	assert.NotNil(t, got["api-change|s3|Quote|possible:Quote|manual-review"])
 }
 
-// A class the issue finder does not know still gets its own key segment.
+// A class the issue finder does not know still gets its own key segment, with a
+// "class=" prefix so it cannot collide with a known token.
 func TestClassifyUnknownClassKeepsFullName(t *testing.T) {
 	l := findingsblock.Line{Class: "future-class", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketManualReview}
-	assert.NotNil(t, classify(t, l)["api-change|s3|Quote|future-class:Quote|manual-review"])
+	assert.NotNil(t, classify(t, l)["api-change|s3|Quote|class=future-class:Quote|manual-review"])
 }
 
 // Ledger Lint rejects a key that is not valid UTF-8 or holds U+FFFD, and one
@@ -142,22 +197,63 @@ func TestClassifySkipsInvalidText(t *testing.T) {
 		Header: s3Header,
 		Lines:  append(bad, modeField),
 	}, issue27)
-	assert.Len(t, skipped, len(bad))
-	require.Len(t, items, 1)
-	assert.Equal(t, "api-change|s3|Bucket|spec:Mode|needs-config", items[0].Key)
-	// The only regen line was skipped, so there is no bump to depend on.
-	assert.Empty(t, items[0].DependsOn)
+	assert.Len(t, skipped, len(bad)-1, "invalid Work does not skip the line")
+	got := byKey(items)
+	require.Len(t, got, 2)
+	assert.Equal(t, []string{bumpKey}, got["api-change|s3|Bucket|spec:Mode|needs-config"].DependsOn)
+	// The only regen line was skipped, but needs-config still needs the bump.
+	assert.Empty(t, got[bumpKey].Evidence.Findings)
 }
 
-// A bad header value would poison every key built from it.
+// Work is not part of any key, so an invalid Work must not skip the line. It is
+// classified conservatively and the bad text is not copied.
+func TestClassifyInvalidWorkIsHandWrittenNotSkipped(t *testing.T) {
+	for _, work := range []string{"create\xff-only", "create�only"} {
+		l := modeField
+		l.Work = work
+		w := classify(t, l)["api-change|s3|Bucket|spec:Mode|needs-config"]
+		require.NotNil(t, w)
+		assert.Equal(t, "hand-written-code", w.ChangeClass)
+		assert.Equal(t, "", w.DetectorWork)
+	}
+}
+
+// A "|" in a key segment would let two different lines share a key.
+func TestClassifySkipsSeparatorInKeySegments(t *testing.T) {
+	bad := []findingsblock.Line{
+		{Class: "spec-field", Kind: "Buc|ket", Subject: "Mode", Bucket: findingsblock.BucketNeedsConfig, Work: "create-only"},
+		{Class: "spec-field", Kind: "Bucket", Subject: "Mo|de", Bucket: findingsblock.BucketNeedsConfig, Work: "create-only"},
+		{Class: "fu|ture", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketManualReview},
+		{Class: "fu|ture", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketNeedsConfig},
+		{Class: "future:x", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketManualReview},
+		{Class: "new-resource", Kind: "Ta|ble", Subject: "Table", Bucket: findingsblock.BucketNewResource},
+	}
+	items, skipped := Classify(findingsblock.Block{Header: s3Header, Lines: append(bad, newTable)}, issue27)
+	assert.Len(t, skipped, len(bad))
+	require.Len(t, items, 1)
+	assert.Equal(t, "api-change|s3|Table|new-resource", items[0].Key)
+}
+
+// An unknown class named like a known token must not collide with the known one.
+func TestClassifyUnknownClassNamedLikeTokenDoesNotCollide(t *testing.T) {
+	known := findingsblock.Line{Class: "spec-field", Kind: "Bucket", Subject: "Mode", Bucket: findingsblock.BucketManualReview}
+	unknown := findingsblock.Line{Class: "spec", Kind: "Bucket", Subject: "Mode", Bucket: findingsblock.BucketManualReview}
+	got := classify(t, known, unknown)
+	require.Len(t, got, 2)
+	assert.NotNil(t, got["api-change|s3|Bucket|spec:Mode|manual-review"])
+	assert.NotNil(t, got["api-change|s3|Bucket|class=spec:Mode|manual-review"])
+}
+
+// A bad header value would poison every key built from it. The bump and every
+// needs-config item need the bump, so they are skipped with it.
 func TestClassifySkipsInvalidHeader(t *testing.T) {
 	items, skipped := Classify(findingsblock.Block{
 		Header: findingsblock.Header{Service: "s3", From: "v1", To: "v\xff2"},
-		Lines:  []findingsblock.Line{regenABAC, modeField},
+		Lines:  []findingsblock.Line{regenABAC, modeField, newTable},
 	}, issue27)
-	assert.Len(t, skipped, 1, "the SDK-bump item")
+	assert.Len(t, skipped, 2, "the SDK-bump item and the needs-config item")
 	require.Len(t, items, 1)
-	assert.Empty(t, items[0].DependsOn)
+	assert.Equal(t, "api-change|s3|Table|new-resource", items[0].Key)
 
 	items, skipped = Classify(findingsblock.Block{
 		Header: findingsblock.Header{Service: "s�3", From: "v1", To: "v2"},
@@ -165,15 +261,30 @@ func TestClassifySkipsInvalidHeader(t *testing.T) {
 	}, issue27)
 	assert.Empty(t, items)
 	assert.Len(t, skipped, 2)
+
+	// A separator in the header would corrupt every key too.
+	items, skipped = Classify(findingsblock.Block{
+		Header: findingsblock.Header{Service: "s3", From: "v1", To: "v|2"},
+		Lines:  []findingsblock.Line{modeField},
+	}, issue27)
+	assert.Empty(t, items)
+	assert.Len(t, skipped, 2)
 }
 
 func TestClassifyIsOrderIndependent(t *testing.T) {
-	a, _ := Classify(findingsblock.Block{Header: s3Header, Lines: []findingsblock.Line{
-		regenABAC, modeField, {Class: "spec-field", Kind: "Bucket", Subject: "Z", Bucket: findingsblock.BucketRegen},
-	}}, issue27)
-	b, _ := Classify(findingsblock.Block{Header: s3Header, Lines: []findingsblock.Line{
-		{Class: "spec-field", Kind: "Bucket", Subject: "Z", Bucket: findingsblock.BucketRegen}, modeField, regenABAC,
-	}}, issue27)
-	assert.Equal(t, byKey(a), byKey(b))
-	assert.Equal(t, []string{"Bucket.ABAC", "Bucket.Z"}, byKey(a)["sdk-bump|s3|*|service/s3/v1.97.3"].Evidence.Findings)
+	z := findingsblock.Line{Class: "spec-field", Kind: "Bucket", Subject: "Z", Bucket: findingsblock.BucketRegen}
+	// Two needs-config lines share a key but disagree on Work.
+	modeCode := modeField
+	modeCode.Work = "dedicated-setter"
+	fwd := []findingsblock.Line{regenABAC, modeField, z, modeCode, regenABAC, newTable, newTable}
+	rev := make([]findingsblock.Line, len(fwd))
+	for i, l := range fwd {
+		rev[len(fwd)-1-i] = l
+	}
+	a, _ := Classify(findingsblock.Block{Header: s3Header, Lines: fwd}, issue27)
+	b, _ := Classify(findingsblock.Block{Header: s3Header, Lines: rev}, issue27)
+	assert.Equal(t, a, b)
+	got := byKey(a)
+	require.Len(t, got, len(a), "duplicate keys are collapsed")
+	assert.Equal(t, []string{"Bucket.ABAC", "Bucket.Z"}, got[bumpKey].Evidence.Findings)
 }
