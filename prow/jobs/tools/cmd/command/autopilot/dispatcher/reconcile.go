@@ -38,6 +38,7 @@ const (
 var (
 	wontFixReasons = map[string]bool{"not_real": true, "aws_api_blocker": true, "env_blocker": true, "product_decision": true}
 	reasonRE       = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
+	outcomeRE      = regexp.MustCompile(`^[a-z][a-z0-9_:]{0,47}$`)
 	prNumberRE     = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
 )
 
@@ -62,6 +63,10 @@ func reconcile(ctx context.Context, items map[string]*ledger.WorkItem, l Launche
 			apply(w, *st.Result, ts)
 		case st.Phase == PhaseFinished:
 			retry(w, "INFRA_NO_VERDICT", ts)
+		case overdue(w.Claim, b.ReaperGrace(), now) && (st.Phase == PhasePending || st.Phase == PhaseRunning):
+			// The run is still live and Launcher has no Abort. Requeueing
+			// could open a second PR while the first run is going.
+			finish(w, ledger.Escalated, ts, "RUN_OVERDUE", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "RUN_OVERDUE"})
 		case overdue(w.Claim, b.ReaperGrace(), now):
 			retry(w, "INFRA_NO_VERDICT", ts)
 		}
@@ -80,6 +85,7 @@ func apply(w *ledger.WorkItem, r RunResult, ts string) {
 			return
 		}
 		w.Links.PR = r.PR
+		w.Verdict = nil
 		finish(w, ledger.HumanReview, ts, "PR_OPENED", nil)
 	case r.Outcome == OutcomeNoChange:
 		reason := cleanReason(r.Reason, outcomeToken)
@@ -93,7 +99,12 @@ func apply(w *ledger.WorkItem, r RunResult, ts string) {
 	case r.Outcome == OutcomeFailed:
 		retry(w, cleanReason(r.Reason, "FAILED"), ts)
 	default:
-		finish(w, ledger.Escalated, ts, "UNKNOWN_VERDICT", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "UNKNOWN_VERDICT " + strconv.Quote(r.Outcome)})
+		// The outcome is untrusted: keep it only if it looks like a token.
+		reason := fmt.Sprintf("UNKNOWN_VERDICT len=%d", len(r.Outcome))
+		if outcomeRE.MatchString(r.Outcome) {
+			reason = "UNKNOWN_VERDICT " + strconv.Quote(r.Outcome)
+		}
+		finish(w, ledger.Escalated, ts, "UNKNOWN_VERDICT", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: reason})
 	}
 }
 
@@ -103,6 +114,7 @@ func retry(w *ledger.WorkItem, reason, ts string) {
 		finish(w, ledger.Escalated, ts, "ATTEMPTS_EXHAUSTED", &ledger.Verdict{Outcome: OutcomeFailed, Reason: reason})
 		return
 	}
+	w.Verdict = nil
 	finish(w, ledger.Queued, ts, "RETRY "+reason, nil)
 }
 
@@ -129,6 +141,9 @@ func cleanReason(s, fallback string) string {
 
 // ownPR reports whether pr is a pull request URL in repo.
 func ownPR(repo, pr string) bool {
+	if repo == "" {
+		return false
+	}
 	n, ok := strings.CutPrefix(pr, "https://github.com/"+repo+"/pull/")
 	return ok && prNumberRE.MatchString(n)
 }
