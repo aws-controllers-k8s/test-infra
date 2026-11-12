@@ -67,14 +67,17 @@ func (s State) Terminal() bool {
 	return s == Done || s == Superseded || s == WontFix
 }
 
-// EverDispatched reports whether any history entry moved the item into
-// Running, the first state after dispatch (PLAN_PENDING is still pre-dispatch;
-// RUNNING means a workflow picked the item up). An item can later return to
-// BLOCKED or QUEUED (env retry, requeue), so the current state alone cannot
-// tell whether a workflow has ever touched it.
+// EverDispatched reports whether any history entry moved the item into an
+// in-flight state (one whose Dir is "inflight"). Under design 5.4 the only edge
+// into in-flight is QUEUED->RUNNING, so this means a workflow picked the item
+// up. An item can later return to BLOCKED or QUEUED (env retry, requeue), so
+// the current state alone cannot tell whether a workflow has ever touched it.
+// Going by directory rather than by RUNNING alone is robust to edited history
+// and to future in-flight states. ESCALATED, DONE, SUPERSEDED and WONT_FIX do
+// not count: they can be reached directly from pre-dispatch.
 func (w WorkItem) EverDispatched() bool {
 	for _, h := range w.History {
-		if h.To == Running {
+		if dir, _ := h.To.Dir(); dir == "inflight" {
 			return true
 		}
 	}
@@ -139,7 +142,9 @@ func KeyHash(key string) string {
 
 // FileName is the item's file name inside its state directory.
 func (w *WorkItem) FileName() string {
-	return strings.TrimPrefix(w.KeyHash, "sha256:") + ".json"
+	// Derived from Key, never the stored KeyHash, so a hand-edited hash can
+	// not become a path.
+	return strings.TrimPrefix(KeyHash(w.Key), "sha256:") + ".json"
 }
 
 // Marshal is the one encoding the ledger uses: two-space indent, no HTML

@@ -10,11 +10,10 @@ import (
 // Lint checks every file under root and returns one error per problem. Jobs
 // run it after writing and before pushing, so a bad ledger never lands.
 func Lint(root string) []error {
-	paths, err := itemPaths(root)
+	paths, errs, err := scan(root)
 	if err != nil {
 		return []error{err}
 	}
-	var errs []error
 	seen := map[string]string{}
 	for _, p := range paths {
 		w, err := decode(p)
@@ -38,8 +37,9 @@ func Lint(root string) []error {
 		switch {
 		case w.Key == "":
 			fail("key is empty")
-		// encoding/json replaces invalid bytes with U+FFFD on decode, so a
-		// decoded key is always valid UTF-8; U+FFFD marks a corrupted key.
+		// encoding/json replaces invalid bytes with U+FFFD on decode, so
+		// utf8.ValidString cannot fail here; the U+FFFD check is what actually
+		// catches a key that held invalid bytes. ValidString stays as a guard.
 		case !utf8.ValidString(w.Key) || strings.ContainsRune(w.Key, utf8.RuneError):
 			fail("key is not valid UTF-8")
 		}
