@@ -214,7 +214,7 @@ func TestScheduleLLMCapWithinTick(t *testing.T) {
 	}
 	picks, waits := schedule(ledgerOf(items...), p, now)
 	assert.Len(t, picks, 2)
-	assert.Equal(t, []string{items[0].Key, items[1].Key}, pickKeys(picks))
+	assert.Equal(t, []string{items[1].Key, items[0].Key}, pickKeys(picks), "ties break by key: iam before s3")
 	assert.Equal(t, map[string]string{items[2].Key: CapLLM}, waitCaps(waits))
 }
 
