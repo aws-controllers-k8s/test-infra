@@ -36,6 +36,7 @@ import (
 	"github.com/google/go-github/v63/github"
 	"gopkg.in/yaml.v3"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 )
 
@@ -1973,6 +1974,13 @@ func renderIssueRegion(
 	// Hashed before truncation, so an overflowing body keeps a stable identity.
 	fingerprint := fingerprintFindings(service, actionable(findings))
 
+	// The machine-readable list for the autopilot issue finder. It is rendered
+	// before the visible blocks so its bytes come out of their budget, and capped
+	// at a quarter of the limit so maintainer text around the region still fits.
+	block, _ := findingsblock.Format(
+		findingsblock.Header{Service: service, From: baselineVersion, To: latestVersion},
+		blockLines(findings), min(maxFindingsBlock, limit/4))
+
 	byKind := map[string][]Finding{}
 	for _, f := range findings {
 		byKind[f.Kind] = append(byKind[f.Kind], f)
@@ -1998,7 +2006,7 @@ func renderIssueRegion(
 	// The findings hold back at most maxAppendixReserve for the appendix, which
 	// gets whatever they leave and truncates itself to fit.
 	budget := issueBodyBudget(limit, baselineVersion, latestVersion, fingerprint,
-		resourceBlocks, len(findings))
+		resourceBlocks, len(findings)) - len(block)
 	findingsBudget := budget - appendixReserve
 
 	var b strings.Builder
@@ -2035,6 +2043,7 @@ func renderIssueRegion(
 	b.WriteString(overflowSummary(omittedResources, omittedFindings))
 	b.WriteString(preexisting)
 	b.WriteString(dropped)
+	b.WriteString(block)
 	b.WriteString(issueFooter(baselineVersion, latestVersion, fingerprint))
 	b.WriteString(generatedRegionEnd + "\n")
 
