@@ -48,19 +48,60 @@ type Result struct {
 	// Changed lists the keys of items created or modified, sorted.
 	Changed []string
 	// Skipped explains each issue that was not read, each finding Classify
-	// could not turn into an item, each finding that names an item in a terminal
-	// state linked to a different issue (once per key per run), and each team
-	// /autopilot wontfix that matches neither a finder-owned item nor an
-	// already WONT_FIX item on this issue, prefixed with "#<issue number>: ".
+	// could not turn into an item, each finding that names a SUPERSEDED item
+	// linked to a different issue (once per key per run), and each team
+	// /autopilot wontfix that matches neither a finder-owned item nor an item
+	// in a terminal state on this issue, prefixed with "#<issue number>: ".
 	// Ingest changes no state for any of them.
 	Skipped []string
+}
+
+// parsed is one trusted issue as read in Ingest's first pass.
+type parsed struct {
+	is Issue
+	// why is set when the issue must not be read; nothing else is then.
+	why string
+	// Open issues only.
+	desired  []*ledger.WorkItem
+	skipped  []string
+	complete bool
+}
+
+// parse reads one issue's generated region and findings block.
+func parse(cfg Config, is Issue) parsed {
+	p := parsed{is: is}
+	svc, why := trusted(cfg, is)
+	if why != "" || !is.Open {
+		p.why = why
+		return p
+	}
+	region, ok := issueregion.Region(is.Body)
+	if !ok {
+		p.why = fmt.Sprintf("no single well-formed generated region (%s ... %s)", issueregion.Begin, issueregion.End)
+		return p
+	}
+	b, found, err := findingsblock.Parse(region)
+	switch {
+	case err != nil:
+		p.why = err.Error()
+		return p
+	case !found:
+		p.why = "no findings block"
+		return p
+	case b.Service != svc:
+		p.why = fmt.Sprintf("block service %q != label service %q", b.Service, svc)
+		return p
+	}
+	p.desired, p.skipped = Classify(b, is.URL)
+	p.complete = b.Omitted == 0 && len(p.skipped) == 0
+	return p
 }
 
 // Ingest reconciles items with issues in place and reports what changed.
 //
 // The finder only touches items it still owns (ledger.WorkItem.FinderOwned):
-// pre-dispatch and never dispatched. An item a workflow has picked up, even one
-// since returned to BLOCKED or QUEUED, is left exactly as it is.
+// in a pre-dispatch state and never dispatched. An item a workflow has picked
+// up, even one since returned to BLOCKED or QUEUED, is left exactly as it is.
 //
 // Only the bot's generated region of the body is parsed, so a maintainer's note
 // quoting a findings block cannot be read as the bot's. A body without exactly
@@ -72,23 +113,45 @@ type Result struct {
 // lists, so truncation (which drops regen lines first) never shrinks the bump.
 // A complete block replaces Evidence.Findings outright.
 //
-// Refreshing an existing item also rewrites its classification (ChangeClass,
-// GapClass, AutonomyLevel, PriorityBand, Resource, FieldPath): a finder-owned
-// item is untriaged, so the latest block is the only source for them.
+// An item missing from its issue's complete block is superseded only when no
+// open issue in this run lists its key. Every issue is read before any item is
+// superseded, so the result cannot depend on which issue happens to come
+// first; an issue that still lists the key refreshes the item instead.
+//
+// Refreshing an existing item rewrites Evidence, Links, DependsOn,
+// DetectorWork, Resource and FieldPath. Its classification (ChangeClass,
+// GapClass, AutonomyLevel, PriorityBand) is rewritten only while the item is
+// DETECTED. Finder-owned also covers TRIAGED, QUEUED, BLOCKED and PLAN_PENDING,
+// and from TRIAGED on the classification holds the Dispatcher's triage
+// verdict, which may only be stricter than the detector's; the block must not
+// loosen it.
 //
 // The result does not depend on the order of issues; see byPrecedence.
 func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Result {
 	before := snapshot(items)
 	var res Result
+
+	// First pass: read every issue, and collect the keys any trusted open
+	// issue lists.
+	var all []parsed
+	listed := map[string]bool{}
+	for _, is := range byPrecedence(issues) {
+		p := parse(cfg, is)
+		all = append(all, p)
+		for _, w := range p.desired {
+			listed[w.Key] = true
+		}
+	}
+
 	// Keys already reported as terminal this run.
 	reported := map[string]bool{}
-	for _, is := range byPrecedence(issues) {
+	for _, p := range all {
+		is := p.is
 		skip := func(format string, args ...any) {
 			res.Skipped = append(res.Skipped, fmt.Sprintf("#%d: ", is.Number)+fmt.Sprintf(format, args...))
 		}
-		svc, why := trusted(cfg, is)
-		if why != "" {
-			skip("%s", why)
+		if p.why != "" {
+			skip("%s", p.why)
 			continue
 		}
 		if !is.Open {
@@ -97,33 +160,11 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			}
 			continue
 		}
-		region, ok := issueregion.Region(is.Body)
-		if !ok {
-			skip("no single well-formed generated region (%s ... %s)", issueregion.Begin, issueregion.End)
-			continue
-		}
-		b, found, err := findingsblock.Parse(region)
-		switch {
-		case err != nil:
-			skip("%v", err)
-			continue
-		case !found:
-			skip("no findings block")
-			continue
-		case b.Service != svc:
-			skip("block service %q != label service %q", b.Service, svc)
-			continue
-		}
-
-		desired, skipped := Classify(b, is.URL)
-		for _, s := range skipped {
+		for _, s := range p.skipped {
 			skip("%s", s)
 		}
-		complete := b.Omitted == 0 && len(skipped) == 0
 
-		want := map[string]bool{}
-		for _, w := range desired {
-			want[w.Key] = true
+		for _, w := range p.desired {
 			cur, ok := items[w.Key]
 			if !ok {
 				w.State = ledger.Detected
@@ -134,7 +175,10 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			if cur.State.Terminal() {
 				// The same issue still listing a dismissed finding is the
 				// steady state; only a different issue is a reappearance.
-				if cur.Links.ViewIssue != is.URL && !reported[w.Key] {
+				// Only a SUPERSEDED one is reported: the detector dropped
+				// the finding and brought it back. WONT_FIX is a person's
+				// deliberate dismissal, and repeating it every run is noise.
+				if cur.State == ledger.Superseded && cur.Links.ViewIssue != is.URL && !reported[w.Key] {
 					reported[w.Key] = true
 					skip("%s: finding reappeared but item is %s; not reopened", w.Key, cur.State)
 				}
@@ -144,16 +188,20 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 				continue
 			}
 			ev := w.Evidence
-			if !complete {
+			if !p.complete {
 				ev.Findings = union(cur.Evidence.Findings, ev.Findings)
 			}
 			cur.Evidence, cur.Links.ViewIssue, cur.DependsOn, cur.DetectorWork = ev, w.Links.ViewIssue, w.DependsOn, w.DetectorWork
-			cur.ChangeClass, cur.GapClass, cur.AutonomyLevel, cur.PriorityBand = w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand
 			cur.Resource, cur.FieldPath = w.Resource, w.FieldPath
+			if cur.State == ledger.Detected {
+				cur.ChangeClass, cur.GapClass, cur.AutonomyLevel, cur.PriorityBand = w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand
+			}
 		}
-		if complete {
+		if p.complete {
 			for _, w := range fromIssue(items, is.URL) {
-				if !want[w.Key] {
+				// listed covers this block's own keys too. A key another
+				// open issue lists is refreshed by that issue instead.
+				if !listed[w.Key] {
 					move(w, ledger.Superseded, cfg.Now, "superseded", "FINDING_GONE")
 				}
 			}
@@ -172,8 +220,9 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 					case w.FinderOwned():
 						handled = true
 						move(w, ledger.WontFix, cfg.Now, "wont_fix:product_decision", "MAINTAINER_WONTFIX by "+c.Author)
-					case w.State == ledger.WontFix:
-						// Already dismissed: the comment stays on the issue.
+					case w.State.Terminal():
+						// Already finished (DONE, SUPERSEDED or WONT_FIX):
+						// the comment stays on the issue.
 						handled = true
 					}
 				}

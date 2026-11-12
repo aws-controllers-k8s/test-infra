@@ -121,8 +121,9 @@ func TestIngestClosedIssueWinsOverNewerOpenIssue(t *testing.T) {
 	for _, k := range []string{bumpKey, modeKey} {
 		assert.Equal(t, ledger.WontFix, items[k].State, k)
 		assert.Equal(t, &ledger.Verdict{Outcome: "wont_fix:product_decision", Reason: "ISSUE_CLOSED"}, items[k].Verdict, k)
-		assert.Contains(t, res.Skipped, "#40: "+k+": finding reappeared but item is WONT_FIX; not reopened")
 	}
+	// WONT_FIX is a deliberate dismissal: its reappearance is not reported.
+	assert.Empty(t, res.Skipped)
 }
 
 func TestIngestNewestOpenIssueOwnsSharedKeys(t *testing.T) {
@@ -160,6 +161,72 @@ func TestIngestRefreshUpdatesClassification(t *testing.T) {
 	assert.Equal(t, ledger.Detected, w.State)
 }
 
+func TestIngestRefreshKeepsTriagedClassification(t *testing.T) {
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{is}, items)
+	// The Dispatcher's verdict may only make the class or level stricter.
+	w := items[modeKey]
+	require.Equal(t, "config-only", w.ChangeClass)
+	w.State = ledger.Triaged
+	w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand = "hand-written-code", "triaged-gap", "human-merge", 1
+	w.History = append(w.History, ledger.Transition{TS: cfg.Now, To: ledger.Triaged, By: "dispatcher"})
+	want, err := ledger.Marshal(w)
+	require.NoError(t, err)
+
+	// The block still says config-only work.
+	res := Ingest(cfg, []Issue{is}, items)
+	assert.Empty(t, res.Changed)
+	got, err := ledger.Marshal(items[modeKey])
+	require.NoError(t, err)
+	assert.Equal(t, string(want), string(got))
+
+	// Evidence still refreshes on a triaged item; the triage verdict stays.
+	rebased := s3Header
+	rebased.From = "v1.50.0"
+	res = Ingest(cfg, []Issue{issueWith(t, 27, true, rebased, regenABAC, modeField)}, items)
+	assert.Contains(t, res.Changed, modeKey)
+	w = items[modeKey]
+	assert.Equal(t, "v1.50.0", w.Evidence.SDKFrom)
+	assert.Equal(t, "hand-written-code", w.ChangeClass)
+	assert.Equal(t, "triaged-gap", w.GapClass)
+	assert.Equal(t, "human-merge", w.AutonomyLevel)
+	assert.Equal(t, 1, w.PriorityBand)
+	assert.Equal(t, ledger.Triaged, w.State)
+}
+
+func TestIngestDoesNotSupersedeKeyListedByAnotherOpenIssue(t *testing.T) {
+	seed := func() map[string]*ledger.WorkItem {
+		items := map[string]*ledger.WorkItem{}
+		Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+		require.Equal(t, issueWith(t, 27, true, s3Header).URL, items[modeKey].Links.ViewIssue)
+		return items
+	}
+	// #27's complete block drops the key; open #40 still lists it.
+	dropped := issueWith(t, 27, true, s3Header, regenABAC)
+	lister := issueWith(t, 40, true, s3Header, regenABAC, modeField)
+
+	a, b := seed(), seed()
+	resA := Ingest(cfg, []Issue{dropped, lister}, a)
+	resB := Ingest(cfg, []Issue{lister, dropped}, b)
+	assert.Equal(t, resA, resB)
+	for _, items := range []map[string]*ledger.WorkItem{a, b} {
+		w := items[modeKey]
+		assert.False(t, w.State.Terminal(), w.State)
+		assert.Equal(t, ledger.Detected, w.State)
+		assert.Nil(t, w.Verdict)
+		assert.Equal(t, lister.URL, w.Links.ViewIssue)
+	}
+	for k := range a {
+		wa, err := ledger.Marshal(a[k])
+		require.NoError(t, err)
+		wb, err := ledger.Marshal(b[k])
+		require.NoError(t, err)
+		assert.Equal(t, string(wa), string(wb), k)
+	}
+	assert.Len(t, b, len(a))
+}
+
 func TestIngestReportsTerminalReappearanceOncePerRun(t *testing.T) {
 	items := map[string]*ledger.WorkItem{}
 	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
@@ -181,6 +248,22 @@ func TestIngestReportsTerminalReappearanceOncePerRun(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []string{"#30: " + modeKey + ": finding reappeared but item is SUPERSEDED; not reopened"}, hits)
+}
+
+func TestIngestWontfixReappearanceIsSilent(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	is.Comments = []Comment{{Author: "maintainer", Body: "/autopilot wontfix " + ledger.KeyHash(modeKey)}}
+	Ingest(cfg, []Issue{is}, items)
+	require.Equal(t, ledger.WontFix, items[modeKey].State)
+
+	// A different issue lists the dismissed finding, run after run.
+	for range 2 {
+		res := Ingest(cfg, []Issue{is, issueWith(t, 40, true, s3Header, regenABAC, modeField)}, items)
+		assert.Equal(t, ledger.WontFix, items[modeKey].State)
+		assert.NotContains(t, res.Changed, modeKey)
+		assert.Empty(t, res.Skipped)
+	}
 }
 
 func TestIngestReportsUnmatchedWontfix(t *testing.T) {
@@ -219,6 +302,30 @@ func TestIngestAppliedWontfixIsSilentOnLaterRuns(t *testing.T) {
 	res = Ingest(cfg, []Issue{is}, items)
 	assert.Empty(t, res.Changed)
 	assert.Empty(t, res.Skipped)
+}
+
+func TestIngestWontfixOfTerminalItemIsSilent(t *testing.T) {
+	for _, st := range []ledger.State{ledger.Done, ledger.Superseded, ledger.WontFix} {
+		t.Run(string(st), func(t *testing.T) {
+			items := map[string]*ledger.WorkItem{}
+			Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+			w := items[modeKey]
+			w.State = st
+			w.History = append(w.History, ledger.Transition{TS: cfg.Now, To: st, By: "test"})
+			want, err := ledger.Marshal(w)
+			require.NoError(t, err)
+
+			// The finding is gone, but the old comment is still on the issue.
+			is := issueWith(t, 27, true, s3Header, regenABAC)
+			is.Comments = []Comment{{Author: "maintainer", Body: "/autopilot wontfix " + ledger.KeyHash(modeKey)}}
+			res := Ingest(cfg, []Issue{is}, items)
+			assert.NotContains(t, res.Changed, modeKey)
+			assert.Empty(t, res.Skipped)
+			got, err := ledger.Marshal(items[modeKey])
+			require.NoError(t, err)
+			assert.Equal(t, string(want), string(got))
+		})
+	}
 }
 
 func TestIngestSameIssueTerminalItemIsSilent(t *testing.T) {
