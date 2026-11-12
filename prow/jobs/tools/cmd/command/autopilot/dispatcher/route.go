@@ -29,11 +29,14 @@ const (
 	HoldAwaitingPlanApproval = "awaiting-plan-approval"
 	HoldAwaitingWorkflow     = "awaiting-workflow"
 	HoldBlockedOther         = "blocked-other"
+	// HoldBlockedMissingDependency: a depends_on key is not in the ledger.
+	HoldBlockedMissingDependency = "blocked-missing-dependency"
 )
 
 // route moves pre-dispatch items along DETECTED -> TRIAGED -> QUEUED or
-// BLOCKED (design 5.4) and escalates triaged items no workflow can do. It
-// returns how many items it held, by reason. It writes a history entry only
+// BLOCKED (design 5.4). Items of a class no workflow handles are held as
+// "awaiting-workflow" in TRIAGED; route escalates only items whose dependency
+// is dead. It returns how many items it held, by reason. It writes a history entry only
 // when an item's state changes.
 func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 	held := map[string]int{}
@@ -68,13 +71,16 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 			}
 			continue
 		}
-		why, dead := unmetDependency(w, items)
+		why, dead, missing := unmetDependency(w, items)
 		if dead {
 			w.Verdict = &ledger.Verdict{Outcome: "needs_human", Reason: "DEPENDENCY_DEAD"}
 			transition(w, ledger.Escalated, ts, "DEPENDENCY_DEAD "+why)
 			continue
 		}
 		if why != "" {
+			if missing {
+				held[HoldBlockedMissingDependency]++
+			}
 			if w.State != ledger.Blocked {
 				transition(w, ledger.Blocked, ts, "DEPENDS_ON "+why)
 			}
@@ -108,20 +114,21 @@ func blockedByDependency(w *ledger.WorkItem) bool {
 
 // unmetDependency describes the first dependency that has not landed, or
 // returns "" when all have. dead is true when that dependency can never land:
-// it is ESCALATED, SUPERSEDED or WONT_FIX.
-func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) (why string, dead bool) {
+// it is ESCALATED, SUPERSEDED or WONT_FIX. missing is true when the unmet
+// dependency is not in the ledger at all.
+func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) (why string, dead, missing bool) {
 	for _, d := range w.DependsOn {
 		dep, ok := items[d]
 		switch {
 		case !ok:
-			return ledger.KeyHash(d) + " missing", false
+			return ledger.KeyHash(d) + " missing", false, true
 		case dep.State.Landed():
 		default:
 			dead = dep.State == ledger.Escalated || dep.State.Terminal()
-			return fmt.Sprintf("%s %s", dep.KeyHash, dep.State), dead
+			return fmt.Sprintf("%s %s", dep.KeyHash, dep.State), dead, false
 		}
 	}
-	return "", false
+	return "", false, false
 }
 
 func transition(w *ledger.WorkItem, to ledger.State, ts, reason string) {

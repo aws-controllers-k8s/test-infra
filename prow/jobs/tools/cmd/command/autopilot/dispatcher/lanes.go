@@ -24,9 +24,9 @@ type lane struct {
 }
 
 // lanes maps a change class to the workflow that does it (design 3, 6). A
-// triaged item of a class not listed has no workflow in Phase 1 and is
-// escalated: hand-written-code waits for fix-bug (Phase 2), new-resource for
-// the plan gate.
+// triaged item of a class not listed has no workflow in Phase 1 and is held
+// as "awaiting-workflow" in TRIAGED: hand-written-code waits for fix-bug
+// (Phase 2), new-resource for the plan gate.
 var lanes = map[string]lane{
 	// The sdk-bump workflow is not built yet; with the shadow launcher this
 	// name only appears in launch lines.

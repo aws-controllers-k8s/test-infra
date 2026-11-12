@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -225,4 +226,16 @@ func Marshal(w *WorkItem) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+var prNumberRE = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
+
+// PRInRepo reports whether pr is a pull request URL in repo. An empty repo
+// matches nothing.
+func PRInRepo(repo, pr string) bool {
+	if repo == "" {
+		return false
+	}
+	n, ok := strings.CutPrefix(pr, "https://github.com/"+repo+"/pull/")
+	return ok && prNumberRE.MatchString(n)
 }

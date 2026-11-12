@@ -39,7 +39,6 @@ var (
 	wontFixReasons = map[string]bool{"not_real": true, "aws_api_blocker": true, "env_blocker": true, "product_decision": true}
 	reasonRE       = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
 	outcomeRE      = regexp.MustCompile(`^[a-z][a-z0-9_:]{0,47}$`)
-	prNumberRE     = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
 )
 
 // reconcile applies the result of every active run that finished and reaps
@@ -80,7 +79,7 @@ func apply(w *ledger.WorkItem, r RunResult, ts string) {
 	outcomeToken := strings.ToUpper(strings.ReplaceAll(r.Outcome, ":", "_"))
 	switch {
 	case r.Outcome == OutcomePROpened:
-		if !ownPR(w.Repo, r.PR) {
+		if !ledger.PRInRepo(w.Repo, r.PR) {
 			finish(w, ledger.Escalated, ts, "INVALID_PR_LINK", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "INVALID_PR_LINK"})
 			return
 		}
@@ -137,15 +136,6 @@ func cleanReason(s, fallback string) string {
 		return "INVALID_REASON"
 	}
 	return s
-}
-
-// ownPR reports whether pr is a pull request URL in repo.
-func ownPR(repo, pr string) bool {
-	if repo == "" {
-		return false
-	}
-	n, ok := strings.CutPrefix(pr, "https://github.com/"+repo+"/pull/")
-	return ok && prNumberRE.MatchString(n)
 }
 
 // overdue reports whether the claim's deadline plus grace has passed. An

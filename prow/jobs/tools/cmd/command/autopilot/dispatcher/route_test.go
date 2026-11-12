@@ -93,6 +93,21 @@ func TestRouteMissingDependency(t *testing.T) {
 	assert.Equal(t, "DEPENDS_ON "+ledger.KeyHash(bumpKey)+" missing", field.History[1].Reason)
 }
 
+func TestRouteCountsMissingDependencyEveryTick(t *testing.T) {
+	for _, state := range []ledger.State{ledger.Triaged, ledger.Blocked} {
+		field := item(fieldKey, "config-only", state)
+		field.DependsOn = []string{bumpKey}
+		items := ledgerOf(field)
+		held := route(items, "2026-11-12T09:00:00Z")
+		assert.Equal(t, map[string]int{HoldBlockedMissingDependency: 1}, held)
+		assert.Equal(t, ledger.Blocked, field.State)
+		n := len(field.History)
+		held = route(items, "2026-11-12T09:05:00Z")
+		assert.Equal(t, map[string]int{HoldBlockedMissingDependency: 1}, held, "counted again on the next tick")
+		assert.Len(t, field.History, n, "no new transition once BLOCKED")
+	}
+}
+
 func TestRouteHoldsClassWithoutLane(t *testing.T) {
 	hook := item("api-change|s3|Bucket|spec:Policy|needs-config", "hand-written-code", ledger.Triaged)
 	queued := item("api-change|s3|Bucket|spec:Tags|needs-config", "hand-written-code", ledger.Queued)

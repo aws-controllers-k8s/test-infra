@@ -34,9 +34,12 @@ const (
 	CapOpenPRs           = "max_open_prs_per_repo_class"
 	CapSDKBumpDaily      = "max_sdk_bump_launches_per_day"
 	CapReview            = "max_prs_awaiting_review"
-	// CapNoLane: a QUEUED item of a class no workflow handles (route escalates
-	// these; a hand-edited ledger may still hold one).
+	// CapNoLane: a QUEUED item of a class no workflow handles. A guard for
+	// hand-edited ledgers: route returns no-lane items to TRIAGED before
+	// schedule runs.
 	CapNoLane = "no-lane"
+	// CapObserve: a QUEUED item at autonomy level "observe" never launches.
+	CapObserve = "observe"
 )
 
 // candidate is a QUEUED item schedule picked, with its lane.
@@ -153,6 +156,10 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 		ln, ok := lanes[w.ChangeClass]
 		if !ok {
 			waits = append(waits, capped{w, CapNoLane})
+			continue
+		}
+		if w.AutonomyLevel == "observe" {
+			waits = append(waits, capped{w, CapObserve})
 			continue
 		}
 		// Bands 0-2 skip the per-class caps (design 8).

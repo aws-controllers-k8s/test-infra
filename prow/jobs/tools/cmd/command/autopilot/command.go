@@ -123,7 +123,7 @@ nothing. The GitHub token is read from GITHUB_TOKEN.`,
 
 var lintCmd = &cobra.Command{
 	Use:   "lint-ledger",
-	Short: "check every work item file in a ledger",
+	Short: "check every work item file and the policy files in a ledger",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := requireDir(lintDir); err != nil {
 			return err

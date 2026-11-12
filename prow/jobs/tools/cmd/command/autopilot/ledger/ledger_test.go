@@ -626,3 +626,19 @@ func TestLintRejectsControlCharacterInKey(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, w.FileName()), b, 0o644))
 	assert.Contains(t, errors.Join(Lint(root)...).Error(), "key holds a control character")
 }
+
+func TestPRInRepo(t *testing.T) {
+	const repo = "aws-controllers-k8s/s3-controller"
+	pre := "https://github.com/" + repo
+	assert.True(t, PRInRepo(repo, pre+"/pull/1"))
+	for _, pr := range []string{
+		pre + "/pull/1/../../x",
+		pre + "/pull/1?x=y",
+		pre + "/pull/01",
+		"https://github.com/aws-controllers-k8s/s3-controller-fork/pull/1",
+	} {
+		assert.False(t, PRInRepo(repo, pr), pr)
+	}
+	assert.False(t, PRInRepo("", "https://github.com//pull/1"))
+	assert.False(t, PRInRepo("", "https://github.com/pull/1"))
+}

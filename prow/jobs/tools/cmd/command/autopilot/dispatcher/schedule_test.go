@@ -256,6 +256,14 @@ func TestScheduleNoLane(t *testing.T) {
 	assert.Equal(t, map[string]string{w.Key: CapNoLane}, waitCaps(waits))
 }
 
+func TestScheduleObserveWaits(t *testing.T) {
+	w := queued("api-change|s3|Bucket|spec:A|config-only", "config-only", 4, t0)
+	w.AutonomyLevel = "observe"
+	picks, waits := schedule(ledgerOf(w), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{w.Key: CapObserve}, waitCaps(waits))
+}
+
 func TestScheduleNoQueuedHistorySortsLast(t *testing.T) {
 	a := queued("sdk-bump|s3|*|v1", "SDK-bump", 3, t0)
 	a.History = nil

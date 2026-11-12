@@ -211,22 +211,6 @@ func TestReconcileClearsStaleVerdict(t *testing.T) {
 	}
 }
 
-func TestOwnPR(t *testing.T) {
-	const repo = "aws-controllers-k8s/s3-controller"
-	pre := "https://github.com/" + repo
-	assert.True(t, ownPR(repo, pre+"/pull/1"))
-	for _, pr := range []string{
-		pre + "/pull/1/../../x",
-		pre + "/pull/1?x=y",
-		pre + "/pull/01",
-		"https://github.com/aws-controllers-k8s/s3-controller-fork/pull/1",
-	} {
-		assert.False(t, ownPR(repo, pr), pr)
-	}
-	assert.False(t, ownPR("", "https://github.com//pull/1"))
-	assert.False(t, ownPR("", "https://github.com/pull/1"))
-}
-
 func TestReconcileEmptyRepoRejectsPR(t *testing.T) {
 	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
 	w.Repo = ""

@@ -19,7 +19,6 @@ package viewstatus
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -71,7 +70,7 @@ func Render(items []*ledger.WorkItem) string {
 	const tail = "\n…and %d more items in the ledger.\n"
 	for i, w := range sorted {
 		line := fmt.Sprintf("- `%s` **`%s`** `%s`: `%s`", code(w.KeyHash), code(string(w.State)), code(w.ChangeClass), code(w.Key))
-		if ownPR(w.Repo, w.Links.PR) {
+		if ledger.PRInRepo(w.Repo, w.Links.PR) {
 			line += " " + w.Links.PR
 		}
 		if v := w.Verdict; v != nil {
@@ -99,19 +98,6 @@ func code(s string) string {
 		}
 		return r
 	}, s)
-}
-
-// prNumberRE matches a pull request number.
-var prNumberRE = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
-
-// ownPR reports whether pr is a pull request URL in repo (the same rule as the
-// dispatcher's check).
-func ownPR(repo, pr string) bool {
-	if repo == "" {
-		return false
-	}
-	n, ok := strings.CutPrefix(pr, "https://github.com/"+repo+"/pull/")
-	return ok && prNumberRE.MatchString(n)
 }
 
 // Plan decides the edit for one issue. Ours is a comment by login whose body

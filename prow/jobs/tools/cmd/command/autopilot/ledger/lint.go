@@ -85,9 +85,6 @@ func Lint(root string) []error {
 			fail("state %s must not hold a claim; only RUNNING, GATING and RETRY_ENV do", w.State)
 		}
 		if c := w.Claim; c != nil {
-			if c.Workflow == "" && !w.State.ActiveRun() {
-				fail("claim workflow is empty")
-			}
 			tsOK, dlOK := utcRFC3339(c.TS), utcRFC3339(c.Deadline)
 			if !tsOK {
 				fail("claim ts %q is not RFC 3339 UTC", c.TS)
