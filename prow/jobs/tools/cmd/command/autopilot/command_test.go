@@ -194,7 +194,7 @@ func TestLintLedgerCommand(t *testing.T) {
 }
 
 func TestChangedLinesKeepPlanFieldPositions(t *testing.T) {
-	// Task 11 runs awk '/^changed/{print $4}', so $4 must be the key, for new
+	// Scripts run awk '/^changed/{print $4}', so $4 must be the key, for new
 	// and for updated items alike.
 	dir := t.TempDir()
 	o := opts(dir)

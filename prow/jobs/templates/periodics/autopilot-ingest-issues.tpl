@@ -35,7 +35,7 @@
           # "true" commits and pushes the ledger; anything else is a dry run.
           # Do not set to true until this job uses the dedicated least-privilege
           # autopilot-ledger-github-token instead of preset-github-secrets, and
-          # ack-private/autopilot/ is bootstrapped (plan Task 12).
+          # ack-private/autopilot/ has been bootstrapped.
           - name: AUTOPILOT_LEDGER_WRITE
             value: "false"
         command: ["/bin/sh", "-ec"]
