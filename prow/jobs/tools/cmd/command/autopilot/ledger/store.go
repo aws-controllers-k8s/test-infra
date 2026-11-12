@@ -74,6 +74,16 @@ func Save(root string, items map[string]*WorkItem) error {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	// Two keys with one file name would mean a hash collision; refuse before
+	// writing anything.
+	names := map[string]string{}
+	for _, k := range keys {
+		name := items[k].FileName()
+		if other, dup := names[name]; dup {
+			return fmt.Errorf("items %q and %q share file name %s (key hash collision)", other, k, name)
+		}
+		names[name] = k
+	}
 	for _, k := range keys {
 		w := items[k]
 		dir, ok := w.State.Dir()
