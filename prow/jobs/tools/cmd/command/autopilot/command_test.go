@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-github/v63/github"
 	"github.com/stretchr/testify/assert"
@@ -182,6 +184,7 @@ func TestLintLedgerCommand(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	copyPolicy(t, dir) // lint-ledger now lints policy too
 	require.NoError(t, ingest(context.Background(), fakeGitHub(t), opts(dir), now, &bytes.Buffer{}))
 	_, err := run(dir)
 	assert.NoError(t, err)
@@ -279,8 +282,9 @@ func TestLintLedgerRequiresDir(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a directory")
 
-	// An empty ledger (just a README) lints clean; workitems/ is not required.
+	// An empty ledger (README and policy) lints clean; workitems/ is not required.
 	empty := t.TempDir()
+	copyPolicy(t, empty)
 	require.NoError(t, os.WriteFile(filepath.Join(empty, "README.md"), []byte("x"), 0o644))
 	assert.NoError(t, run(empty))
 }
@@ -329,4 +333,105 @@ func TestTeamOwnerFlagIsRegistered(t *testing.T) {
 	f := ingestCmd.Flags().Lookup("team-owner")
 	require.NotNil(t, f)
 	assert.Equal(t, "", f.DefValue)
+}
+
+// copyPolicy puts the Phase 1 policy files into a ledger dir.
+func copyPolicy(t *testing.T, dir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "policy"), 0o755))
+	for _, f := range []string{"autopilot.yaml", "budgets.yaml"} {
+		b, err := os.ReadFile(filepath.Join("policy", "testdata", "policy", f))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "policy", f), b, 0o644))
+	}
+}
+
+var tickTime = time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+
+func TestDispatchQueuesBumpAndShadowLaunches(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	var out strings.Builder
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, &out))
+	got := out.String()
+	bumpHash := ledger.KeyHash(bumpKey)
+	assert.Contains(t, got, "changed "+bumpHash+" QUEUED "+bumpKey+" (new)\n")
+	assert.Contains(t, got, "changed "+ledger.KeyHash(modeKey)+" DETECTED "+modeKey+" (new)\n")
+	assert.Contains(t, got, "launch "+bumpHash+" sdk-bump autopilot-"+bumpHash[len("sha256:"):]+"-g1-r1 "+bumpKey+" (shadow)\n")
+	assert.Contains(t, got, "held awaiting-triage 1\n")
+	assert.Contains(t, got, "2 issue(s) read, 1 skipped, 2 item(s) changed, 1 launch(es), 0 waiting, 1 held, 0 problem(s)\n")
+
+	items, err := ledger.Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, ledger.Queued, items[bumpKey].State)
+	assert.Nil(t, items[bumpKey].Claim)
+
+	// Second tick: nothing changes, the shadow launch repeats.
+	out.Reset()
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime.Add(30*time.Minute), &out))
+	assert.Contains(t, out.String(), " 0 item(s) changed, 1 launch(es)")
+}
+
+func TestDispatchWithoutPolicyStillRoutes(t *testing.T) {
+	dir := t.TempDir()
+	o := opts(dir)
+	o.DryRun = true
+	var out strings.Builder
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), o, tickTime, &out))
+	assert.Contains(t, out.String(), "problem policy: ")
+	assert.Contains(t, out.String(), "changed "+ledger.KeyHash(bumpKey)+" QUEUED ")
+	assert.NotContains(t, out.String(), "\nlaunch ")
+	assert.Contains(t, out.String(), "dry run: ledger not written\n")
+	entries, _ := os.ReadDir(dir)
+	assert.Empty(t, entries, "dry run writes nothing")
+}
+
+func TestDispatchFailsWhenWrittenPolicyIsMissing(t *testing.T) {
+	// Writing a ledger without policy must not lint clean: writes need policy.
+	err := dispatch(context.Background(), fakeGitHub(t), opts(t.TempDir()), tickTime, io.Discard)
+	assert.ErrorContains(t, err, "does not lint clean")
+}
+
+func TestPostStatus(t *testing.T) {
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	require.NoError(t, dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, io.Discard))
+
+	var posted []string
+	body, err := json.Marshal(issueBody(t))
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/ack-private/issues", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `[{"number":27,"html_url":"https://x/27","state":"open","user":{"login":"ack-bot"},
+		  "labels":[{"name":"ack/api-change-detected"},{"name":"service/s3"}],"body":%s},
+		  {"number":28,"html_url":"https://x/28","state":"open","user":{"login":"someone"},
+		  "labels":[{"name":"ack/api-change-detected"},{"name":"service/s3"}],"body":%s}]`, body, body)
+	})
+	mux.HandleFunc("/repos/o/ack-private/issues/27/comments", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			b, _ := io.ReadAll(r.Body)
+			posted = append(posted, string(b))
+			fmt.Fprint(w, `{"id":1}`)
+			return
+		}
+		fmt.Fprint(w, `[]`)
+	})
+	mux.HandleFunc("/repos/o/ack-private/issues/28/comments", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "no items name #28, so no comment")
+		fmt.Fprint(w, `[]`)
+	})
+	client := newClient(t, mux)
+	so := statusOptions{Owner: "o", Repo: "ack-private", CommentLogin: "ack-bot", LedgerDir: dir, DryRun: true}
+
+	var out strings.Builder
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Equal(t, "status #27 create\ndry run: no comments written\n", out.String())
+	assert.Empty(t, posted)
+
+	so.DryRun = false
+	out.Reset()
+	require.NoError(t, postStatus(context.Background(), client, so, &out))
+	assert.Equal(t, "status #27 create\n", out.String())
+	require.Len(t, posted, 1)
+	assert.Contains(t, posted[0], `"body":"<!-- ack-autopilot-status v1 -->`)
 }
