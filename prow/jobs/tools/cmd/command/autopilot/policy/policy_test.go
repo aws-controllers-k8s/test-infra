@@ -71,6 +71,9 @@ func TestLoadFailsClosed(t *testing.T) {
 		"grace too short":  {BudgetsFile, "reaper_grace_minutes: 30", "reaper_grace_minutes: 5"},
 		"bad service":      {SwitchesFile, "[s3, iam", `["s3|x", iam`},
 		"bad repo":         {SwitchesFile, "paused_repos: []", "paused_repos: [s3-controller]"},
+		"missing paused":   {SwitchesFile, "paused: false\n", ""},
+		"missing max runs": {BudgetsFile, "max_runs_per_item: 3\n", ""},
+		"bad expensive":    {BudgetsFile, "[ec2, rds", `["a b", rds`},
 		"two documents":    {BudgetsFile, "reaper_grace_minutes: 30", "reaper_grace_minutes: 30\n---\npaused: true"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -89,6 +92,23 @@ func TestLoadMissingAndEmpty(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, BudgetsFile), nil, 0o644))
 	_, err = Load(root)
 	assert.ErrorContains(t, err, "empty")
+	assert.ErrorContains(t, err, "budgets.yaml")
+
+	root = withFiles(t)
+	require.NoError(t, os.Remove(filepath.Join(root, BudgetsFile)))
+	_, err = Load(root)
+	assert.ErrorContains(t, err, "budgets.yaml")
+	assert.NotEmpty(t, Lint(root))
+}
+
+func TestLoadRejectsSymlinkedPolicyDir(t *testing.T) {
+	root := withFiles(t)
+	real := filepath.Join(t.TempDir(), "real")
+	require.NoError(t, os.Rename(filepath.Join(root, "policy"), real))
+	require.NoError(t, os.Symlink(real, filepath.Join(root, "policy")))
+	_, err := Load(root)
+	assert.ErrorContains(t, err, "regular directory")
+	assert.NotEmpty(t, Lint(root))
 }
 
 func TestLoadRejectsSymlink(t *testing.T) {

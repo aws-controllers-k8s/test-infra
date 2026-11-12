@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -38,8 +39,8 @@ const (
 	// launcher this version accepts.
 	LauncherShadow = "shadow"
 	// maxJobTimeoutMinutes is Prow's hard limit for an agent job (design 5.4).
-	maxJobTimeoutMinutes = 360
-	minReaperGrace       = 30
+	maxJobTimeoutMinutes  = 360
+	minReaperGraceMinutes = 30
 )
 
 type Switches struct {
@@ -81,25 +82,41 @@ func (b Budgets) ReaperGrace() time.Duration {
 // Load reads and validates both files under root (the ledger's autopilot/
 // directory).
 func Load(root string) (Policy, error) {
-	var p Policy
-	if err := decodeFile(filepath.Join(root, SwitchesFile), &p.Switches); err != nil {
-		return Policy{}, err
-	}
-	if err := decodeFile(filepath.Join(root, BudgetsFile), &p.Budgets); err != nil {
-		return Policy{}, err
-	}
-	if errs := p.validate(); len(errs) > 0 {
+	p, errs := load(root)
+	if len(errs) > 0 {
 		return Policy{}, errors.Join(errs...)
 	}
 	return p, nil
 }
 
-// Lint returns one error per policy problem, for lint-ledger.
+// Lint returns one error per policy problem, for lint-ledger: the decode error,
+// or every validation error.
 func Lint(root string) []error {
-	if _, err := Load(root); err != nil {
-		return []error{err}
+	_, errs := load(root)
+	return errs
+}
+
+func load(root string) (Policy, []error) {
+	var p Policy
+	// Lstat only checks the last path element, so check the directory too.
+	di, err := os.Lstat(filepath.Join(root, "policy"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Policy{}, []error{err}
 	}
-	return nil
+	// A missing directory falls through so the error names the missing file.
+	if err == nil && !di.IsDir() {
+		return Policy{}, []error{fmt.Errorf("%s: must be a regular directory, not a symlink", filepath.Join(root, "policy"))}
+	}
+	if err := decodeFile(filepath.Join(root, SwitchesFile), &p.Switches); err != nil {
+		return Policy{}, []error{err}
+	}
+	if err := decodeFile(filepath.Join(root, BudgetsFile), &p.Budgets); err != nil {
+		return Policy{}, []error{err}
+	}
+	if errs := p.validate(); len(errs) > 0 {
+		return Policy{}, errs
+	}
+	return p, nil
 }
 
 func decodeFile(path string, v any) error {
@@ -115,6 +132,10 @@ func decodeFile(path string, v any) error {
 	if err != nil {
 		return err
 	}
+	var doc yaml.Node
+	if err := yaml.NewDecoder(bytes.NewReader(raw)).Decode(&doc); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
 	dec.KnownFields(true)
 	if err := dec.Decode(v); err != nil {
@@ -127,7 +148,35 @@ func decodeFile(path string, v any) error {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("%s: more than one YAML document", path)
 	}
-	return nil
+	return requireKeys(path, &doc, v)
+}
+
+// requireKeys fails if the document lacks any key the struct's yaml tags name,
+// so a deleted switch or cap never silently becomes its zero value.
+func requireKeys(path string, doc *yaml.Node, v any) error {
+	top := doc
+	if top.Kind == yaml.DocumentNode && len(top.Content) > 0 {
+		top = top.Content[0]
+	}
+	if top.Kind != yaml.MappingNode {
+		return fmt.Errorf("%s: top level must be a mapping", path)
+	}
+	present := map[string]bool{}
+	for i := 0; i+1 < len(top.Content); i += 2 {
+		present[top.Content[i].Value] = true
+	}
+	t := reflect.TypeOf(v).Elem()
+	var errs []error
+	for i := 0; i < t.NumField(); i++ {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		if !present[name] {
+			errs = append(errs, fmt.Errorf("%s: missing key %q", path, name))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (p Policy) validate() []error {
@@ -139,9 +188,14 @@ func (p Policy) validate() []error {
 	if s.Launcher != LauncherShadow {
 		bad(SwitchesFile, "launcher %q is not supported (only %q)", s.Launcher, LauncherShadow)
 	}
-	for _, svc := range append(slices.Clone(s.Services), b.ExpensiveServices...) {
+	for _, svc := range s.Services {
 		if svc == "" || strings.ContainsAny(svc, "|/ \t") {
-			bad(SwitchesFile+" or "+BudgetsFile, "service %q is not a bare service name", svc)
+			bad(SwitchesFile, "service %q is not a bare service name", svc)
+		}
+	}
+	for _, svc := range b.ExpensiveServices {
+		if svc == "" || strings.ContainsAny(svc, "|/ \t") {
+			bad(BudgetsFile, "expensive service %q is not a bare service name", svc)
 		}
 	}
 	for _, r := range s.PausedRepos {
@@ -170,8 +224,8 @@ func (p Policy) validate() []error {
 	if b.JobTimeoutMinutes < 1 || b.JobTimeoutMinutes > maxJobTimeoutMinutes {
 		bad(BudgetsFile, "job_timeout_minutes must be 1..%d", maxJobTimeoutMinutes)
 	}
-	if b.ReaperGraceMinutes < minReaperGrace {
-		bad(BudgetsFile, "reaper_grace_minutes must be at least %d", minReaperGrace)
+	if b.ReaperGraceMinutes < minReaperGraceMinutes {
+		bad(BudgetsFile, "reaper_grace_minutes must be at least %d", minReaperGraceMinutes)
 	}
 	return errs
 }
