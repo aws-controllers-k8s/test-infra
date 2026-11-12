@@ -87,6 +87,8 @@ func (s State) ActiveRun() bool {
 }
 
 // OpenPR reports whether the item has a pull request that is not merged yet.
+// It deliberately excludes GATING: a gating run's PR counts through ActiveRun.
+// ESCALATED is neither OpenPR nor Landed.
 func (s State) OpenPR() bool {
 	switch s {
 	case PRReady, HumanReview, Feedback, MergeSoak, Stale:
@@ -96,7 +98,7 @@ func (s State) OpenPR() bool {
 }
 
 // Landed reports whether the item's change is on main (or needed no change),
-// so items that depend on it may start.
+// so items that depend on it may start. ESCALATED is not Landed.
 func (s State) Landed() bool {
 	switch s {
 	case Merged, Released, Verified, Done:
