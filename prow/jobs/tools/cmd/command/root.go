@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot"
 )
 
 const (
@@ -83,6 +84,7 @@ func init() {
 		&OptPushImages, "push-images", "true", "option to push images to ECR or not. accepts only true or false",
 	)
 	rootCmd.AddCommand(apichanges.Command)
+	rootCmd.AddCommand(autopilot.Command)
 }
 
 func Execute() {
