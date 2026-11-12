@@ -137,13 +137,24 @@ func TestClassifyNoBumpWhenNothingNeedsIt(t *testing.T) {
 }
 
 func TestClassifyConfigOnlyWork(t *testing.T) {
-	for _, work := range []string{"create-only", "from-sibling", "not-generated"} {
+	for _, work := range []string{"create-only", "not-generated"} {
 		l := modeField
 		l.Work = work
 		w := classify(t, l)["api-change|s3|Bucket|spec:Mode|needs-config"]
 		require.NotNil(t, w, work)
 		assert.Equal(t, "config-only", w.ChangeClass, work)
 	}
+}
+
+// from-sibling is sent beside a field custom code reconciles, so adding it means
+// updating that hook: it needs hand-written code, not only a generator.yaml change.
+func TestClassifyFromSiblingIsHandWritten(t *testing.T) {
+	l := modeField
+	l.Work = "from-sibling"
+	w := classify(t, l)["api-change|s3|Bucket|spec:Mode|needs-config"]
+	require.NotNil(t, w)
+	assert.Equal(t, "hand-written-code", w.ChangeClass)
+	assert.Equal(t, "from-sibling", w.DetectorWork)
 }
 
 // An unknown work name is treated conservatively: it may need code.

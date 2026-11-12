@@ -16,10 +16,11 @@ const source = "api-change"
 
 // configOnlyWork is detector work a generator.yaml change alone can do. Any
 // other work, including a name this package does not know yet, may need
-// hand-written code.
+// hand-written code. "from-sibling" is not listed: the detector sets it only
+// for a field sent beside one that custom code reconciles, so adding it means
+// updating that hook.
 var configOnlyWork = map[string]bool{
 	"create-only":   true, // is_immutable
-	"from-sibling":  true, // a field beside an existing from:
 	"not-generated": true, // a from: field codegen does not add itself
 }
 
