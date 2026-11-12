@@ -468,3 +468,52 @@ func TestLintReportsStrayEntries(t *testing.T) {
 		assert.Empty(t, Lint(root))
 	})
 }
+
+func TestNonDirectoryWorkitemsRoot(t *testing.T) {
+	good := sampleItem("good")
+	cases := map[string]func(t *testing.T, root string){
+		"symlink": func(t *testing.T, root string) {
+			outside := t.TempDir()
+			require.NoError(t, os.Symlink(outside, filepath.Join(root, "workitems")))
+		},
+		"regular file": func(t *testing.T, root string) {
+			require.NoError(t, os.WriteFile(filepath.Join(root, "workitems"), []byte("x"), 0o644))
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			setup(t, root)
+			_, err := Load(root)
+			assert.ErrorContains(t, err, "workitems")
+			assert.ErrorContains(t, Save(root, map[string]*WorkItem{good.Key: good}), "workitems")
+			assert.NotEmpty(t, Lint(root))
+			// Nothing was written through the link or into the file.
+			if target, err := os.Readlink(filepath.Join(root, "workitems")); err == nil {
+				entries, err := os.ReadDir(target)
+				require.NoError(t, err)
+				assert.Empty(t, entries)
+			}
+		})
+	}
+}
+
+func TestSaveRefusesSymlinkedStateDir(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems"), 0o755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(root, "workitems", "open")))
+	w := sampleItem("k1")
+	assert.Error(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	entries, err := os.ReadDir(outside)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestLoadRejectsMisnamedFile(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("k1")
+	writeItem(t, root, "open", "wrong.json", w)
+	_, err := Load(root)
+	assert.ErrorContains(t, err, "file name")
+}

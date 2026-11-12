@@ -45,6 +45,17 @@ func decode(path string) (*WorkItem, error) {
 // one error per other entry. A missing ledger is empty.
 func scan(root string) (paths []string, stray []error, err error) {
 	base := filepath.Join(root, itemsDir)
+	// WalkDir Lstats the root and never descends a symlink, so check the root
+	// ourselves: absent is an empty ledger, anything but a real directory is
+	// an error.
+	switch fi, lerr := os.Lstat(base); {
+	case errors.Is(lerr, fs.ErrNotExist):
+		return nil, nil, nil
+	case lerr != nil:
+		return nil, nil, lerr
+	case !fi.IsDir():
+		return nil, nil, fmt.Errorf("%s: must be a real directory, not a symlink or file", base)
+	}
 	err = filepath.WalkDir(base, func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			if p == base && errors.Is(werr, fs.ErrNotExist) {
@@ -96,6 +107,9 @@ func Load(root string) (map[string]*WorkItem, error) {
 		}
 		if w.KeyHash != KeyHash(w.Key) {
 			return nil, fmt.Errorf("%s: key_hash %q does not match key (want %s)", p, w.KeyHash, KeyHash(w.Key))
+		}
+		if filepath.Base(p) != w.FileName() {
+			return nil, fmt.Errorf("%s: file name should be %s", p, w.FileName())
 		}
 		if _, dup := items[w.Key]; dup {
 			return nil, fmt.Errorf("%s: duplicate key %q", p, w.Key)
@@ -160,6 +174,15 @@ func Save(root string, items map[string]*WorkItem) error {
 			return fmt.Errorf("item %q: %w", k, err)
 		}
 		encoded[k] = b
+	}
+	// Refuse to write into a ledger with a symlinked or otherwise unexpected
+	// entry, so a hand-edited link cannot redirect a write.
+	_, stray, err := scan(root)
+	if err != nil {
+		return err
+	}
+	if len(stray) > 0 {
+		return fmt.Errorf("refusing to save into a malformed ledger: %w", errors.Join(stray...))
 	}
 	for _, k := range keys {
 		w := items[k]
