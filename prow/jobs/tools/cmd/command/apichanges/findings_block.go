@@ -55,20 +55,29 @@ func findingWork(f Finding) string {
 }
 
 // blockLines lists each actionable finding once by (Class, Kind, Subject), the
-// identity fingerprintFindings hashes.
+// identity fingerprintFindings hashes. When findings collide on that identity,
+// the choice must not depend on input order: keep the higher-priority bucket,
+// then the lexicographically smaller work name.
 func blockLines(findings []Finding) []findingsblock.Line {
-	seen := map[[3]string]bool{}
+	index := map[[3]string]int{}
 	var out []findingsblock.Line
 	for _, f := range actionable(findings) {
 		id := [3]string{f.Class.String(), f.Kind, f.Subject}
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		out = append(out, findingsblock.Line{
+		l := findingsblock.Line{
 			Class: id[0], Kind: f.Kind, Subject: f.Subject,
 			Bucket: findingBucket(f), Work: findingWork(f),
-		})
+		}
+		i, ok := index[id]
+		if !ok {
+			index[id] = len(out)
+			out = append(out, l)
+			continue
+		}
+		cur := out[i]
+		rl, rc := findingsblock.Rank(l.Bucket), findingsblock.Rank(cur.Bucket)
+		if rl < rc || (rl == rc && l.Work < cur.Work) {
+			out[i] = l
+		}
 	}
 	return out
 }

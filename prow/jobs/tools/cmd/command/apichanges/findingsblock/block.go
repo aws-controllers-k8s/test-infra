@@ -86,6 +86,10 @@ func rank(bucket string) int {
 	return len(bucketOrder)
 }
 
+// Rank orders buckets by priority: 0 is the highest (new-resource), regen is the
+// lowest, and an unknown bucket ranks after all of them.
+func Rank(bucket string) int { return rank(bucket) }
+
 func less(a, b Line) bool {
 	if rank(a.Bucket) != rank(b.Bucket) {
 		return rank(a.Bucket) < rank(b.Bucket)
