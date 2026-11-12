@@ -116,3 +116,29 @@ func TestFetchErrors(t *testing.T) {
 	_, err = FetchTeam(context.Background(), client, "o", "t")
 	assert.Error(t, err)
 }
+
+func TestFetchIssuesFailsWhenPagesShift(t *testing.T) {
+	// An issue filed or relabelled mid-listing shifts the pages, so the same
+	// issue shows up twice (and another may be missed).
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/issues", paged(t,
+		`[{"number":1,"state":"closed","user":{"login":"b"}},{"number":2,"state":"closed","user":{"login":"b"}}]`,
+		`[{"number":2,"state":"closed","user":{"login":"b"}}]`))
+	client := newTestClient(t, mux)
+
+	_, err := FetchIssues(context.Background(), client, "o", "r")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "#2")
+}
+
+func TestFetchTeamSkipsEmptyLogins(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/orgs/o/teams/t/members", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[{"login":""},{},{"login":"a"}]`)
+	})
+	client := newTestClient(t, mux)
+
+	team, err := FetchTeam(context.Background(), client, "o", "t")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"a": true}, team)
+}
