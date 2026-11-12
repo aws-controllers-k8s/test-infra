@@ -195,6 +195,26 @@ func TestIngestRefreshKeepsTriagedClassification(t *testing.T) {
 	assert.Equal(t, ledger.Triaged, w.State)
 }
 
+// Items ingested before FieldPath was cleared for resource classes still carry
+// the Subject there. Refreshing clears it without reclassifying or re-keying.
+func TestIngestClearsStaleFieldPathOnResourceManualReview(t *testing.T) {
+	const quoteKey = "api-change|s3|Quote|transient:Quote|manual-review"
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, quoteRes)}, items)
+	w := items[quoteKey]
+	require.NotNil(t, w)
+	w.FieldPath = "Quote"
+	w.State = ledger.Triaged
+	w.History = append(w.History, ledger.Transition{TS: cfg.Now, To: ledger.Triaged, By: "dispatcher"})
+
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, quoteRes)}, items)
+	w = items[quoteKey]
+	require.NotNil(t, w, "the key still uses Subject")
+	assert.Empty(t, w.FieldPath)
+	assert.Equal(t, "transient-resource", w.DetectorWork)
+	assert.Equal(t, ledger.Triaged, w.State, "DetectorWork is unchanged, so no reclassification")
+}
+
 func TestIngestRetriagesWhenDetectorReclassifies(t *testing.T) {
 	items := map[string]*ledger.WorkItem{}
 	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)

@@ -46,6 +46,15 @@ var classToken = map[string]string{
 	"possible-resource":  "possible",
 }
 
+// fieldClass is the detector classes whose Subject is a field path. For any
+// other class (transient-resource, possible-resource, one this package does not
+// know) the Subject names a resource or is unspecified.
+var fieldClass = map[string]bool{
+	"spec-field":      true,
+	"status-field":    true,
+	"lifecycle-field": true,
+}
+
 // unknownClassPrefix marks the class segment of a class not in classToken, so
 // an unknown class literally named "spec" ("class=spec") cannot collide with
 // the known spec-field ("spec").
@@ -197,7 +206,15 @@ func Classify(b findingsblock.Block, issueURL string) (items []*ledger.WorkItem,
 				continue
 			}
 			w = newItem(fmt.Sprintf("api-change|%s|%s|%s|manual-review", svc, l.Kind, subjectKey(l)), l.Bucket)
-			w.Resource, w.FieldPath, w.DetectorWork = l.Kind, l.Subject, l.Class
+			// A manual-review item has no detector Work, so DetectorWork holds
+			// the detector Class instead; Ingest compares it to spot a
+			// reclassification. FieldPath is set only for a field class: for a
+			// resource class the Subject is the resource name, which Resource
+			// holds. The key still uses Subject (via subjectKey).
+			w.Resource, w.DetectorWork = l.Kind, l.Class
+			if fieldClass[l.Class] {
+				w.FieldPath = l.Subject
+			}
 			w.ChangeClass, w.AutonomyLevel, w.PriorityBand = "unclassified", "observe", 6
 		default:
 			// Parse rejects unknown buckets.
