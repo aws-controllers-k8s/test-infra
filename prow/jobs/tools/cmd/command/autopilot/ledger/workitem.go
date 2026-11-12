@@ -125,26 +125,28 @@ type Transition struct {
 }
 
 type WorkItem struct {
-	Schema        string       `json:"schema"`
-	Key           string       `json:"key"`
-	KeyHash       string       `json:"key_hash"`
-	Generation    int          `json:"generation"`
-	Source        string       `json:"source"`
-	Service       string       `json:"service"`
-	Repo          string       `json:"repo"`
-	Resource      string       `json:"resource,omitempty"`
-	FieldPath     string       `json:"field_path,omitempty"`
-	GapClass      string       `json:"gap_class"`
-	ChangeClass   string       `json:"change_class"`
-	AutonomyLevel string       `json:"autonomy_level"`
-	PriorityBand  int          `json:"priority_band"`
-	DetectorWork  string       `json:"detector_work,omitempty"`
-	Evidence      Evidence     `json:"evidence"`
-	DependsOn     []string     `json:"depends_on,omitempty"`
-	State         State        `json:"state"`
-	Links         Links        `json:"links"`
-	Verdict       *Verdict     `json:"verdict"`
-	History       []Transition `json:"history"`
+	Schema        string `json:"schema"`
+	Key           string `json:"key"`
+	KeyHash       string `json:"key_hash"`
+	Generation    int    `json:"generation"`
+	Source        string `json:"source"`
+	Service       string `json:"service"`
+	Repo          string `json:"repo"`
+	Resource      string `json:"resource,omitempty"`
+	FieldPath     string `json:"field_path,omitempty"`
+	GapClass      string `json:"gap_class"`
+	ChangeClass   string `json:"change_class"`
+	AutonomyLevel string `json:"autonomy_level"`
+	PriorityBand  int    `json:"priority_band"`
+	// DetectorWork is the detector's Work name for a needs-config item. For a
+	// manual-review item, which has no Work, it holds the detector Class.
+	DetectorWork string       `json:"detector_work,omitempty"`
+	Evidence     Evidence     `json:"evidence"`
+	DependsOn    []string     `json:"depends_on,omitempty"`
+	State        State        `json:"state"`
+	Links        Links        `json:"links"`
+	Verdict      *Verdict     `json:"verdict"`
+	History      []Transition `json:"history"`
 }
 
 // KeyHash is the short, stable id of a key: "sha256:" and 16 hex digits.

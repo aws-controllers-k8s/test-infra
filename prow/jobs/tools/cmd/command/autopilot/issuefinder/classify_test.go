@@ -92,6 +92,8 @@ func TestClassify(t *testing.T) {
 	assert.Equal(t, "unclassified", quote.ChangeClass)
 	assert.Equal(t, "observe", quote.AutonomyLevel)
 	assert.Equal(t, "transient-resource", quote.DetectorWork)
+	assert.Empty(t, quote.FieldPath, "a resource class has no field")
+	assert.Equal(t, "Quote", quote.Resource)
 	assert.Equal(t, 6, quote.PriorityBand)
 	assert.Equal(t, "manual-review", quote.GapClass)
 	assert.Equal(t, "api-change", quote.Source)
@@ -155,6 +157,30 @@ func TestClassifyFromSiblingIsHandWritten(t *testing.T) {
 	require.NotNil(t, w)
 	assert.Equal(t, "hand-written-code", w.ChangeClass)
 	assert.Equal(t, "from-sibling", w.DetectorWork)
+}
+
+// A manual-review item stores the detector class in DetectorWork. FieldPath
+// holds a field path only for a field class; for a resource class the Subject is
+// the resource name, which Resource already holds.
+func TestClassifyManualReviewFieldPath(t *testing.T) {
+	field := findingsblock.Line{Class: "status-field", Kind: "Bucket", Subject: "Mode", Bucket: findingsblock.BucketManualReview}
+	possible := findingsblock.Line{Class: "possible-resource", Kind: "Quote", Subject: "Quote", Bucket: findingsblock.BucketManualReview}
+	got := classify(t, field, quoteRes, possible)
+
+	f := got["api-change|s3|Bucket|status:Mode|manual-review"]
+	require.NotNil(t, f)
+	assert.Equal(t, "Mode", f.FieldPath)
+	assert.Equal(t, "status-field", f.DetectorWork)
+
+	for _, key := range []string{
+		"api-change|s3|Quote|transient:Quote|manual-review",
+		"api-change|s3|Quote|possible:Quote|manual-review",
+	} {
+		w := got[key]
+		require.NotNil(t, w, key)
+		assert.Empty(t, w.FieldPath, key)
+		assert.Equal(t, "Quote", w.Resource, key)
+	}
 }
 
 // An unknown work name is treated conservatively: it may need code.
