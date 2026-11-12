@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v63/github"
@@ -84,8 +85,8 @@ func TestIngestDryRunWritesNothing(t *testing.T) {
 	o := opts(dir)
 	o.DryRun = true
 	require.NoError(t, ingest(context.Background(), fakeGitHub(t), o, now, &out))
-	assert.Contains(t, out.String(), "new "+ledger.KeyHash(modeKey)+" DETECTED "+modeKey+"\n")
-	assert.Contains(t, out.String(), "new "+ledger.KeyHash(bumpKey)+" DETECTED "+bumpKey+"\n")
+	assert.Contains(t, out.String(), "changed "+ledger.KeyHash(modeKey)+" DETECTED "+modeKey+" (new)\n")
+	assert.Contains(t, out.String(), "changed "+ledger.KeyHash(bumpKey)+" DETECTED "+bumpKey+" (new)\n")
 	assert.Contains(t, out.String(), `skipped #28: author "someone" is not "ack-bot"`)
 	assert.Contains(t, out.String(), "2 issue(s) read, 1 skipped, 2 item(s) changed")
 	assert.Contains(t, out.String(), "dry run")
@@ -190,4 +191,96 @@ func TestLintLedgerCommand(t *testing.T) {
 	stderr, err := run(dir)
 	require.Error(t, err)
 	assert.Contains(t, stderr, stray)
+}
+
+func TestChangedLinesKeepPlanFieldPositions(t *testing.T) {
+	// Task 11 runs awk '/^changed/{print $4}', so $4 must be the key, for new
+	// and for updated items alike.
+	dir := t.TempDir()
+	o := opts(dir)
+	o.DryRun = true
+	keys := func(out string) (got []string) {
+		for _, line := range strings.Split(out, "\n") {
+			if f := strings.Fields(line); len(f) > 0 && f[0] == "changed" {
+				require.GreaterOrEqual(t, len(f), 5, line)
+				assert.Equal(t, ledger.KeyHash(f[3]), f[1], line)
+				assert.Equal(t, "DETECTED", f[2], line)
+				got = append(got, f[3])
+			}
+		}
+		return got
+	}
+	var out bytes.Buffer
+	require.NoError(t, ingest(context.Background(), fakeGitHub(t), o, now, &out))
+	assert.ElementsMatch(t, []string{modeKey, bumpKey}, keys(out.String()))
+	assert.Contains(t, out.String(), " (new)\n")
+
+	// Written, then the issue changes: the item is "updated", $4 still the key.
+	o.DryRun = false
+	require.NoError(t, ingest(context.Background(), fakeGitHub(t), o, now, &bytes.Buffer{}))
+	items, err := ledger.Load(dir)
+	require.NoError(t, err)
+	items[modeKey].Evidence = ledger.Evidence{}
+	items[bumpKey].Evidence = ledger.Evidence{}
+	require.NoError(t, ledger.Save(dir, items))
+	out.Reset()
+	o.DryRun = true
+	require.NoError(t, ingest(context.Background(), fakeGitHub(t), o, "2026-11-11T20:30:00Z", &out))
+	t.Log("\n" + out.String())
+	for _, k := range keys(out.String()) {
+		assert.Contains(t, out.String(), " "+k+" (updated)\n")
+	}
+}
+
+func TestIngestRequiresLedgerDirWhenWriting(t *testing.T) {
+	// Nothing may be fetched before the directory is checked.
+	client := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request %s", r.URL)
+	}))
+	file := filepath.Join(t.TempDir(), "afile")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	for name, dir := range map[string]string{
+		"missing":   filepath.Join(t.TempDir(), "typo"),
+		"not-a-dir": file,
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := ingest(context.Background(), client, opts(dir), now, &bytes.Buffer{})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "--ledger-dir")
+		})
+	}
+}
+
+func TestIngestDryRunAllowsMissingLedgerDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "not-bootstrapped-yet")
+	o := opts(dir)
+	o.DryRun = true
+	var out bytes.Buffer
+	require.NoError(t, ingest(context.Background(), fakeGitHub(t), o, now, &out))
+	assert.Contains(t, out.String(), "2 item(s) changed")
+	_, err := os.Stat(dir)
+	assert.True(t, os.IsNotExist(err), "dry run must not create the directory")
+}
+
+func TestLintLedgerRequiresDir(t *testing.T) {
+	run := func(dir string) error {
+		Command.SetArgs([]string{"lint-ledger", "--ledger-dir", dir})
+		Command.SetOut(&bytes.Buffer{})
+		Command.SetErr(&bytes.Buffer{})
+		return Command.Execute()
+	}
+	err := run(filepath.Join(t.TempDir(), "typo"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--ledger-dir")
+
+	file := filepath.Join(t.TempDir(), "afile")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	err = run(file)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a directory")
+
+	// An empty ledger (just a README) lints clean; workitems/ is not required.
+	empty := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(empty, "README.md"), []byte("x"), 0o644))
+	assert.NoError(t, run(empty))
 }

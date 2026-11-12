@@ -11,10 +11,12 @@ import (
 // Pull requests are skipped. Comments are fetched for open issues only.
 // It only reads from GitHub.
 //
-// The listing is not a snapshot: an issue filed, relabelled or edited while
-// pages are being read shifts later pages, so one issue can be listed twice
-// and another missed. FetchIssues fails closed when any number repeats, since
-// a missed issue would look like gone findings.
+// The listing is not a snapshot, and only part of the drift is detected.
+// An issue filed or labelled while pages are being read shifts later pages
+// right, so one issue is listed twice; FetchIssues fails when any number
+// repeats. An issue removed or unlabelled mid-listing shifts later pages left
+// and can skip an issue, and nothing here notices. That issue is missed for
+// this run only and is picked up by the next one.
 func FetchIssues(ctx context.Context, c *github.Client, owner, repo string) ([]Issue, error) {
 	opt := &github.IssueListByRepoOptions{
 		State: "all", Labels: []string{apiChangeLabel},
