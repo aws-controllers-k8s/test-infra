@@ -284,3 +284,49 @@ func TestLintLedgerRequiresDir(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(empty, "README.md"), []byte("x"), 0o644))
 	assert.NoError(t, run(empty))
 }
+
+// teamRecorder serves the fakeGitHub issues but answers the team request only
+// on teamPath, and records the paths of all team requests.
+func teamRecorder(t *testing.T, teamPath string, seen *[]string) *github.Client {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/ack-private/issues", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/teams/") {
+			*seen = append(*seen, r.URL.Path)
+		}
+		if r.URL.Path == teamPath {
+			fmt.Fprint(w, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	return newClient(t, mux)
+}
+
+func TestIngestTeamOwnerDefaultsToIssuesOwner(t *testing.T) {
+	var seen []string
+	o := opts(t.TempDir())
+	o.DryRun = true
+	require.NoError(t, ingest(context.Background(), teamRecorder(t, "/orgs/o/teams/ack-admin/members", &seen), o, now, &bytes.Buffer{}))
+	assert.Equal(t, []string{"/orgs/o/teams/ack-admin/members"}, seen)
+}
+
+func TestIngestUsesExplicitTeamOwnerForTeamRequest(t *testing.T) {
+	var seen []string
+	o := opts(t.TempDir())
+	o.DryRun = true
+	o.TeamOwner = "aws-controllers-k8s"
+	require.NoError(t, ingest(context.Background(),
+		teamRecorder(t, "/orgs/aws-controllers-k8s/teams/ack-admin/members", &seen), o, now, &bytes.Buffer{}))
+	// The issues owner "o" is never asked for the team.
+	assert.Equal(t, []string{"/orgs/aws-controllers-k8s/teams/ack-admin/members"}, seen)
+}
+
+func TestTeamOwnerFlagIsRegistered(t *testing.T) {
+	f := ingestCmd.Flags().Lookup("team-owner")
+	require.NotNil(t, f)
+	assert.Equal(t, "", f.DefValue)
+}
