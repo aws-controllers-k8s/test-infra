@@ -1,0 +1,14 @@
+# ACK Autopilot caps (design section 8, Phase 1). Change by pull request.
+max_concurrent_llm_runs: 2
+max_concurrent_runs_per_repo: 1
+max_open_prs_per_repo_class: 1
+# Review-load backpressure: human-merge PRs open or being produced, org-wide.
+max_prs_awaiting_review: 6
+max_sdk_bump_launches_per_day: 5
+expensive_services: [ec2, rds, eks, fsx, elasticache, sagemaker, opensearch]
+max_expensive_launches_per_service_per_day: 1
+max_runs_per_item: 3
+# Timeout ladder (design 5.4): a run fits Prow's 6h limit and the reaper waits
+# at least 30 minutes past it.
+job_timeout_minutes: 300
+reaper_grace_minutes: 30
