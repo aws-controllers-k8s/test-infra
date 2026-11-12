@@ -158,13 +158,16 @@ periodics:
             memory: "1Gi"
         env:
           # "true" commits and pushes the ledger; anything else is a dry run.
+          # Do not set to true until this job uses the dedicated least-privilege
+          # autopilot-ledger-github-token instead of preset-github-secrets, and
+          # ack-private/autopilot/ is bootstrapped (plan Task 12).
           - name: AUTOPILOT_LEDGER_WRITE
             value: "false"
         command: ["/bin/sh", "-ec"]
         args:
           - |
             go build -mod=mod -o /tmp/ack-build-tools ./prow/jobs/tools/cmd
-            exec ./scripts/autopilot-ingest.sh ${TEST_INFRA_ORG}
+            exec sh ./scripts/autopilot-ingest.sh ${TEST_INFRA_ORG}
         volumeMounts:
           - name: github-token-censor
             mountPath: /etc/github-censor

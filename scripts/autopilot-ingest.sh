@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Records the findings in detect-api-changes issues as ACK Autopilot work items
 # in <org>/ack-private under autopilot/.
 #
@@ -11,9 +11,19 @@
 # Requires GITHUB_TOKEN (from the preset-github-secrets preset) and an
 # ack-build-tools binary at AUTOPILOT_BIN (default /tmp/ack-build-tools).
 #
+# POSIX sh only: the job image (golang alpine) has no bash.
+#
 # Do not add `set -x`: GIT_ASKPASS hands the token to git, and tracing would put
 # the environment of every command at risk of being logged.
-set -euo pipefail
+set -eu
+# busybox ash and recent dash support pipefail; skip it where unsupported.
+# shellcheck disable=SC3040
+(set -o pipefail) 2>/dev/null && set -o pipefail
+
+# Git tracing would log the credential exchange, so make sure none is enabled in
+# the job environment.
+unset GIT_TRACE GIT_TRACE_CURL GIT_CURL_VERBOSE GIT_TRACE_PACKET \
+  GIT_TRACE_SETUP GIT_TRACE2 GIT_TRACE2_EVENT GIT_TRACE2_PERF
 
 OWNER="${1:?usage: $0 <org>}"
 BIN="${AUTOPILOT_BIN:-/tmp/ack-build-tools}"
@@ -74,15 +84,23 @@ for attempt in 1 2 3; do
   [ -d "$LEDGER_DIR" ] \
     || fail "$LEDGER_DIR does not exist on ${OWNER}/ack-private ${BRANCH}; bootstrap the ledger before enabling writes"
   ingest
-  if [ -z "$(git status --porcelain -- autopilot)" ]; then
+  # Assign first so that a failing git status stops the script under set -e.
+  changes="$(git status --porcelain -- autopilot)"
+  if [ -z "$changes" ]; then
     echo "ledger unchanged"
     exit 0
   fi
   git add -A -- autopilot
   # Stage nothing but autopilot/: anything else in the index is a bug.
-  if git diff --cached --name-only | grep -qv '^autopilot/'; then
-    fail "refusing to commit changes outside autopilot/"
-  fi
+  staged="$(git diff --cached --name-only)"
+  while IFS= read -r path; do
+    case "$path" in
+      "" | autopilot/*) ;;
+      *) fail "refusing to commit changes outside autopilot/: $path" ;;
+    esac
+  done <<STAGED
+$staged
+STAGED
   git commit -q -m "autopilot: ingest api-change issues" -m "Producer: autopilot/issue-finder"
   if git push -q origin "HEAD:refs/heads/$BRANCH"; then
     echo "ledger pushed"
