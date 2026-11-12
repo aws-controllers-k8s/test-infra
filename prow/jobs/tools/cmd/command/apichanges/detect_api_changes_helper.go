@@ -37,6 +37,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/issueregion"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/generator"
 )
 
@@ -1687,9 +1688,11 @@ const fingerprintPrefix = "<!-- ack-api-change-fingerprint: "
 
 // The generated region bounds what renderIssueBody writes, so a maintainer's
 // additions to the body survive a refresh and only the marker inside it counts.
+// The markers live in issueregion so the Autopilot issue finder reads the same
+// region this package writes.
 const (
-	generatedRegionBegin = "<!-- ack-api-change-begin -->"
-	generatedRegionEnd   = "<!-- ack-api-change-end -->"
+	generatedRegionBegin = issueregion.Begin
+	generatedRegionEnd   = issueregion.End
 )
 
 // fingerprintRE matches the marker on a line of its own. The trailing [ \t\r]* is
@@ -1762,53 +1765,20 @@ func parseFingerprint(body string) string {
 }
 
 // regionShape is what generatedRegion found.
-type regionShape int
+type regionShape = issueregion.Shape
 
 const (
-	// regionAbsent: neither marker appears in the body.
-	regionAbsent regionShape = iota
-	// regionUnique: exactly one begin and one end marker, each on its own line,
-	// begin first.
-	regionUnique
-	// regionMalformed: any other arrangement.
-	regionMalformed
+	regionAbsent    = issueregion.Absent
+	regionUnique    = issueregion.Unique
+	regionMalformed = issueregion.Malformed
 )
 
 // generatedRegion returns the half-open byte range from the begin marker through
-// the end marker. Anything but regionUnique is reported rather than guessed at:
-// refusing to refresh is safer than rewriting a maintainer's text. Raw marker
-// occurrences are counted, so a marker in prose also makes the body malformed.
-// Marker lines may have trailing whitespace or \r, as for fingerprintRE.
+// the end marker; see issueregion.Find. Anything but regionUnique is reported
+// rather than guessed at: refusing to refresh is safer than rewriting a
+// maintainer's text.
 func generatedRegion(body string) (start, end int, shape regionShape) {
-	begins := strings.Count(body, generatedRegionBegin)
-	ends := strings.Count(body, generatedRegionEnd)
-	if begins == 0 && ends == 0 {
-		return 0, 0, regionAbsent
-	}
-	if begins != 1 || ends != 1 {
-		return 0, 0, regionMalformed
-	}
-	start = strings.Index(body, generatedRegionBegin)
-	endAt := strings.Index(body, generatedRegionEnd)
-	if endAt < start ||
-		!isCompleteLine(body, start, len(generatedRegionBegin)) ||
-		!isCompleteLine(body, endAt, len(generatedRegionEnd)) {
-		return 0, 0, regionMalformed
-	}
-	return start, endAt + len(generatedRegionEnd), regionUnique
-}
-
-// isCompleteLine reports whether body[at:at+n] is the whole of its line, give or
-// take trailing spaces, tabs and a \r.
-func isCompleteLine(body string, at, n int) bool {
-	if at > 0 && body[at-1] != '\n' {
-		return false
-	}
-	rest := body[at+n:]
-	if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
-		rest = rest[:nl]
-	}
-	return strings.Trim(rest, " \t\r") == ""
+	return issueregion.Find(body)
 }
 
 // errUnmanageableRegion is wrapped by replaceGeneratedRegion when a body has no
