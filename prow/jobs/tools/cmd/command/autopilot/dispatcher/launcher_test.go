@@ -42,9 +42,12 @@ func TestShadowLauncherRecordsAndReportsUnknown(t *testing.T) {
 func TestLaunchIDIsStablePerRun(t *testing.T) {
 	w := item("sdk-bump|s3|*|v1", "SDK-bump", ledger.Queued)
 	id := launchID(w, 2)
-	assert.Equal(t, "autopilot-"+w.KeyHash[len("sha256:"):]+"-r2", id)
+	assert.Equal(t, "autopilot-"+w.KeyHash[len("sha256:"):]+"-g1-r2", id)
 	assert.Equal(t, id, launchID(w, 2))
 	assert.LessOrEqual(t, len(id), 63, "must fit a Kubernetes object name")
+	reopened := *w
+	reopened.Generation = 2
+	assert.NotEqual(t, id, launchID(&reopened, 2))
 }
 
 func TestLaneArgs(t *testing.T) {
@@ -57,4 +60,11 @@ func TestLaneArgs(t *testing.T) {
 		lanes["config-only"].args(field))
 	assert.True(t, lanes["config-only"].LLM)
 	assert.False(t, lanes["SDK-bump"].LLM)
+}
+
+func TestRunningHelperLintsClean(t *testing.T) {
+	root := t.TempDir()
+	w := running(item("sdk-bump|s3|*|v1", "SDK-bump", ledger.Queued), t0, 1, 3)
+	require.NoError(t, ledger.Save(root, ledgerOf(w)))
+	assert.Empty(t, ledger.Lint(root))
 }

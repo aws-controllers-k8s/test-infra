@@ -34,7 +34,9 @@ type Phase string
 
 const (
 	// PhaseUnknown: no such run, or the launcher cannot tell. The reaper
-	// handles it once the claim's deadline and grace pass.
+	// handles it once the claim's deadline and grace pass. Switching to the
+	// shadow launcher while real runs are in flight makes those runs report
+	// unknown, so they are reaped after their deadline plus grace.
 	PhaseUnknown Phase = "unknown"
 	PhasePending Phase = "pending"
 	PhaseRunning Phase = "running"
@@ -66,9 +68,12 @@ type LaunchRequest struct {
 
 // Launcher starts and inspects workflow runs.
 type Launcher interface {
-	// Launch starts a run. It must be idempotent on LaunchID: launching an id
-	// that already exists succeeds and starts nothing, so a tick that
-	// launched but lost its ledger push is safe to repeat.
+	// Launch starts a run. It must be idempotent on LaunchID: the same
+	// LaunchID with an identical request succeeds and starts nothing, so a
+	// tick that launched but lost its ledger push is safe to repeat. The same
+	// LaunchID with a different Workflow or Args is an error. A real launcher
+	// must remember the ids it has started even after Prow deletes the job,
+	// so that a relaunch never starts a second run.
 	Launch(ctx context.Context, r LaunchRequest) error
 	Status(ctx context.Context, launchID string) (Status, error)
 	// Shadow reports that Launch only records requests. The Dispatcher then
@@ -86,6 +91,9 @@ func (s *ShadowLauncher) Launch(_ context.Context, r LaunchRequest) error {
 	return nil
 }
 
+// Status always reports unknown. Switching to shadow while real runs are in
+// flight means those runs report unknown and are reaped after their deadline
+// plus grace.
 func (s *ShadowLauncher) Status(context.Context, string) (Status, error) {
 	return Status{Phase: PhaseUnknown}, nil
 }
@@ -101,8 +109,10 @@ func NewLauncher(p policy.Policy) (Launcher, error) {
 	return nil, fmt.Errorf("launcher %q is not supported", p.Switches.Launcher)
 }
 
-// launchID names an item's run-th run. It is built from the key hash alone,
-// so it is stable across ticks and fits a Kubernetes name (at most 63).
+// launchID names an item's run-th run in its current generation. It is built
+// from the key hash and generation, so it is stable across ticks, fits a
+// Kubernetes name (at most 63), and a reopened item (generation+1, fresh
+// attempts) never collides with an old run.
 func launchID(w *ledger.WorkItem, run int) string {
-	return fmt.Sprintf("autopilot-%s-r%d", strings.TrimPrefix(ledger.KeyHash(w.Key), "sha256:"), run)
+	return fmt.Sprintf("autopilot-%s-g%d-r%d", strings.TrimPrefix(ledger.KeyHash(w.Key), "sha256:"), w.Generation, run)
 }

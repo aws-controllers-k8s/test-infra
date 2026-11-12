@@ -43,10 +43,18 @@ func item(key, class string, state ledger.State) *ledger.WorkItem {
 
 // running makes w an active run launched at ts with the given attempts.
 func running(w *ledger.WorkItem, ts string, runs, max int) *ledger.WorkItem {
+	ln, ok := lanes[w.ChangeClass]
+	if !ok {
+		panic("running: no lane for change class " + w.ChangeClass)
+	}
+	if runs < 1 {
+		panic("running: runs must be at least 1")
+	}
+	ts = mustTime(ts).UTC().Format(time.RFC3339)
 	id := launchID(w, runs)
 	w.State = ledger.Running
 	w.Attempts = &ledger.Attempts{Runs: runs, MaxRuns: max}
-	w.Claim = &ledger.Claim{LaunchID: id, Workflow: lanes[w.ChangeClass].Workflow, TS: ts,
+	w.Claim = &ledger.Claim{LaunchID: id, Workflow: ln.Workflow, TS: ts,
 		Deadline: mustTime(ts).Add(5 * time.Hour).Format(time.RFC3339)}
 	w.Links.ProwJobs = append(w.Links.ProwJobs, id)
 	w.History = append(w.History, ledger.Transition{TS: ts, To: ledger.Running, By: actor, Reason: id})
