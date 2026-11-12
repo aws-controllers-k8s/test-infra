@@ -44,7 +44,19 @@ var Command = &cobra.Command{
 
 type ingestOptions struct {
 	Owner, Repo, BotLogin, TeamSlug, LedgerDir string
-	DryRun                                     bool
+	// TeamOwner is the org that owns TeamSlug. Empty means Owner.
+	TeamOwner string
+	DryRun    bool
+}
+
+// teamOwner is the org to ask for the team's members: --team-owner, or
+// --issues-owner when that is not set. A sandbox repo owned by a user needs the
+// two to differ, because only an org has teams.
+func (o ingestOptions) teamOwner() string {
+	if strings.TrimSpace(o.TeamOwner) == "" {
+		return o.Owner
+	}
+	return o.TeamOwner
 }
 
 // validate rejects empty values. MarkFlagRequired only checks that a flag was
@@ -125,10 +137,11 @@ var lintCmd = &cobra.Command{
 
 func init() {
 	f := ingestCmd.Flags()
-	f.StringVar(&ingestOpts.Owner, "issues-owner", "aws-controllers-k8s", "org that owns the issues repo and the team")
+	f.StringVar(&ingestOpts.Owner, "issues-owner", "aws-controllers-k8s", "owner of the issues repo (and of the team, unless --team-owner is set)")
 	f.StringVar(&ingestOpts.Repo, "issues-repo", "ack-private", "repo where detect-api-changes files issues")
 	f.StringVar(&ingestOpts.BotLogin, "bot-login", "", "account detect-api-changes files issues as; other authors are ignored")
 	f.StringVar(&ingestOpts.TeamSlug, "team-slug", "", "team whose members' /autopilot commands count")
+	f.StringVar(&ingestOpts.TeamOwner, "team-owner", "", "org that owns --team-slug (default: the value of --issues-owner)")
 	f.StringVar(&ingestOpts.LedgerDir, "ledger-dir", "", "the autopilot/ directory of an ack-private checkout")
 	f.BoolVar(&ingestOpts.DryRun, "dry-run", false, "report changes without writing the ledger")
 	for _, name := range []string{"bot-login", "team-slug", "ledger-dir"} {
@@ -153,7 +166,7 @@ func ingest(ctx context.Context, client *github.Client, o ingestOptions, now str
 			return err
 		}
 	}
-	team, err := issuefinder.FetchTeam(ctx, client, o.Owner, o.TeamSlug)
+	team, err := issuefinder.FetchTeam(ctx, client, o.teamOwner(), o.TeamSlug)
 	if err != nil {
 		return err
 	}
