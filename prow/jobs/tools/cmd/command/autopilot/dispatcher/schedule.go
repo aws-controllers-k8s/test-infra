@@ -34,6 +34,9 @@ const (
 	CapOpenPRs           = "max_open_prs_per_repo_class"
 	CapSDKBumpDaily      = "max_sdk_bump_launches_per_day"
 	CapReview            = "max_prs_awaiting_review"
+	// CapNoLane: a QUEUED item of a class no workflow handles (route escalates
+	// these; a hand-edited ledger may still hold one).
+	CapNoLane = "no-lane"
 )
 
 // candidate is a QUEUED item schedule picked, with its lane.
@@ -63,9 +66,11 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time)
 	for _, w := range items {
 		if w.State.ActiveRun() {
 			l.runsPerRepo[w.Repo]++
-			if lanes[w.ChangeClass].LLM {
+			if w.Claim != nil && llmWorkflow(w.Claim.Workflow) {
 				l.llmRuns++
 			}
+			// The run will open a PR.
+			l.openPRs[w.Repo+"|"+w.ChangeClass]++
 		}
 		if w.State.OpenPR() {
 			l.openPRs[w.Repo+"|"+w.ChangeClass]++
@@ -97,6 +102,7 @@ func (l *load) add(w *ledger.WorkItem, ln lane, b policy.Budgets) {
 	if ln.LLM {
 		l.llmRuns++
 	}
+	l.openPRs[w.Repo+"|"+w.ChangeClass]++
 	l.launchesToday[w.ChangeClass]++
 	if b.Expensive(w.Service) {
 		l.expensiveToday[w.Service]++
@@ -128,6 +134,10 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 			return a.PriorityBand < c.PriorityBand
 		}
 		if qa, qc := queuedSince(a), queuedSince(c); qa != qc {
+			// No QUEUED history sorts after any timestamp.
+			if qa == "" || qc == "" {
+				return qc == ""
+			}
 			return qa < qc
 		}
 		if va, vc := lastVisit[a.Repo], lastVisit[c.Repo]; va != vc {
@@ -142,12 +152,19 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 	for _, w := range queue {
 		ln, ok := lanes[w.ChangeClass]
 		if !ok {
-			// route escalates these; a hand-edited ledger may still hold one.
+			waits = append(waits, capped{w, CapNoLane})
 			continue
 		}
 		// Bands 0-2 skip the per-class caps (design 8).
 		perClass := w.PriorityBand > 2
 		cap := ""
+		runs, maxRuns := 0, b.MaxRunsPerItem
+		if w.Attempts != nil {
+			runs = w.Attempts.Runs
+			if w.Attempts.MaxRuns >= 1 {
+				maxRuns = w.Attempts.MaxRuns
+			}
+		}
 		switch {
 		case sw.Paused:
 			cap = CapPaused
@@ -155,7 +172,7 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 			cap = CapRepoPaused
 		case !sw.ServiceEnabled(w.Service):
 			cap = CapServiceNotEnabled
-		case w.Attempts != nil && w.Attempts.Runs >= w.Attempts.MaxRuns:
+		case runs >= maxRuns:
 			cap = CapRuns
 		case l.runsPerRepo[w.Repo] >= b.MaxConcurrentRunsPerRepo:
 			cap = CapRepoBusy
@@ -188,4 +205,15 @@ func queuedSince(w *ledger.WorkItem) string {
 		}
 	}
 	return ""
+}
+
+// llmWorkflow reports whether any lane running the named workflow is an LLM
+// lane.
+func llmWorkflow(name string) bool {
+	for _, ln := range lanes {
+		if ln.Workflow == name && ln.LLM {
+			return true
+		}
+	}
+	return false
 }

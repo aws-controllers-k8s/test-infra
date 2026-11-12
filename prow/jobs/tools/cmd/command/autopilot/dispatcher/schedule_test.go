@@ -158,3 +158,110 @@ func TestScheduleRunsExhausted(t *testing.T) {
 	assert.Empty(t, picks)
 	assert.Equal(t, map[string]string{w.Key: CapRuns}, waitCaps(waits))
 }
+
+func TestScheduleBand2SkipsOpenPRCap(t *testing.T) {
+	open := item("sdk-bump|s3|*|v0", "SDK-bump", ledger.HumanReview)
+	urgent := queued("sdk-bump|s3|*|v1", "SDK-bump", 2, t0)
+	picks, waits := schedule(ledgerOf(open, urgent), testPolicy(t), now)
+	assert.Equal(t, []string{urgent.Key}, pickKeys(picks))
+	assert.Empty(t, waits)
+
+	normal := queued("sdk-bump|s3|*|v1", "SDK-bump", 3, t0)
+	picks, waits = schedule(ledgerOf(open, normal), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{normal.Key: CapOpenPRs}, waitCaps(waits))
+}
+
+func TestScheduleReviewLoadMergeSoakVersusGating(t *testing.T) {
+	build := func(extra *ledger.WorkItem) map[string]*ledger.WorkItem {
+		var items []*ledger.WorkItem
+		for _, svc := range []string{"a", "b", "c", "d", "e"} {
+			items = append(items, item(fmt.Sprintf("sdk-bump|%s|*|v0", svc), "SDK-bump", ledger.HumanReview))
+		}
+		items = append(items, extra, queued("sdk-bump|iam|*|v1", "SDK-bump", 3, t0))
+		return ledgerOf(items...)
+	}
+	// MERGE_SOAK is no longer waiting on a reviewer: 5 awaiting, iam fits.
+	picks, waits := schedule(build(item("sdk-bump|f|*|v0", "SDK-bump", ledger.MergeSoak)), testPolicy(t), now)
+	assert.Equal(t, []string{"sdk-bump|iam|*|v1"}, pickKeys(picks))
+	assert.Empty(t, waits)
+
+	// GATING is producing a human-merge PR: 6 awaiting, iam waits.
+	picks, waits = schedule(build(item("sdk-bump|f|*|v0", "SDK-bump", ledger.Gating)), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{"sdk-bump|iam|*|v1": CapReview}, waitCaps(waits))
+}
+
+func TestScheduleSDKBumpDailyCapWithinTick(t *testing.T) {
+	p := testPolicy(t)
+	p.Switches.Services = append(p.Switches.Services, "a", "b", "c", "d", "e", "f")
+	p.Budgets.MaxPRsAwaitingReview = 100
+	var items []*ledger.WorkItem
+	for _, svc := range []string{"a", "b", "c", "d", "e", "f"} {
+		items = append(items, queued(fmt.Sprintf("sdk-bump|%s|*|v1", svc), "SDK-bump", 3, t0))
+	}
+	picks, waits := schedule(ledgerOf(items...), p, now)
+	assert.Equal(t, []string{items[0].Key, items[1].Key, items[2].Key, items[3].Key, items[4].Key}, pickKeys(picks))
+	assert.Equal(t, map[string]string{items[5].Key: CapSDKBumpDaily}, waitCaps(waits))
+}
+
+func TestScheduleLLMCapWithinTick(t *testing.T) {
+	p := testPolicy(t)
+	p.Switches.Services = append(p.Switches.Services, "sqs")
+	var items []*ledger.WorkItem
+	for _, svc := range []string{"s3", "iam", "sqs"} {
+		items = append(items, queued(fmt.Sprintf("api-change|%s|Thing|spec:A|needs-config", svc), "config-only", 4, t0))
+	}
+	picks, waits := schedule(ledgerOf(items...), p, now)
+	assert.Len(t, picks, 2)
+	assert.Equal(t, []string{items[0].Key, items[1].Key}, pickKeys(picks))
+	assert.Equal(t, map[string]string{items[2].Key: CapLLM}, waitCaps(waits))
+}
+
+func TestSchedule24HourBoundary(t *testing.T) {
+	// ec2 is expensive with a cap of one launch per day.
+	launched := func(ago time.Duration) *ledger.WorkItem {
+		w := running(item("sdk-bump|ec2|*|v0", "SDK-bump", ledger.Queued), now.Add(-ago).Format(time.RFC3339), 1, 3)
+		w.State, w.Claim = ledger.Done, nil
+		return w
+	}
+	next := queued("api-change|ec2|Instance|spec:A|needs-config", "config-only", 4, t0)
+
+	picks, waits := schedule(ledgerOf(launched(24*time.Hour), next), testPolicy(t), now)
+	assert.Equal(t, []string{next.Key}, pickKeys(picks), "exactly 24h ago no longer counts")
+	assert.Empty(t, waits)
+
+	picks, waits = schedule(ledgerOf(launched(24*time.Hour-time.Minute), next), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{next.Key: CapExpensive}, waitCaps(waits))
+}
+
+func TestScheduleRunsCapFallback(t *testing.T) {
+	nilAttempts := queued("sdk-bump|s3|*|v1", "SDK-bump", 3, t0)
+	picks, waits := schedule(ledgerOf(nilAttempts), testPolicy(t), now)
+	assert.Equal(t, []string{nilAttempts.Key}, pickKeys(picks))
+	assert.Empty(t, waits)
+
+	zeroMax := queued("sdk-bump|s3|*|v1", "SDK-bump", 3, t0)
+	zeroMax.Attempts = &ledger.Attempts{Runs: 3, MaxRuns: 0}
+	picks, waits = schedule(ledgerOf(zeroMax), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{zeroMax.Key: CapRuns}, waitCaps(waits))
+}
+
+func TestScheduleNoLane(t *testing.T) {
+	w := queued("api-change|s3|Bucket|spec:A|hand-written", "hand-written-code", 4, t0)
+	picks, waits := schedule(ledgerOf(w), testPolicy(t), now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{w.Key: CapNoLane}, waitCaps(waits))
+}
+
+func TestScheduleNoQueuedHistorySortsLast(t *testing.T) {
+	a := queued("sdk-bump|s3|*|v1", "SDK-bump", 3, t0)
+	a.History = nil
+	b := queued("sdk-bump|iam|*|v1", "SDK-bump", 3, "2026-11-12T08:30:00Z")
+	p := testPolicy(t)
+	p.Budgets.MaxPRsAwaitingReview = 100
+	picks, _ := schedule(ledgerOf(a, b), p, now)
+	assert.Equal(t, []string{b.Key, a.Key}, pickKeys(picks))
+}
