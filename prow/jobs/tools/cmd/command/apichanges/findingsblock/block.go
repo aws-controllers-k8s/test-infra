@@ -53,6 +53,8 @@ type Header struct {
 // issue, so a reader must not treat a missing line as a finding that is gone.
 type Block struct {
 	Header
+	// Count is the number of lines in the block; the total number of findings
+	// is Count+Omitted.
 	Count   int
 	Omitted int
 	Lines   []Line
@@ -75,9 +77,18 @@ func (l Line) render() string {
 	}, "|") + "\n"
 }
 
+// rank gives a bucket not in bucketOrder the lowest priority, after every known
+// bucket, so it is dropped first when truncating.
+func rank(bucket string) int {
+	if r, ok := bucketOrder[bucket]; ok {
+		return r
+	}
+	return len(bucketOrder)
+}
+
 func less(a, b Line) bool {
-	if bucketOrder[a.Bucket] != bucketOrder[b.Bucket] {
-		return bucketOrder[a.Bucket] < bucketOrder[b.Bucket]
+	if rank(a.Bucket) != rank(b.Bucket) {
+		return rank(a.Bucket) < rank(b.Bucket)
 	}
 	if a.Kind != b.Kind {
 		return a.Kind < b.Kind
@@ -157,8 +168,12 @@ func Parse(body string) (b Block, found bool, err error) {
 		return Block{}, true, err
 	}
 	b.Header = Header{Service: h[0], From: h[1], To: h[2]}
-	b.Count, _ = strconv.Atoi(m[4])
-	b.Omitted, _ = strconv.Atoi(m[5])
+	if b.Count, err = strconv.Atoi(m[4]); err != nil {
+		return Block{}, true, fmt.Errorf("bad findings count %q: %w", m[4], err)
+	}
+	if b.Omitted, err = strconv.Atoi(m[5]); err != nil {
+		return Block{}, true, fmt.Errorf("bad findings omitted %q: %w", m[5], err)
+	}
 
 	closed := false
 	for _, raw := range lines[1:] {
@@ -174,6 +189,9 @@ func Parse(body string) (b Block, found bool, err error) {
 		f, err := unquoteAll(lm[1:])
 		if err != nil {
 			return Block{}, true, err
+		}
+		if _, ok := bucketOrder[f[3]]; !ok {
+			return Block{}, true, fmt.Errorf("unknown bucket %q in line %q", f[3], raw)
 		}
 		b.Lines = append(b.Lines, Line{Class: f[0], Kind: f[1], Subject: f[2], Bucket: f[3], Work: f[4]})
 	}

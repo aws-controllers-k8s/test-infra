@@ -64,6 +64,21 @@ func TestFormatKeepsWorkFirstWhenTruncating(t *testing.T) {
 	assert.Equal(t, "Mode", b.Lines[0].Subject)
 }
 
+func TestFormatSortsUnknownBucketLast(t *testing.T) {
+	lines := []Line{
+		{Class: "c", Kind: "A", Subject: "unknown", Bucket: "bogus"},
+		{Class: "c", Kind: "B", Subject: "manual", Bucket: BucketManualReview},
+	}
+	out, _ := Format(hdr, lines, 1<<16)
+	assert.Less(t, strings.Index(out, `"manual"`), strings.Index(out, `"unknown"`))
+
+	full := out
+	out, omitted := Format(hdr, lines, len(full)-1)
+	assert.Equal(t, 1, omitted)
+	assert.Contains(t, out, `"manual"`)
+	assert.NotContains(t, out, `"unknown"`)
+}
+
 func TestFormatReturnsEmptyWhenHeaderDoesNotFit(t *testing.T) {
 	out, omitted := Format(hdr, []Line{{Class: "x", Bucket: BucketRegen}}, 10)
 	assert.Equal(t, "", out)
@@ -84,6 +99,9 @@ func TestParseRejects(t *testing.T) {
 		"unknown version": strings.Replace(good, Begin+"v1 ", Begin+"v2 ", 1),
 		"unterminated":    strings.TrimSuffix(good, End+"\n"),
 		"bad line":        strings.Replace(good, `"regen"|""`, `"regen"`, 1),
+		"huge omitted":    strings.Replace(good, "omitted=0", "omitted=99999999999999999999999", 1),
+		"huge count":      strings.Replace(good, "count=1", "count=99999999999999999999999", 1),
+		"unknown bucket":  strings.Replace(good, `"regen"|""`, `"bogus"|""`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, found, err := Parse(body)
