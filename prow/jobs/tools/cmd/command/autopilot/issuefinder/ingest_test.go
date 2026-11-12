@@ -53,14 +53,177 @@ func TestIngestCreatesItems(t *testing.T) {
 	assert.Equal(t, []string{bumpKey}, items[modeKey].DependsOn)
 }
 
+// historyLen counts every history entry across items.
+func historyLen(items map[string]*ledger.WorkItem) int {
+	n := 0
+	for _, w := range items {
+		n += len(w.History)
+	}
+	return n
+}
+
 func TestIngestIsIdempotent(t *testing.T) {
-	items := map[string]*ledger.WorkItem{}
-	issues := []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}
-	Ingest(cfg, issues, items)
 	later := cfg
 	later.Now = "2026-11-11T20:30:00Z"
-	res := Ingest(later, issues, items)
+	wontfix := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	wontfix.Comments = []Comment{{Author: "maintainer", Body: "/autopilot wontfix " + ledger.KeyHash(modeKey)}}
+	for _, tc := range []struct {
+		name   string
+		issues []Issue
+	}{
+		{"refresh", []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}},
+		{"supersede", []Issue{issueWith(t, 27, true, s3Header, regenABAC)}},
+		{"close", []Issue{issueWith(t, 27, false, s3Header, regenABAC, modeField)}},
+		{"wontfix", []Issue{wontfix}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := map[string]*ledger.WorkItem{}
+			Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+			Ingest(cfg, tc.issues, items)
+			n := historyLen(items)
+			res := Ingest(later, tc.issues, items)
+			assert.Empty(t, res.Changed)
+			assert.Equal(t, n, historyLen(items), "new history entries")
+		})
+	}
+}
+
+func TestIngestIsOrderIndependent(t *testing.T) {
+	// The maintainer closed #27; the detector then filed #40 re-listing the
+	// same findings.
+	seed := func() map[string]*ledger.WorkItem {
+		items := map[string]*ledger.WorkItem{}
+		Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+		return items
+	}
+	closed := issueWith(t, 27, false, s3Header, regenABAC, modeField)
+	open := issueWith(t, 40, true, s3Header, regenABAC, modeField)
+
+	a, b := seed(), seed()
+	resA := Ingest(cfg, []Issue{closed, open}, a)
+	resB := Ingest(cfg, []Issue{open, closed}, b)
+	assert.Equal(t, resA, resB)
+	for k := range a {
+		wa, err := ledger.Marshal(a[k])
+		require.NoError(t, err)
+		wb, err := ledger.Marshal(b[k])
+		require.NoError(t, err)
+		assert.Equal(t, string(wa), string(wb), k)
+	}
+	assert.Len(t, b, len(a))
+}
+
+func TestIngestClosedIssueWinsOverNewerOpenIssue(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+
+	res := Ingest(cfg, []Issue{issueWith(t, 40, true, s3Header, regenABAC, modeField), issueWith(t, 27, false, s3Header)}, items)
+	for _, k := range []string{bumpKey, modeKey} {
+		assert.Equal(t, ledger.WontFix, items[k].State, k)
+		assert.Equal(t, &ledger.Verdict{Outcome: "wont_fix:product_decision", Reason: "ISSUE_CLOSED"}, items[k].Verdict, k)
+		assert.Contains(t, res.Skipped, "#40: "+k+": finding reappeared but item is WONT_FIX; not reopened")
+	}
+}
+
+func TestIngestNewestOpenIssueOwnsSharedKeys(t *testing.T) {
+	older := issueWith(t, 30, true, s3Header, regenABAC, modeField)
+	newer := issueWith(t, 40, true, s3Header, regenABAC, modeField)
+	for _, order := range [][]Issue{{older, newer}, {newer, older}} {
+		items := map[string]*ledger.WorkItem{}
+		Ingest(cfg, order, items)
+		assert.Equal(t, newer.URL, items[modeKey].Links.ViewIssue)
+		assert.Equal(t, newer.URL, items[bumpKey].Links.ViewIssue)
+
+		// Swapping the input order on the next run changes nothing.
+		res := Ingest(cfg, []Issue{order[1], order[0]}, items)
+		assert.Empty(t, res.Changed)
+	}
+}
+
+func TestIngestRefreshUpdatesClassification(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, modeField)}, items)
+	require.Equal(t, "config-only", items[modeKey].ChangeClass)
+
+	hook := modeField
+	hook.Work = "custom-hook"
+	res := Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, hook)}, items)
+	assert.Equal(t, []string{modeKey}, res.Changed)
+	w := items[modeKey]
+	assert.Equal(t, "hand-written-code", w.ChangeClass)
+	assert.Equal(t, "custom-hook", w.DetectorWork)
+	assert.Equal(t, findingsblock.BucketNeedsConfig, w.GapClass)
+	assert.Equal(t, "human-merge", w.AutonomyLevel)
+	assert.Equal(t, 4, w.PriorityBand)
+	assert.Equal(t, "Bucket", w.Resource)
+	assert.Equal(t, "Mode", w.FieldPath)
+	assert.Equal(t, ledger.Detected, w.State)
+}
+
+func TestIngestReportsTerminalReappearanceOncePerRun(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC)}, items)
+	require.Equal(t, ledger.Superseded, items[modeKey].State)
+	want, err := ledger.Marshal(items[modeKey])
+	require.NoError(t, err)
+
+	// Two open issues bring the finding back in one run.
+	res := Ingest(cfg, []Issue{issueWith(t, 30, true, s3Header, regenABAC, modeField), issueWith(t, 40, true, s3Header, regenABAC, modeField)}, items)
+	got, err := ledger.Marshal(items[modeKey])
+	require.NoError(t, err)
+	assert.Equal(t, string(want), string(got))
+	assert.NotContains(t, res.Changed, modeKey)
+	var hits []string
+	for _, s := range res.Skipped {
+		if strings.Contains(s, modeKey) {
+			hits = append(hits, s)
+		}
+	}
+	assert.Equal(t, []string{"#30: " + modeKey + ": finding reappeared but item is SUPERSEDED; not reopened"}, hits)
+}
+
+func TestIngestReportsUnmatchedWontfix(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	stray := ledger.KeyHash("api-change|s3|Bucket|spec:Nope|needs-config")
+	is.Comments = []Comment{
+		{Author: "maintainer", Body: "/autopilot wontfix " + stray},
+		// Not a team member: ignored, not reported.
+		{Author: "someone", Body: "/autopilot wontfix " + stray},
+	}
+	res := Ingest(cfg, []Issue{is}, items)
 	assert.Empty(t, res.Changed)
+	require.Len(t, res.Skipped, 1)
+	assert.True(t, strings.HasPrefix(res.Skipped[0], "#27: "), res.Skipped[0])
+	assert.Contains(t, res.Skipped[0], stray)
+	assert.Contains(t, res.Skipped[0], "matches no finder-owned item")
+}
+
+func TestIngestIgnoresWontfixInFencedCode(t *testing.T) {
+	items := map[string]*ledger.WorkItem{}
+	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, regenABAC, modeField)}, items)
+
+	cmd := "/autopilot wontfix " + ledger.KeyHash(modeKey)
+	is := issueWith(t, 27, true, s3Header, regenABAC, modeField)
+	is.Comments = []Comment{
+		{Author: "maintainer", Body: "To dismiss, run:\n```\n" + cmd + "\n```\n"},
+		{Author: "maintainer", Body: "Or:\n~~~text\n" + cmd + "\n~~~\n"},
+		// A longer opening fence is not closed by a shorter one.
+		{Author: "maintainer", Body: "````\n```\n" + cmd + "\n````\n"},
+		// An unclosed fence runs to the end of the comment.
+		{Author: "maintainer", Body: "```\n" + cmd + "\n"},
+	}
+	res := Ingest(cfg, []Issue{is}, items)
+	assert.Empty(t, res.Changed)
+	assert.Equal(t, ledger.Detected, items[modeKey].State)
+
+	// After a closed fence, a command counts again.
+	is.Comments = []Comment{{Author: "maintainer", Body: "```\nexample\n```\n" + cmd + "\n"}}
+	Ingest(cfg, []Issue{is}, items)
+	assert.Equal(t, ledger.WontFix, items[modeKey].State)
 }
 
 func TestIngestSkipsUntrustedIssues(t *testing.T) {
@@ -75,9 +238,19 @@ func TestIngestSkipsUntrustedIssues(t *testing.T) {
 	wrongService := issueWith(t, 5, true, findingsblock.Header{Service: "iam", From: "a", To: "b"}, modeField)
 
 	items := map[string]*ledger.WorkItem{}
-	res := Ingest(cfg, []Issue{stranger, unlabelled, twoServices, noBlock, wrongService}, items)
+	res := Ingest(cfg, []Issue{wrongService, stranger, unlabelled, twoServices, noBlock}, items)
 	assert.Empty(t, items)
-	assert.Len(t, res.Skipped, 5)
+	want := []string{
+		`#1: author "someone" is not "ack-bot"`,
+		"#2: missing label ack/api-change-detected",
+		"#3: want exactly one service/ label, got 2",
+		"#4: no findings block",
+		`#5: block service "iam" != label service "s3"`,
+	}
+	require.Len(t, res.Skipped, len(want))
+	for i, w := range want {
+		assert.Contains(t, res.Skipped[i], w)
+	}
 }
 
 func TestIngestSkipsIssueWithoutRegion(t *testing.T) {
@@ -214,7 +387,11 @@ func TestIngestWontfixCommandOnlyFromTeam(t *testing.T) {
 func TestIngestLeavesDispatchedItemsAlone(t *testing.T) {
 	items := map[string]*ledger.WorkItem{}
 	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header, modeField)}, items)
-	items[modeKey].State = ledger.Running
+	w := items[modeKey]
+	w.State = ledger.Running
+	w.History = append(w.History,
+		ledger.Transition{TS: cfg.Now, To: ledger.Queued, By: "triage"},
+		ledger.Transition{TS: cfg.Now, To: ledger.Running, By: "dispatcher"})
 
 	Ingest(cfg, []Issue{issueWith(t, 27, true, s3Header)}, items)
 	assert.Equal(t, ledger.Running, items[modeKey].State)
