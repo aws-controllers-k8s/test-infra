@@ -16,6 +16,7 @@ package dispatcher
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
 )
@@ -26,6 +27,8 @@ const (
 	HoldAwaitingTriage       = "awaiting-triage"
 	HoldAwaitingPlanWorkflow = "awaiting-plan-workflow"
 	HoldAwaitingPlanApproval = "awaiting-plan-approval"
+	HoldAwaitingWorkflow     = "awaiting-workflow"
+	HoldBlockedOther         = "blocked-other"
 )
 
 // route moves pre-dispatch items along DETECTED -> TRIAGED -> QUEUED or
@@ -57,11 +60,21 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 		}
 		// TRIAGED, QUEUED or BLOCKED from here.
 		if _, ok := lanes[w.ChangeClass]; !ok {
-			w.Verdict = &ledger.Verdict{Outcome: "needs_human", Reason: "NO_WORKFLOW"}
-			transition(w, ledger.Escalated, ts, "NO_WORKFLOW")
+			// No workflow yet: keep the item with the issue finder, out of
+			// schedule's reach.
+			held[HoldAwaitingWorkflow]++
+			if w.State != ledger.Triaged {
+				transition(w, ledger.Triaged, ts, "NO_WORKFLOW")
+			}
 			continue
 		}
-		if why := unmetDependency(w, items); why != "" {
+		why, dead := unmetDependency(w, items)
+		if dead {
+			w.Verdict = &ledger.Verdict{Outcome: "needs_human", Reason: "DEPENDENCY_DEAD"}
+			transition(w, ledger.Escalated, ts, "DEPENDENCY_DEAD "+why)
+			continue
+		}
+		if why != "" {
 			if w.State != ledger.Blocked {
 				transition(w, ledger.Blocked, ts, "DEPENDS_ON "+why)
 			}
@@ -69,6 +82,10 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 		}
 		switch w.State {
 		case ledger.Blocked:
+			if !blockedByDependency(w) {
+				held[HoldBlockedOther]++
+				continue
+			}
 			transition(w, ledger.Queued, ts, "DEPENDENCIES_MET")
 		case ledger.Triaged:
 			transition(w, ledger.Queued, ts, "READY")
@@ -77,19 +94,34 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 	return held
 }
 
+// blockedByDependency reports whether the transition that last moved w to
+// BLOCKED was route's own dependency block. Other writers (env retry,
+// back-off) also use BLOCKED, and route must not release those.
+func blockedByDependency(w *ledger.WorkItem) bool {
+	for i := len(w.History) - 1; i >= 0; i-- {
+		if w.History[i].To == ledger.Blocked {
+			return strings.HasPrefix(w.History[i].Reason, "DEPENDS_ON ")
+		}
+	}
+	return false
+}
+
 // unmetDependency describes the first dependency that has not landed, or
-// returns "" when all have.
-func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) string {
+// returns "" when all have. dead is true when that dependency can never land:
+// it is ESCALATED, SUPERSEDED or WONT_FIX.
+func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) (why string, dead bool) {
 	for _, d := range w.DependsOn {
 		dep, ok := items[d]
 		switch {
 		case !ok:
-			return ledger.KeyHash(d) + " missing"
-		case !dep.State.Landed():
-			return fmt.Sprintf("%s %s", dep.KeyHash, dep.State)
+			return ledger.KeyHash(d) + " missing", false
+		case dep.State.Landed():
+		default:
+			dead = dep.State == ledger.Escalated || dep.State.Terminal()
+			return fmt.Sprintf("%s %s", dep.KeyHash, dep.State), dead
 		}
 	}
-	return ""
+	return "", false
 }
 
 func transition(w *ledger.WorkItem, to ledger.State, ts, reason string) {

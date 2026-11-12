@@ -93,18 +93,79 @@ func TestRouteMissingDependency(t *testing.T) {
 	assert.Equal(t, "DEPENDS_ON "+ledger.KeyHash(bumpKey)+" missing", field.History[1].Reason)
 }
 
-func TestRouteEscalatesClassWithoutLane(t *testing.T) {
+func TestRouteHoldsClassWithoutLane(t *testing.T) {
 	hook := item("api-change|s3|Bucket|spec:Policy|needs-config", "hand-written-code", ledger.Triaged)
-	route(ledgerOf(hook), "2026-11-12T09:00:00Z")
-	assert.Equal(t, ledger.Escalated, hook.State)
-	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: "NO_WORKFLOW"}, hook.Verdict)
+	queued := item("api-change|s3|Bucket|spec:Tags|needs-config", "hand-written-code", ledger.Queued)
+	held := route(ledgerOf(hook, queued), "2026-11-12T09:00:00Z")
+	assert.Equal(t, map[string]int{HoldAwaitingWorkflow: 2}, held)
+	assert.Equal(t, ledger.Triaged, hook.State)
+	assert.Len(t, hook.History, 1)
+	assert.Nil(t, hook.Verdict)
+	assert.Equal(t, ledger.Triaged, queued.State)
+	assert.Equal(t, "NO_WORKFLOW", queued.History[1].Reason)
+}
+
+func TestRouteRegressedDependencyBlocksQueuedItem(t *testing.T) {
+	bump := item(bumpKey, "SDK-bump", ledger.Merged)
+	field := item(fieldKey, "config-only", ledger.Queued)
+	field.DependsOn = []string{bumpKey}
+	items := ledgerOf(bump, field)
+	route(items, "2026-11-12T09:00:00Z")
+	assert.Equal(t, ledger.Queued, field.State)
+	bump.State = ledger.HumanReview
+	route(items, "2026-11-12T09:30:00Z")
+	assert.Equal(t, ledger.Blocked, field.State)
+	assert.Equal(t, "DEPENDS_ON "+bump.KeyHash+" HUMAN_REVIEW", field.History[1].Reason)
+}
+
+func TestRouteLeavesEverDispatchedQueuedItem(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), t0, 1, 3)
+	w.State = ledger.Queued
+	w.Claim = nil
+	w.History = append(w.History, ledger.Transition{TS: t0, To: ledger.Queued, By: actor, Reason: "REQUEUE"})
+	n := len(w.History)
+	route(ledgerOf(w), "2026-11-12T09:00:00Z")
+	assert.Equal(t, ledger.Queued, w.State)
+	assert.Len(t, w.History, n)
+}
+
+func TestRouteNamesFirstUnmetDependency(t *testing.T) {
+	landed := item(bumpKey, "SDK-bump", ledger.Merged)
+	other := item("sdk-bump|s3|*|v3", "SDK-bump", ledger.Running)
+	field := item(fieldKey, "config-only", ledger.Triaged)
+	field.DependsOn = []string{bumpKey, other.Key}
+	route(ledgerOf(landed, other, field), "2026-11-12T09:00:00Z")
+	assert.Equal(t, "DEPENDS_ON "+other.KeyHash+" RUNNING", field.History[1].Reason)
+}
+
+func TestRouteEscalatesDeadDependency(t *testing.T) {
+	for _, st := range []ledger.State{ledger.WontFix, ledger.Superseded, ledger.Escalated} {
+		dep := item(bumpKey, "SDK-bump", st)
+		field := item(fieldKey, "config-only", ledger.Blocked)
+		field.DependsOn = []string{bumpKey}
+		route(ledgerOf(dep, field), "2026-11-12T09:00:00Z")
+		assert.Equal(t, ledger.Escalated, field.State, st)
+		assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: "DEPENDENCY_DEAD"}, field.Verdict, st)
+		assert.Equal(t, "DEPENDENCY_DEAD "+dep.KeyHash+" "+string(st), field.History[len(field.History)-1].Reason)
+	}
+}
+
+func TestRouteKeepsBlockedForOtherReasons(t *testing.T) {
+	field := item(fieldKey, "config-only", ledger.Blocked)
+	field.History = append(field.History, ledger.Transition{TS: t0, To: ledger.Blocked, By: "reconciler", Reason: "RETRY_ENV_BACKOFF"})
+	held := route(ledgerOf(field), "2026-11-12T09:00:00Z")
+	assert.Equal(t, map[string]int{HoldBlockedOther: 1}, held)
+	assert.Equal(t, ledger.Blocked, field.State)
+	assert.Len(t, field.History, 2)
 }
 
 func TestRouteLeavesDispatchedAndTerminalItems(t *testing.T) {
 	run := running(item(bumpKey, "SDK-bump", ledger.Queued), t0, 1, 3)
 	done := item("sdk-bump|iam|*|v9", "SDK-bump", ledger.Done)
+	runLen := len(run.History)
 	route(ledgerOf(run, done), "2026-11-12T09:00:00Z")
 	assert.Equal(t, ledger.Running, run.State)
+	assert.Len(t, run.History, runLen)
 	assert.Equal(t, ledger.Done, done.State)
 	assert.Len(t, done.History, 1)
 }
