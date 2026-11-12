@@ -129,6 +129,10 @@ func TestEverDispatchedAndFinderOwned(t *testing.T) {
 		{"requeued after run", Queued, []Transition{at(Running), at(Queued)}, true, false},
 		{"wontfix never run", WontFix, []Transition{at(Detected), at(WontFix)}, false, false},
 		{"no history", Detected, nil, false, true},
+		{"gating after queued", Gating, []Transition{at(Queued), at(Gating)}, true, false},
+		{"escalated from pre-dispatch", Escalated, []Transition{at(Detected), at(Escalated)}, false, false},
+		{"done from pre-dispatch", Done, []Transition{at(Detected), at(Done)}, false, false},
+		{"superseded from pre-dispatch", Superseded, []Transition{at(Queued), at(Superseded)}, false, false},
 	}
 	for _, c := range cases {
 		w := WorkItem{State: c.state, History: c.history}
@@ -140,9 +144,9 @@ func TestEverDispatchedAndFinderOwned(t *testing.T) {
 func TestSaveRejectsFileNameCollision(t *testing.T) {
 	root := t.TempDir()
 	a, b := sampleItem("k1"), sampleItem("k2")
-	b.KeyHash = a.KeyHash // simulated collision
+	b.KeyHash = a.KeyHash // simulated collision; the hash no longer matches b's key
 	err := Save(root, map[string]*WorkItem{a.Key: a, b.Key: b})
-	assert.ErrorContains(t, err, "collision")
+	assert.ErrorContains(t, err, "key_hash")
 	assert.NoDirExists(t, filepath.Join(root, "workitems"))
 }
 
@@ -303,3 +307,164 @@ const goldenMin = `{
   "history": null
 }
 `
+
+func writeRaw(t *testing.T, root, dir, name string, b []byte) string {
+	t.Helper()
+	d := filepath.Join(root, "workitems", dir)
+	require.NoError(t, os.MkdirAll(d, 0o755))
+	p := filepath.Join(d, name)
+	require.NoError(t, os.WriteFile(p, b, 0o644))
+	return p
+}
+
+func writeItem(t *testing.T, root, dir, name string, w *WorkItem) string {
+	t.Helper()
+	b, err := Marshal(w)
+	require.NoError(t, err)
+	return writeRaw(t, root, dir, name, b)
+}
+
+const evilHash = "sha256:../../../../victim"
+
+func TestLoadRejectsCraftedKeyHash(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("k1")
+	w.KeyHash = evilHash
+	writeItem(t, root, "open", "x.json", w)
+	_, err := Load(root)
+	assert.ErrorContains(t, err, "key_hash")
+}
+
+func TestSaveRejectsCraftedKeyHash(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim.json")
+	require.NoError(t, os.WriteFile(victim, []byte("keep"), 0o644))
+	ledgerRoot := filepath.Join(root, "a", "b", "c", "d")
+	w := sampleItem("k1")
+	w.KeyHash = evilHash
+	err := Save(ledgerRoot, map[string]*WorkItem{w.Key: w})
+	assert.ErrorContains(t, err, "key_hash")
+	assert.NoDirExists(t, filepath.Join(ledgerRoot, "workitems"))
+	b, err := os.ReadFile(victim)
+	require.NoError(t, err)
+	assert.Equal(t, "keep", string(b))
+	// FileName never reflects the stored hash.
+	assert.Equal(t, strings.TrimPrefix(KeyHash("k1"), "sha256:")+".json", w.FileName())
+}
+
+func TestSaveValidatesBeforeMoving(t *testing.T) {
+	root := t.TempDir()
+	a, b := sampleItem("a"), sampleItem("b")
+	require.NoError(t, Save(root, map[string]*WorkItem{a.Key: a, b.Key: b}))
+
+	a.State = WontFix
+	a.History = append(a.History, Transition{TS: "2026-11-12T08:30:00Z", To: WontFix, By: "t"})
+	b.State = State("BOGUS")
+	err := Save(root, map[string]*WorkItem{a.Key: a, b.Key: b})
+	assert.ErrorContains(t, err, "unknown state")
+	assert.FileExists(t, filepath.Join(root, "workitems", "open", a.FileName()))
+	assert.NoFileExists(t, filepath.Join(root, "workitems", "wontfix", a.FileName()))
+	assert.FileExists(t, filepath.Join(root, "workitems", "open", b.FileName()))
+}
+
+func TestSaveRepairsWrongDir(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("k1") // DETECTED belongs in open
+	writeItem(t, root, "done", w.FileName(), w)
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	assert.FileExists(t, filepath.Join(root, "workitems", "open", w.FileName()))
+	assert.NoFileExists(t, filepath.Join(root, "workitems", "done", w.FileName()))
+	assert.Empty(t, Lint(root))
+	// No temp files left behind.
+	entries, err := os.ReadDir(filepath.Join(root, "workitems", "open"))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+}
+
+func TestLoadRejectsTrailingData(t *testing.T) {
+	root := t.TempDir()
+	b, err := Marshal(sampleItem("k1"))
+	require.NoError(t, err)
+	writeRaw(t, root, "open", "x.json", append(b, []byte("<<<<<<< HEAD\n")...))
+	_, err = Load(root)
+	assert.Error(t, err)
+	writeRaw(t, root, "open", "x.json", append(b, b...))
+	_, err = Load(root)
+	assert.Error(t, err)
+	assert.NotEmpty(t, Lint(root))
+}
+
+func TestLoadRejectsDuplicateKeyAcrossDirs(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("k1")
+	writeItem(t, root, "open", w.FileName(), w)
+	writeItem(t, root, "done", w.FileName(), w)
+	_, err := Load(root)
+	assert.ErrorContains(t, err, "duplicate key")
+}
+
+func TestLintMessages(t *testing.T) {
+	root := t.TempDir()
+	unknown := sampleItem("k1")
+	unknown.State = State("BOGUS")
+	writeItem(t, root, "open", unknown.FileName(), unknown)
+	misnamed := sampleItem("k2")
+	writeItem(t, root, "open", "wrong.json", misnamed)
+	dup := sampleItem("k3")
+	writeItem(t, root, "open", dup.FileName(), dup)
+	writeItem(t, root, "done", dup.FileName(), dup)
+
+	joined := errors.Join(Lint(root)...).Error()
+	assert.Contains(t, joined, `unknown state "BOGUS"`)
+	assert.Contains(t, joined, "file name should be "+misnamed.FileName())
+	assert.Contains(t, joined, `duplicate key "k3"`)
+}
+
+func TestLintReportsStrayEntries(t *testing.T) {
+	good := sampleItem("good")
+	cases := map[string]func(t *testing.T, root string){
+		"unknown dir": func(t *testing.T, root string) {
+			writeItem(t, root, "wont_fix", good.FileName(), good)
+		},
+		"nested dir": func(t *testing.T, root string) {
+			writeItem(t, root, filepath.Join("open", "nested"), good.FileName(), good)
+		},
+		"upper-case extension": func(t *testing.T, root string) {
+			writeItem(t, root, "open", "X.JSON", good)
+		},
+		"other extension": func(t *testing.T, root string) {
+			writeRaw(t, root, "open", "notes.txt", []byte("hi"))
+		},
+		"file at workitems top": func(t *testing.T, root string) {
+			writeRaw(t, root, ".", "x.json", []byte("{}"))
+		},
+		"symlinked file": func(t *testing.T, root string) {
+			target := writeItem(t, root, "open", good.FileName(), good)
+			require.NoError(t, os.Symlink(target, filepath.Join(filepath.Dir(target), "link.json")))
+		},
+		"symlinked known dir": func(t *testing.T, root string) {
+			outside := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems"), 0o755))
+			require.NoError(t, os.Symlink(outside, filepath.Join(root, "workitems", "open")))
+			require.NoError(t, os.WriteFile(filepath.Join(outside, good.FileName()), []byte("{}"), 0o644))
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			setup(t, root)
+			var stray []error
+			for _, err := range Lint(root) {
+				if strings.Contains(err.Error(), "not a regular .json file directly inside") {
+					stray = append(stray, err)
+				}
+			}
+			assert.NotEmpty(t, stray)
+		})
+	}
+	t.Run("clean ledger has none", func(t *testing.T) {
+		root := t.TempDir()
+		require.NoError(t, Save(root, map[string]*WorkItem{good.Key: good}))
+		assert.Empty(t, Lint(root))
+	})
+}
