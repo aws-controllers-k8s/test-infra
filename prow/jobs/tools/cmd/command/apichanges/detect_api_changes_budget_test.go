@@ -176,7 +176,7 @@ func TestRenderIssueBodyBoundsAnOversizedDroppedAppendix(t *testing.T) {
 	assert.Contains(t, body, "- `Description` (Spec) — `CreateWidget`")
 	assert.Contains(t, body, "- `ResetWidget`")
 	assert.Contains(t, body, "<summary>2000 new operations not reported, each with the reason</summary>")
-	assert.Regexp(t, `- _and \d+ more_\n\n</details>\n\n---\n`, body)
+	assert.Regexp(t, `- _and \d+ more_\n\n</details>\n\n<!-- ack-api-change-findings [^\n]*\n(?:[^\n]*\n)*?-->\n---\n`, body)
 	assert.Equal(t, plainFingerprint, fingerprint)
 }
 
