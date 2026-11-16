@@ -1058,6 +1058,103 @@ def test_generator_templates_helmignored():
         check(f"{rel} in .helmignore", rel in ignored, True)
 
 
+RESULT_FIXTURE = (
+    _PKG_ROOT.parents[1] / "jobs/tools/cmd/command/autopilot/dispatcher/testdata/agent-result-v1.json"
+)
+
+
+def test_result_contract():
+    """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
+    print("result contract:")
+    import json
+    import tempfile
+    from workflows import result
+
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "out" / "agent-result.json"
+        old = os.environ.get("PROW_JOB_ID")
+        os.environ["PROW_JOB_ID"] = "autopilot-0123456789abcdef-g1-r1"
+        try:
+            result.write(result.new("add-field", "sha256:0123456789abcdef"), path)
+        finally:
+            if old is None:
+                os.environ.pop("PROW_JOB_ID", None)
+            else:
+                os.environ["PROW_JOB_ID"] = old
+        fresh = json.loads(path.read_text())
+        check("fresh outcome", (fresh["outcome"], fresh["reason"]), ("failed", "JOB_INCOMPLETE"))
+
+        result.update(
+            path,
+            tokens={"input": 1200000, "output": 80000, "total": 1280000},
+            iterations={"impl": 2, "replan": 0},
+            e2e={"status": "PASS", "attempts": 1},
+        )
+        result.update(path, outcome="pr_opened", reason="",
+                      pr="https://github.com/aws-controllers-k8s/s3-controller/pull/240")
+        check("matches the Go fixture", json.loads(path.read_text()), json.loads(RESULT_FIXTURE.read_text()))
+
+        # A partial nested update keeps the other keys.
+        result.update(path, e2e={"attempts": 2})
+        check("nested merge", json.loads(path.read_text())["e2e"], {"status": "PASS", "attempts": 2})
+
+        # Invalid values are refused and the file is left as it was.
+        before = path.read_text()
+        for bad in (
+            {"outcome": "merged"},
+            {"reason": "not snake"},
+            {"pr": "https://example.com/pull/1"},
+            {"outcome": "pr_opened", "pr": ""},
+            {"tokens": {"total": -1}},
+            {"tokens": {"total": True}},
+            {"work_item": "sha256:XYZ"},
+            {"e2e": {"status": "GREEN"}},
+            {"prow_job_id": "a b"},
+        ):
+            try:
+                result.update(path, **bad)
+                raised = False
+            except ValueError:
+                raised = True
+            check(f"rejects {bad}", raised, True)
+        check("file unchanged after rejects", path.read_text(), before)
+
+
+def test_result_cli():
+    """prow-job.sh's calls: init, then set; a bad value exits 2 and writes nothing."""
+    print("result CLI:")
+    import json
+    import subprocess
+    import tempfile
+
+    script = _PKG_ROOT / "workflows" / "result.py"
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "agent-result.json"
+        env = {**os.environ, "AGENT_RESULT_FILE": str(path)}
+        env.pop("PROW_JOB_ID", None)
+
+        def run(*args):
+            return subprocess.run([sys.executable, str(script), *args], env=env,
+                                  capture_output=True, text=True).returncode
+
+        check("init", run("init", "--workflow", "address-feedback"), 0)
+        check("set work item", run("set", "--work-item", "sha256:0123456789abcdef"), 0)
+        check("set outcome", run("set", "--outcome", "completed_no_change", "--reason", "NO_FEEDBACK"), 0)
+        doc = json.loads(path.read_text())
+        check("cli doc", (doc["workflow"], doc["work_item"], doc["outcome"], doc["reason"], doc["prow_job_id"]),
+              ("address-feedback", "sha256:0123456789abcdef", "completed_no_change", "NO_FEEDBACK", ""))
+        before = path.read_text()
+        check("bad outcome exits 2", run("set", "--outcome", "merged"), 2)
+        check("bad workflow exits 2", run("init", "--workflow", "deploy"), 2)
+        check("file unchanged", path.read_text(), before)
+
+        # ARTIFACTS is the default directory when AGENT_RESULT_FILE is unset.
+        env.pop("AGENT_RESULT_FILE")
+        env["ARTIFACTS"] = d + "/artifacts"
+        check("init under ARTIFACTS", run("init", "--workflow", "add-field"), 0)
+        check("file under ARTIFACTS", (Path(d) / "artifacts" / "agent-result.json").exists(), True)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1077,7 +1174,8 @@ def main():
                test_ensure_test_config_field_selector,
                test_e2e_timeout_preserves_output,
                test_workflow_timeout_budget,
-               test_generator_templates_helmignored):
+               test_generator_templates_helmignored,
+               test_result_contract, test_result_cli):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 
