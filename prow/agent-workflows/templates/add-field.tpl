@@ -5,7 +5,7 @@
         image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "add-resource") }}
         command: ["/app/prow-job.sh"]
         required_args: ["service", "resource", "field"]
-        optional_args: ["model", "aws-sdk-version"]
+        optional_args: ["model", "aws-sdk-version", "work-item", "change-class"]
         environment:
             GITHUB_ORG: ${TEST_INFRA_ORG}
             GITHUB_EMAIL_PREFIX: "327606448"
