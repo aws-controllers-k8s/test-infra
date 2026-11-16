@@ -45,13 +45,17 @@ const (
 	PhaseFinished Phase = "finished"
 )
 
-// RunResult is what a finished run reports (its agent-result.json). Every
-// field is untrusted: reconcile validates it before anything reaches the
-// ledger.
+// RunResult is what a finished run reports (its agent-result.json, read by
+// ParseResult). Every field is untrusted: reconcile validates it before
+// anything reaches the ledger.
 type RunResult struct {
 	Outcome string
 	Reason  string
 	PR      string
+	// Tokens and E2ERuns are what the run spent; reconcile adds them to the
+	// item's usage.
+	Tokens  int64
+	E2ERuns int
 }
 
 type Status struct {

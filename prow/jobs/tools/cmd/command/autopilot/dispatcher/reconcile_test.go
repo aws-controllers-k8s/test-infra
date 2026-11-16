@@ -240,3 +240,16 @@ func TestReconcileFailedWithoutAttempts(t *testing.T) {
 	assert.Equal(t, ledger.Escalated, w.State)
 	assert.Equal(t, "ATTEMPTS_EXHAUSTED", last(w).Reason)
 }
+
+func TestReconcileRecordsUsage(t *testing.T) {
+	st := &Status{Phase: PhaseFinished, Result: &RunResult{Outcome: "failed", Reason: "E2E_FAIL", Tokens: 900, E2ERuns: 2}}
+	w, _ := runWith(t, 1, 3, st)
+	require.NotNil(t, w.Usage)
+	assert.Equal(t, int64(900), w.Usage.Tokens)
+	assert.Equal(t, 2, w.Usage.E2ERuns)
+}
+
+func TestReconcileNoUsageLeavesFieldUnset(t *testing.T) {
+	w, _ := runWith(t, 1, 3, finished("completed_no_change", "", ""))
+	assert.Nil(t, w.Usage)
+}
