@@ -29,13 +29,15 @@ job as a Prow extra_ref.
 Every Prow run writes `$ARTIFACTS/agent-result.json` (schema
 `ack.autopilot.result/v1`, `workflows/result.py`): outcome, reason, pull
 request, model tokens, iterations and the e2e result. ACK Autopilot's
-Dispatcher reads it. A run started with `--work-item` and `--change-class`
-also adds `Producer`, `Work-Item` and `Change-Class` trailers to its commit
-and pull request body.
+Dispatcher reads it. When `prow-job.sh` gets `--work-item` and
+`--change-class` (the agent-plugin passes them from the workflow's
+`optional_args` when the Dispatcher sets them; they are not
+`python -m workflows` options), the run also adds `Producer`, `Work-Item`
+and `Change-Class` trailers to its commit and pull request body.
 
 ## Running locally
 
-Prerequisites: Python 3.12, [uv](https://github.com/astral-sh/uv), AWS
+Prerequisites: Python 3.10+ (the job image uses 3.12), [uv](https://github.com/astral-sh/uv), AWS
 credentials with Amazon Bedrock access to the configured model, and
 checkouts of code-generator, the service controller and ack-dev-skills.
 
@@ -61,8 +63,9 @@ make workflow-add-field SERVICE=s3 RESOURCE=Bucket FIELD=BucketKeyEnabled
 | `RUN_E2E` | `true` runs the e2e phase |
 | `AGENT_MODEL_ID`, `AGENT_PLANNER_MODEL_ID`, `AGENT_IMPLEMENTER_MODEL_ID`, `AGENT_REVIEWER_MODEL_ID` | Model overrides |
 | `AGENT_TEMPERATURE`, `AGENT_MAX_TOKENS`, `AGENT_SHELL_TIMEOUT` | Sampling, output cap and shell-command timeout |
-| `AWS_REGION` | Bedrock region (default `us-west-2`) |
-| `ARTIFACTS`, `AGENT_RESULT_FILE` | Where logs and `agent-result.json` go |
+| `AWS_REGION`, `AWS_DEFAULT_REGION` | Bedrock region, in that order (default `us-west-2`) |
+| `AWS_SDK_GO_VERSION` | Fallback for `--aws-sdk-version` |
+| `ARTIFACTS`, `AGENT_RESULT_FILE` | Where logs and `agent-result.json` go. `prow-job.sh` sets `AGENT_RESULT_FILE` to `${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json` and creates the file; the workflow only updates an existing file, so a local `python -m workflows` run writes no result |
 
 ## Tests
 
