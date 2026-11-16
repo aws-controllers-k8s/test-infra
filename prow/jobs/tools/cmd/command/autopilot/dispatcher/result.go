@@ -86,7 +86,8 @@ func ParseResult(data []byte, workItem string) (RunResult, error) {
 	if workItem != "" && f.WorkItem != workItem {
 		return RunResult{}, fmt.Errorf("agent-result.json is for work item %q, want %q", f.WorkItem, workItem)
 	}
-	if f.Tokens.Input < 0 || f.Tokens.Output < 0 || f.Tokens.Total < 0 || f.E2E.Attempts < 0 {
+	if f.Tokens.Input < 0 || f.Tokens.Output < 0 || f.Tokens.Total < 0 ||
+		f.E2E.Attempts < 0 || f.Iterations.Impl < 0 || f.Iterations.Replan < 0 {
 		return RunResult{}, errors.New("agent-result.json has a negative count")
 	}
 	if f.Tokens.Input > maxResultTokens || f.Tokens.Output > maxResultTokens || f.Tokens.Total > maxResultTokens {

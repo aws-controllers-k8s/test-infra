@@ -113,11 +113,28 @@ export AGENT_RESULT_FILE="${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json"
 python "$WORKFLOW_DIR/workflows/result.py" init --workflow "${WORKFLOW_NAME:-}" \
   || echo "$SCRIPT_NAME][WARN] could not create $AGENT_RESULT_FILE" >&2
 
-# set_result records the run's outcome, reason and PR. A failed write is
-# logged and never fails the job: the Dispatcher then sees no verdict.
+# set_result records the run's outcome, reason and PR. If the write fails
+# (the agent in the pod can leave a file result.py refuses, which would make
+# its own verdict stick), the file is rebuilt and the write retried. A failed
+# write is logged and never fails the job: the Dispatcher then sees no verdict.
+VALIDATED=false
 set_result() {
-  python "$WORKFLOW_DIR/workflows/result.py" set --outcome "$1" --reason "${2:-}" --pr "${3:-}" \
-    || echo "$SCRIPT_NAME][WARN] could not record the run result: $1 ${2:-}" >&2
+  local result_py="$WORKFLOW_DIR/workflows/result.py"
+  local set_args=(set --outcome "$1" --reason "${2:-}" --pr "${3:-}")
+  python "$result_py" "${set_args[@]}" && return 0
+  echo "$SCRIPT_NAME][WARN] could not record the run result: $1 ${2:-}; rebuilding $AGENT_RESULT_FILE" >&2
+  if ! python "$result_py" init --workflow "${WORKFLOW_NAME:-}"; then
+    echo "$SCRIPT_NAME][WARN] could not rebuild $AGENT_RESULT_FILE" >&2
+    return 0
+  fi
+  # The work item is recorded only once it has passed validation.
+  if [ "$VALIDATED" = true ] && [ -n "$WORK_ITEM" ]; then
+    python "$result_py" set --work-item "$WORK_ITEM" \
+      || echo "$SCRIPT_NAME][WARN] could not record the work item" >&2
+  fi
+  python "$result_py" "${set_args[@]}" \
+    || echo "$SCRIPT_NAME][WARN] could not record the run result after a rebuild: $1 ${2:-}" >&2
+  return 0
 }
 
 VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
@@ -190,6 +207,7 @@ if ! python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"; the
   set_result needs_human INVALID_INPUT
   exit 2
 fi
+VALIDATED=true
 if [ -n "$WORK_ITEM" ]; then
   python "$WORKFLOW_DIR/workflows/result.py" set --work-item "$WORK_ITEM" \
     || echo "$SCRIPT_NAME][WARN] could not record the work item" >&2
@@ -576,7 +594,9 @@ if [ ! -s "$PR_BODY_FILE" ]; then
     echo "ACK Agent changes adding $RESOURCE to $SERVICE-controller" > "$PR_BODY_FILE"
   fi
 fi
-[ -n "$TRAILERS" ] && printf '\n%s\n' "$TRAILERS" >> "$PR_BODY_FILE"
+# The blank line ends the paragraph before it (the harness body has no
+# trailing newline), so git interpret-trailers finds the block.
+[ -n "$TRAILERS" ] && printf '\n\n%s\n' "$TRAILERS" >> "$PR_BODY_FILE"
 
 # A retried run pushes to the same branch, whose pull request may still be
 # open: reuse it rather than fail on "a pull request already exists".

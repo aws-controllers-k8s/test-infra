@@ -1186,6 +1186,16 @@ def test_result_cli():
         doc = json.loads(path.read_text())
         check("cli doc", (doc["workflow"], doc["work_item"], doc["outcome"], doc["reason"], doc["prow_job_id"]),
               ("address-feedback", "sha256:0123456789abcdef", "completed_no_change", "NO_FEEDBACK", ""))
+        # A new outcome without --reason clears the old reason, so a stale
+        # JOB_INCOMPLETE never survives an outcome change.
+        check("re-init", run("init", "--workflow", "address-feedback"), 0)
+        check("outcome without reason", run("set", "--outcome", "pr_updated",
+                                            "--pr", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"), 0)
+        check("reason reset", json.loads(path.read_text())["reason"], "")
+        check("reason only", run("set", "--reason", "NO_FEEDBACK"), 0)
+        check("reason-only keeps outcome", json.loads(path.read_text())["outcome"], "pr_updated")
+        check("pr-only keeps reason", (run("set", "--pr", "https://github.com/aws-controllers-k8s/s3-controller/pull/2"),
+                                       json.loads(path.read_text())["reason"]), (0, "NO_FEEDBACK"))
         before = path.read_text()
         check("bad outcome exits 2", run("set", "--outcome", "merged"), 2)
         check("bad workflow exits 2", run("init", "--workflow", "deploy"), 2)

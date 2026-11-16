@@ -33,7 +33,10 @@ Dispatcher reads it. When `prow-job.sh` gets `--work-item` and
 `--change-class` (the agent-plugin passes them from the workflow's
 `optional_args` when the Dispatcher sets them; they are not
 `python -m workflows` options), the run also adds `Producer`, `Work-Item`
-and `Change-Class` trailers to its commit and pull request body.
+and `Change-Class` trailers to its commit and pull request body. The
+trailers record what the run was given, not where it came from: a team
+member's `/agent` comment can pass the same arguments, so the ledger's link
+to the pull request is the authoritative record.
 
 ## Running locally
 

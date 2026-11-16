@@ -108,6 +108,14 @@ func TestReconcileUnknownOutcomeKeptVerbatim(t *testing.T) {
 	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: `UNKNOWN_VERDICT "wont_fix:bogus"`}, w.Verdict)
 }
 
+// pr_updated is a valid run outcome (address-feedback) but not a work-item
+// verdict, so the Dispatcher escalates it verbatim rather than accept it.
+func TestReconcilePRUpdatedEscalates(t *testing.T) {
+	w, _ := runWith(t, 1, 3, finished("pr_updated", "", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"))
+	assert.Equal(t, ledger.Escalated, w.State)
+	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: `UNKNOWN_VERDICT "pr_updated"`}, w.Verdict)
+}
+
 func TestReconcileFailedRequeuesThenEscalates(t *testing.T) {
 	w, _ := runWith(t, 1, 3, finished("failed", "TESTS_RED", ""))
 	assert.Equal(t, ledger.Queued, w.State)

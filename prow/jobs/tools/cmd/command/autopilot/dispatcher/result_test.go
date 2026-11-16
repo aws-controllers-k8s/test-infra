@@ -51,6 +51,8 @@ func TestParseResultRejects(t *testing.T) {
 		"not json":         {"{", "", "decode"},
 		"negative tokens":  {strings.Replace(good, `"total": 1280000`, `"total": -1`, 1), "", "negative"},
 		"negative e2e":     {strings.Replace(good, `"attempts": 1`, `"attempts": -1`, 1), "", "negative"},
+		"negative impl":    {strings.Replace(good, `"impl": 2`, `"impl": -1`, 1), "", "negative"},
+		"negative replan":  {strings.Replace(good, `"replan": 0`, `"replan": -1`, 1), "", "negative"},
 		"too large":        {good + strings.Repeat(" ", maxResultBytes), "", "larger"},
 		"trailing garbage": {good + "{}", "", "decode"},
 		"trailing brace":   {good + "}", "", "data after the object"},

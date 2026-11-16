@@ -228,6 +228,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if value is not None
             }
+            # A new outcome clears the old reason unless one is given, so a
+            # stale JOB_INCOMPLETE never survives an outcome change.
+            if args.outcome is not None and args.reason is None:
+                fields["reason"] = ""
             update(**fields)
     except (OSError, ValueError) as exc:
         print(f"result.py: {exc}", file=sys.stderr)
