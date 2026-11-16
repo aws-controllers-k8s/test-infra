@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // ResultSchema is the schema of agent-result.json, written by
@@ -27,6 +28,14 @@ const ResultSchema = "ack.autopilot.result/v1"
 
 // maxResultBytes bounds what is read from a run's artifacts.
 const maxResultBytes = 64 << 10
+
+// Upper bounds on a single run's counts. Real runs are far below them; they
+// keep a bad or hostile file from pushing the ledger's running totals past
+// what fits in an int64 or int.
+const (
+	maxResultTokens = 1 << 40
+	maxResultCount  = 1000
+)
 
 type resultFile struct {
 	Schema    string `json:"schema"`
@@ -60,12 +69,15 @@ func ParseResult(data []byte, workItem string) (RunResult, error) {
 	if len(data) > maxResultBytes {
 		return RunResult{}, fmt.Errorf("agent-result.json is larger than %d bytes", maxResultBytes)
 	}
+	// encoding/json matches keys case-insensitively ("Work_Item" fills
+	// WorkItem). That is fine: the work-item check guards against launcher
+	// miswiring, not an adversarial run.
 	var f resultFile
 	dec := json.NewDecoder(bytes.NewReader(data))
 	if err := dec.Decode(&f); err != nil {
 		return RunResult{}, fmt.Errorf("decode agent-result.json: %w", err)
 	}
-	if dec.More() {
+	if _, err := dec.Token(); err != io.EOF {
 		return RunResult{}, errors.New("decode agent-result.json: data after the object")
 	}
 	if f.Schema != ResultSchema {
@@ -76,6 +88,12 @@ func ParseResult(data []byte, workItem string) (RunResult, error) {
 	}
 	if f.Tokens.Input < 0 || f.Tokens.Output < 0 || f.Tokens.Total < 0 || f.E2E.Attempts < 0 {
 		return RunResult{}, errors.New("agent-result.json has a negative count")
+	}
+	if f.Tokens.Input > maxResultTokens || f.Tokens.Output > maxResultTokens || f.Tokens.Total > maxResultTokens {
+		return RunResult{}, fmt.Errorf("agent-result.json tokens out of range (max %d)", int64(maxResultTokens))
+	}
+	if f.E2E.Attempts > maxResultCount || f.Iterations.Impl > maxResultCount || f.Iterations.Replan > maxResultCount {
+		return RunResult{}, fmt.Errorf("agent-result.json iterations or e2e.attempts out of range (max %d)", maxResultCount)
 	}
 	return RunResult{Outcome: f.Outcome, Reason: f.Reason, PR: f.PR, Tokens: f.Tokens.Total, E2ERuns: f.E2E.Attempts}, nil
 }

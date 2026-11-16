@@ -16,6 +16,7 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -147,7 +148,8 @@ func overdue(c *ledger.Claim, grace time.Duration, now time.Time) bool {
 }
 
 // addUsage adds what a finished run spent to the item. apply runs once per
-// run, because it clears the claim.
+// run, because it clears the claim. The sums saturate rather than wrap:
+// ParseResult bounds each run, and this is the backstop.
 func addUsage(w *ledger.WorkItem, r RunResult) {
 	if r.Tokens <= 0 && r.E2ERuns <= 0 {
 		return
@@ -156,9 +158,17 @@ func addUsage(w *ledger.WorkItem, r RunResult) {
 		w.Usage = &ledger.Usage{}
 	}
 	if r.Tokens > 0 {
-		w.Usage.Tokens += r.Tokens
+		if w.Usage.Tokens > math.MaxInt64-r.Tokens {
+			w.Usage.Tokens = math.MaxInt64
+		} else {
+			w.Usage.Tokens += r.Tokens
+		}
 	}
 	if r.E2ERuns > 0 {
-		w.Usage.E2ERuns += r.E2ERuns
+		if w.Usage.E2ERuns > math.MaxInt-r.E2ERuns {
+			w.Usage.E2ERuns = math.MaxInt
+		} else {
+			w.Usage.E2ERuns += r.E2ERuns
+		}
 	}
 }

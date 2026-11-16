@@ -500,6 +500,6 @@ func readResult(path, workItem string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "result outcome=%s reason=%s pr=%s tokens=%d e2e_runs=%d\n", r.Outcome, r.Reason, r.PR, r.Tokens, r.E2ERuns)
+	_, err = fmt.Fprintf(out, "result outcome=%q reason=%q pr=%q tokens=%d e2e_runs=%d\n", r.Outcome, r.Reason, r.PR, r.Tokens, r.E2ERuns)
 	return err
 }

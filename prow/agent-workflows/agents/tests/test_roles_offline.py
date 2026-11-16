@@ -1107,6 +1107,12 @@ def test_result_contract():
             {"outcome": "pr_opened", "pr": ""},
             {"tokens": {"total": -1}},
             {"tokens": {"total": True}},
+            # Counts past the Go reader's bounds are refused here first.
+            {"tokens": {"total": 2**40 + 1}},
+            {"tokens": {"input": 2**40 + 1}},
+            {"iterations": {"impl": 1001}},
+            {"iterations": {"replan": 1001}},
+            {"e2e": {"attempts": 1001}},
             {"work_item": "sha256:XYZ"},
             {"e2e": {"status": "GREEN"}},
             {"prow_job_id": "a b"},
@@ -1130,6 +1136,13 @@ def test_result_contract():
                 raised = True
             check(f"rejects {bad}", raised, True)
         check("file unchanged after rejects", path.read_text(), before)
+
+        # The bounds themselves are allowed, and the message names the problem.
+        at_limit = {**json.loads(before), "tokens": {"input": 2**40, "output": 0, "total": 2**40},
+                    "iterations": {"impl": 1000, "replan": 1000}, "e2e": {"status": "PASS", "attempts": 1000}}
+        check("counts at the limit", result.validate(at_limit), [])
+        over = {**at_limit, "e2e": {"status": "PASS", "attempts": 1001}}
+        check("out of range message", result.validate(over), ["e2e.attempts out of range (max 1000)"])
 
         # The Prow upload sidecar may run as another uid: the file is 0644.
         check("file mode", path.stat().st_mode & 0o777, 0o644)

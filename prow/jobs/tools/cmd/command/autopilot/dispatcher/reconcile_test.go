@@ -16,6 +16,7 @@ package dispatcher
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -247,6 +248,28 @@ func TestReconcileRecordsUsage(t *testing.T) {
 	require.NotNil(t, w.Usage)
 	assert.Equal(t, int64(900), w.Usage.Tokens)
 	assert.Equal(t, 2, w.Usage.E2ERuns)
+}
+
+func TestReconcileAccumulatesUsage(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	w.Usage = &ledger.Usage{Tokens: 1000, E2ERuns: 1}
+	f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: {Phase: PhaseFinished, Result: &RunResult{Outcome: "failed", Reason: "E2E_FAIL", Tokens: 900, E2ERuns: 2}}}}
+	items := ledgerOf(w)
+	reconcile(context.Background(), items, f, testPolicy(t).Budgets, now)
+	assertLints(t, items)
+	require.NotNil(t, w.Usage)
+	assert.Equal(t, int64(1900), w.Usage.Tokens)
+	assert.Equal(t, 3, w.Usage.E2ERuns)
+}
+
+func TestAddUsageSaturates(t *testing.T) {
+	w := &ledger.WorkItem{Usage: &ledger.Usage{Tokens: math.MaxInt64 - 10, E2ERuns: math.MaxInt - 1}}
+	addUsage(w, RunResult{Tokens: 1 << 40, E2ERuns: 1000})
+	assert.Equal(t, int64(math.MaxInt64), w.Usage.Tokens)
+	assert.Equal(t, math.MaxInt, w.Usage.E2ERuns)
+	addUsage(w, RunResult{Tokens: 5, E2ERuns: 5})
+	assert.Equal(t, int64(math.MaxInt64), w.Usage.Tokens)
+	assert.Equal(t, math.MaxInt, w.Usage.E2ERuns)
 }
 
 func TestReconcileNoUsageLeavesFieldUnset(t *testing.T) {

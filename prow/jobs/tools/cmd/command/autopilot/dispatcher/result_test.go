@@ -53,6 +53,12 @@ func TestParseResultRejects(t *testing.T) {
 		"negative e2e":     {strings.Replace(good, `"attempts": 1`, `"attempts": -1`, 1), "", "negative"},
 		"too large":        {good + strings.Repeat(" ", maxResultBytes), "", "larger"},
 		"trailing garbage": {good + "{}", "", "decode"},
+		"trailing brace":   {good + "}", "", "data after the object"},
+		"trailing bracket": {good + "]", "", "data after the object"},
+		"tokens too big":   {strings.Replace(good, `"total": 1280000`, `"total": 1099511627777`, 1), "", "out of range"},
+		"input too big":    {strings.Replace(good, `"input": 1200000`, `"input": 1099511627777`, 1), "", "out of range"},
+		"attempts too big": {strings.Replace(good, `"attempts": 1`, `"attempts": 1001`, 1), "", "out of range"},
+		"impl too big":     {strings.Replace(good, `"impl": 2`, `"impl": 1001`, 1), "", "out of range"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ParseResult([]byte(tc.data), tc.workItem)
@@ -64,6 +70,20 @@ func TestParseResultRejects(t *testing.T) {
 
 func TestParseResultIgnoresUnknownFields(t *testing.T) {
 	data := strings.Replace(string(fixture(t)), `"workflow"`, `"later_field": 1, "workflow"`, 1)
-	_, err := ParseResult([]byte(data), "")
-	assert.NoError(t, err)
+	r, err := ParseResult([]byte(data), "")
+	require.NoError(t, err)
+	want, err := ParseResult(fixture(t), "")
+	require.NoError(t, err)
+	assert.Equal(t, want, r)
+	assert.Equal(t, int64(1280000), r.Tokens)
+}
+
+func TestParseResultAcceptsLimits(t *testing.T) {
+	good := string(fixture(t))
+	data := strings.Replace(good, `"total": 1280000`, `"total": 1099511627776`, 1)
+	data = strings.Replace(data, `"attempts": 1`, `"attempts": 1000`, 1)
+	r, err := ParseResult([]byte(data), "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1<<40), r.Tokens)
+	assert.Equal(t, 1000, r.E2ERuns)
 }

@@ -60,10 +60,14 @@ _REASON_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 _PR_RE = re.compile(r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/pull/[1-9][0-9]*$")
 _WORK_ITEM_RE = re.compile(r"^sha256:[0-9a-f]{16}$")
 _PROW_JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{0,128}$")
+# (group, keys, max): the bounds match the Go reader's, which refuses a file
+# past them so a run can never overflow the ledger's running totals.
+_MAX_TOKENS = 2**40
+_MAX_COUNT = 1000
 _COUNTS = (
-    ("tokens", ("input", "output", "total")),
-    ("iterations", ("impl", "replan")),
-    ("e2e", ("attempts",)),
+    ("tokens", ("input", "output", "total"), _MAX_TOKENS),
+    ("iterations", ("impl", "replan"), _MAX_COUNT),
+    ("e2e", ("attempts",), _MAX_COUNT),
 )
 # The v1 keys. The Go reader ignores unknown keys; this writer refuses them so
 # a typo or a stray value never reaches the file.
@@ -141,7 +145,7 @@ def validate(doc: dict) -> list[str]:
         problems.append("pr must be empty or https://github.com/<owner>/<repo>/pull/<n>")
     elif outcome in ("pr_opened", "pr_updated") and not pr:
         problems.append(f"outcome {outcome} needs a pr")
-    for group, keys in _COUNTS:
+    for group, keys, limit in _COUNTS:
         values = doc.get(group)
         if not isinstance(values, dict):
             problems.append(f"{group} must be an object")
@@ -150,8 +154,11 @@ def validate(doc: dict) -> list[str]:
         if unknown:
             problems.append(f"unknown {group} keys: " + ", ".join(unknown))
         for key in keys:
-            if not _is_count(values.get(key)):
+            value = values.get(key)
+            if not _is_count(value):
                 problems.append(f"{group}.{key} must be a non-negative integer")
+            elif value > limit:
+                problems.append(f"{group}.{key} out of range (max {limit})")
     e2e = doc.get("e2e")
     if isinstance(e2e, dict) and not _one_of(e2e.get("status"), E2E_STATUSES):
         problems.append("e2e.status must be one of " + ", ".join(sorted(E2E_STATUSES)))
