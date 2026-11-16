@@ -10,12 +10,6 @@
 # and limitations under the License.
 """Default configuration values for ACK agents."""
 
-# AWS SDK Go version
-DEFAULT_AWS_SDK_GO_VERSION = "v1.32.6"
-
-# Maximum number of log lines to return
-MAX_LOG_LINES_TO_RETURN = 100
-
 # CLI defaults for the agent
 DEFAULT_REGION = "us-west-2"
 DEFAULT_MODEL_ID = "us.anthropic.claude-opus-5-5"
@@ -29,10 +23,3 @@ DEFAULT_MAX_RETRY_ATTEMPTS = 20
 DEFAULT_RETRY_MODE = "standard"
 DEFAULT_CONNECT_TIMEOUT = 100
 DEFAULT_READ_TIMEOUT = 600
-
-# Memory Agent User ID
-MEM0_USER_ID = "ack_codegen_agent_user"
-
-# Knowledge Base defaults for model agent
-MODEL_AGENT_KB_NUMBER_OF_RESULTS = 5
-MODEL_AGENT_KB_SCORE_THRESHOLD = 0.5

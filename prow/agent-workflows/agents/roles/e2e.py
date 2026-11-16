@@ -18,10 +18,10 @@ the outcome (PASS / FAIL / SKIPPED), and applies the workflow's rules:
   - On FAIL, dispatch the implementer with the failure details to fix, then
     re-run. Maximum `cfg.max_e2e_fix_attempts` (default 2) before escalating.
 
-This phase is a fast-follow: the build-cluster ProwJob currently runs with
-run_e2e=False (it lacks the privileged Docker-in-Docker + kind toolchain). The
-code is kept intact and validated by the offline classifier/config tests so it
-can be switched on once the build-cluster job grows a DinD/kind sidecar.
+The ProwJob runs this phase: agent-plugin sets RUN_E2E=true and runs the pod
+privileged for Docker-in-Docker (pkg/prowjob applyE2EPodSettings), and
+prow-job.sh starts Docker and exports the e2e role before the workflow
+starts. A local run leaves it off unless RUN_E2E=true.
 """
 
 from __future__ import annotations
