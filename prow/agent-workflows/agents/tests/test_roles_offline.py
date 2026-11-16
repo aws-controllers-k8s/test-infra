@@ -1219,6 +1219,22 @@ def test_harness_result_fields():
                                                        run_e2e=True), False)
 
 
+def test_autopilot_arg_validation():
+    """--work-item and --change-class come together and are checked."""
+    print("autopilot args:")
+    from workflows.validation import validate_inputs
+
+    def problems(**kw):
+        return validate_inputs(service="s3", resource="Bucket", **kw)
+
+    check("neither", problems(), [])
+    check("both", problems(work_item="sha256:0123456789abcdef", change_class="config-only"), [])
+    check("work item alone", len(problems(work_item="sha256:0123456789abcdef")), 1)
+    check("class alone", len(problems(change_class="config-only")), 1)
+    check("bad hash", len(problems(work_item="sha256:0123", change_class="config-only")), 1)
+    check("bad class", len(problems(work_item="sha256:0123456789abcdef", change_class="C2")), 1)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1240,7 +1256,8 @@ def main():
                test_workflow_timeout_budget,
                test_generator_templates_helmignored,
                test_result_contract, test_result_cli,
-               test_token_accounting, test_harness_result_fields):
+               test_token_accounting, test_harness_result_fields,
+               test_autopilot_arg_validation):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

@@ -24,6 +24,10 @@ _SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _GO_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 _FIELD_PATH_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$")
 _AWS_SDK_VERSION_RE = re.compile(r"^v?[0-9]+\.[0-9]+\.[0-9]+$")
+_WORK_ITEM_RE = re.compile(r"^sha256:[0-9a-f]{16}$")
+# Ledger change classes (autopilot/issuefinder/classify.go) a workflow can be
+# started for.
+CHANGE_CLASSES = ("SDK-bump", "config-only", "hand-written-code", "new-resource")
 
 
 def validate_inputs(
@@ -33,6 +37,8 @@ def validate_inputs(
     field: str | None = None,
     aws_sdk_version: str | None = None,
     require_field: bool = False,
+    work_item: str | None = None,
+    change_class: str | None = None,
 ) -> list[str]:
     """Return validation problems for one workflow invocation.
 
@@ -54,6 +60,12 @@ def validate_inputs(
         )
     if aws_sdk_version is not None and not _AWS_SDK_VERSION_RE.fullmatch(aws_sdk_version):
         problems.append("aws-sdk-version must be a semantic version such as v1.41.0")
+    if (work_item is None) != (change_class is None):
+        problems.append("work-item and change-class must be given together")
+    if work_item is not None and not _WORK_ITEM_RE.fullmatch(work_item):
+        problems.append("work-item must be sha256: and 16 hex digits")
+    if change_class is not None and change_class not in CHANGE_CLASSES:
+        problems.append("change-class must be one of " + ", ".join(CHANGE_CLASSES))
     return problems
 
 
@@ -64,6 +76,8 @@ def main() -> int:
     parser.add_argument("--field")
     parser.add_argument("--aws-sdk-version")
     parser.add_argument("--require-field", action="store_true")
+    parser.add_argument("--work-item")
+    parser.add_argument("--change-class")
     args = parser.parse_args()
 
     problems = validate_inputs(
@@ -72,6 +86,8 @@ def main() -> int:
         field=args.field,
         aws_sdk_version=args.aws_sdk_version,
         require_field=args.require_field,
+        work_item=args.work_item,
+        change_class=args.change_class,
     )
     if problems:
         parser.error("; ".join(problems))
