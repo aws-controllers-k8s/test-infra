@@ -1155,6 +1155,30 @@ def test_result_cli():
         check("file under ARTIFACTS", (Path(d) / "artifacts" / "agent-result.json").exists(), True)
 
 
+def test_token_accounting():
+    """Graph usage plus the direct implementer/pr_writer calls after it."""
+    print("token accounting:")
+    from types import SimpleNamespace
+    from roles import orchestrator as orch
+
+    check("tokens of None", orch._tokens(None), {"input": 0, "output": 0, "total": 0})
+    check("tokens of usage",
+          orch._tokens({"inputTokens": 10, "outputTokens": 2, "totalTokens": 12, "cacheReadInputTokens": 5}),
+          {"input": 10, "output": 2, "total": 12})
+    agent = SimpleNamespace(event_loop_metrics=SimpleNamespace(
+        accumulated_usage={"inputTokens": 7, "outputTokens": 3, "totalTokens": 10}))
+    check("agent tokens", orch._agent_tokens(agent), {"input": 7, "output": 3, "total": 10})
+    check("agent without metrics", orch._agent_tokens(object()), {"input": 0, "output": 0, "total": 0})
+    check("add", orch._add_tokens({"input": 1, "output": 2, "total": 3}, {"input": 10, "output": 20, "total": 30}),
+          {"input": 11, "output": 22, "total": 33})
+    # A counter that went backwards (an agent rebuilt mid-run) adds nothing.
+    check("delta clamps at zero",
+          orch._delta_tokens({"input": 5, "output": 5, "total": 10}, {"input": 9, "output": 1, "total": 10}),
+          {"input": 4, "output": 0, "total": 0})
+    rr = orch.RunResult(cfg=None)
+    check("RunResult default tokens", rr.tokens, {"input": 0, "output": 0, "total": 0})
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1175,7 +1199,8 @@ def main():
                test_e2e_timeout_preserves_output,
                test_workflow_timeout_budget,
                test_generator_templates_helmignored,
-               test_result_contract, test_result_cli):
+               test_result_contract, test_result_cli,
+               test_token_accounting):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 
