@@ -647,3 +647,13 @@ func TestPostStatusReportsDuplicatesWithoutDeleting(t *testing.T) {
 	assert.Equal(t, "status #27 update\nstatus #27 duplicate 9\n", out.String())
 	assert.Equal(t, []string{http.MethodPatch}, methods, "only the first of our comments is edited; nothing is deleted")
 }
+
+func TestReadResult(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, readResult("dispatcher/testdata/agent-result-v1.json", "sha256:0123456789abcdef", &out))
+	assert.Equal(t, "result outcome=pr_opened reason= pr=https://github.com/aws-controllers-k8s/s3-controller/pull/240 tokens=1280000 e2e_runs=1\n", out.String())
+
+	err := readResult("dispatcher/testdata/agent-result-v1.json", "sha256:ffffffffffffffff", &out)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "work item")
+}

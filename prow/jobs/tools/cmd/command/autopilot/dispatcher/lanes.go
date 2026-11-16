@@ -33,9 +33,13 @@ var lanes = map[string]lane{
 	"SDK-bump": {Workflow: "sdk-bump", args: func(w *ledger.WorkItem) map[string]string {
 		return map[string]string{"service": w.Service, "sdk-to": w.Evidence.SDKTo, "work-item": w.KeyHash}
 	}},
-	// add-field's required_args in prow/agent-workflows/templates/add-field.tpl.
+	// add-field's required_args, plus the provenance optional_args in
+	// prow/agent-workflows/templates/add-field.tpl.
 	"config-only": {Workflow: "add-field", LLM: true, args: func(w *ledger.WorkItem) map[string]string {
-		return map[string]string{"service": w.Service, "resource": w.Resource, "field": w.FieldPath}
+		return map[string]string{
+			"service": w.Service, "resource": w.Resource, "field": w.FieldPath,
+			"work-item": w.KeyHash, "change-class": w.ChangeClass,
+		}
 	}},
 }
 
