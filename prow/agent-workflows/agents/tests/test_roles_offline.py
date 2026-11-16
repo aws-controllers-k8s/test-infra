@@ -1179,6 +1179,46 @@ def test_token_accounting():
     check("RunResult default tokens", rr.tokens, {"input": 0, "output": 0, "total": 0})
 
 
+def test_harness_result_fields():
+    """The harness's part of agent-result.json, by how the run ended."""
+    print("harness result fields:")
+    from roles import orchestrator as orch
+    from roles.e2e import E2EAttempt, E2EResult
+    from roles.verdict import Decision
+    from workflows.ack_workflow import result_fields
+
+    def rr(decision, e2e=None, reviewer_ran=True):
+        r = orch.RunResult(cfg=None)
+        r.impl_decision = decision
+        r.impl_reviewer_ran = reviewer_ran
+        r.impl_iterations, r.replan_attempts = 3, 1
+        r.tokens = {"input": 10, "output": 5, "total": 15}
+        r.e2e = e2e
+        return r
+
+    passed = E2EResult(status="PASS", attempts_detail=[E2EAttempt(number=1, status="FAIL"),
+                                                       E2EAttempt(number=2, status="PASS")])
+    ok = result_fields(rr(Decision.APPROVE, passed), run_e2e=True)
+    check("success leaves the outcome to prow-job.sh", "outcome" in ok, False)
+    check("success counts", (ok["tokens"]["total"], ok["iterations"], ok["e2e"]),
+          (15, {"impl": 3, "replan": 1}, {"status": "PASS", "attempts": 2}))
+    check("no e2e", result_fields(rr(Decision.APPROVE), run_e2e=False)["e2e"], {"status": "NOT_RUN", "attempts": 0})
+
+    def ending(fields):
+        return fields.get("outcome"), fields.get("reason")
+
+    check("no verdict", ending(result_fields(rr(None, reviewer_ran=False), run_e2e=False)),
+          ("failed", "REVIEWER_NO_VERDICT"))
+    check("revise", ending(result_fields(rr(Decision.REVISE), run_e2e=False)), ("failed", "REVIEW_NOT_APPROVED"))
+    check("e2e fail", ending(result_fields(rr(Decision.APPROVE, E2EResult(status="FAIL")), run_e2e=True)),
+          ("failed", "E2E_FAIL"))
+    check("e2e skipped", ending(result_fields(rr(Decision.APPROVE, E2EResult(status="SKIPPED")), run_e2e=True)),
+          ("failed", "E2E_SKIPPED"))
+    check("e2e never ran", ending(result_fields(rr(Decision.APPROVE), run_e2e=True)), ("failed", "E2E_NOT_RUN"))
+    check("e2e not needed", "outcome" in result_fields(rr(Decision.APPROVE, E2EResult(status="NOT_NEEDED")),
+                                                       run_e2e=True), False)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1200,7 +1240,7 @@ def main():
                test_workflow_timeout_budget,
                test_generator_templates_helmignored,
                test_result_contract, test_result_cli,
-               test_token_accounting):
+               test_token_accounting, test_harness_result_fields):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

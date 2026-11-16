@@ -22,6 +22,7 @@ from pathlib import Path
 from roles import orchestrator
 from roles.config import Config
 from roles.workflow import WorkflowDefinition
+from workflows import result
 from workflows.validation import validate_inputs
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,49 @@ class WorkflowRunOutput:
     report: str = ""
 
 
+def result_fields(run_result: orchestrator.RunResult, run_e2e: bool) -> dict:
+    """The harness's part of agent-result.json.
+
+    A run that will produce a change leaves outcome to prow-job.sh, which
+    knows whether a PR was opened. A run that failed records why, and
+    prow-job.sh then exits without touching it.
+    """
+    e2e = run_result.e2e
+    fields: dict = {
+        "tokens": dict(run_result.tokens),
+        "iterations": {"impl": run_result.impl_iterations, "replan": run_result.replan_attempts},
+        "e2e": {
+            "status": e2e.status if e2e is not None else "NOT_RUN",
+            "attempts": len(e2e.attempts_detail) if e2e is not None else 0,
+        },
+    }
+    if not run_result.impl_reviewer_ran:
+        fields.update(outcome="failed", reason="REVIEWER_NO_VERDICT")
+    elif not run_result.approved:
+        fields.update(outcome="failed", reason="REVIEW_NOT_APPROVED")
+    elif run_e2e and not (e2e is not None and e2e.ok):
+        fields.update(outcome="failed", reason="E2E_" + (e2e.status if e2e is not None else "NOT_RUN"))
+    return fields
+
+
+def _record_result(**fields) -> None:
+    """Update agent-result.json if the job script created one.
+
+    Only prow-job.sh sets AGENT_RESULT_FILE, so a local run writes nothing. A
+    write failure is logged and never fails the run: the Dispatcher then sees
+    no verdict.
+    """
+    if not os.environ.get("AGENT_RESULT_FILE"):
+        return
+    path = result.result_path()
+    if not path.exists():
+        return
+    try:
+        result.update(path, **fields)
+    except (OSError, ValueError) as exc:
+        logger.warning("could not update %s: %s", path, exc)
+
+
 class ACKWorkflowRunner:
     """Run the common Planner, Reviewer, Implementer, Reviewer, E2E graph."""
 
@@ -65,6 +109,7 @@ class ACKWorkflowRunner:
             require_field=request.definition.requires_field,
         )
         if input_problems:
+            _record_result(outcome="needs_human", reason="INVALID_INPUT")
             return self._error_output(
                 request,
                 "invalid workflow input: " + "; ".join(input_problems),
@@ -75,6 +120,7 @@ class ACKWorkflowRunner:
         if missing_inputs:
             message = "; ".join(missing_inputs)
             logger.error("missing workflow inputs: %s", message)
+            _record_result(outcome="failed", reason="MISSING_INPUTS")
             return self._error_output(
                 request,
                 f"cannot run {cfg.workflow_name}: {message}. The job script "
@@ -84,6 +130,7 @@ class ACKWorkflowRunner:
         if path_problems:
             message = "; ".join(path_problems)
             logger.error("configuration problems: %s", message)
+            _record_result(outcome="failed", reason="MISSING_CHECKOUT")
             return self._error_output(
                 request,
                 f"cannot run {cfg.workflow_name}: required checkouts are missing: "
@@ -107,12 +154,17 @@ class ACKWorkflowRunner:
 
         # The orchestrator owns a synchronous event loop and blocking E2E
         # subprocess. Keep both off this adapter's already-running event loop.
-        run_result = await asyncio.to_thread(
-            orchestrator.run,
-            cfg,
-            verbose=True,
-            progress=True,
-        )
+        try:
+            run_result = await asyncio.to_thread(
+                orchestrator.run,
+                cfg,
+                verbose=True,
+                progress=True,
+            )
+        except Exception:
+            _record_result(outcome="failed", reason="HARNESS_ERROR")
+            raise
+        _record_result(**result_fields(run_result, cfg.run_e2e))
 
         report = orchestrator.completion_report(run_result)
         print("\n" + "=" * 72)
