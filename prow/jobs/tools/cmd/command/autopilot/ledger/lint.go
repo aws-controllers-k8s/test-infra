@@ -102,6 +102,9 @@ func Lint(root string) []error {
 		if a := w.Attempts; a != nil && (a.MaxRuns < 1 || a.Runs < 0 || a.Runs > a.MaxRuns) {
 			fail("attempts runs=%d max_runs=%d out of range", a.Runs, a.MaxRuns)
 		}
+		if u := w.Usage; u != nil && (u.Tokens < 0 || u.E2ERuns < 0) {
+			fail("usage tokens=%d e2e_runs=%d is negative", u.Tokens, u.E2ERuns)
+		}
 		if other, dup := seen[w.Key]; dup {
 			fail("duplicate key %q (also in %s)", w.Key, other)
 		}
