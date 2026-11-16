@@ -124,13 +124,23 @@ class RunResult:
         return self.impl_decision == Decision.APPROVE
 
 
+def _token_count(v) -> int:
+    """A reported count as a non-negative int; anything unusable is 0."""
+    try:
+        return max(0, int(v or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _tokens(usage) -> dict[str, int]:
-    """A Strands Usage dict as {input, output, total}; missing counts are 0."""
-    usage = usage or {}
+    """A Strands Usage dict as {input, output, total}. Never raises: missing,
+    non-numeric and negative counts are 0."""
+    if not isinstance(usage, dict):
+        usage = {}
     return {
-        "input": int(usage.get("inputTokens", 0) or 0),
-        "output": int(usage.get("outputTokens", 0) or 0),
-        "total": int(usage.get("totalTokens", 0) or 0),
+        "input": _token_count(usage.get("inputTokens")),
+        "output": _token_count(usage.get("outputTokens")),
+        "total": _token_count(usage.get("totalTokens")),
     }
 
 

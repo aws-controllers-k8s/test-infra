@@ -83,18 +83,18 @@ def _record_result(**fields) -> None:
     """Update agent-result.json if the job script created one.
 
     Only prow-job.sh sets AGENT_RESULT_FILE, so a local run writes nothing. A
-    write failure is logged and never fails the run: the Dispatcher then sees
-    no verdict.
+    write failure is logged and never fails the run (nor masks the exception
+    on the HARNESS_ERROR path): the Dispatcher then sees no verdict.
     """
     if not os.environ.get("AGENT_RESULT_FILE"):
         return
-    path = result.result_path()
-    if not path.exists():
-        return
     try:
+        path = result.result_path()
+        if not path.exists():
+            return
         result.update(path, **fields)
-    except (OSError, ValueError) as exc:
-        logger.warning("could not update %s: %s", path, exc)
+    except Exception as exc:  # noqa: BLE001 - a result write must never fail the run
+        logger.warning("could not update agent-result.json: %s", exc)
 
 
 class ACKWorkflowRunner:

@@ -1110,6 +1110,18 @@ def test_result_contract():
             {"work_item": "sha256:XYZ"},
             {"e2e": {"status": "GREEN"}},
             {"prow_job_id": "a b"},
+            # Unhashable values are a problem, not a TypeError.
+            {"outcome": []},
+            {"outcome": {}},
+            {"workflow": []},
+            {"workflow": {"a": 1}},
+            {"e2e": {"status": {}}},
+            {"e2e": {"status": []}},
+            # Keys outside v1 are refused.
+            {"extra": 1},
+            {"tokens": {"cache": 1}},
+            {"iterations": {"review": 1}},
+            {"e2e": {"log": "x"}},
         ):
             try:
                 result.update(path, **bad)
@@ -1118,6 +1130,24 @@ def test_result_contract():
                 raised = True
             check(f"rejects {bad}", raised, True)
         check("file unchanged after rejects", path.read_text(), before)
+
+        # The Prow upload sidecar may run as another uid: the file is 0644.
+        check("file mode", path.stat().st_mode & 0o777, 0o644)
+
+        # validate() reports problems for a non-object and never raises.
+        check("validate non-object", len(result.validate([])) > 0, True)
+
+        # A file that does not hold an object is a ValueError, not a TypeError.
+        for content in ("[]", "null", "3", '"x"', "{not json"):
+            path.write_text(content)
+            try:
+                result.update(path, outcome="failed")
+                raised = None
+            except ValueError:
+                raised = "ValueError"
+            except Exception as exc:  # noqa: BLE001
+                raised = type(exc).__name__
+            check(f"update of {content!r} file", raised, "ValueError")
 
 
 def test_result_cli():
@@ -1148,6 +1178,15 @@ def test_result_cli():
         check("bad workflow exits 2", run("init", "--workflow", "deploy"), 2)
         check("file unchanged", path.read_text(), before)
 
+        # A malformed file exits 2 with a message, never a traceback.
+        for content in ("[]", "null", '{"outcome": []}', '{"e2e": {"status": {}}}', "{not json"):
+            path.write_text(content)
+            proc = subprocess.run([sys.executable, str(script), "set", "--outcome", "failed"], env=env,
+                                  capture_output=True, text=True)
+            check(f"malformed {content!r} exits 2", proc.returncode, 2)
+            check(f"malformed {content!r} no traceback", "Traceback" in proc.stderr, False)
+            check(f"malformed {content!r} unchanged", path.read_text(), content)
+
         # ARTIFACTS is the default directory when AGENT_RESULT_FILE is unset.
         env.pop("AGENT_RESULT_FILE")
         env["ARTIFACTS"] = d + "/artifacts"
@@ -1165,6 +1204,15 @@ def test_token_accounting():
     check("tokens of usage",
           orch._tokens({"inputTokens": 10, "outputTokens": 2, "totalTokens": 12, "cacheReadInputTokens": 5}),
           {"input": 10, "output": 2, "total": 12})
+    check("tokens never negative",
+          orch._tokens({"inputTokens": -5, "outputTokens": 2, "totalTokens": -1}),
+          {"input": 0, "output": 2, "total": 0})
+    check("tokens non-numeric are 0",
+          orch._tokens({"inputTokens": "lots", "outputTokens": [1], "totalTokens": {"a": 1}}),
+          {"input": 0, "output": 0, "total": 0})
+    check("tokens numeric strings", orch._tokens({"inputTokens": "4", "outputTokens": 2.7}),
+          {"input": 4, "output": 2, "total": 0})
+    check("tokens of a non-dict", orch._tokens(["inputTokens"]), {"input": 0, "output": 0, "total": 0})
     agent = SimpleNamespace(event_loop_metrics=SimpleNamespace(
         accumulated_usage={"inputTokens": 7, "outputTokens": 3, "totalTokens": 10}))
     check("agent tokens", orch._agent_tokens(agent), {"input": 7, "output": 3, "total": 10})
@@ -1219,6 +1267,58 @@ def test_harness_result_fields():
                                                        run_e2e=True), False)
 
 
+def test_record_result():
+    """The harness's write: a no-op outside prow-job.sh and never fatal."""
+    print("record result:")
+    import json
+    import logging
+    import tempfile
+    from workflows import ack_workflow, result
+
+    saved = {k: os.environ.get(k) for k in ("AGENT_RESULT_FILE", "ARTIFACTS")}
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "agent-result.json"
+
+            # Unset: writes nothing, even where $ARTIFACTS would put the file.
+            os.environ.pop("AGENT_RESULT_FILE", None)
+            os.environ["ARTIFACTS"] = d
+            ack_workflow._record_result(outcome="failed", reason="HARNESS_ERROR")
+            check("unset writes nothing", path.exists(), False)
+
+            # Set but prow-job.sh never created it: still nothing.
+            os.environ["AGENT_RESULT_FILE"] = str(path)
+            ack_workflow._record_result(outcome="failed", reason="HARNESS_ERROR")
+            check("missing file stays missing", path.exists(), False)
+
+            result.write(result.new("add-field"), path)
+            ack_workflow._record_result(outcome="needs_human", reason="INVALID_INPUT")
+            doc = json.loads(path.read_text())
+            check("valid update written", (doc["outcome"], doc["reason"]), ("needs_human", "INVALID_INPUT"))
+
+            def warns(**fields):
+                before = path.read_text()
+                with patch.object(ack_workflow.logger, "warning") as warning:
+                    ack_workflow._record_result(**fields)
+                return warning.called, path.read_text() == before
+
+            check("invalid value only warns", warns(outcome="merged"), (True, True))
+            check("unhashable value only warns", warns(outcome=[]), (True, True))
+            for content in ("{not json", "[]", '{"e2e": {"status": {}}}'):
+                path.write_text(content)
+                check(f"corrupt {content!r} only warns", warns(outcome="failed"), (True, True))
+            # Anything else that goes wrong is logged too, never raised.
+            path.write_text(json.dumps(result.new("add-field")))
+            with patch.object(result, "update", side_effect=RuntimeError("boom")):
+                check("unexpected error only warns", warns(outcome="failed")[0], True)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 def test_autopilot_arg_validation():
     """--work-item and --change-class come together and are checked."""
     print("autopilot args:")
@@ -1257,6 +1357,7 @@ def main():
                test_generator_templates_helmignored,
                test_result_contract, test_result_cli,
                test_token_accounting, test_harness_result_fields,
+               test_record_result,
                test_autopilot_arg_validation):
         fn()
     print("\nALL OFFLINE TESTS PASSED")

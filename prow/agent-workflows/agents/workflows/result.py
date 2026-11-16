@@ -35,6 +35,8 @@ import tempfile
 from pathlib import Path
 
 SCHEMA = "ack.autopilot.result/v1"
+# Every workflow that writes a result. A new one (sdk-bump in Plan 6) must be
+# added here, or its runs cannot record anything.
 WORKFLOWS = ("add-resource", "add-field", "address-feedback")
 # Design 4.1 outcomes a run can report, plus pr_opened (a run that left a PR
 # for review) and pr_updated (address-feedback pushed to an existing PR).
@@ -63,6 +65,17 @@ _COUNTS = (
     ("iterations", ("impl", "replan")),
     ("e2e", ("attempts",)),
 )
+# The v1 keys. The Go reader ignores unknown keys; this writer refuses them so
+# a typo or a stray value never reaches the file.
+_KEYS = frozenset({
+    "schema", "workflow", "work_item", "prow_job_id", "outcome", "reason", "pr",
+    "tokens", "iterations", "e2e",
+})
+_NESTED_KEYS = {
+    "tokens": frozenset({"input", "output", "total"}),
+    "iterations": frozenset({"impl", "replan"}),
+    "e2e": frozenset({"status", "attempts"}),
+}
 
 
 def result_path() -> Path:
@@ -93,12 +106,23 @@ def _is_count(v: object) -> bool:
     return isinstance(v, int) and not isinstance(v, bool) and v >= 0
 
 
+def _one_of(v: object, allowed) -> bool:
+    # isinstance first: an unhashable value (a list, a dict) would make the
+    # set membership test raise TypeError.
+    return isinstance(v, str) and v in allowed
+
+
 def validate(doc: dict) -> list[str]:
-    """Return one problem per invalid value."""
+    """Return one problem per invalid value. Never raises."""
+    if not isinstance(doc, dict):
+        return ["result must be a JSON object"]
     problems: list[str] = []
+    unknown = sorted(str(k) for k in doc if k not in _KEYS)
+    if unknown:
+        problems.append("unknown keys: " + ", ".join(unknown))
     if doc.get("schema") != SCHEMA:
         problems.append(f"schema must be {SCHEMA}")
-    if doc.get("workflow") not in WORKFLOWS:
+    if not _one_of(doc.get("workflow"), WORKFLOWS):
         problems.append("workflow must be one of " + ", ".join(WORKFLOWS))
     work_item = doc.get("work_item")
     if not isinstance(work_item, str) or (work_item and not _WORK_ITEM_RE.fullmatch(work_item)):
@@ -106,7 +130,8 @@ def validate(doc: dict) -> list[str]:
     prow_job_id = doc.get("prow_job_id")
     if not isinstance(prow_job_id, str) or not _PROW_JOB_ID_RE.fullmatch(prow_job_id):
         problems.append("prow_job_id must be at most 128 of [A-Za-z0-9._-]")
-    if doc.get("outcome") not in OUTCOMES:
+    outcome = doc.get("outcome")
+    if not _one_of(outcome, OUTCOMES):
         problems.append("outcome must be one of " + ", ".join(sorted(OUTCOMES)))
     reason = doc.get("reason")
     if not isinstance(reason, str) or (reason and not _REASON_RE.fullmatch(reason)):
@@ -114,18 +139,21 @@ def validate(doc: dict) -> list[str]:
     pr = doc.get("pr")
     if not isinstance(pr, str) or (pr and not _PR_RE.fullmatch(pr)):
         problems.append("pr must be empty or https://github.com/<owner>/<repo>/pull/<n>")
-    elif doc.get("outcome") in ("pr_opened", "pr_updated") and not pr:
-        problems.append(f"outcome {doc.get('outcome')} needs a pr")
+    elif outcome in ("pr_opened", "pr_updated") and not pr:
+        problems.append(f"outcome {outcome} needs a pr")
     for group, keys in _COUNTS:
         values = doc.get(group)
         if not isinstance(values, dict):
             problems.append(f"{group} must be an object")
             continue
+        unknown = sorted(str(k) for k in values if k not in _NESTED_KEYS[group])
+        if unknown:
+            problems.append(f"unknown {group} keys: " + ", ".join(unknown))
         for key in keys:
             if not _is_count(values.get(key)):
                 problems.append(f"{group}.{key} must be a non-negative integer")
     e2e = doc.get("e2e")
-    if isinstance(e2e, dict) and e2e.get("status") not in E2E_STATUSES:
+    if isinstance(e2e, dict) and not _one_of(e2e.get("status"), E2E_STATUSES):
         problems.append("e2e.status must be one of " + ", ".join(sorted(E2E_STATUSES)))
     return problems
 
@@ -139,6 +167,8 @@ def write(doc: dict, path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".agent-result.")
     try:
+        # mkstemp creates 0600; the Prow upload sidecar may run as another uid.
+        os.fchmod(fd, 0o644)
         with os.fdopen(fd, "w") as f:
             json.dump(doc, f, indent=2, sort_keys=True)
             f.write("\n")
@@ -150,9 +180,12 @@ def write(doc: dict, path: Path | None = None) -> None:
 
 def update(path: Path | None = None, **fields) -> dict:
     """Change fields of the existing file. A dict value is merged into the
-    nested object of the same name, so e2e={"attempts": 2} keeps e2e.status."""
+    nested object of the same name, so e2e={"attempts": 2} keeps e2e.status.
+    Raise ValueError if the file is not a JSON object or the result is invalid."""
     path = path or result_path()
-    doc = json.loads(path.read_text())
+    doc = json.loads(path.read_text())  # JSONDecodeError is a ValueError
+    if not isinstance(doc, dict):
+        raise ValueError(f"{path} does not hold a JSON object")
     for key, value in fields.items():
         if isinstance(value, dict) and isinstance(doc.get(key), dict):
             doc[key] = {**doc[key], **value}
