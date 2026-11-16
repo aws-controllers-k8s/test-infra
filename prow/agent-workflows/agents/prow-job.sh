@@ -103,6 +103,23 @@ done
 # Resolve the workflow package dir from this script's own location. Dispatch from
 # the workflow selected by the plugin instead of inferring it from optional data.
 WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# agent-result.json is the run result ACK Autopilot's Dispatcher reads from the
+# job artifacts (workflows/result.py). It is created as soon as the workflow
+# directory is known, before any input check or other step that can exit, so a
+# job that dies early still reports failed/JOB_INCOMPLETE, and each exit path
+# below records its own outcome. An unknown WORKFLOW_NAME cannot be recorded
+# (result.py rejects it), so that run leaves no file.
+export AGENT_RESULT_FILE="${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json"
+python "$WORKFLOW_DIR/workflows/result.py" init --workflow "${WORKFLOW_NAME:-}" \
+  || echo "$SCRIPT_NAME][WARN] could not create $AGENT_RESULT_FILE" >&2
+
+# set_result records the run's outcome, reason and PR. A failed write is
+# logged and never fails the job: the Dispatcher then sees no verdict.
+set_result() {
+  python "$WORKFLOW_DIR/workflows/result.py" set --outcome "$1" --reason "${2:-}" --pr "${3:-}" \
+    || echo "$SCRIPT_NAME][WARN] could not record the run result: $1 ${2:-}" >&2
+}
+
 VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
 [ -n "$AWS_SDK_VERSION" ] && VALIDATION_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
 [ -n "$WORK_ITEM" ] && VALIDATION_ARGS+=(--work-item "$WORK_ITEM")
@@ -111,6 +128,7 @@ case "${WORKFLOW_NAME:-}" in
   add-resource)
     if [ -n "$FIELD" ]; then
       echo "$SCRIPT_NAME][ERROR] --field is not supported by add-resource" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     WORKFLOW_COMMAND="resource-addition"
@@ -121,6 +139,7 @@ case "${WORKFLOW_NAME:-}" in
   add-field)
     if [ -z "$FIELD" ]; then
       echo "$SCRIPT_NAME][ERROR] --field is required by add-field" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     VALIDATION_ARGS+=(--field "$FIELD" --require-field)
@@ -135,18 +154,22 @@ case "${WORKFLOW_NAME:-}" in
     [ -n "$FIELD" ] && VALIDATION_ARGS+=(--field "$FIELD")
     if ! [[ "${ISSUE_NUMBER:-}" =~ ^[0-9]+$ && "$REVIEW_ID" =~ ^[0-9]+$ ]]; then
       echo "$SCRIPT_NAME][ERROR] ISSUE_NUMBER and --review-id must be numbers" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if ! [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]; then
       echo "$SCRIPT_NAME][ERROR] --review-sha must be a full commit SHA" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if ! [[ "${REPO_OWNER:-}" =~ ^[A-Za-z0-9-]+$ && "${REPO_NAME:-}" == "$SERVICE-controller" ]]; then
       echo "$SCRIPT_NAME][ERROR] REPO_OWNER/REPO_NAME must name the $SERVICE-controller repository" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if [ -z "$TEAM_MEMBERS" ]; then
       echo "$SCRIPT_NAME][ERROR] --team-members is required by address-feedback" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     WORKFLOW_COMMAND="address-feedback"
@@ -159,21 +182,6 @@ case "${WORKFLOW_NAME:-}" in
     exit 2
     ;;
 esac
-
-# agent-result.json is the run result ACK Autopilot's Dispatcher reads from the
-# job artifacts (workflows/result.py). It is created before anything else can
-# fail, so a job that exits early still reports failed/JOB_INCOMPLETE, and
-# each exit path below records its own outcome.
-export AGENT_RESULT_FILE="${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json"
-python "$WORKFLOW_DIR/workflows/result.py" init --workflow "$WORKFLOW_NAME" \
-  || echo "$SCRIPT_NAME][WARN] could not create $AGENT_RESULT_FILE" >&2
-
-# set_result records the run's outcome, reason and PR. A failed write is
-# logged and never fails the job: the Dispatcher then sees no verdict.
-set_result() {
-  python "$WORKFLOW_DIR/workflows/result.py" set --outcome "$1" --reason "${2:-}" --pr "${3:-}" \
-    || echo "$SCRIPT_NAME][WARN] could not record the run result: $1 ${2:-}" >&2
-}
 
 # Validate invocation values before using them in repository paths or Git
 # commands. This keeps one structural-validation implementation for the shell
@@ -188,7 +196,10 @@ if [ -n "$WORK_ITEM" ]; then
 fi
 
 # Provenance trailers (design 4.4) for runs ACK Autopilot started. They go on
-# the commit and at the end of the PR body, which a squash merge keeps.
+# the commit and at the end of the PR body. The PR body is what reaches main:
+# Tide squash-merges with a merge_commit_template whose body is the PR body
+# (prow/config/templates/config-ConfigMap.yaml), so a reused PR's body is
+# refreshed below to keep the trailers.
 TRAILERS=""
 if [ -n "$WORK_ITEM" ]; then
   TRAILERS="Producer: autopilot/$WORKFLOW_NAME
@@ -264,7 +275,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
 
   if [ "$PR_STATE" != "OPEN" ]; then
     echo "$SCRIPT_NAME][INFO] $PR_URL is $PR_STATE; nothing to do"
-    set_result completed_no_change PR_NOT_OPEN
+    set_result completed_no_change PR_NOT_OPEN "$PR_URL"
     exit 0
   fi
   # The job pushes to the PR's head branch, so the head repository must be
@@ -272,23 +283,23 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   TOKEN_USER=$(gh api user --jq .login)
   if [ "${HEAD_OWNER,,}" != "${PR_AUTHOR,,}" ] || [ "${TOKEN_USER,,}" != "${PR_AUTHOR,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository owner ($HEAD_OWNER), PR author ($PR_AUTHOR) and token user ($TOKEN_USER) must match" >&2
-    set_result needs_human IDENTITY_MISMATCH
+    set_result needs_human IDENTITY_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "${HEAD_REPO,,}" != "${REPO_NAME,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository $HEAD_REPO does not match $REPO_NAME" >&2
-    set_result needs_human IDENTITY_MISMATCH
+    set_result needs_human IDENTITY_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "$HEAD_REF" != "$LOCAL_GIT_BRANCH" ]; then
     echo "$SCRIPT_NAME][ERROR] head branch $HEAD_REF does not match $LOCAL_GIT_BRANCH" >&2
-    set_result needs_human BRANCH_MISMATCH
+    set_result needs_human BRANCH_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "$HEAD_SHA" != "$REVIEW_SHA" ]; then
     echo "$SCRIPT_NAME][INFO] PR head moved from $REVIEW_SHA to $HEAD_SHA after the review; not addressing it"
+    set_result completed_no_change HEAD_MOVED "$PR_URL"
     pr_comment -b "This pull request changed after the review (reviewed \`${REVIEW_SHA:0:7}\`, head is now \`${HEAD_SHA:0:7}\`), so the agent did not address it. Submit a new review on the latest commit to have the feedback addressed."
-    set_result completed_no_change HEAD_MOVED
     exit 0
   fi
 
@@ -297,7 +308,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   cd "$SERVICE_REPO_DIR"
   if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
     echo "$SCRIPT_NAME][ERROR] cloned $HEAD_REF is not at $HEAD_SHA" >&2
-    set_result failed CLONE_MISMATCH
+    set_result failed CLONE_MISMATCH "$PR_URL"
     exit 1
   fi
   # The merge base with the PR's base branch, so `git diff PR_BASE_SHA..HEAD`
@@ -315,15 +326,15 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
       --review-id "$REVIEW_ID" --team-members "$TEAM_MEMBERS" \
       --pr-author "$PR_AUTHOR" --output "$FEEDBACK_FILE" \
       --targets-output "$FEEDBACK_TARGETS_FILE"); then
+    set_result failed FEEDBACK_COLLECTION_FAILED "$PR_URL"
     pr_comment -b "The agent could not collect this feedback. See job \`${PROW_JOB_ID:-unknown}\` for details."
-    set_result failed FEEDBACK_COLLECTION_FAILED
     exit 1
   fi
   echo "$SCRIPT_NAME][INFO] collected $FEEDBACK_COUNT feedback item(s) into $FEEDBACK_FILE"
   if [ "$FEEDBACK_COUNT" = "0" ]; then
     echo "$SCRIPT_NAME][INFO] no unresolved feedback from team members; nothing to do"
+    set_result completed_no_change NO_FEEDBACK "$PR_URL"
     pr_comment -b "The agent found no unresolved feedback from team members to address."
-    set_result completed_no_change NO_FEEDBACK
     exit 0
   fi
   # The harness writes the reply writer's per-item replies here.
@@ -469,8 +480,8 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo "$SCRIPT_NAME][INFO] Pushing to $HEAD_OWNER/$HEAD_REPO:$HEAD_REF..."
     if ! git push "https://github.com/$HEAD_OWNER/$HEAD_REPO.git" \
          "HEAD:refs/heads/$HEAD_REF"; then
+      set_result failed PUSH_FAILED "$PR_URL"
       pr_comment -b "The agent addressed this feedback but could not push the changes. See job \`${PROW_JOB_ID:-unknown}\` for details, then submit a new review to try again."
-      set_result failed PUSH_FAILED
       exit 1
     fi
     PUSHED_SHA=$(git rev-parse HEAD)
@@ -478,7 +489,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     FEEDBACK_OUTCOME=(pr_updated "" "$PR_URL")
   else
     STATUS_LINE="No code changes were needed for this feedback."
-    FEEDBACK_OUTCOME=(completed_no_change NO_CODE_CHANGE)
+    FEEDBACK_OUTCOME=(completed_no_change NO_CODE_CHANGE "$PR_URL")
   fi
 
   # Reply in the review threads this run addressed. Reached only after a
@@ -505,9 +516,11 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo
     echo "<!-- ack-agent:feedback-reply -->"
   } > "$REPLY_FILE"
+  # Record the outcome before commenting: a failed comment exits the job under
+  # set -e, and the outcome must already be in agent-result.json by then.
+  set_result "${FEEDBACK_OUTCOME[@]}"
   pr_comment -F "$REPLY_FILE"
   echo "$SCRIPT_NAME][INFO] Posted the reply on $PR_URL"
-  set_result "${FEEDBACK_OUTCOME[@]}"
   exit 0
 fi
 
@@ -567,10 +580,16 @@ fi
 
 # A retried run pushes to the same branch, whose pull request may still be
 # open: reuse it rather than fail on "a pull request already exists".
-PR_URL=$(gh pr list -R "$ORG_REPO" --head "$PR_SOURCE_BRANCH" --author "$GITHUB_ACTOR" \
-  --state open --json url --jq '.[0].url // ""')
+# A failed lookup falls back to creating one (which then fails visibly if a
+# pull request does exist) rather than killing the job after the push.
+PR_URL=$(gh pr list -R "$ORG_REPO" --head "$PR_SOURCE_BRANCH" --base "$PR_TARGET_BRANCH" \
+  --author "$GITHUB_ACTOR" --state open --json url --jq '.[0].url // ""') || PR_URL=""
 if [ -n "$PR_URL" ]; then
   echo "$SCRIPT_NAME][INFO] Reusing the open pull request $PR_URL"
+  # The reused PR keeps the body from the run that opened it; refresh it so
+  # the squash merge carries this run's description and trailers.
+  gh pr edit "$PR_URL" -R "$ORG_REPO" -F "$PR_BODY_FILE" >/dev/null \
+    || echo "$SCRIPT_NAME][WARN] could not refresh the body of $PR_URL" >&2
 else
   echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch... "
   if ! PR_URL=$(gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" -F "$PR_BODY_FILE" \
