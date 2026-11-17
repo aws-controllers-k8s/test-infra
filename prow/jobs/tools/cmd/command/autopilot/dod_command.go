@@ -40,7 +40,8 @@ func (e exitError) ExitCode() int { return e.code }
 
 type dodFlags struct {
 	repoDir, repo, service, baseRef, headRef, changeClass, workItem string
-	botEmails, skip                                                 []string
+	prAuthor                                                        string
+	botEmails, botLogins, skip                                      []string
 	codegenDir, runtimeDir, ackGenerate, crdCompat, sdkModel        string
 	cacheDir, prBody, output, verdictOut, trailerOut                string
 	timeout                                                         time.Duration
@@ -106,8 +107,10 @@ func init() {
 	f.StringVar(&dodOpts.baseRef, "base-ref", "", "the PR's base; dod diffs from its merge base with --head-ref")
 	f.StringVar(&dodOpts.headRef, "head-ref", "HEAD", "the PR's head")
 	f.StringVar(&dodOpts.changeClass, "change-class", "", "mechanical, docs-only, SDK-bump, config-only, hand-written-code or new-resource")
-	f.StringVar(&dodOpts.workItem, "work-item", "", "ledger key hash (sha256:<16 hex>); makes provenance binding (so does a bot-authored or Producer: autopilot/* head)")
+	f.StringVar(&dodOpts.workItem, "work-item", "", "ledger key hash (sha256:<16 hex>); makes provenance binding (so does an autopilot PR: --pr-author, else a bot-authored or Producer: autopilot/* head)")
 	f.StringArrayVar(&dodOpts.botEmails, "bot-email", nil, "author email of autopilot commits (repeatable)")
+	f.StringVar(&dodOpts.prAuthor, "pr-author", "", "the PR's GitHub author; when set, only it (against --bot-login) makes this an autopilot PR")
+	f.StringArrayVar(&dodOpts.botLogins, "bot-login", nil, "GitHub login of the autopilot bot (repeatable)")
 	f.StringVar(&dodOpts.codegenDir, "codegen-dir", "", "code-generator checkout at the pinned SHA (regen-clean skips without it)")
 	f.StringVar(&dodOpts.runtimeDir, "runtime-dir", "", "runtime checkout at the pinned SHA (RUNTIME_CRD_DIR for regeneration)")
 	f.StringVar(&dodOpts.ackGenerate, "ack-generate", "", "built ack-generate with crd-compat-check --output json; run in the scratch clone")
@@ -154,6 +157,7 @@ func runDod(ctx context.Context, f dodFlags, stdin io.Reader, out, errw io.Write
 	o := dod.Options{
 		RepoDir: f.repoDir, Repo: f.repo, Service: f.service, BaseRef: f.baseRef, HeadRef: f.headRef,
 		ChangeClass: f.changeClass, WorkItem: f.workItem, BotEmails: f.botEmails,
+		PRAuthor: f.prAuthor, BotLogins: f.botLogins,
 		CodegenDir: f.codegenDir, RuntimeDir: f.runtimeDir, ACKGenerate: f.ackGenerate,
 		SDKModelPath: f.sdkModel, CacheDir: f.cacheDir, Skip: f.skip,
 		ToolRevision: dod.BuildRevision(), Log: errw,

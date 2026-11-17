@@ -212,3 +212,36 @@ func TestRunOrderIsCheckOrderWithBuildLast(t *testing.T) {
 	assert.ElementsMatch(t, CheckOrder, runOrder)
 	assert.Equal(t, CheckBuild, runOrder[len(runOrder)-1])
 }
+
+// Review 5: with the PR author known (Prow's JOB_SPEC), autopilot is the PR
+// author, not a commit email anyone can set.
+func TestReviewPRAuthorDecidesAutopilot(t *testing.T) {
+	bots := []string{"ack-bot"}
+	head := commit{AuthorEmail: "bot@example.com", Message: "x\n\nProducer: autopilot/sdk-bump"}
+	emails := []string{"bot@example.com"}
+	assert.True(t, autopilotPR("ACK-Bot", bots, head, emails))
+	assert.False(t, autopilotPR("mallory", bots, head, emails), "a spoofed commit email on a human PR is not autopilot")
+	assert.True(t, autopilotPR("", nil, head, emails), "without a PR author, fall back to the head commit")
+
+	// A bot-authored PR binds provenance even when its commits look human.
+	f := sdkBump(t)
+	f.base = f.head
+	f.repo.Write("README.md", "docs\n")
+	f.head = f.repo.Commit("docs")
+	o := options(t, f)
+	o.CRDCompatJSON = compatJSON(t, f.base, f.head)
+	o.WorkItem, o.PRAuthor, o.BotLogins = "", "ack-bot", bots
+	v, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.True(t, checkOf(v, CheckProvenance).Binding)
+	assert.Contains(t, v.Reasons, "provenance:NO_BOT_COMMIT")
+
+	o.PRAuthor = "mallory"
+	v, err = Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.False(t, checkOf(v, CheckProvenance).Binding, "a human PR with no work item")
+
+	o.PRAuthor, o.BotLogins = "ack-bot", nil
+	_, err = Run(context.Background(), o)
+	assert.Error(t, err, "--pr-author needs --bot-login")
+}

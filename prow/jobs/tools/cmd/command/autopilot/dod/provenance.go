@@ -37,6 +37,17 @@ func autopilotHead(head commit, botEmails []string) bool {
 	return isBot(head, botEmails) || strings.HasPrefix(firstValue(parseTrailers(head.Message)["Producer"]), "autopilot/")
 }
 
+// autopilotPR decides whether provenance binds without a work item. When the
+// PR author is known (Prow's JOB_SPEC), it alone decides: commit emails and
+// trailers are set by whoever pushes. Without one (a local run), the head
+// commit decides (autopilotHead).
+func autopilotPR(prAuthor string, botLogins []string, head commit, botEmails []string) bool {
+	if prAuthor != "" {
+		return slices.ContainsFunc(botLogins, func(l string) bool { return strings.EqualFold(l, prAuthor) })
+	}
+	return autopilotHead(head, botEmails)
+}
+
 // checkProvenance applies design §4.4: a commit by a bot email must carry the
 // Plan 3 trailers for this work item and class (fail closed); any other commit
 // is a human commit, allowed and counted. It returns the human commit count.

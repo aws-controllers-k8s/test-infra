@@ -36,6 +36,10 @@ type Options struct {
 	BaseRef, HeadRef       string
 	ChangeClass, WorkItem  string
 	BotEmails              []string
+	// PRAuthor is the PR's GitHub author; when set, it alone decides whether
+	// this is an autopilot PR (BotLogins), since commit emails are spoofable.
+	PRAuthor  string
+	BotLogins []string
 	// CodegenDir and RuntimeDir are code-generator and runtime checkouts at
 	// the SHAs the run is pinned to; regen-clean skips without CodegenDir.
 	CodegenDir, RuntimeDir string
@@ -70,6 +74,8 @@ func (o *Options) normalize() error {
 		return fmt.Errorf("--change-class %q is not one of %s", o.ChangeClass, strings.Join(InputClasses, ", "))
 	case o.WorkItem != "" && !workItemRE.MatchString(o.WorkItem):
 		return fmt.Errorf("--work-item %q is not sha256:<16 hex>", o.WorkItem)
+	case o.PRAuthor != "" && len(o.BotLogins) == 0:
+		return errors.New("--pr-author needs --bot-login")
 	case o.ACKGenerate != "" && o.CRDCompatJSON != nil:
 		return errors.New("give --ack-generate or --crd-compat-json, not both")
 	}
@@ -270,7 +276,7 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 	if err != nil {
 		return nil, err
 	}
-	provenanceBinds := o.WorkItem != "" || autopilotHead(headCommit, o.BotEmails)
+	provenanceBinds := o.WorkItem != "" || autopilotPR(o.PRAuthor, o.BotLogins, headCommit, o.BotEmails)
 
 	in := Inputs{ChangeClass: o.ChangeClass, WorkItem: o.WorkItem, SkippedByFlag: slices.Clone(o.Skip)}
 	if o.CodegenDir != "" {
