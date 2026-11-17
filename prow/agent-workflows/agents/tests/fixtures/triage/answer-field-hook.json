@@ -1,0 +1,1 @@
+{"decision": "field-hook", "reason": "DefaultEventHold rides on PutObjectLockConfiguration, which the Bucket's custom update hook sends; the hook must copy the new member.", "evidence_refs": ["op:PutObjectLockConfiguration", "field:ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold", "crd:spec.objectLockConfiguration.rule.defaultRetention"]}

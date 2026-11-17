@@ -1284,6 +1284,107 @@ def test_triage_prompt_framing():
         check(f"system prompt says {phrase}", phrase in SYSTEM_PROMPT, True)
 
 
+def test_triage_answer_checks():
+    """Closed enum, strict keys, references that exist; anything else is undecided."""
+    print("triage answer checks:")
+    import json
+    from workflows import result
+    from workflows import triage as tg
+
+    pack = _triage_pack()
+    good = json.loads((TRIAGE_FIXTURES / "answer-field-hook.json").read_text())
+
+    def run(answer, p=pack):
+        calls = []
+
+        def call(system, user):
+            calls.append((system, user))
+            return answer, {"input": 10, "output": 2, "total": 12}
+
+        return tg.triage(p, call), calls
+
+    out, calls = run(json.dumps(good))
+    item = out.doc["items"][0]
+    check("one call", len(calls), 1)
+    check("field-hook", (item["decision"], item["class"], item["invalid"]), ("field-hook", "hand-written-code", []))
+    check("matches the Go fixture's verdict", out.doc, json.loads(TRIAGE_FIXTURE.read_text())["triage"])
+    check("tokens", out.tokens, {"input": 10, "output": 2, "total": 12})
+    fenced, _ = run("```json\n" + json.dumps(good) + "\n```")
+    check("a fenced answer parses", fenced.doc["items"][0]["decision"], "field-hook")
+
+    def verdict(answer, p=pack):
+        o, _ = run(answer if isinstance(answer, str) else json.dumps(answer), p)
+        it = o.doc["items"][0]
+        check("passes the result contract", result.validate_triage(o.doc, "sha256:0123456789abcdef"), [])
+        return it["decision"], it["invalid"], "class" in it
+
+    for name, answer, want in (
+        ("prose", "I think field-config.", ("undecided", ["INVALID_JSON"], False)),
+        ("array", "[1]", ("undecided", ["NOT_AN_OBJECT"], False)),
+        ("too long", " " * 8001, ("undecided", ["RESPONSE_TOO_LONG"], False)),
+        ("unknown decision", {**good, "decision": "merge"}, ("undecided", ["UNKNOWN_DECISION"], False)),
+        ("extra key", {**good, "tool": "shell"}, ("undecided", ["UNKNOWN_KEYS"], False)),
+        ("unknown op", {**good, "evidence_refs": ["op:DeleteEverything"]},
+         ("undecided", ["UNKNOWN_REF op:DeleteEverything"], False)),
+        ("malformed ref", {**good, "evidence_refs": ["see https://x"]}, ("undecided", ["MALFORMED_REF"], False)),
+        ("refs not a list", {**good, "evidence_refs": "op:X"}, ("undecided", ["BAD_EVIDENCE_REFS"], False)),
+        ("resource without op", {"decision": "resource", "reason": "", "evidence_refs": []},
+         ("undecided", ["RESOURCE_WITHOUT_OPERATION"], False)),
+        ("resource with op", {"decision": "resource", "reason": "", "evidence_refs": ["op:CreateBucket"]},
+         ("resource", [], True)),
+        ("not worth it", {"decision": "not-worth-modelling", "reason": "deprecated", "evidence_refs": []},
+         ("not-worth-modelling", [], False)),
+    ):
+        check(name, verdict(answer), want)
+
+    sd = _triage_pack(detector_work="server-default", change_class="config-only")
+    check("server-default refuses not-worth-modelling",
+          verdict({"decision": "not-worth-modelling", "reason": "", "evidence_refs": []}, sd),
+          ("undecided", ["DECISION_NOT_ALLOWED_FOR_SERVER_DEFAULT"], False))
+
+    noisy, _ = run(json.dumps({**good, "reason": "line\nbreak\x07 " + "é" * 400}))
+    reason = noisy.doc["items"][0]["reason"]
+    check("reason is one line", ("\n" in reason, "\x07" in reason), (False, False))
+    check("reason at most 600 bytes", len(reason.encode()) <= 600, True)
+
+    missing, calls = run(json.dumps(good), _triage_pack(field="ObjectLockConfiguration.Rule.Gone"))
+    check("a field the model lacks skips the call",
+          (len(calls), missing.doc["items"][0]["invalid"], missing.tokens["total"]), (0, ["ITEM_NOT_IN_MODEL"], 0))
+
+
+def test_triage_tool_less_call():
+    """converse_text sends no toolConfig and refuses a tool_use stop."""
+    print("triage tool-less call:")
+    from utils.bedrock import converse_text
+
+    class Client:
+        def __init__(self, resp):
+            self.resp, self.kwargs = resp, None
+
+        def converse(self, **kwargs):
+            self.kwargs = kwargs
+            return self.resp
+
+    c = Client({
+        "output": {"message": {"content": [{"text": '{"decision":'}, {"text": ' "undecided"}'}]}},
+        "stopReason": "end_turn",
+        "usage": {"inputTokens": 7, "outputTokens": 3, "totalTokens": 10},
+    })
+    text, usage = converse_text("sys", "user", model_id="m", client=c)
+    check("text joined", text, '{"decision": "undecided"}')
+    check("usage", usage, {"input": 7, "output": 3, "total": 10})
+    check("no tools offered", "toolConfig" in c.kwargs, False)
+    check("system and one user turn",
+          (c.kwargs["system"], [m["role"] for m in c.kwargs["messages"]]), ([{"text": "sys"}], ["user"]))
+    tool = Client({"output": {"message": {"content": []}}, "stopReason": "tool_use", "usage": {}})
+    try:
+        converse_text("s", "u", model_id="m", client=tool)
+        raised = False
+    except RuntimeError:
+        raised = True
+    check("tool_use stop is an error", raised, True)
+
+
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
     print("result contract:")
@@ -1654,6 +1755,8 @@ def main():
                test_triage_input_validation,
                test_triage_evidence,
                test_triage_prompt_framing,
+               test_triage_answer_checks,
+               test_triage_tool_less_call,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()
