@@ -1,0 +1,189 @@
+# ACK Autopilot Dispatcher: builder-security review checklist (Plan 7)
+
+The real launcher lets the `autopilot-dispatch` periodic create ProwJobs. This
+is the checklist the builder-security review signs off before it goes live
+(design §9 control 8, owner decisions 2026-11-13 and 2026-11-16). Until every
+box in "Going live" is ticked, `AUTOPILOT_LAUNCHER_ENABLED` stays `"false"` in
+`prow/jobs/templates/periodics/autopilot-dispatch.tpl`, `policy/autopilot.yaml`
+says `launcher: shadow`, and nothing in this directory is applied.
+
+Nothing in this directory is deployed by Argo CD or Flux
+(`argocd/applications/values.yaml` has no path under `prow/autopilot`;
+`prowlaunch.TestNothingDeploysThisDirectory` checks it). A human applies it.
+
+## What changes
+
+| Before (Plan 2) | After (Plan 7, live) |
+|---|---|
+| The Dispatcher logs the runs it would start (shadow launcher) | It creates ProwJobs in `prow`: `agent-workflow-add-field` (config-only lane, at most 2 at once) and `autopilot-sdk-bump` (SDK-bump lane and `--mode refresh`) |
+| Runs as `periodic-service-account` | Runs as `autopilot-dispatcher` (test-pods) with the Role in `rbac.yaml` and the AWS role in `pod-identity.yaml` |
+| No cluster API calls | `create`, `get`, `list`, `patch` on `prowjobs` in `prow` |
+| No result reads | One S3 GET per finished run: `logs/<job>/<build id>/artifacts/agent-result.json`, at most 64 KiB |
+
+No listener is opened anywhere: the Dispatcher is a client of the Kubernetes
+API (pod ServiceAccount token, cluster CA, no proxy) and of S3 (SigV4 with the
+pod's Pod Identity credentials). There is no new endpoint, port, Service or
+Ingress, and no new public storage.
+
+## Identities and credentials
+
+| Credential | Where it lives | Who can read it | Lifetime |
+|---|---|---|---|
+| `autopilot-dispatcher` ServiceAccount token | projected into every container of the Dispatcher pod (test container, clonerefs, initupload, sidecar) | code running in that pod | bound token, rotated by the kubelet (about 1 h); the client re-reads it on every request |
+| Pod Identity credentials of `<stack>-autopilot-dispatcher-role` | EKS Pod Identity agent, per pod | code running in that pod | short-lived STS credentials |
+| ack-bot PAT (`ack/prow/github-pat-token`) | `prow-secrets` CSI mount, as today through `preset-github-secrets` | code running in that pod | long-lived (Plan 1's `ack-autopilot` App replaces it before the Dispatcher writes the ledger) |
+
+Code in the Dispatcher pod is test-infra `main`, built in the pod at every tick
+(`go build -mod=mod`): whoever can merge to test-infra `main`, or publish a Go
+module version that test-infra resolves, controls these credentials. That is
+the same trust as every other test-infra periodic. Keep the dependency set
+small: the launcher uses no client-go, no sigs.k8s.io/prow and no new AWS SDK
+module (only the core module's SigV4 signer and `config`, already required).
+
+## What the token can do
+
+RBAC (`rbac.yaml`): `create`, `get`, `list`, `patch` on `prowjobs` in `prow`.
+No `update`, `delete`, `deletecollection`, `watch`; nothing else in any
+namespace; no ClusterRole.
+
+- **Why `patch`.** Abort sets `status.state=aborted` (Prow's plank then deletes
+  the pod: `syncAbortedJob`, sigs.k8s.io/prow v20260908 `pkg/plank/reconciler.go`).
+  The ProwJob CRD has `subresources: {}` (no status subresource,
+  `flux/prow/crds/prowjob_customresourcedefinition.yaml`), so this is a patch
+  of the object. The 2026-11-13 decision listed `create/get/list/watch`; Plan 7
+  replaces `watch` (never used: each tick polls) with `patch` (decision 2).
+- **What RBAC cannot stop.** A ProwJob is a pod spec Prow runs with its own
+  identity. With `create` alone, the token could start any image, as any
+  ServiceAccount, with any secret in `test-pods` (including the ack-bot PAT and
+  the postsubmit role's ECR publish rights), or privileged pods on the build
+  cluster. With `patch` it could rewrite any job's spec. agent-plugin's
+  ClusterRole has the same reach today (`create/get/list/watch/update/patch`
+  on `prowjobs`, cluster-wide).
+- **What closes it: `admission-policy.yaml`.** A ValidatingAdmissionPolicy that
+  matches only this ServiceAccount's requests (`failurePolicy: Fail`,
+  `Deny`). CREATE: only the two allowlisted job names, named by a launch id,
+  labelled `ack-autopilot/managed-by=autopilot-dispatcher`; for each, exactly
+  the cluster, ServiceAccount, image repository and tag prefix, command,
+  secret, SecretProviderClass and volumes `prowlaunch.Build` makes; no
+  `spec.namespace`, `refs`, init or ephemeral containers, host namespaces,
+  `envFrom`, credential secrets in the decoration config, or other utility
+  images; extra_refs only `main` of four org repos; only the annotations
+  `Build` sets (Prow copies a job's annotations to its pod, so no AppArmor,
+  seccomp or other pod annotation), with `karpenter.sh/do-not-disrupt: "true"`
+  only on `autopilot-sdk-bump`. UPDATE: only an abort of a
+  job it made (spec, labels and annotations unchanged, state `aborted`).
+  `prowlaunch.TestAdmissionPolicyAllowsWhatBuildMakes` fails when `Build`
+  gains an annotation or secret volume the policy does not name.
+- **Residual with the policy applied.** The token can start the two workflows
+  for any args the policy does not check (service, resource, field), so a
+  stolen token can start up to "add-field on any controller" runs (5 h, e2e
+  pod, ack-agent fork PAT) and sdk-bump runs (ack-bot token, pushes only
+  `autopilot/<svc>/sdk-bump`, Plan 6's push guard). It can abort only the
+  Dispatcher's own jobs, and read their state.
+
+## What the Dispatcher can launch (code-side controls)
+
+- **Allowlist** (`prowlaunch.Allowed`): `add-field` -> `agent-workflow-add-field`
+  (from `prow/agent-workflows/agent-workflows.yaml`, the same entry agent-plugin
+  uses) and `sdk-bump` -> `autopilot-sdk-bump` (defined in code, kept out of
+  `agent-workflows.yaml` so no `/agent` comment can start it with ack-bot's
+  token). `add-resource` and `address-feedback` are refused.
+- **Args**: every arg must be in the workflow's `required_args`/`optional_args`
+  and match a fixed shape (`prowlaunch` `validators`); `work-item` must be the
+  launch id's key hash; `change-class` must be the workflow's class. Args reach
+  the pod as container args or environment variables, never through a shell.
+- **Names**: the job name is the launch id
+  (`autopilot-<16 hex>-g<gen>-(r<run>|f<8 hex>)`), so Launch is idempotent and
+  adopts a job only when its `ack-autopilot/request` digest matches.
+- **Golden test**: `prowlaunch.TestAddFieldMatchesAgentPlugin` and agent-plugin's
+  `TestAutopilotGolden` pin the add-field job to what agent-plugin builds.
+
+## Log censoring
+
+Prow's sidecar censors the values of **secret volumes** mounted in the test
+container (`censor_secrets: true`); it does not read the Secrets Store CSI
+mounts.
+- `autopilot-sdk-bump` mounts `prowjob-github-pat-token` read-only at
+  `/etc/github-censor` for that reason, as Plan 6's periodic and
+  `autopilot-dispatch` do; its `GITHUB_TOKEN` is censored in the logs.
+- `agent-workflow-add-field` is agent-plugin's job byte for byte (golden):
+  its `agent-github-pat-token` reaches the pod as an env var and through the
+  `agent-secrets` CSI mount only, so the sidecar does not censor it. That is
+  agent-plugin's behaviour today for every `/agent add-field`; changing it is
+  an agent-plugin change (and the golden moves with it). Reviewer: decide
+  whether it blocks going live.
+
+## Results are untrusted
+
+The agents share the pod and can write `agent-result.json`. The Dispatcher:
+- reads at most 64 KiB (`dispatcher.MaxResultBytes`), from one key shape;
+- requires the file's `work_item`, `prow_job_id` and `workflow` to be the
+  job's;
+- cross-checks the outcome against the job's exit state (a failed job may only
+  report `failed`/`needs_human`, a succeeded one only
+  `pr_opened`/`pr_updated`/`completed_no_change`); a mismatch is retried as
+  `RESULT_STATE_MISMATCH` and nothing from the file reaches the ledger;
+- keeps only token-shaped reasons and PR links in the item's repo (Plan 2/3).
+
+Residual: an agent can still make a failed run look like a different failure,
+or a succeeded run report "no change". Plan 10's gate-agreement record and
+the ledger's `links.pr` (not trailers) are the checks after that.
+
+## Launch ids are used once
+
+A launch id is consumed once the ledger records it (the item's claim and
+`links.prowjobs`; `attempts.runs` picks the next run's id). The launcher does
+not remember ids after Prow's sinker deletes a job; it need not: a claimed run
+whose job is gone reads as unknown, is reaped after its deadline plus grace,
+and the next run gets a new id (`dispatcher.TestTickNeverRelaunchesAGoneJob`).
+Refresh ids are recorded in the bump's `links.prowjobs` the same way. The gap
+is a tick whose ledger push is lost: the next tick repeats the same id and
+adopts the job while it exists (the sinker keeps jobs for days; a tick is 30
+minutes), and the inventory counts it against the caps.
+
+## Kill switches and caps
+
+| Switch | Who flips it | Effect |
+|---|---|---|
+| `AUTOPILOT_LAUNCHER_ENABLED` in `autopilot-dispatch.tpl` | test-infra PR | not `"true"`: the prow launcher is refused; nothing reconciled or launched |
+| `launcher: shadow` in `policy/autopilot.yaml` | ack-private PR | no runs start; runs in flight report unknown and are reaped after deadline + grace |
+| `paused: true` | ack-private PR | no launches (runs in flight continue) |
+| `abort_inflight: true` | ack-private PR | every run in flight (and every orphan) is aborted on the next tick, its item ESCALATED `ABORTED_BY_POLICY`; nothing launches |
+| `paused_repos`, `services` | ack-private PR | per repo / per service |
+| delete the RoleBinding | cluster admin | every create, read and abort fails; the tick reports problems and changes nothing |
+
+Caps (`policy/budgets.yaml`, design §8) plus a code ceiling: the config-only
+lane never runs more than 2 at once whatever the budgets say. Runs in flight
+that no item claims (a lost ledger push) are counted against the caps, and if
+the run list cannot be read, nothing launches. A tick is at most 30 minutes
+apart, so the time to stop everything is one tick after the switch merges.
+
+## Blast radius (worst case per lane, Phase 1 caps)
+
+| Lane | At once | Per day | Each run can |
+|---|---|---|---|
+| config-only (add-field) | 2 | bounded by caps and `max_runs_per_item` | 5 h privileged e2e pod on the build cluster; push to the ack-agent fork; open a PR (human-merge); real-AWS e2e in the agent test account |
+| SDK-bump | 1 per repo | 5 (`max_sdk_bump_launches_per_day`) | 3 h on 8 CPU / 8 Gi, not evicted by Karpenter (`do-not-disrupt`); push `autopilot/<svc>/sdk-bump` with ack-bot's token; open a draft PR |
+| sdk-bump refresh | one per change of a bump's dependents | small | edit the bump PR's body, labels, status and draft state |
+
+All PRs stay human-merge (Phases 1-4); Plan P's rulesets make that a control.
+
+## Going live (all required, in order)
+
+- [ ] Plan P done: org rulesets on `main` of every controller repo (bypass: Tide only), ack-bot not admin.
+- [ ] This review signed off by the builder-security reviewer.
+- [ ] Plan 1 Task 12 done (ledger writes on, with the dedicated token).
+- [ ] Apply `serviceaccount.yaml`, `rbac.yaml`, then `admission-policy.yaml` (values resolved; `kubectl apply --server-side`).
+- [ ] Verify the policy before anything else: as the ServiceAccount (`kubectl create token autopilot-dispatcher -n test-pods`), a create of a job with another image is denied, and `kubectl auth can-i --as=system:serviceaccount:test-pods:autopilot-dispatcher delete prowjobs -n prow` says no.
+- [ ] Apply `pod-identity.yaml` (values resolved) and wait for the ACK Role and PodIdentityAssociation to be synced.
+- [ ] test-infra PR: `serviceAccountName: autopilot-dispatcher` and `AUTOPILOT_LAUNCHER_ENABLED: "true"` in `autopilot-dispatch.tpl`; `make prow-gen`.
+- [ ] Watch one dry tick on the new ServiceAccount (`AUTOPILOT_LEDGER_WRITE` unchanged): no `problem inventory:` line, Status reads work.
+- [ ] ack-private PR: `launcher: prow`, `services:` reduced to one low-risk service first.
+- [ ] After the first runs: check the Dispatcher's own logs upload (`OwnLogs` in `pod-identity.yaml` is the minimum Prow needs; widen only inside `logs/autopilot-dispatch/`).
+
+## Rollback
+
+`launcher: shadow` (ledger PR) or `AUTOPILOT_LAUNCHER_ENABLED: "false"` (test-infra
+PR) stops new runs; `abort_inflight: true` stops running ones. Deleting the
+RoleBinding is the cluster-side stop. Items left RUNNING are reaped after
+their deadline plus grace (Plan 2).
