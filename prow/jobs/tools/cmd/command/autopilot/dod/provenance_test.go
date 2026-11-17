@@ -39,11 +39,11 @@ func TestProvenance(t *testing.T) {
 		c    commit
 		want string
 	}{
-		"no trailers": {botCommit("Signed-off-by: x"), "BOT_COMMIT_WITHOUT_TRAILERS"},
-		"other item":  {botCommit("Producer: autopilot/sdk-bump\nWork-Item: sha256:ffffffffffffffff\nChange-Class: SDK-bump"), "BOT_COMMIT_WRONG_WORK_ITEM"},
-		"other class": {botCommit("Producer: autopilot/sdk-bump\nWork-Item: " + wi + "\nChange-Class: config-only"), "BOT_COMMIT_WRONG_CLASS"},
+		"no trailers":  {botCommit("Signed-off-by: x"), "BOT_COMMIT_WITHOUT_TRAILERS"},
+		"other item":   {botCommit("Producer: autopilot/sdk-bump\nWork-Item: sha256:ffffffffffffffff\nChange-Class: SDK-bump"), "BOT_COMMIT_WRONG_WORK_ITEM"},
+		"other class":  {botCommit("Producer: autopilot/sdk-bump\nWork-Item: " + wi + "\nChange-Class: config-only"), "BOT_COMMIT_WRONG_CLASS"},
 		"no work item": {botCommit("Producer: autopilot/sdk-bump\nChange-Class: SDK-bump"), "BOT_COMMIT_WITHOUT_WORK_ITEM"},
-		"not last":    {commit{SHA: good.SHA, AuthorEmail: "bot@example.com", Message: "bump\n\nProducer: autopilot/sdk-bump\n\nsome prose"}, "BOT_COMMIT_WITHOUT_TRAILERS"},
+		"not last":     {commit{SHA: good.SHA, AuthorEmail: "bot@example.com", Message: "bump\n\nProducer: autopilot/sdk-bump\n\nsome prose"}, "BOT_COMMIT_WITHOUT_TRAILERS"},
 	} {
 		c, _ := checkProvenance([]commit{tc.c}, bots, wi, ClassSDKBump)
 		assert.Equal(t, []string{tc.want}, c.Reasons, name)
