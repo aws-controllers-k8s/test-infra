@@ -98,7 +98,6 @@ func TestRejectWithADecisionIsAMaintainersDecision(t *testing.T) {
 func TestBareRejectHoldsUntilADecidingReply(t *testing.T) {
 	// Plan 2's route moves a TRIAGED needs-config item on whether or not it
 	// is decided, so nothing holds it as triage-rejected yet.
-	t.Skip("Plan 8 Task 15 adds the triage holds to route; remove this skip there")
 	w := proposed(t, needsConfig(fieldKey, "config-only", "create-only"), ledger.DecisionFieldHook)
 	items := ledgerOf(item(bumpKey, "SDK-bump", ledger.Queued), w)
 	applyTriageCommands(items, cmds(reply(w, 1, "reject", "")), replyTS)

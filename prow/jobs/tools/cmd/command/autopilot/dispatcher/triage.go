@@ -256,3 +256,37 @@ func startTriage(w *ledger.WorkItem, req LaunchRequest, now time.Time) {
 	w.Links.ProwJobs = append(w.Links.ProwJobs, req.LaunchID)
 	transition(w, ledger.Detected, ts, "TRIAGE_STARTED "+req.LaunchID)
 }
+
+// triageHold says why route keeps a triage item where it is, or "" when its
+// decision lets it move on. A needs-config item past TRIAGED without a
+// decision (only a hand edit can do that) goes back to TRIAGED: a triage
+// item never runs on the detector's guess alone (design 5.1).
+func triageHold(w *ledger.WorkItem, ts string) string {
+	t := w.Triage
+	switch w.State {
+	case ledger.Detected:
+		switch {
+		case t != nil && t.Claim != nil:
+			return HoldTriageRunning
+		case t != nil && t.Failed != "":
+			return HoldTriageFailed
+		}
+		if _, why := triageArgs(w); why != "" {
+			return HoldTriageIneligible
+		}
+		return HoldAwaitingTriage
+	case ledger.Triaged:
+		switch {
+		case t == nil || t.Proposal == nil || t.Review == nil:
+			return HoldAwaitingTriageReview
+		case t.Decided() == "":
+			return HoldTriageRejected
+		}
+		return ""
+	}
+	if t.Decided() == "" {
+		transition(w, ledger.Triaged, ts, "TRIAGE_REQUIRED")
+		return HoldAwaitingTriageReview
+	}
+	return ""
+}
