@@ -178,19 +178,14 @@ func crdDocProblem(id string, d *crdCompat, err error, runFailed bool) (Check, b
 	return Check{}, false
 }
 
-func sensitiveCheck(ctx context.Context, src gitRepo, head string, d *crdCompat, docErr error, runFailed bool, model []byte) Check {
-	if c, bad := crdDocProblem(CheckSensitive, d, docErr, runFailed); bad {
-		return c
-	}
-	if model == nil {
-		return skipCheck(CheckSensitive, "SDK_MODEL_MISSING")
-	}
-	names, err := smithySensitiveNames(model)
-	if err != nil {
-		return newCheck(CheckSensitive, []Finding{{Signature: "SDK_MODEL_INVALID", Fails: true}})
-	}
+// sensitiveCRDs reads, from git, the head CRDs the document's added buckets
+// name. It runs before regen-clean and build, which run other code.
+func sensitiveCRDs(ctx context.Context, src gitRepo, head string, d *crdCompat) (map[string][]map[string]any, []Finding) {
 	crds := map[string][]map[string]any{}
 	var extra []Finding
+	if d == nil {
+		return crds, nil
+	}
 	for _, b := range addedBuckets {
 		for _, ch := range d.Buckets[b] {
 			if _, done := crds[ch.File]; done {
@@ -210,6 +205,20 @@ func sensitiveCheck(ctx context.Context, src gitRepo, head string, d *crdCompat,
 			crds[ch.File] = schemas
 		}
 	}
+	return crds, extra
+}
+
+func sensitiveCheck(d *crdCompat, docErr error, runFailed bool, crds map[string][]map[string]any, extra []Finding, model []byte) Check {
+	if c, bad := crdDocProblem(CheckSensitive, d, docErr, runFailed); bad {
+		return c
+	}
+	if model == nil {
+		return skipCheck(CheckSensitive, "SDK_MODEL_MISSING")
+	}
+	names, err := smithySensitiveNames(model)
+	if err != nil {
+		return newCheck(CheckSensitive, []Finding{{Signature: "SDK_MODEL_INVALID", Fails: true}})
+	}
 	return checkSensitive(d, crds, names, extra)
 }
 
@@ -218,6 +227,12 @@ func sdkPinCheck(base sdkPins, baseErr error, head sdkPins, headErr error) Check
 		return newCheck(CheckSDKPin, []Finding{{Signature: "SDK_PIN_UNREADABLE", Fails: true}})
 	}
 	return checkSDKPin(base, head)
+}
+
+// runOrder is the order checks run in; build is last (it runs PR code).
+var runOrder = []string{
+	CheckPathAllowlist, CheckProvenance, CheckCRDDiff, CheckCodeScan, CheckLeaks, CheckSDKPin,
+	CheckRegenClean, CheckSensitive, CheckIgnore, CheckBuild,
 }
 
 // Run gathers one PR's inputs from git, runs every check in CheckOrder and
@@ -318,14 +333,20 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 	headPins, headPinErr := readPins(headMeta, headMod)
 	headCfg, _ := readGeneratorConfig(headGen) // ignore-effective reports a bad file
 
-	// The model is read after regen-clean, which fills ack-generate's cache.
+	var docBase string
+	if compat != nil {
+		docBase, _ = src.commitSHA(ctx, compat.BaseRef)
+	}
+	crds, crdExtra := sensitiveCRDs(ctx, src, head, compat)
+
+	// The model is read before regen-clean when it is already there
+	// (--sdk-model, a warm cache); otherwise after it, since regeneration
+	// fills ack-generate's cache. Either way before build.
 	var model []byte
-	modelRead := false
 	loadModel := func() error {
-		if modelRead {
+		if model != nil {
 			return nil
 		}
-		modelRead = true
 		var err error
 		model, in.SDKModel, err = sdkModel(o, headPins, headCfg)
 		if model != nil {
@@ -333,12 +354,18 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 		}
 		return err
 	}
+	if err := loadModel(); err != nil {
+		return nil, err
+	}
 
-	checks := make([]Check, 0, len(CheckOrder))
+	// Checks run in runOrder: everything that only reads inputs first, then
+	// regen-clean (trusted tools), then the model-based checks, and build last,
+	// because go test runs PR code. The verdict lists them in CheckOrder.
+	results := map[string]Check{}
 	humans := 0
-	for _, id := range CheckOrder {
+	for _, id := range runOrder {
 		if skip(id) {
-			checks = append(checks, skipCheck(id, "SKIPPED_BY_FLAG"))
+			results[id] = skipCheck(id, "SKIPPED_BY_FLAG")
 			continue
 		}
 		var c Check
@@ -361,14 +388,13 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 			if p, bad := crdDocProblem(id, compat, compatErr, runFailed); bad {
 				c = p
 			} else {
-				docBase, _ := src.commitSHA(ctx, compat.BaseRef)
 				c = checkCRDDiff(o.ChangeClass, compat, docBase, mb)
 			}
 		case CheckSensitive:
 			if err := loadModel(); err != nil {
 				return nil, err
 			}
-			c = sensitiveCheck(ctx, src, head, compat, compatErr, runFailed, model)
+			c = sensitiveCheck(compat, compatErr, runFailed, crds, crdExtra, model)
 		case CheckCodeScan:
 			c = checkCodeScan(o.ChangeClass, files)
 		case CheckLeaks:
@@ -381,10 +407,11 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 			}
 			c = ignoreCheck(baseGen, headGen, model, modelName(o.Service, headCfg))
 		}
-		checks = append(checks, c)
+		results[id] = c
 	}
-	if err := loadModel(); err != nil {
-		return nil, err
+	checks := make([]Check, 0, len(CheckOrder))
+	for _, id := range CheckOrder {
+		checks = append(checks, results[id])
 	}
 	// Tools killed by the deadline look like failing checks; a run that ran
 	// out of time has no verdict.

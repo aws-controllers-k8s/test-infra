@@ -31,7 +31,7 @@ type gitRepo struct{ dir string }
 func (g gitRepo) run(ctx context.Context, args ...string) ([]byte, error) {
 	full := append([]string{"-c", "core.quotePath=false", "-c", "color.ui=never", "-C", g.dir}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0")
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_NO_REPLACE_OBJECTS=1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {

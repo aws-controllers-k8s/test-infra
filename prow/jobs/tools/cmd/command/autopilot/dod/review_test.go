@@ -15,6 +15,9 @@ package dod
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -151,4 +154,61 @@ func TestReviewUnparsedDiffFails(t *testing.T) {
 	same := changedFile{Path: "run.sh", Status: 'M', Base: []byte("a\n"), Head: []byte("a\n")}
 	markUnparsed(&same)
 	assert.False(t, same.Unparsed, "a mode change adds no lines")
+}
+
+// Review 4: build runs PR code (go test), so it runs last, after every input
+// (the SDK model, the CRD blobs) has been read and digested.
+func TestReviewBuildRunsLastAfterInputsAreRead(t *testing.T) {
+	f := sdkBump(t)
+	o := options(t, f)
+	model, err := os.ReadFile(o.SDKModelPath)
+	require.NoError(t, err)
+	tampered := filepath.Join(t.TempDir(), "widgets.json")
+	require.NoError(t, os.WriteFile(tampered, model, 0o644))
+	o.SDKModelPath = tampered
+
+	var order []string
+	inner := o.Run
+	o.Run = func(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
+		order = append(order, name)
+		if name == "go" {
+			// PR code rewrites the model while its tests run.
+			require.NoError(t, os.WriteFile(tampered, []byte("not json"), 0o644))
+		}
+		return inner(ctx, dir, env, name, args...)
+	}
+	v, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, v.Verdict, "%v", v.Reasons)
+	assert.Equal(t, Digest(model), v.Inputs.SDKModelSHA256)
+	require.NotEmpty(t, order)
+	first := slices.Index(order, "go")
+	require.GreaterOrEqual(t, first, 0)
+	for _, n := range order[first:] {
+		assert.Equal(t, "go", n, "nothing runs after build starts: %v", order)
+	}
+	var ids []string
+	for _, c := range v.Checks {
+		ids = append(ids, c.ID)
+	}
+	assert.Equal(t, CheckOrder, ids, "the verdict keeps CheckOrder")
+}
+
+// git replace refs must never change what dod reads.
+func TestReviewGitIgnoresReplaceRefs(t *testing.T) {
+	r := dodtest.NewRepo(t)
+	r.Write("a.txt", "real\n")
+	head := r.Commit("a")
+	real := r.Git("rev-parse", head+":a.txt")
+	r.Write("a.txt", "fake\n")
+	fake := r.Git("hash-object", "-w", "a.txt")
+	r.Git("replace", real, fake)
+	b, err := gitRepo{dir: r.Dir}.show(context.Background(), head, "a.txt")
+	require.NoError(t, err)
+	assert.Equal(t, "real\n", string(b))
+}
+
+func TestRunOrderIsCheckOrderWithBuildLast(t *testing.T) {
+	assert.ElementsMatch(t, CheckOrder, runOrder)
+	assert.Equal(t, CheckBuild, runOrder[len(runOrder)-1])
 }
