@@ -91,3 +91,30 @@ func TestReviewUnreproducedRegenOutput(t *testing.T) {
 
 	assert.Equal(t, StatusPass, runFixture(t, helmFixture(t, false, false)).Verdict, "the plain bump still passes")
 }
+
+// Review 2: "* -diff" in a .gitattributes turns every diff into "Binary files
+// differ"; dod must still see the lines, and the attributes file itself is a
+// sensitive path.
+func TestReviewGitattributesDoNotBlindTheChecks(t *testing.T) {
+	v := runFixture(t, helmFixture(t, true, false))
+	assert.Equal(t, StatusFail, v.Verdict)
+	assert.Contains(t, findingFiles(checkOf(v, CheckRegenClean), "REGEN_DIFF"), "helm/templates/role.yaml")
+	assert.Contains(t, findingFiles(checkOf(v, CheckPathAllowlist), "SENSITIVE_PATH"), "helm/templates/.gitattributes")
+
+	r := dodtest.NewRepo(t)
+	r.Write("README.md", "x\n")
+	base := r.Commit("base")
+	r.Write(".gitattributes", "* -diff\n")
+	r.Write("test/e2e/conf.py", "KEY = 'AKIA"+"Z7QWERTYUIOPASDF'\n")
+	head := r.Commit("head")
+	files, err := gather(context.Background(), gitRepo{dir: r.Dir}, base, head)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, checkLeaks(files, nil, nil).Status)
+}
+
+func TestReviewGitConfigFilesAreSensitive(t *testing.T) {
+	for _, p := range []string{".gitattributes", ".gitignore", "helm/.gitattributes", "pkg/x/.gitignore"} {
+		assert.True(t, sensitivePath(p), p)
+	}
+	assert.False(t, sensitivePath("pkg/x/gitignore.go"))
+}

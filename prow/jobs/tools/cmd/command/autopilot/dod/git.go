@@ -99,7 +99,7 @@ type addedLine struct {
 var hunkHeader = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
 
 func (g gitRepo) addedLines(ctx context.Context, base, head string) (map[string][]addedLine, error) {
-	out, err := g.run(ctx, "diff", "-U0", "--no-renames", "--no-ext-diff", "--no-textconv", base, head, "--")
+	out, err := g.run(ctx, "diff", "-U0", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", base, head, "--")
 	if err != nil {
 		return nil, err
 	}

@@ -97,7 +97,7 @@ func metadataVersion(committed, regenerated []byte, p string) []Finding {
 }
 
 func regenDiff(ctx context.Context, scratch gitRepo, head, p string) []Finding {
-	out, err := scratch.run(ctx, "diff", "-U0", "--no-ext-diff", "--no-textconv", "--", p)
+	out, err := scratch.run(ctx, "diff", "-U0", "--text", "--no-ext-diff", "--no-textconv", "--", p)
 	if err != nil {
 		return []Finding{{Signature: "REGEN_SETUP_FAILED", File: p, Fails: true}}
 	}

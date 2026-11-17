@@ -70,9 +70,18 @@ var classPaths = map[string][]string{
 	ClassNewResource: handWrittenPaths,
 }
 
+// gitConfigPaths change what git diff and git status show (diff attributes,
+// ignore rules), so they are sensitive everywhere, even under a regen output.
+var gitConfigPaths = []string{"**/.gitattributes", "**/.gitignore"}
+
 // globMatch matches one slash-separated path: "dir/**" is everything under
-// dir, otherwise path.Match, where * never crosses a slash.
+// dir, "**/name" is name in any directory, otherwise path.Match, where *
+// never crosses a slash.
 func globMatch(pattern, name string) bool {
+	if base, ok := strings.CutPrefix(pattern, "**/"); ok {
+		ok, _ := path.Match(base, path.Base(name))
+		return ok
+	}
 	if prefix, ok := strings.CutSuffix(pattern, "**"); ok && strings.HasSuffix(prefix, "/") {
 		return strings.HasPrefix(name, prefix)
 	}
@@ -110,7 +119,7 @@ func generatedFile(f changedFile) bool {
 }
 
 func sensitivePath(p string) bool {
-	return matchAny(sensitivePaths, p) && !matchAny(regenOutputs, p)
+	return matchAny(gitConfigPaths, p) || (matchAny(sensitivePaths, p) && !matchAny(regenOutputs, p))
 }
 
 func allowedFor(class string, f changedFile) bool {
