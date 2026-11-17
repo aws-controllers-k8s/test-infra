@@ -24,6 +24,11 @@ import (
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dod"
 )
 
+// DefaultBotLogin is the GitHub login that authors every bump PR. dod gets it
+// as the PR author, so only it (not a spoofable commit email) makes the PR an
+// autopilot PR.
+const DefaultBotLogin = "ack-bot"
+
 const (
 	ModeBump    = "bump"    // regenerate, gate, publish
 	ModeRefresh = "refresh" // re-evaluate the merge block of the open PR only
@@ -90,6 +95,9 @@ func (o *Options) check() error {
 	if o.Mode == "" {
 		o.Mode = ModeBump
 	}
+	if o.BotLogin == "" {
+		o.BotLogin = DefaultBotLogin
+	}
 	switch {
 	case o.Mode != ModeBump && o.Mode != ModeRefresh:
 		return fmt.Errorf("mode %q is not %s or %s", o.Mode, ModeBump, ModeRefresh)
@@ -99,8 +107,8 @@ func (o *Options) check() error {
 		return fmt.Errorf("the controller checkout must be set")
 	case o.Mode == ModeBump && (o.CodegenRepo == "" || o.RuntimeRepo == ""):
 		return fmt.Errorf("a bump needs the code-generator and runtime clones")
-	case o.BotName == "" || o.BotLogin == "" || !strings.Contains(o.BotEmail, "@"):
-		return fmt.Errorf("the bot name, login and email must be set")
+	case o.BotName == "" || !strings.Contains(o.BotEmail, "@"):
+		return fmt.Errorf("the bot name and email must be set")
 	case o.Forge == nil || o.Run == nil || o.Gate == nil:
 		return fmt.Errorf("forge, runner and gate must be set")
 	case o.Write && o.remote() != canonicalRemote(o.Org, o.Service):
