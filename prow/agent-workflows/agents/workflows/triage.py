@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import unicodedata
 from dataclasses import dataclass
 from typing import Callable
@@ -140,3 +141,98 @@ def triage(pack: EvidencePack, call: ModelCall) -> Triaged:
     text, tokens = call(SYSTEM_PROMPT, user_prompt(pack))
     doc, problem = parse_answer(text)
     return Triaged(_doc(check_answer(doc, problem, pack)), tokens, True)
+
+
+MODEL_URL = "https://raw.githubusercontent.com/aws/aws-sdk-go-v2/{sdk_to}/codegen/sdk-codegen/aws-models/{model}.json"
+
+
+def _file_call(path) -> ModelCall:
+    """A canned answer instead of Bedrock, for offline runs. triage-job.sh
+    passes it only when TRIAGE_MODEL_RESPONSE_FILE is set, which the
+    workflow definition never does."""
+    text = path.read_text()
+    return lambda system, user: (text, dict(_NO_TOKENS))
+
+
+def _bedrock_call(model_id: str) -> ModelCall:
+    from utils.bedrock import converse_text
+
+    return lambda system, user: converse_text(system, user, model_id=model_id)
+
+
+def _record(outcome: str, reason: str, **fields) -> int:
+    """Record the run's outcome; 2 when the result file cannot be written."""
+    try:
+        result.update(outcome=outcome, reason=reason, **fields)
+    except (OSError, ValueError) as exc:
+        print(f"triage: could not record {outcome} {reason}: {exc}", file=sys.stderr)
+        return 2
+    return 0 if outcome == "completed_no_change" else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    from pathlib import Path
+
+    import yaml
+
+    from config.defaults import DEFAULT_MODEL_ID
+    from workflows import validation
+    from workflows.triage_evidence import Item, Model, build, generator_config, model_name
+
+    parser = argparse.ArgumentParser(description="ACK Autopilot triage, mode api (Plan 8)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    url = sub.add_parser("model-url", help="print the SDK model URL for --sdk-to")
+    url.add_argument("--service", required=True)
+    url.add_argument("--sdk-to", required=True)
+    url.add_argument("--controller-dir", required=True)
+    run = sub.add_parser("run", help="triage one item and update agent-result.json")
+    for name in ("service", "resource", "field", "finding-class", "detector-work", "change-class",
+                 "sdk-to", "work-item", "controller-dir", "sdk-model"):
+        run.add_argument("--" + name, required=True)
+    run.add_argument("--model", default=DEFAULT_MODEL_ID)
+    run.add_argument("--model-response-file")
+    args = parser.parse_args(argv)
+
+    if args.command == "model-url":
+        if not validation._SERVICE_RE.fullmatch(args.service) or not validation.SDK_TO_RE.fullmatch(args.sdk_to):
+            print("triage: model-url needs a service alias and service/<package>/vX.Y.Z", file=sys.stderr)
+            return 2
+        cfg = generator_config(Path(args.controller_dir))
+        print(MODEL_URL.format(sdk_to=args.sdk_to, model=model_name(cfg, args.service)))
+        return 0
+
+    item = Item(service=args.service, resource=args.resource, field=args.field,
+                finding_class=args.finding_class, detector_work=args.detector_work,
+                change_class=args.change_class, sdk_to=args.sdk_to, work_item=args.work_item)
+    problems = validation.validate_triage_inputs(
+        service=item.service, resource=item.resource, field=item.field, finding_class=item.finding_class,
+        detector_work=item.detector_work, change_class=item.change_class, sdk_to=item.sdk_to,
+        work_item=item.work_item, model=args.model)
+    if problems:
+        print("triage: " + "; ".join(problems), file=sys.stderr)
+        return _record("needs_human", "INVALID_INPUT")
+    try:
+        model = Model.load(Path(args.sdk_model))
+    except (OSError, ValueError) as exc:
+        print(f"triage: SDK model: {exc}", file=sys.stderr)
+        return _record("needs_human", "SDK_MODEL_UNREADABLE")
+    try:
+        pack = build(item, model, Path(args.controller_dir))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"triage: controller: {exc}", file=sys.stderr)
+        return _record("needs_human", "CONTROLLER_UNREADABLE")
+    call = _file_call(Path(args.model_response_file)) if args.model_response_file else _bedrock_call(args.model)
+    try:
+        out = triage(pack, call)
+    except Exception as exc:  # noqa: BLE001 - any failure of the call is a failed run
+        print(f"triage: model call: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return _record("failed", "MODEL_CALL_FAILED")
+    it = out.doc["items"][0]
+    print(f"triage {item.work_item} decision={it['decision']} invalid={','.join(it['invalid']) or '-'} "
+          f"called={str(out.called).lower()} tokens={out.tokens['total']}")
+    return _record("completed_no_change", "TRIAGE_VERDICT", triage=out.doc, tokens=out.tokens)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

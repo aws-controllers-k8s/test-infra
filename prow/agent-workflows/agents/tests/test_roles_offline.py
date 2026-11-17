@@ -1385,6 +1385,65 @@ def test_triage_tool_less_call():
     check("tool_use stop is an error", raised, True)
 
 
+def test_triage_cli_offline():
+    """triage-job.sh end to end on fixtures, with a canned answer instead of Bedrock."""
+    print("triage CLI offline:")
+    import json
+    import subprocess
+    import tempfile
+
+    job = _PKG_ROOT / "triage-job.sh"
+    args = []
+    for key, value in TRIAGE_ARGS.items():
+        args += ["--" + key.replace("_", "-"), value]
+    with tempfile.TemporaryDirectory() as d:
+        env = {
+            **os.environ,
+            # triage-job.sh runs `python`: make it this interpreter (the venv).
+            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}",
+            "ARTIFACTS": d,
+            "PROW_JOB_ID": "autopilot-0123456789abcdef-g1-t1",
+            "TRIAGE_CONTROLLER_DIR": str(TRIAGE_FIXTURES / "controller"),
+            "TRIAGE_SDK_MODEL": str(TRIAGE_FIXTURES / "model.json"),
+            "TRIAGE_MODEL_RESPONSE_FILE": str(TRIAGE_FIXTURES / "answer-field-hook.json"),
+        }
+        env.pop("AGENT_RESULT_FILE", None)
+        path = Path(d) / "agent-result.json"
+
+        def job_run(argv):
+            proc = subprocess.run(["bash", str(job), *argv], env=env, capture_output=True, text=True, cwd=d)
+            return proc.returncode, json.loads(path.read_text())
+
+        code, doc = job_run(args)
+        check("exit 0", code, 0)
+        check("outcome", (doc["outcome"], doc["reason"], doc["workflow"], doc["work_item"]),
+              ("completed_no_change", "TRIAGE_VERDICT", "triage", "sha256:0123456789abcdef"))
+        # Plan 7's launcher refuses a file whose prow_job_id is not the
+        # ProwJob's name (RESULT_FOR_OTHER_JOB); Prow sets PROW_JOB_ID to it.
+        check("prow job id", doc["prow_job_id"], "autopilot-0123456789abcdef-g1-t1")
+        check("verdict", doc["triage"], json.loads(TRIAGE_FIXTURE.read_text())["triage"])
+        check("a canned answer spends no tokens", doc["tokens"], {"input": 0, "output": 0, "total": 0})
+
+        bad = ["operation" if a == "spec-field" else a for a in args]
+        code, doc = job_run(bad)
+        check("bad input", (code, doc["outcome"], doc["reason"]), (1, "needs_human", "INVALID_INPUT"))
+
+        env["TRIAGE_SDK_MODEL"] = str(Path(d) / "missing.json")
+        code, doc = job_run(args)
+        check("unreadable model", (code, doc["outcome"], doc["reason"]), (1, "needs_human", "SDK_MODEL_UNREADABLE"))
+
+    def model_url(sdk_to):
+        return subprocess.run(
+            [sys.executable, "-m", "workflows.triage", "model-url", "--service", "s3", "--sdk-to", sdk_to,
+             "--controller-dir", str(TRIAGE_FIXTURES / "controller")],
+            capture_output=True, text=True, cwd=_PKG_ROOT)
+
+    ok = model_url("service/s3/v1.114.10")
+    check("model url", (ok.returncode, ok.stdout.strip()), (
+        0, "https://raw.githubusercontent.com/aws/aws-sdk-go-v2/service/s3/v1.114.10/codegen/sdk-codegen/aws-models/s3.json"))
+    check("model url refuses a bad tag", model_url("service/s3/../../x").returncode != 0, True)
+
+
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
     print("result contract:")
@@ -1757,6 +1816,7 @@ def main():
                test_triage_prompt_framing,
                test_triage_answer_checks,
                test_triage_tool_less_call,
+               test_triage_cli_offline,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()
