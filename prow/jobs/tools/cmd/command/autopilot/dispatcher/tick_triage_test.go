@@ -179,3 +179,28 @@ func TestTriageStats(t *testing.T) {
 		{Mode: "api", Work: "not-generated", Decision: "field-config", Proposed: 1, Rejected: 1, Overridden: 1},
 	}, TriageStats(items), "the last reply to a proposal counts once")
 }
+
+// Under abort_inflight nothing is adopted (scheduling launches nothing), so a
+// lost push's run, triage or workflow lane, is aborted like an orphan instead
+// of running on.
+func TestTickAbortInflightAbortsLostPushRuns(t *testing.T) {
+	lost := needsConfig(fieldKey, "config-only", "create-only")
+	lostID := nextTriageLaunchID(lost)
+	bump := item(bumpKey, "SDK-bump", ledger.Queued)
+	bumpID := nextLaunchID(bump)
+	p := withTriage(t)
+	p.Switches.AbortInflight = true
+	f := inventoryLauncher{&fakeLauncher{active: []ActiveJob{
+		{LaunchID: lostID, Workflow: triageWorkflow, Service: "s3"},
+		{LaunchID: bumpID, Workflow: "sdk-bump", Service: "s3"},
+	}}}
+	items := ledgerOf(lost, bump)
+	res := Tick(context.Background(), Config{Now: now, Policy: &p, Launcher: f}, items)
+	assert.ElementsMatch(t, []string{lostID, bumpID}, f.aborted)
+	assert.Empty(t, res.Launched)
+	assert.Nil(t, lost.Triage)
+	assert.Nil(t, bump.Claim)
+	assert.Contains(t, res.Waiting, Wait{Key: lost.Key, KeyHash: lost.KeyHash, Cap: CapAborting})
+	assert.Contains(t, res.Waiting, Wait{Key: bump.Key, KeyHash: bump.KeyHash, Cap: CapAborting})
+	assertLints(t, items)
+}

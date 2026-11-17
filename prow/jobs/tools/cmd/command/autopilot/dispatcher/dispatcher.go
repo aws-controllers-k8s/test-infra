@@ -103,7 +103,7 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 	// Set before the inventory read, whose failure returns early.
 	res.TriageOff = !triageEnabled(p)
 	res.TriageStats = TriageStats(items)
-	orphans, adopt, err := findOrphans(ctx, cfg.Launcher, items)
+	orphans, adopt, err := findOrphans(ctx, cfg.Launcher, items, p.Switches.AbortInflight)
 	if err != nil {
 		// Without the inventory the caps cannot be trusted: launch nothing.
 		res.Problems = append(res.Problems, fmt.Sprintf("inventory: %v; nothing launched", err))
@@ -180,10 +180,13 @@ func NextLaunch(w *ledger.WorkItem, b policy.Budgets) (LaunchRequest, bool) {
 }
 
 // findOrphans sorts the runs the launcher sees in flight: a run that is the
-// next run of a QUEUED item, or of a triage candidate, goes to adopt (that item's next Launch adopts it);
-// a run no item claims is an orphan. Refresh runs are neither. A shadow
-// launcher, or one without an inventory, sees none.
-func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkItem) ([]ActiveJob, map[string]bool, error) {
+// next run of a QUEUED item, or of a triage candidate, goes to adopt (that
+// item's next Launch adopts it); a run no item claims is an orphan. Refresh
+// runs are neither. With aborting set (policy abort_inflight) nothing is
+// adopted, since scheduling launches nothing: such a run is an orphan, so Tick
+// aborts it instead of leaving it to run on. A shadow launcher, or one without
+// an inventory, sees none.
+func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkItem, aborting bool) ([]ActiveJob, map[string]bool, error) {
 	inv, ok := l.(Inventory)
 	if !ok || l.Shadow() {
 		return nil, nil, nil
@@ -215,7 +218,7 @@ func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkI
 	for _, a := range active {
 		switch {
 		case a.Refresh, claimed[a.LaunchID]:
-		case next[a.LaunchID]:
+		case next[a.LaunchID] && !aborting:
 			adopt[a.LaunchID] = true
 		default:
 			orphans = append(orphans, a)
