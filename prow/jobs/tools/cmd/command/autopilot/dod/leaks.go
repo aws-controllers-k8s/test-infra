@@ -94,6 +94,9 @@ func checkLeaks(files []changedFile, commits []commit, prBody []byte) Check {
 		if f.Binary {
 			continue
 		}
+		if f.Unparsed {
+			findings = append(findings, Finding{Signature: "DIFF_UNPARSED", File: f.Path, Fails: true})
+		}
 		for _, l := range f.Added {
 			findings = scanText(findings, f.Path, l.N, l.Text, f.Generated)
 		}

@@ -117,10 +117,7 @@ func parseAddedLines(diff []byte) map[string][]addedLine {
 		case strings.HasPrefix(line, "diff --git "):
 			file, inHeader = "", true
 		case inHeader && strings.HasPrefix(line, "+++ "):
-			file = strings.TrimPrefix(line, "+++ b/")
-			if file == line {
-				file = "" // "+++ /dev/null"
-			}
+			file = diffHeaderPath(strings.TrimPrefix(line, "+++ "))
 		case strings.HasPrefix(line, "@@"):
 			inHeader = false
 			if m := hunkHeader.FindStringSubmatch(line); m != nil {
@@ -132,6 +129,23 @@ func parseAddedLines(diff []byte) map[string][]addedLine {
 		}
 	}
 	return out
+}
+
+// diffHeaderPath is the path in a "+++ " header: "b/<path>", or the
+// C-quoted form git writes for a path with a quote, a backslash or control
+// characters; "" for /dev/null or anything else.
+func diffHeaderPath(h string) string {
+	if strings.HasPrefix(h, `"`) {
+		u, err := strconv.Unquote(h)
+		if err != nil {
+			return ""
+		}
+		h = u
+	}
+	if p, ok := strings.CutPrefix(h, "b/"); ok {
+		return p
+	}
+	return ""
 }
 
 type commit struct {
@@ -213,6 +227,26 @@ type changedFile struct {
 	Generated  bool
 	Binary     bool
 	Added      []addedLine
+	// Unparsed: the head has lines the base does not, yet the diff parser
+	// found no added line. leak-inventory and code-scan fail closed on it.
+	Unparsed bool
+}
+
+// markUnparsed sets Unparsed for a text file that must have added lines.
+func markUnparsed(f *changedFile) {
+	if f.Binary || f.Status == 'D' || len(f.Added) > 0 {
+		return
+	}
+	seen := map[string]bool{}
+	for _, l := range strings.Split(string(f.Base), "\n") {
+		seen[l] = true
+	}
+	for _, l := range strings.Split(string(f.Head), "\n") {
+		if !seen[l] {
+			f.Unparsed = true
+			return
+		}
+	}
 }
 
 func isBinary(b []byte) bool {
@@ -246,6 +280,7 @@ func gather(ctx context.Context, g gitRepo, base, head string) ([]changedFile, e
 		}
 		f.Binary = isBinary(f.Base) || isBinary(f.Head)
 		f.Generated = generatedFile(f)
+		markUnparsed(&f)
 		files = append(files, f)
 	}
 	return files, nil

@@ -118,3 +118,37 @@ func TestReviewGitConfigFilesAreSensitive(t *testing.T) {
 	}
 	assert.False(t, sensitivePath("pkg/x/gitignore.go"))
 }
+
+// Review 3: git quotes a path with '"' or '\' in "+++ b/...", and its added
+// lines must still be attributed to it.
+func TestReviewQuotedPathLinesAreScanned(t *testing.T) {
+	r := dodtest.NewRepo(t)
+	r.Write("README.md", "x\n")
+	base := r.Commit("base")
+	r.Write("test/e2e/a\"b.py", "KEY = 'AKIA"+"Z7QWERTYUIOPASDF'\nurl='http://169.254.169.254/'\n")
+	r.Write("test/e2e/tab\there.py", "x = 1\n")
+	head := r.Commit("head")
+	files, err := gather(context.Background(), gitRepo{dir: r.Dir}, base, head)
+	require.NoError(t, err)
+	for _, f := range files {
+		assert.NotEmpty(t, f.Added, f.Path)
+	}
+	assert.Contains(t, checkLeaks(files, nil, nil).Reasons, "AWS_ACCESS_KEY_ID")
+	assert.Contains(t, checkCodeScan(ClassHandWritten, files).Reasons, "IMDS_ADDRESS")
+}
+
+// A changed text file whose new lines the diff parser lost fails closed.
+func TestReviewUnparsedDiffFails(t *testing.T) {
+	f := changedFile{Path: "pkg/x.go", Status: 'A', Head: []byte("package x\n")}
+	markUnparsed(&f)
+	require.True(t, f.Unparsed)
+	assert.Contains(t, checkLeaks([]changedFile{f}, nil, nil).Reasons, "DIFF_UNPARSED")
+	assert.Contains(t, checkCodeScan(ClassHandWritten, []changedFile{f}).Reasons, "DIFF_UNPARSED")
+
+	del := changedFile{Path: "pkg/x.go", Status: 'M', Base: []byte("a\nb\n"), Head: []byte("a\n")}
+	markUnparsed(&del)
+	assert.False(t, del.Unparsed, "a pure deletion adds no lines")
+	same := changedFile{Path: "run.sh", Status: 'M', Base: []byte("a\n"), Head: []byte("a\n")}
+	markUnparsed(&same)
+	assert.False(t, same.Unparsed, "a mode change adds no lines")
+}

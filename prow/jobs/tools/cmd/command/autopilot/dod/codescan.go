@@ -256,6 +256,9 @@ func checkCodeScan(class string, files []changedFile) Check {
 			findings = append(findings, Finding{Signature: "BINARY_FILE", File: f.Path, Fails: true})
 			continue
 		}
+		if f.Unparsed {
+			findings = append(findings, Finding{Signature: "DIFF_UNPARSED", File: f.Path, Fails: true})
+		}
 		switch {
 		case strings.HasSuffix(f.Path, ".go"):
 			findings = append(findings, scanGo(f)...)
