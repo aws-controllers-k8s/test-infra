@@ -1149,6 +1149,52 @@ def test_triage_result_contract():
               result.validate({**bare, "outcome": "failed", "reason": "MODEL_CALL_FAILED"}), [])
 
 
+EVENT_HOLD = "ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold"
+TRIAGE_ARGS = dict(
+    service="s3", resource="Bucket", field=EVENT_HOLD, finding_class="spec-field",
+    detector_work="from-sibling", change_class="hand-written-code",
+    sdk_to="service/s3/v1.114.10", work_item="sha256:0123456789abcdef",
+)
+
+
+def test_triage_input_validation():
+    """Every triage argument is checked before it reaches a path, a URL or a prompt."""
+    print("triage inputs:")
+    import subprocess
+    from workflows.validation import validate_triage_inputs
+
+    check("valid", validate_triage_inputs(**TRIAGE_ARGS), [])
+    check("with a model", validate_triage_inputs(**TRIAGE_ARGS, model="us.anthropic.claude-opus-5-5"), [])
+    check("status field", validate_triage_inputs(**{**TRIAGE_ARGS, "finding_class": "status-field"}), [])
+    for name, change in {
+        "new-resource class": {"change_class": "new-resource"},
+        "SDK-bump class": {"change_class": "SDK-bump"},
+        "no work item": {"work_item": None},
+        "bad work item": {"work_item": "sha256:0123"},
+        "unknown finding class": {"finding_class": "operation"},
+        "bad work": {"detector_work": "Create Only"},
+        "no work": {"detector_work": None},
+        "core SDK tag": {"sdk_to": "v1.41.5"},
+        "path escape in sdk-to": {"sdk_to": "service/s3/v1.2.3/../../x"},
+        "slash in field": {"field": "a/b"},
+        "no field": {"field": None},
+        "bad resource": {"resource": "Bu cket"},
+        "bad model": {"model": "x y"},
+    }.items():
+        check(f"rejects {name}", len(validate_triage_inputs(**{**TRIAGE_ARGS, **change})) > 0, True)
+
+    script = _PKG_ROOT / "workflows" / "validation.py"
+
+    def cli(**kw):
+        argv = ["--triage"]
+        for key, value in kw.items():
+            argv += ["--" + key.replace("_", "-"), value]
+        return subprocess.run([sys.executable, str(script), *argv], capture_output=True, text=True).returncode
+
+    check("cli valid", cli(**TRIAGE_ARGS), 0)
+    check("cli invalid", cli(**{**TRIAGE_ARGS, "finding_class": "operation"}) != 0, True)
+
+
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
     print("result contract:")
@@ -1516,6 +1562,7 @@ def main():
                test_record_result,
                test_autopilot_arg_validation,
                test_triage_result_contract,
+               test_triage_input_validation,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()

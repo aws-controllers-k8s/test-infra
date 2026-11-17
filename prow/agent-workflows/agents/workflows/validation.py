@@ -31,6 +31,15 @@ CHANGE_CLASSES = ("SDK-bump", "config-only", "hand-written-code", "new-resource"
 # Detector work names of config-only items (autopilot/issuefinder classify.go
 # configOnlyWork) the Dispatcher passes to add-field as --detector-work.
 DETECTOR_WORKS = ("create-only", "not-generated", "server-default")
+# Triage (Plan 8) runs for needs-config items only; their finder class is one
+# of these two.
+TRIAGE_CHANGE_CLASSES = ("config-only", "hand-written-code")
+# Detector FindingClass names of the field classes (issuefinder classToken).
+FINDING_CLASSES = ("spec-field", "status-field", "lifecycle-field")
+DETECTOR_WORK_RE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+# The detector's SDK target is always a per-service aws-sdk-go-v2 tag.
+SDK_TO_RE = re.compile(r"^service/[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+$")
+MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.:_-]{0,127}$")
 
 
 def validate_inputs(
@@ -75,6 +84,42 @@ def validate_inputs(
     return problems
 
 
+def validate_triage_inputs(
+    *,
+    service: str,
+    resource: str,
+    field: str | None,
+    finding_class: str | None,
+    detector_work: str | None,
+    change_class: str | None,
+    sdk_to: str | None,
+    work_item: str | None,
+    model: str | None = None,
+) -> list[str]:
+    """Return validation problems for one triage invocation (Plan 8).
+
+    Every value comes from the ledger through the Dispatcher; each is checked
+    again here before it reaches a path, a URL or a prompt.
+    """
+    problems = validate_inputs(
+        service=service, resource=resource, field=field, require_field=True,
+        work_item=work_item, change_class=change_class,
+    )
+    if work_item is None:
+        problems.append("work-item is required for triage")
+    if change_class is not None and change_class not in TRIAGE_CHANGE_CLASSES:
+        problems.append("triage takes change-class " + " or ".join(TRIAGE_CHANGE_CLASSES))
+    if finding_class not in FINDING_CLASSES:
+        problems.append("finding-class must be one of " + ", ".join(FINDING_CLASSES))
+    if detector_work is None or not DETECTOR_WORK_RE.fullmatch(detector_work):
+        problems.append("detector-work must be a detector work name such as create-only")
+    if sdk_to is None or not SDK_TO_RE.fullmatch(sdk_to):
+        problems.append("sdk-to must be service/<package>/vX.Y.Z")
+    if model is not None and not MODEL_ID_RE.fullmatch(model):
+        problems.append("model must be a Bedrock model id")
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate ACK workflow inputs")
     parser.add_argument("--service", required=True)
@@ -85,18 +130,35 @@ def main() -> int:
     parser.add_argument("--work-item")
     parser.add_argument("--change-class")
     parser.add_argument("--detector-work")
+    parser.add_argument("--triage", action="store_true", help="check a triage invocation (Plan 8)")
+    parser.add_argument("--finding-class")
+    parser.add_argument("--sdk-to")
+    parser.add_argument("--model")
     args = parser.parse_args()
 
-    problems = validate_inputs(
-        service=args.service,
-        resource=args.resource,
-        field=args.field,
-        aws_sdk_version=args.aws_sdk_version,
-        require_field=args.require_field,
-        work_item=args.work_item,
-        change_class=args.change_class,
-        detector_work=args.detector_work,
-    )
+    if args.triage:
+        problems = validate_triage_inputs(
+            service=args.service,
+            resource=args.resource,
+            field=args.field,
+            finding_class=args.finding_class,
+            detector_work=args.detector_work,
+            change_class=args.change_class,
+            sdk_to=args.sdk_to,
+            work_item=args.work_item,
+            model=args.model,
+        )
+    else:
+        problems = validate_inputs(
+            service=args.service,
+            resource=args.resource,
+            field=args.field,
+            aws_sdk_version=args.aws_sdk_version,
+            require_field=args.require_field,
+            work_item=args.work_item,
+            change_class=args.change_class,
+            detector_work=args.detector_work,
+        )
     if problems:
         parser.error("; ".join(problems))
     return 0
