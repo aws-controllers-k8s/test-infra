@@ -657,3 +657,9 @@ func TestReadResult(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "work item")
 }
+
+func TestReadResultAcceptsTheSDKBumpGolden(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, readResult("sdkbump/testdata/agent-result-sdk-bump-v1.json", "sha256:0123456789abcdef", &out))
+	assert.Contains(t, out.String(), "pr_opened")
+}
