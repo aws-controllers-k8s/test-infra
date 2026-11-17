@@ -97,8 +97,9 @@ func TestRegenClean(t *testing.T) {
 		want  string
 	}{
 		"not reproduced": {map[string]string{metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false, "GENERATED_FILE_NOT_REPRODUCED"},
+		"output missing": {map[string]string{"pkg/resource/widget/sdk.go": genSDK}, false, "GENERATED_FILE_NOT_REPRODUCED"},
 		"differs":        {map[string]string{"pkg/resource/widget/sdk.go": genSDK + "var X = 1\n", metadataPath: metaYAML("v0.64.0", "x")}, false, "REGEN_DIFF"},
-		"new file":       {map[string]string{"pkg/resource/widget/sdk.go": genSDK, "pkg/resource/widget/extra.go": genSDK}, false, "REGEN_NEW_FILE"},
+		"new file":       {map[string]string{"pkg/resource/widget/sdk.go": genSDK, "pkg/resource/widget/extra.go": genSDK, metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false, "REGEN_NEW_FILE"},
 		"codegen moved":  {map[string]string{"pkg/resource/widget/sdk.go": genSDK, metadataPath: metaYAML("v0.65.0", "x")}, false, "REGEN_CODEGEN_VERSION_MISMATCH"},
 		"make fails":     {nil, true, "REGEN_FAILED"},
 	} {

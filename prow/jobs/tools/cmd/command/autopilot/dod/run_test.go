@@ -55,8 +55,9 @@ func sdkBump(t *testing.T) fixture {
 	cg := dodtest.NewRepo(t)
 	cg.Commit("code-generator")
 	return fixture{repo: r, base: base, head: headSHA, codegen: cg.Dir, regen: map[string]string{
-		"pkg/resource/widget/sdk.go": genSDK + "\nvar NewField = 1\n",
-		metadataPath:                 strings.Replace(head, "2026-11-02", "2026-11-16", 1),
+		"config/crd/bases/widgets.yaml": crdFixture,
+		"pkg/resource/widget/sdk.go":    genSDK + "\nvar NewField = 1\n",
+		metadataPath:                    strings.Replace(head, "2026-11-02", "2026-11-16", 1),
 	}}
 }
 

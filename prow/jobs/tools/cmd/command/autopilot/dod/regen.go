@@ -127,8 +127,8 @@ func regenDiff(ctx context.Context, scratch gitRepo, head, p string) []Finding {
 	return findings
 }
 
-// checkRegen deletes every file with a regen header under apis/, cmd/ and
-// pkg/, runs make build-controller in code-generator against the scratch
+// checkRegen deletes every tracked regen output (regenOutputs) and every file
+// with a regen header under apis/, cmd/ and pkg/, runs make build-controller in code-generator against the scratch
 // clone, and fails on any difference verify-code-gen.sh would report, on a
 // generated file that did not come back, and on new files. The scratch clone
 // is reset to head afterwards.
@@ -149,10 +149,21 @@ func checkRegen(ctx context.Context, scratch gitRepo, head string, o regenOption
 		return fail("REGEN_SETUP_FAILED")
 	}
 	for _, p := range strings.Split(strings.TrimSuffix(string(ls), "\x00"), "\x00") {
-		if p == "" || !matchAny(headerDirs, p) {
+		if p == "" {
 			continue
 		}
 		full := filepath.Join(scratch.dir, filepath.FromSlash(p))
+		// A file under a header-less output (an extra helm template, say)
+		// must come back from regeneration too, or it was not generated.
+		if matchAny(regenOutputs, p) {
+			if err := os.Remove(full); err != nil {
+				return fail("REGEN_SETUP_FAILED")
+			}
+			continue
+		}
+		if !matchAny(headerDirs, p) {
+			continue
+		}
 		if b, err := os.ReadFile(full); err == nil && hasRegenHeader(b) {
 			if err := os.Remove(full); err != nil {
 				return fail("REGEN_SETUP_FAILED")
