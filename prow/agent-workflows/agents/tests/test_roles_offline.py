@@ -1444,6 +1444,24 @@ def test_triage_cli_offline():
     check("model url refuses a bad tag", model_url("service/s3/../../x").returncode != 0, True)
 
 
+def test_triage_workflow_manifest():
+    """The triage entry: no secrets, no e2e, a short timeout, the Dispatcher's arguments, no offline overrides."""
+    print("triage manifest:")
+    manifest = yaml.safe_load((_PKG_ROOT.parent / "agent-workflows.yaml").read_text())
+    wf = manifest["workflows"]["triage"]
+    check("command", wf["command"], ["/app/triage-job.sh"])
+    check("required args", wf["required_args"], [
+        "service", "resource", "field", "finding-class", "detector-work", "change-class", "sdk-to", "work-item"])
+    check("optional args", wf["optional_args"], ["model"])
+    check("no secrets", "environmentFromSecrets" in wf, False)
+    check("no e2e", wf.get("e2e", False), False)
+    check("no extra refs", wf.get("extra_refs", []), [])
+    check("timeout", wf["timeout"], "30m")
+    check("no offline overrides", sorted(k for k in wf.get("environment", {}) if k.startswith("TRIAGE_")), [])
+    check("same image as add-field", wf["image"], manifest["workflows"]["add-field"]["image"])
+    check("job script is executable", os.access(_PKG_ROOT / "triage-job.sh", os.X_OK), True)
+
+
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
     print("result contract:")
@@ -1817,6 +1835,7 @@ def main():
                test_triage_answer_checks,
                test_triage_tool_less_call,
                test_triage_cli_offline,
+               test_triage_workflow_manifest,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()
