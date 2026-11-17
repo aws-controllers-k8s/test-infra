@@ -349,3 +349,31 @@ func TestRunRefusesUnsafeOptions(t *testing.T) {
 type writingForge struct{ *FakeForge }
 
 func (writingForge) Writes() bool { return true }
+
+// The codegen checkout is a fresh worktree: build-controller-release.sh looks
+// for ack-generate and the templates at a GOPATH-relative path unless told
+// where they are (dod's regen-clean passes the same two variables).
+func TestRegeneratePointsMakeAtTheCodegenWorktree(t *testing.T) {
+	type call struct {
+		dir string
+		env []string
+	}
+	var makes []call
+	run := func(_ context.Context, dir string, env []string, name string, _ ...string) ([]byte, []byte, error) {
+		if name == "make" {
+			makes = append(makes, call{dir, env})
+		}
+		return nil, nil, nil
+	}
+	o := Options{Inputs: Inputs{Service: svc}, ControllerDir: "/work/controller", CacheDir: "/work/cache", Run: run, Log: io.Discard}
+	cg, rt := "/work/cg", "/work/rt"
+	require.Equal(t, "", regenerate(context.Background(), o, Target{Package: "s3", Version: "v1.97.3"}, cg, rt))
+	require.Len(t, makes, 2)
+	for _, m := range makes {
+		assert.Equal(t, cg, m.dir)
+		assert.Contains(t, m.env, "ACK_GENERATE_BIN_PATH="+filepath.Join(cg, "bin", "ack-generate"))
+		assert.Contains(t, m.env, "TEMPLATES_DIR="+filepath.Join(cg, "templates"))
+		assert.Contains(t, m.env, "RUNTIME_CRD_DIR="+filepath.Join(rt, "config"))
+		assert.Contains(t, m.env, "ACK_GENERATE_CACHE_DIR=/work/cache")
+	}
+}
