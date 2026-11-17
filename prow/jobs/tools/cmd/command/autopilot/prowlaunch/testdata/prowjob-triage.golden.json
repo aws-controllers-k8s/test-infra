@@ -1,0 +1,124 @@
+{
+  "apiVersion": "prow.k8s.io/v1",
+  "kind": "ProwJob",
+  "metadata": {
+    "annotations": {
+      "prow.k8s.io/job": "agent-workflow-triage",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.pull": "0",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "workflow-agent/command-args": "change-class=hand-written-code,detector-work=from-sibling,field=ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold,finding-class=spec-field,resource=Bucket,sdk-to=service/s3/v1.114.10,service=s3,work-item=sha256:0123456789abcdef",
+      "workflow-agent/issue-number": "0",
+      "workflow-agent/workflow-name": "triage"
+    },
+    "labels": {
+      "app.kubernetes.io/name": "agent-workflow-triage",
+      "created-by-prow": "true",
+      "prow.k8s.io/job": "agent-workflow-triage",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "prow.k8s.io/type": "periodic",
+      "triggered-by": "workflow-agent",
+      "workflow-agent/issue-number": "0",
+      "workflow-type": "triage"
+    },
+    "namespace": "prow"
+  },
+  "spec": {
+    "agent": "kubernetes",
+    "cluster": "build",
+    "decoration_config": {
+      "censor_secrets": true,
+      "censoring_options": {
+        "include_directories": [
+          "/etc/github"
+        ]
+      },
+      "gcs_configuration": {
+        "bucket": "s3://example-prow-logs",
+        "path_strategy": "explicit"
+      },
+      "grace_period": "15m0s",
+      "timeout": "30m0s",
+      "utility_images": {
+        "clonerefs": "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
+        "entrypoint": "public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6",
+        "initupload": "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
+        "sidecar": "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6"
+      }
+    },
+    "job": "agent-workflow-triage",
+    "pod_spec": {
+      "containers": [
+        {
+          "args": [
+            "--change-class",
+            "hand-written-code",
+            "--detector-work",
+            "from-sibling",
+            "--field",
+            "ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold",
+            "--finding-class",
+            "spec-field",
+            "--resource",
+            "Bucket",
+            "--sdk-to",
+            "service/s3/v1.114.10",
+            "--service",
+            "s3",
+            "--work-item",
+            "sha256:0123456789abcdef"
+          ],
+          "command": [
+            "/app/triage-job.sh"
+          ],
+          "env": [
+            {
+              "name": "GITHUB_ORG",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "ISSUE_AUTHOR",
+              "value": "ack-autopilot"
+            },
+            {
+              "name": "ISSUE_NUMBER",
+              "value": "0"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "s3-controller"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "WORKFLOW_NAME",
+              "value": "triage"
+            }
+          ],
+          "image": "registry.example/prow:add-resource-0.0.33",
+          "name": "workflow-runner",
+          "resources": {
+            "limits": {
+              "cpu": "1",
+              "memory": "2Gi"
+            },
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          }
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "workflow-runner"
+    },
+    "type": "periodic"
+  },
+  "status": {
+    "description": "Job triggered by workflow-agent",
+    "state": "triggered"
+  }
+}

@@ -88,6 +88,7 @@ func TestAdmissionPolicyCoversTheAllowlist(t *testing.T) {
 	nameRule := regexp.MustCompile(m[1])
 	for _, id := range []string{
 		"autopilot-0123456789abcdef-g1-r1", "autopilot-0123456789abcdef-g12-f0123abcd",
+		"autopilot-0123456789abcdef-g1-t1", "autopilot-0123456789abcdef-g1-t0",
 		"autopilot-0123456789abcdef-g1-r0", "periodic-agent-add-field-1", "autopilot-0123456789abcdef-g1-r1x",
 	} {
 		assert.Equal(t, launchIDRE.MatchString(id), nameRule.MatchString(id), "the policy's name rule is the launcher's: %s", id)

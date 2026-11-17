@@ -3,7 +3,7 @@
 # is a pod spec Prow runs as its own identity: without this policy the
 # ServiceAccount could run any image with any secret in test-pods. This policy
 # applies only to that ServiceAccount's requests and allows:
-#   CREATE: the two allowlisted jobs (prowlaunch.Allowed), each with exactly
+#   CREATE: the three allowlisted jobs (prowlaunch.Allowed), each with exactly
 #           the pod prowlaunch.Build makes for it;
 #   UPDATE: an abort of a job it made (status.state=aborted), nothing else.
 # Apply (a human, after SECURITY-REVIEW.md) with the three values resolved:
@@ -44,6 +44,8 @@ spec:
     expression: "variables.job == 'agent-workflow-add-field'"
   - name: sdkBump
     expression: "variables.job == 'autopilot-sdk-bump'"
+  - name: triage
+    expression: "variables.job == 'agent-workflow-triage'"
   - name: pod
     expression: "object.spec.pod_spec"
   - name: container
@@ -56,7 +58,7 @@ spec:
       request.operation != 'CREATE' ||
       ('ack-autopilot/managed-by' in variables.labels &&
        variables.labels['ack-autopilot/managed-by'] == 'autopilot-dispatcher' &&
-       object.metadata.name.matches('^autopilot-[0-9a-f]{16}-g[0-9]{1,4}-(r[1-9][0-9]{0,2}|f[0-9a-f]{8})$'))
+       object.metadata.name.matches('^autopilot-[0-9a-f]{16}-g[0-9]{1,4}-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2})$'))
     message: "a Dispatcher ProwJob is named by a launch id and labelled ack-autopilot/managed-by=autopilot-dispatcher"
   - expression: >-
       request.operation != 'CREATE' ||
@@ -67,11 +69,11 @@ spec:
   - expression: >-
       request.operation != 'CREATE' ||
       (object.spec.type == 'periodic' && object.spec.agent == 'kubernetes' &&
-       (variables.addField || variables.sdkBump) &&
+       (variables.addField || variables.sdkBump || variables.triage) &&
        !has(object.spec.refs) && !has(object.spec.namespace) &&
        !has(object.spec.jenkins_spec) && !has(object.spec.pipeline_run_spec) &&
        !has(object.spec.tekton_pipeline_run_spec))
-    message: "only the periodic kubernetes jobs agent-workflow-add-field and autopilot-sdk-bump, with no refs, namespace or other agent"
+    message: "only the periodic kubernetes jobs agent-workflow-add-field, autopilot-sdk-bump and agent-workflow-triage, with no refs, namespace or other agent"
   - expression: >-
       request.operation != 'CREATE' ||
       (has(object.spec.pod_spec) && size(variables.pod.containers) == 1 &&
@@ -97,6 +99,22 @@ spec:
        variables.container.command == ['/bin/bash', '-c', './scripts/autopilot-sdk-bump.sh'] &&
        !has(variables.container.args) && !has(variables.container.securityContext))
     message: "autopilot-sdk-bump runs scripts/autopilot-sdk-bump.sh from the auto-generate-controllers image, unprivileged, as periodic-service-account"
+  - expression: >-
+      request.operation != 'CREATE' || !variables.triage ||
+      (object.spec.cluster == 'build' &&
+       variables.pod.serviceAccountName == 'workflow-runner' &&
+       variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:add-resource-') &&
+       variables.container.command == ['/app/triage-job.sh'] &&
+       !has(variables.container.securityContext) &&
+       !has(variables.pod.volumes) && !has(variables.container.volumeMounts) &&
+       !has(object.spec.extra_refs) &&
+       (!has(variables.container.env) || variables.container.env.all(e, !has(e.valueFrom))) &&
+       object.metadata.name.matches('-g[1-9][0-9]{0,3}-t[1-9][0-9]{0,2}$'))
+    message: "agent-workflow-triage runs triage-job.sh from the add-resource image on the build cluster as workflow-runner, unprivileged, with no volume, secret or extra ref, named by a triage launch id"
+  - expression: >-
+      request.operation != 'CREATE' || variables.triage ||
+      !object.metadata.name.matches('-t[0-9]+$')
+    message: "a triage launch id names only an agent-workflow-triage job"
   - expression: >-
       request.operation != 'CREATE' || !has(variables.container.env) ||
       variables.container.env.all(e, !has(e.valueFrom) ||

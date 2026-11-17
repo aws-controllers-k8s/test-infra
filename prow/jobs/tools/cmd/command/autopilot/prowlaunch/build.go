@@ -59,9 +59,10 @@ var utilityImages = UtilityImages{
 	Sidecar:    "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6",
 }
 
-// launchIDRE is a dispatcher launch id: a run (r<n>) or an sdk-bump refresh
-// (f<8 hex>) of one item generation. It is the job's name.
-var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8})$`)
+// launchIDRE is a dispatcher launch id: a run (r<n>), an sdk-bump refresh
+// (f<8 hex>) or a triage run (t<n>, Plan 8) of one item generation. It is
+// the job's name.
+var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2})$`)
 
 var (
 	bucketURLRE = regexp.MustCompile(`^s3://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
@@ -98,7 +99,10 @@ func (c Config) validate() error {
 // shape. For add-field the job equals what agent-plugin builds for
 // "/agent add-field <args>" on <org>/<service>-controller (issue 0, author
 // ack-autopilot), apart from the name, startTime and the ack-autopilot/
-// labels and annotations.
+// labels and annotations. The triage job (Plan 8) is agent-plugin's shape
+// minus the agent-secrets volume, which agent-plugin mounts on every pod: it
+// is pinned by its own golden (testdata/prowjob-triage.golden.json), not
+// agent-plugin's.
 func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -115,6 +119,14 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 	hash, gen, run := m[1], m[2], m[3]
 	if strings.HasPrefix(run, "f") && (req.Workflow != "sdk-bump" || req.Args["mode"] != ModeRefresh) {
 		return nil, fmt.Errorf("launch id %q names a refresh, which only sdk-bump --mode refresh is", req.LaunchID)
+	}
+	if strings.HasPrefix(run, "t") != (req.Workflow == "triage") {
+		return nil, fmt.Errorf("launch id %q: a t<n> id names a triage run, and a triage run needs one", req.LaunchID)
+	}
+	// A triage id is the ledger's too (ledger triageIDRE: generation from 1,
+	// no leading zero); the launcher is no looser than the ledger.
+	if req.Workflow == "triage" && strings.HasPrefix(gen, "0") {
+		return nil, fmt.Errorf("launch id %q: a triage run's generation starts at 1, with no leading zero", req.LaunchID)
 	}
 	if err := checkArgs(req.Workflow, w, req.Args, "sha256:"+hash); err != nil {
 		return nil, fmt.Errorf("%s: %w", req.Workflow, err)
@@ -163,9 +175,17 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		}
 	}
 
-	container := Container{
-		Name: "workflow-runner", Image: w.Image, Command: w.Command, Args: args, Env: env,
-		VolumeMounts: []VolumeMount{{Name: w.pod.SecretsVolume, MountPath: w.pod.SecretsMount, ReadOnly: true}},
+	container := Container{Name: "workflow-runner", Image: w.Image, Command: w.Command, Args: args, Env: env}
+	var volumes []Volume
+	// Only a workflow that reads a secret gets the secrets volume (Plan 8).
+	// agent-plugin mounts it on every pod; for add-field and sdk-bump, which
+	// both declare a secret, the job is unchanged.
+	if len(w.EnvironmentFromSecrets) > 0 {
+		container.VolumeMounts = []VolumeMount{{Name: w.pod.SecretsVolume, MountPath: w.pod.SecretsMount, ReadOnly: true}}
+		volumes = []Volume{{Name: w.pod.SecretsVolume, CSI: &CSISource{
+			Driver: "secrets-store.csi.k8s.io", ReadOnly: boolPtr(true),
+			VolumeAttributes: map[string]string{"secretProviderClass": w.pod.SecretProviderClass},
+		}}}
 	}
 	if r := w.Resources; r != nil {
 		for _, q := range []string{r.CPU, r.Memory} {
@@ -190,11 +210,7 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 	}
 	pod := &PodSpec{
 		RestartPolicy: "Never", ServiceAccountName: w.pod.ServiceAccount,
-		Containers: []Container{container},
-		Volumes: []Volume{{Name: w.pod.SecretsVolume, CSI: &CSISource{
-			Driver: "secrets-store.csi.k8s.io", ReadOnly: boolPtr(true),
-			VolumeAttributes: map[string]string{"secretProviderClass": w.pod.SecretProviderClass},
-		}}},
+		Containers: []Container{container}, Volumes: volumes,
 	}
 	if w.E2E {
 		applyE2E(pod)
