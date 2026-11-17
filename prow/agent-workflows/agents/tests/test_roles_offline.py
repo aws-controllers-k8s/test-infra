@@ -1062,6 +1062,92 @@ RESULT_FIXTURE = (
     _PKG_ROOT.parents[1] / "jobs/tools/cmd/command/autopilot/dispatcher/testdata/agent-result-v1.json"
 )
 
+TRIAGE_FIXTURE = RESULT_FIXTURE.parent / "agent-result-triage-v1.json"
+
+TRIAGE_ITEM = {
+    "item_key": "sha256:0123456789abcdef",
+    "decision": "field-hook",
+    "class": "hand-written-code",
+    "reason": (
+        "DefaultEventHold rides on PutObjectLockConfiguration, which the Bucket's custom "
+        "update hook sends; the hook must copy the new member."
+    ),
+    "evidence_refs": [
+        "crd:spec.objectLockConfiguration.rule.defaultRetention",
+        "field:ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold",
+        "op:PutObjectLockConfiguration",
+    ],
+    "invalid": [],
+}
+
+
+def test_triage_result_contract():
+    """A triage run's agent-result.json: the triage/v1 verdict, checked like every other key."""
+    print("triage result contract:")
+    import json
+    import tempfile
+    from workflows import result
+
+    def verdict(**change):
+        it = {**TRIAGE_ITEM, **change}
+        it = {k: v for k, v in it.items() if v is not None}
+        return {"schema": result.TRIAGE_SCHEMA, "mode": "api", "items": [it]}
+
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "agent-result.json"
+        old = os.environ.get("PROW_JOB_ID")
+        os.environ["PROW_JOB_ID"] = "autopilot-0123456789abcdef-g1-t1"
+        try:
+            result.write(result.new("triage", "sha256:0123456789abcdef"), path)
+        finally:
+            if old is None:
+                os.environ.pop("PROW_JOB_ID", None)
+            else:
+                os.environ["PROW_JOB_ID"] = old
+        result.update(path, outcome="completed_no_change", reason="TRIAGE_VERDICT",
+                      tokens={"input": 5200, "output": 180, "total": 5380}, triage=verdict())
+        check("matches the Go fixture", json.loads(path.read_text()), json.loads(TRIAGE_FIXTURE.read_text()))
+        base = json.loads(path.read_text())
+
+        for name, t in {
+            "undecided with invalid": verdict(decision="undecided", invalid=["UNKNOWN_REF op:Nope"], **{"class": None}),
+            "not-worth-modelling": verdict(decision="not-worth-modelling", **{"class": None}),
+            "resource": verdict(decision="resource", **{"class": "new-resource"}),
+            "no refs": verdict(evidence_refs=[]),
+            "no reason": verdict(reason=""),
+        }.items():
+            check(f"accepts {name}", result.validate({**base, "triage": t}), [])
+
+        for name, t in {
+            "unknown decision": verdict(decision="merge-it"),
+            "class of another decision": verdict(**{"class": "config-only"}),
+            "class on undecided": verdict(decision="undecided"),
+            "missing class": verdict(**{"class": None}),
+            "invalid but decided": verdict(invalid=["UNKNOWN_REF op:Nope"]),
+            "another item": verdict(item_key="sha256:ffffffffffffffff"),
+            "two items": {**verdict(), "items": [TRIAGE_ITEM, TRIAGE_ITEM]},
+            "bad schema": {**verdict(), "schema": "ack.autopilot.triage/v2"},
+            "bad mode": {**verdict(), "mode": "e2e-flake"},
+            "extra key": {**verdict(), "extra": 1},
+            "extra item key": verdict(confidence=0.9),
+            "missing invalid": {**verdict(), "items": [{k: v for k, v in TRIAGE_ITEM.items() if k != "invalid"}]},
+            "newline in reason": verdict(reason="line one\nline two"),
+            "long reason": verdict(reason="x" * 601),
+            "malformed ref": verdict(evidence_refs=["op:Put Bucket"]),
+            "crd ref outside spec/status": verdict(evidence_refs=["crd:metadata.name"]),
+            "too many refs": verdict(evidence_refs=[f"op:Op{i}" for i in range(17)]),
+            "malformed invalid": verdict(decision="undecided", invalid=["not a code"], **{"class": None}),
+            "not an object": [],
+        }.items():
+            check(f"rejects {name}", len(result.validate({**base, "triage": t})) > 0, True)
+
+        check("only triage records a verdict",
+              len(result.validate({**base, "workflow": "add-field"})) > 0, True)
+        bare = {k: v for k, v in base.items() if k != "triage"}
+        check("a completed triage run needs a verdict", len(result.validate(bare)) > 0, True)
+        check("a failed triage run needs none",
+              result.validate({**bare, "outcome": "failed", "reason": "MODEL_CALL_FAILED"}), [])
+
 
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
@@ -1429,6 +1515,7 @@ def main():
                test_token_accounting, test_harness_result_fields,
                test_record_result,
                test_autopilot_arg_validation,
+               test_triage_result_contract,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()
