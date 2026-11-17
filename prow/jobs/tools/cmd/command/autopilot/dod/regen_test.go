@@ -122,9 +122,9 @@ func TestRegenDirtyCodegen(t *testing.T) {
 	assert.Equal(t, []string{"REGEN_DIRTY_CODEGEN"}, c.Reasons)
 }
 
-// build-controller-release.sh looks for ack-generate at a GOPATH-relative
-// path, so a code-generator checkout anywhere else must be told where the
-// binary build-controller just built is.
+// build-controller-release.sh looks for ack-generate and its templates at a
+// GOPATH-relative path, so a code-generator checkout anywhere else must be
+// told where they are.
 func TestRegenPassesTheEnvironment(t *testing.T) {
 	r, head := regenRepo(t)
 	s, cleanup, err := cloneScratch(context.Background(), gitRepo{dir: r.Dir}, head)
@@ -141,6 +141,7 @@ func TestRegenPassesTheEnvironment(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"SERVICE=widget", "SERVICE_CONTROLLER_SOURCE_PATH=" + s.dir,
 		"ACK_GENERATE_BIN_PATH=" + filepath.Join(codegen, "bin", "ack-generate"),
+		"TEMPLATES_DIR=" + filepath.Join(codegen, "templates"),
 		"RUNTIME_CRD_DIR=" + filepath.Join("/rt", "config"), "ACK_GENERATE_CACHE_DIR=/cache",
 	}, got)
 }
