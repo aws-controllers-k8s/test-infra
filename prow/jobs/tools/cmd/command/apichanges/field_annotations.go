@@ -29,6 +29,8 @@ import (
 //     field's custom code.
 //   - A Spec field only a Create sends is immutable.
 //   - A Status `W.X` reading back Spec field X is folded into X.
+//   - A Spec field with no other work that a called read returns may have a
+//     server default (see workServerDefault).
 //
 // Last, each field's operations are split into those that set and return it.
 func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
@@ -124,7 +126,42 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		}
 		f.SetBy, f.ReadBy, f.ReturnedBy = newEvidence(setBy), newEvidence(readBy), newEvidence(returnedBy)
 	}
+
+	// Last, because it reads ReadBy and yields to any other work.
+	for i := range findings {
+		f := &findings[i]
+		if f.Class != ClassSpecField || f.Work != workNone || f.Detail != "" {
+			continue
+		}
+		if op := serverDefaultRead(in, *f); op != "" {
+			f.Detail, f.Work = serverDefaultDetail(op), workServerDefault
+		}
+	}
 	return findings
+}
+
+// serverDefaultRead returns the first ReadBy operation the resource's package
+// calls, or "" when it calls none. When the package's calls are unknown, any
+// read counts, so missing data cannot route a field to regeneration.
+func serverDefaultRead(in *ControllerInputs, f Finding) string {
+	if f.ReadBy == "" {
+		return ""
+	}
+	called := in.UsedOps[kindToResourceDir(f.Kind)]
+	for _, entry := range strings.Split(f.ReadBy, ",") {
+		op, _, _ := strings.Cut(entry, "=")
+		if len(called) == 0 || called[op] {
+			return op
+		}
+	}
+	return ""
+}
+
+// serverDefaultDetail explains workServerDefault for the issue.
+func serverDefaultDetail(op string) string {
+	return fmt.Sprintf("read back by `%s`: if the service fills it in when it is unset, every existing "+
+		"resource shows a Spec delta after the upgrade; decide `late_initialize`, `compare.is_ignored`, "+
+		"or that it has no server default", op)
 }
 
 // roleIndex answers where an operation's request or response carries a field,
