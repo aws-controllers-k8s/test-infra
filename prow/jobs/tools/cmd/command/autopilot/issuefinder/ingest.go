@@ -245,8 +245,8 @@ func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Resul
 			if c.Author == "" || !cfg.Team[c.Author] {
 				continue
 			}
-			// Defence in depth: our own status comment is never a command.
-			if strings.HasPrefix(c.Body, StatusMarker) {
+			// Defence in depth: our own status and triage comments are never commands.
+			if strings.HasPrefix(c.Body, StatusMarker) || strings.HasPrefix(c.Body, TriageMarker) {
 				continue
 			}
 			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {
