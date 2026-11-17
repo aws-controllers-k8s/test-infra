@@ -62,8 +62,12 @@ type crdCandidate struct {
 
 // crdCompat mirrors code-generator pkg/crdcompat.Result (ack.crd-compat/v1).
 type crdCompat struct {
-	Schema              string                 `json:"schema"`
-	BaseRef             string                 `json:"base_ref"`
+	Schema  string `json:"schema"`
+	BaseRef string `json:"base_ref"`
+	// HeadRef names the head the document describes. Plan 4 does not write
+	// it; dod requires it only for a document given as a file, because one
+	// it ran itself is for the scratch clone's head by construction.
+	HeadRef             string                 `json:"head_ref,omitempty"`
 	Breaking            bool                   `json:"breaking"`
 	Files               []crdFile              `json:"files"`
 	Buckets             map[string][]crdChange `json:"buckets"`

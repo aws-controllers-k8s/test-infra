@@ -144,9 +144,29 @@ func runCRDCompat(ctx context.Context, o Options, dir, base string) []byte {
 	return nil
 }
 
+// errCRDHead is a CRD document file that is not for this run's head.
+type errCRDHead struct{ sig, detail string }
+
+func (e errCRDHead) Error() string { return e.detail }
+
+// crdFileHead checks a file document's head_ref: it must resolve to a commit
+// whose tree is the head tree (the verdict binds the tree, decision 2).
+func crdFileHead(ctx context.Context, src gitRepo, d *crdCompat, headTree string) error {
+	if strings.TrimSpace(d.HeadRef) == "" {
+		return errCRDHead{"CRD_COMPAT_HEAD_MISSING", "the crd-compat document has no head_ref"}
+	}
+	if t, err := src.treeSHA(ctx, d.HeadRef); err != nil || t != headTree {
+		return errCRDHead{"CRD_COMPAT_HEAD_MISMATCH", "document head_ref " + d.HeadRef}
+	}
+	return nil
+}
+
 // crdDocProblem is the check to report when the CRD document is unusable.
 func crdDocProblem(id string, d *crdCompat, err error, runFailed bool) (Check, bool) {
+	var head errCRDHead
 	switch {
+	case errors.As(err, &head):
+		return newCheck(id, []Finding{{Signature: head.sig, Detail: head.detail, Fails: true}}), true
 	case runFailed:
 		return newCheck(id, []Finding{{Signature: "CRD_COMPAT_RUN_FAILED", Fails: true}}), true
 	case err != nil:
@@ -274,6 +294,9 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 	if raw != nil {
 		in.CRDCompatSHA256 = Digest(raw)
 		compat, compatErr = parseCRDCompat(raw)
+		if compatErr == nil && in.CRDCompatSource == "file" {
+			compatErr = crdFileHead(ctx, src, compat, tree)
+		}
 	}
 
 	read := func(rev, p string) []byte {

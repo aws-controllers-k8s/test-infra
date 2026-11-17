@@ -87,11 +87,14 @@ func fakeTools(t *testing.T, f fixture, doc []byte, ackGenerateCode int) Runner 
 	}
 }
 
-func compatJSON(t *testing.T, base string) []byte {
+func compatJSON(t *testing.T, base string, head ...string) []byte {
 	t.Helper()
 	d := doc(crdChange{File: "config/crd/bases/widgets.yaml", Kind: "Widget", Bucket: "added_optional_spec",
 		Field: "spec.name", Path: ".properties.spec.properties.name", ChangeType: "PROPERTY_ADDED"})
 	d.BaseRef = base
+	if len(head) > 0 {
+		d.HeadRef = head[0]
+	}
 	d.Files, d.SensitiveCandidates = []crdFile{}, []crdCandidate{}
 	b, err := json.Marshal(d)
 	require.NoError(t, err)
@@ -105,7 +108,7 @@ func options(t *testing.T, f fixture) Options {
 		RepoDir: f.repo.Dir, Repo: "example/widgets-controller", Service: "widgets",
 		BaseRef: f.base, HeadRef: f.head, ChangeClass: ClassSDKBump, WorkItem: wi,
 		BotEmails: []string{dodtest.Bot}, CodegenDir: f.codegen,
-		CRDCompatJSON: compatJSON(t, f.base), SDKModelPath: model, ToolRevision: "test",
+		CRDCompatJSON: compatJSON(t, f.base, f.head), SDKModelPath: model, ToolRevision: "test",
 		Run: fakeTools(t, f, nil, 0),
 	}
 }
@@ -270,5 +273,27 @@ func TestRunBotHeadWithoutWorkItemFails(t *testing.T) {
 		if c.ID == CheckProvenance {
 			assert.False(t, c.Binding)
 		}
+	}
+}
+
+// A CRD document given as a file must name this head (head_ref, compared by
+// tree); a file for another head, or with none, cannot be trusted.
+func TestRunCRDCompatFileMustMatchHead(t *testing.T) {
+	f := sdkBump(t)
+	for name, tc := range map[string]struct {
+		doc  []byte
+		want string
+	}{
+		"missing": {compatJSON(t, f.base), "CRD_COMPAT_HEAD_MISSING"},
+		"other":   {compatJSON(t, f.base, f.base), "CRD_COMPAT_HEAD_MISMATCH"},
+		"unknown": {compatJSON(t, f.base, "0000000000000000000000000000000000000000"), "CRD_COMPAT_HEAD_MISMATCH"},
+	} {
+		o := options(t, f)
+		o.CRDCompatJSON = tc.doc
+		v, err := Run(context.Background(), o)
+		require.NoError(t, err, name)
+		assert.Equal(t, StatusFail, v.Verdict, name)
+		assert.Contains(t, v.Reasons, "crd-diff:"+tc.want, name)
+		assert.Contains(t, v.Reasons, "sensitive-field:"+tc.want, name)
 	}
 }

@@ -111,7 +111,7 @@ func init() {
 	f.StringVar(&dodOpts.codegenDir, "codegen-dir", "", "code-generator checkout at the pinned SHA (regen-clean skips without it)")
 	f.StringVar(&dodOpts.runtimeDir, "runtime-dir", "", "runtime checkout at the pinned SHA (RUNTIME_CRD_DIR for regeneration)")
 	f.StringVar(&dodOpts.ackGenerate, "ack-generate", "", "built ack-generate with crd-compat-check --output json; run in the scratch clone")
-	f.StringVar(&dodOpts.crdCompat, "crd-compat-json", "", `ack.crd-compat/v1 document file, or "-" for stdin`)
+	f.StringVar(&dodOpts.crdCompat, "crd-compat-json", "", `ack.crd-compat/v1 document file, or "-" for stdin; must carry base_ref and head_ref for this run`)
 	f.StringVar(&dodOpts.sdkModel, "sdk-model", "", "SDK model JSON (default: the head pin's model in --cache-dir)")
 	f.StringVar(&dodOpts.cacheDir, "cache-dir", defaultCacheDir(), "ack-generate model cache (ACK_GENERATE_CACHE_DIR)")
 	f.StringVar(&dodOpts.prBody, "pr-body-file", "", `PR description to scan for leaks, or "-" for stdin`)
