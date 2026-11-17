@@ -1,0 +1,173 @@
+{
+  "apiVersion": "prow.k8s.io/v1",
+  "kind": "ProwJob",
+  "metadata": {
+    "annotations": {
+      "prow.k8s.io/job": "autopilot-sdk-bump",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.pull": "0",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "workflow-agent/command-args": "change-class=SDK-bump,sdk-to=service/s3/v1.97.3,service=s3,work-item=sha256:0123456789abcdef",
+      "workflow-agent/issue-number": "0",
+      "workflow-agent/workflow-name": "sdk-bump"
+    },
+    "labels": {
+      "app.kubernetes.io/name": "autopilot-sdk-bump",
+      "created-by-prow": "true",
+      "prow.k8s.io/job": "autopilot-sdk-bump",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "prow.k8s.io/type": "periodic",
+      "triggered-by": "workflow-agent",
+      "workflow-agent/issue-number": "0",
+      "workflow-type": "sdk-bump"
+    },
+    "namespace": "prow"
+  },
+  "spec": {
+    "agent": "kubernetes",
+    "cluster": "default",
+    "decoration_config": {
+      "censor_secrets": true,
+      "censoring_options": {
+        "include_directories": [
+          "/etc/github"
+        ]
+      },
+      "gcs_configuration": {
+        "bucket": "s3://example-prow-logs",
+        "path_strategy": "explicit"
+      },
+      "grace_period": "15m0s",
+      "timeout": "3h0m0s",
+      "utility_images": {
+        "clonerefs": "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
+        "entrypoint": "public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6",
+        "initupload": "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
+        "sidecar": "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6"
+      }
+    },
+    "extra_refs": [
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/test-infra",
+        "repo": "test-infra",
+        "workdir": true
+      }
+    ],
+    "job": "autopilot-sdk-bump",
+    "pod_spec": {
+      "containers": [
+        {
+          "command": [
+            "/bin/bash",
+            "-c",
+            "./scripts/autopilot-sdk-bump.sh"
+          ],
+          "env": [
+            {
+              "name": "AUTOPILOT_ORG",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "AUTOPILOT_SDK_BUMP_WRITE",
+              "value": "true"
+            },
+            {
+              "name": "GITHUB_ACTOR",
+              "value": "ack-bot"
+            },
+            {
+              "name": "GITHUB_EMAIL_ID",
+              "value": "82905295"
+            },
+            {
+              "name": "GITHUB_TOKEN",
+              "valueFrom": {
+                "secretKeyRef": {
+                  "key": "token",
+                  "name": "prowjob-github-pat-token"
+                }
+              }
+            },
+            {
+              "name": "ISSUE_AUTHOR",
+              "value": "ack-autopilot"
+            },
+            {
+              "name": "ISSUE_NUMBER",
+              "value": "0"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "s3-controller"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "SDK_TO",
+              "value": "service/s3/v1.97.3"
+            },
+            {
+              "name": "SERVICE",
+              "value": "s3"
+            },
+            {
+              "name": "TEST_INFRA_ORG",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "WORKFLOW_NAME",
+              "value": "sdk-bump"
+            },
+            {
+              "name": "WORK_ITEM",
+              "value": "sha256:0123456789abcdef"
+            }
+          ],
+          "image": "registry.example/prow:prow-auto-generate-controllers-0.0.48",
+          "name": "workflow-runner",
+          "resources": {
+            "limits": {
+              "cpu": "8",
+              "memory": "8Gi"
+            },
+            "requests": {
+              "cpu": "8",
+              "memory": "8Gi"
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/github",
+              "name": "github-token",
+              "readOnly": true
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "periodic-service-account",
+      "volumes": [
+        {
+          "csi": {
+            "driver": "secrets-store.csi.k8s.io",
+            "readOnly": true,
+            "volumeAttributes": {
+              "secretProviderClass": "prow-secrets"
+            }
+          },
+          "name": "github-token"
+        }
+      ]
+    },
+    "type": "periodic"
+  },
+  "status": {
+    "description": "Job triggered by workflow-agent",
+    "state": "triggered"
+  }
+}
