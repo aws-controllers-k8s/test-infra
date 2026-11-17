@@ -234,5 +234,3 @@ func gather(ctx context.Context, g gitRepo, base, head string) ([]changedFile, e
 	}
 	return files, nil
 }
-
-func generatedFile(f changedFile) bool { return false }
