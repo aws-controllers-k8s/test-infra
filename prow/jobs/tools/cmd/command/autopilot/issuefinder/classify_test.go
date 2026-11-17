@@ -336,3 +336,8 @@ func TestClassifySkipsControlCharacters(t *testing.T) {
 	}
 	assert.Len(t, items, 1, "only the bump")
 }
+
+func TestBumpKeyIsTheClassifyKey(t *testing.T) {
+	assert.Equal(t, "sdk-bump|s3|*|service/s3/v1.2.0", BumpKey("s3", "service/s3/v1.2.0"))
+	assert.Equal(t, "sdk-bump|s3|*|", BumpKey("s3", ""), "the prefix of every s3 bump key")
+}
