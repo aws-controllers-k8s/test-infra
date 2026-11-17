@@ -127,7 +127,13 @@ func regenDiff(ctx context.Context, scratch gitRepo, head, p string) []Finding {
 	return findings
 }
 
-// checkRegen deletes every tracked regen output (regenOutputs) and every file
+// regenInputs are regen outputs that make build-controller also reads:
+// build-controller-release.sh takes the SDK pins from the metadata file. They
+// stay in place and are compared after regeneration like any other output.
+var regenInputs = []string{"apis/*/ack-generate-metadata.yaml"}
+
+// checkRegen deletes every tracked regen output (regenOutputs, except
+// regenInputs) and every file
 // with a regen header under apis/, cmd/ and pkg/, runs make build-controller in code-generator against the scratch
 // clone, and fails on any difference verify-code-gen.sh would report, on a
 // generated file that did not come back, and on new files. The scratch clone
@@ -155,7 +161,7 @@ func checkRegen(ctx context.Context, scratch gitRepo, head string, o regenOption
 		full := filepath.Join(scratch.dir, filepath.FromSlash(p))
 		// A file under a header-less output (an extra helm template, say)
 		// must come back from regeneration too, or it was not generated.
-		if matchAny(regenOutputs, p) {
+		if matchAny(regenOutputs, p) && !matchAny(regenInputs, p) {
 			if err := os.Remove(full); err != nil {
 				return fail("REGEN_SETUP_FAILED")
 			}

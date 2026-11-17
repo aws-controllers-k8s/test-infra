@@ -97,14 +97,20 @@ func TestRegenClean(t *testing.T) {
 		want  string
 	}{
 		"not reproduced": {map[string]string{metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false, "GENERATED_FILE_NOT_REPRODUCED"},
-		"output missing": {map[string]string{"pkg/resource/widget/sdk.go": genSDK}, false, "GENERATED_FILE_NOT_REPRODUCED"},
-		"differs":        {map[string]string{"pkg/resource/widget/sdk.go": genSDK + "var X = 1\n", metadataPath: metaYAML("v0.64.0", "x")}, false, "REGEN_DIFF"},
-		"new file":       {map[string]string{"pkg/resource/widget/sdk.go": genSDK, "pkg/resource/widget/extra.go": genSDK, metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false, "REGEN_NEW_FILE"},
-		"codegen moved":  {map[string]string{"pkg/resource/widget/sdk.go": genSDK, metadataPath: metaYAML("v0.65.0", "x")}, false, "REGEN_CODEGEN_VERSION_MISMATCH"},
-		"make fails":     {nil, true, "REGEN_FAILED"},
+		// The metadata file is an input (regenInputs): kept, so a regen that
+		// does not rewrite it leaves the committed bytes and no finding.
+		"metadata kept": {map[string]string{"pkg/resource/widget/sdk.go": genSDK}, false, ""},
+		"differs":       {map[string]string{"pkg/resource/widget/sdk.go": genSDK + "var X = 1\n", metadataPath: metaYAML("v0.64.0", "x")}, false, "REGEN_DIFF"},
+		"new file":      {map[string]string{"pkg/resource/widget/sdk.go": genSDK, "pkg/resource/widget/extra.go": genSDK, metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false, "REGEN_NEW_FILE"},
+		"codegen moved": {map[string]string{"pkg/resource/widget/sdk.go": genSDK, metadataPath: metaYAML("v0.65.0", "x")}, false, "REGEN_CODEGEN_VERSION_MISMATCH"},
+		"make fails":    {nil, true, "REGEN_FAILED"},
 	} {
 		c, s := runRegen(t, tc.files, tc.fail)
-		assert.Equal(t, []string{tc.want}, c.Reasons, name)
+		if tc.want == "" {
+			assert.Empty(t, c.Reasons, name)
+		} else {
+			assert.Equal(t, []string{tc.want}, c.Reasons, name)
+		}
 		assert.NoFileExists(t, filepath.Join(s.dir, "pkg/resource/widget/extra.go"), name)
 	}
 
@@ -160,4 +166,22 @@ func TestScratchAtHead(t *testing.T) {
 	require.NoError(t, s.reset(context.Background(), head))
 	require.NoError(t, os.WriteFile(filepath.Join(s.dir, "untracked.go"), []byte("x"), 0o644))
 	assert.Error(t, scratchAtHead(context.Background(), s, head))
+}
+
+// build-controller-release.sh reads the SDK pins from
+// ack-generate-metadata.yaml, so regen-clean must leave it in place for make.
+func TestRegenKeepsTheMetadataForMake(t *testing.T) {
+	r, head := regenRepo(t)
+	s, cleanup, err := cloneScratch(context.Background(), gitRepo{dir: r.Dir}, head)
+	require.NoError(t, err)
+	defer cleanup()
+	inner := fakeMake(map[string]string{"pkg/resource/widget/sdk.go": genSDK, metadataPath: metaYAML("v0.64.0", "2026-11-16")}, false)
+	run := func(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
+		if _, err := os.Stat(filepath.Join(s.dir, metadataPath)); err != nil {
+			return nil, []byte("cat: ack-generate-metadata.yaml: No such file or directory"), errors.New("exit status 2")
+		}
+		return inner(ctx, dir, env, name, args...)
+	}
+	c := checkRegen(context.Background(), s, head, regenOptions{Service: "widget", CodegenDir: t.TempDir(), Run: run, Log: &bytes.Buffer{}})
+	assert.Equal(t, StatusPass, c.Status, "%+v", c.Findings)
 }
