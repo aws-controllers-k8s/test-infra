@@ -86,6 +86,13 @@ func parseCRDCompat(data []byte) (*crdCompat, error) {
 	if d.Schema != crdCompatSchema {
 		return nil, fmt.Errorf("crd-compat schema %q, want %q", d.Schema, crdCompatSchema)
 	}
+	// The producer writes every bucket, empty ones as []; a missing one means
+	// the document is not what Plan 4 wrote (fail closed).
+	for _, b := range crdBuckets {
+		if _, ok := d.Buckets[b]; !ok {
+			return nil, fmt.Errorf("crd-compat document has no %q bucket", b)
+		}
+	}
 	return &d, nil
 }
 

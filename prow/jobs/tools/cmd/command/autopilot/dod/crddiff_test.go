@@ -14,6 +14,7 @@
 package dod
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -121,4 +122,18 @@ func TestParseCRDCompat(t *testing.T) {
 		_, err := parseCRDCompat([]byte(bad))
 		assert.Error(t, err, name)
 	}
+}
+
+// A document without Plan 4's bucket keys (truncated or from another tool)
+// would otherwise pass every CRD rule with nothing to judge.
+func TestParseCRDCompatNeedsEveryBucket(t *testing.T) {
+	_, err := parseCRDCompat([]byte(`{"schema":"ack.crd-compat/v1","base_ref":"x","breaking":false,"files":[],"buckets":{},"sensitive_candidates":[]}`))
+	assert.ErrorContains(t, err, "added_optional_spec")
+
+	d := doc()
+	delete(d.Buckets, "removed")
+	b, err := json.Marshal(d)
+	require.NoError(t, err)
+	_, err = parseCRDCompat(b)
+	assert.ErrorContains(t, err, `"removed"`)
 }
