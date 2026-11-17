@@ -61,3 +61,26 @@ func TestBuild(t *testing.T) {
 	})
 	assert.Equal(t, []string{"UNIT_TEST_FAILED"}, checkBuild(ctx, ClassSDKBump, red, ExecRunner, &bytes.Buffer{}).Reasons)
 }
+
+// TestBuildVetsWithGoTestSet: the vet step uses exactly go test's analyzer
+// subset. ACK generated code trips composites and unreachable, which
+// controllers never run; printf is in the subset and still fails.
+func TestBuildVetsWithGoTestSet(t *testing.T) {
+	ctx := context.Background()
+	generated := goModule(t, map[string]string{
+		"main.go": "package main\n\nimport \"image\"\n\nvar P = image.Point{1, 2}\n\nfunc f() int {\n\treturn 1\n\tpanic(\"x\")\n}\n\nfunc main() { _ = f() }\n",
+	})
+	assert.Equal(t, StatusPass, checkBuild(ctx, ClassSDKBump, generated, ExecRunner, &bytes.Buffer{}).Status,
+		"composites and unreachable are not in go test's vet set")
+
+	printf := goModule(t, map[string]string{
+		"main.go": "package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Printf(\"%d\\n\", \"x\") }\n",
+	})
+	c := checkBuild(ctx, ClassSDKBump, printf, ExecRunner, &bytes.Buffer{})
+	assert.Contains(t, c.Reasons, "VET_FAILED")
+}
+
+func TestVetAnalyzersMatchGoTest(t *testing.T) {
+	assert.Equal(t, []string{"atomic", "bool", "buildtags", "directive", "errorsas",
+		"ifaceassert", "nilfunc", "printf", "stringintconv", "tests"}, goTestVetAnalyzers)
+}

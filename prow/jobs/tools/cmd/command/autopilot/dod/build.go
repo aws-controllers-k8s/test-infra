@@ -19,12 +19,27 @@ import (
 	"strings"
 )
 
+// goTestVetAnalyzers is the "high-confidence subset" go test runs (go help
+// test, Go 1.25 and 1.26). Full go vet trips on ACK generated code (unkeyed
+// composite literals, unreachable code) that controllers only ever vet
+// through go test, so the vet step uses exactly this set.
+var goTestVetAnalyzers = []string{"atomic", "bool", "buildtags", "directive", "errorsas",
+	"ifaceassert", "nilfunc", "printf", "stringintconv", "tests"}
+
+func vetArgs() []string {
+	args := []string{"vet"}
+	for _, a := range goTestVetAnalyzers {
+		args = append(args, "-"+a)
+	}
+	return append(args, "./...")
+}
+
 var buildSteps = []struct {
 	sig  string
 	args []string
 }{
 	{"BUILD_FAILED", []string{"build", "./..."}},
-	{"VET_FAILED", []string{"vet", "./..."}},
+	{"VET_FAILED", vetArgs()},
 	{"UNIT_TEST_FAILED", []string{"test", "-count=1", "./..."}},
 	{"GO_MOD_NOT_TIDY", []string{"mod", "tidy", "-diff"}},
 }
