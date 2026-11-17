@@ -426,7 +426,8 @@ func TestCreateOnlyFollowsRenames(t *testing.T) {
 	assert.False(t, createOnly(m, in, nil, nil, f), "a recorded SDK path on UpdateThing")
 }
 
-// serverDefaultModel has a Widget with Create, Update and a Get returning Color.
+// serverDefaultModel has a Widget with Create, Update, a Get returning Color,
+// and a ListWidgets read that does not return it.
 func serverDefaultModel(t *testing.T) *SmithyModel {
 	t.Helper()
 	m, err := LoadSmithyModel([]byte(`{"shapes": {
@@ -442,7 +443,11 @@ func serverDefaultModel(t *testing.T) *SmithyModel {
 		"demo#GetWidgetOutput": {"type": "structure", "members": {
 			"Name": {"target": "smithy.api#String"}, "Color": {"target": "smithy.api#String"}}},
 		"demo#DescribeWidgetHistory": {"type": "operation", "input": {"target": "demo#GetWidgetInput"},
-			"output": {"target": "demo#GetWidgetOutput"}}
+			"output": {"target": "demo#GetWidgetOutput"}},
+		"demo#ListWidgets": {"type": "operation", "input": {"target": "demo#ListWidgetsInput"},
+			"output": {"target": "demo#ListWidgetsOutput"}},
+		"demo#ListWidgetsInput": {"type": "structure", "members": {"NextToken": {"target": "smithy.api#String"}}},
+		"demo#ListWidgetsOutput": {"type": "structure", "members": {"NextToken": {"target": "smithy.api#String"}}}
 	}}`))
 	require.NoError(t, err)
 	return m
@@ -453,66 +458,169 @@ func colorFinding() []Finding {
 		Evidence: "CreateWidget,UpdateWidget"}}
 }
 
-// TestAnnotateFieldsFlagsServerDefault: a new Spec field the controller's read
-// returns may be filled in by the service, so existing resources would show a
-// delta after the upgrade. Regeneration alone is not enough.
-func TestAnnotateFieldsFlagsServerDefault(t *testing.T) {
+// serverDefaults runs annotateFields, then markServerDefaults, as
+// findingsWithCodegen does around reconcileWithCodegen.
+func serverDefaults(t *testing.T, in *ControllerInputs, findings []Finding) []Finding {
+	t.Helper()
+	return markServerDefaults(in, annotateFields(serverDefaultModel(t), in, findings))
+}
+
+// TestMarkServerDefaultsFlagsServerDefault: a new Spec field the controller's
+// read returns may be filled in by the service, so existing resources would
+// show a delta after the upgrade. Regeneration alone is not enough.
+func TestMarkServerDefaultsFlagsServerDefault(t *testing.T) {
 	in := &ControllerInputs{Config: &generatorConfig{}, UsedOps: map[string]map[string]bool{
 		"widget": {"CreateWidget": true, "UpdateWidget": true, "GetWidget": true}}}
 
-	got := annotateFields(serverDefaultModel(t), in, colorFinding())
+	annotated := annotateFields(serverDefaultModel(t), in, colorFinding())
+	assert.Equal(t, workNone, annotated[0].Work, "annotateFields leaves it to markServerDefaults")
+
+	got := markServerDefaults(in, annotated)
 	require.Len(t, got, 1)
 	assert.Equal(t, "GetWidget", got[0].ReadBy)
 	assert.Equal(t, workServerDefault, got[0].Work)
-	assert.Equal(t, serverDefaultDetail("GetWidget"), got[0].Detail)
+	assert.Equal(t, serverDefaultDetail, got[0].Detail)
+	assert.NotContains(t, got[0].Detail, "GetWidget", "the rendered bullet already names the read")
 	reason, ok := needsWork(got[0])
 	assert.True(t, ok)
 	assert.Equal(t, got[0].Detail, reason)
 	assert.Equal(t, "server-default", workServerDefault.name())
 }
 
-// TestAnnotateFieldsServerDefaultNeedsACalledRead: a read the controller does
-// not call cannot produce the delta.
-func TestAnnotateFieldsServerDefaultNeedsACalledRead(t *testing.T) {
+// TestMarkServerDefaultsNeedsACalledRead: a read the controller does not call
+// cannot produce the delta, when the controller is known to call another read.
+func TestMarkServerDefaultsNeedsACalledRead(t *testing.T) {
 	in := &ControllerInputs{Config: &generatorConfig{}, UsedOps: map[string]map[string]bool{
-		"widget": {"CreateWidget": true, "UpdateWidget": true}}}
+		"widget": {"CreateWidget": true, "UpdateWidget": true, "ListWidgets": true}}}
+	finding := colorFinding()
+	finding[0].Evidence = "CreateWidget,GetWidget,UpdateWidget"
 
-	got := annotateFields(serverDefaultModel(t), in, colorFinding())
+	got := serverDefaults(t, in, finding)
+	require.Equal(t, "GetWidget", got[0].ReadBy)
 	assert.Equal(t, workNone, got[0].Work)
 	assert.Empty(t, got[0].Detail)
 }
 
-// TestAnnotateFieldsServerDefaultWithoutUsedOps: when the controller's calls
-// are unknown, any read counts, so missing data cannot mean regeneration.
-func TestAnnotateFieldsServerDefaultWithoutUsedOps(t *testing.T) {
+// TestMarkServerDefaultsWithoutUsedOps: when the controller's calls are
+// unknown, any read counts, so missing data cannot mean regeneration.
+func TestMarkServerDefaultsWithoutUsedOps(t *testing.T) {
 	in := &ControllerInputs{Config: &generatorConfig{}}
 	finding := colorFinding()
 	finding[0].Evidence = "CreateWidget,GetWidget,UpdateWidget"
 
-	got := annotateFields(serverDefaultModel(t), in, finding)
+	got := serverDefaults(t, in, finding)
 	assert.Equal(t, workServerDefault, got[0].Work)
 }
 
-// TestAnnotateFieldsServerDefaultKeepsOtherWork: work already found wins, and
-// Status fields are not affected. The Status field is Name, not Color: a Status
-// Color would be folded into the Spec Color by foldReadBacks.
-func TestAnnotateFieldsServerDefaultKeepsOtherWork(t *testing.T) {
+// TestMarkServerDefaultsWithoutACalledRead: scanUsedOps can miss reads made
+// through helpers, so a package with no read at all among its calls counts as
+// unknown too.
+func TestMarkServerDefaultsWithoutACalledRead(t *testing.T) {
+	in := &ControllerInputs{Config: &generatorConfig{}, UsedOps: map[string]map[string]bool{
+		"widget": {"CreateWidget": true, "UpdateWidget": true}}}
+	finding := colorFinding()
+	finding[0].Evidence = "CreateWidget,GetWidget,UpdateWidget"
+
+	got := serverDefaults(t, in, finding)
+	require.Equal(t, "GetWidget", got[0].ReadBy)
+	assert.Equal(t, workServerDefault, got[0].Work)
+}
+
+// TestMarkServerDefaultsKeepsOtherWork: work already found is kept, with the
+// hazard added to its Detail (a server-defaulted immutable field fails every
+// existing resource). Status fields are not affected. The Status field is Name,
+// not Color: a Status Color would be folded into the Spec Color by foldReadBacks.
+func TestMarkServerDefaultsKeepsOtherWork(t *testing.T) {
 	in := &ControllerInputs{Config: &generatorConfig{}, UsedOps: map[string]map[string]bool{
 		"widget": {"CreateWidget": true, "GetWidget": true}}}
 
-	got := annotateFields(serverDefaultModel(t), in, []Finding{
+	got := serverDefaults(t, in, []Finding{
 		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, Evidence: "CreateWidget"},
 		{Kind: "Widget", Class: ClassStatusField, Subject: "Name", NewSincePin: true, Evidence: "GetWidget"},
 	})
 	require.Len(t, got, 2)
-	assert.Equal(t, "GetWidget", got[1].ReadBy)
 	assert.Equal(t, workCreateOnly, got[0].Work, "only Create sends it, so is_immutable comes first")
+	assert.Equal(t, createOnlyDetail+"; "+serverDefaultDetail, got[0].Detail)
+	assert.Contains(t, got[0].Detail, "late_initialize")
+	assert.Equal(t, "GetWidget", got[1].ReadBy)
 	assert.Equal(t, workNone, got[1].Work)
+	assert.Empty(t, got[1].Detail)
+}
+
+// TestMarkServerDefaultsSkipsNotGeneratedAndPreexisting: a field codegen does
+// not add is not in the CRD, so it cannot show a delta; a field that predates
+// the generation pin is not this upgrade's change.
+func TestMarkServerDefaultsSkipsNotGeneratedAndPreexisting(t *testing.T) {
+	in := &ControllerInputs{Config: &generatorConfig{}}
+	read := "GetWidget"
+	got := markServerDefaults(in, []Finding{
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Color", NewSincePin: true, ReadBy: read,
+			Work: workNotGenerated, Detail: "regeneration does not add it"},
+		{Kind: "Widget", Class: ClassSpecField, Subject: "Size", ReadBy: read},
+	})
+	assert.Equal(t, workNotGenerated, got[0].Work)
+	assert.Equal(t, "regeneration does not add it", got[0].Detail)
+	assert.Equal(t, workNone, got[1].Work)
+	assert.Empty(t, got[1].Detail)
 }
 
 func TestServerDefaultReadParsesRoleEntries(t *testing.T) {
 	in := &ControllerInputs{UsedOps: map[string]map[string]bool{"widget": {"GetWidget": true}}}
-	f := Finding{Kind: "Widget", ReadBy: "DescribeWidgetHistory,GetWidget=Widget.Color"}
-	assert.Equal(t, "GetWidget", serverDefaultRead(in, f))
-	assert.Empty(t, serverDefaultRead(in, Finding{Kind: "Widget"}))
+	assert.True(t, serverDefaultRead(in, Finding{Kind: "Widget", ReadBy: "DescribeWidgetHistory,GetWidget=Widget.Color"}))
+	assert.False(t, serverDefaultRead(in, Finding{Kind: "Widget", ReadBy: "DescribeWidgetHistory=Widget.Color"}))
+	assert.False(t, serverDefaultRead(in, Finding{Kind: "Widget"}))
+}
+
+// TestFindingsWithCodegenRunsServerDefaultsLast: the server-default pass runs
+// after reconcileWithCodegen, so a field codegen does not add stays
+// not-generated even though a called read returns it, and one codegen adds
+// gets server-default.
+func TestFindingsWithCodegenRunsServerDefaultsLast(t *testing.T) {
+	baseline, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#CreateWidget": {"type": "operation", "input": {"target": "demo#CreateWidgetInput"}},
+		"demo#CreateWidgetInput": {"type": "structure", "members": {"Name": {"target": "smithy.api#String"}}},
+		"demo#UpdateWidget": {"type": "operation", "input": {"target": "demo#CreateWidgetInput"}},
+		"demo#GetWidget": {"type": "operation", "input": {"target": "demo#GetWidgetInput"},
+			"output": {"target": "demo#GetWidgetOutput"}},
+		"demo#GetWidgetInput": {"type": "structure", "members": {"Name": {"target": "smithy.api#String"}}},
+		"demo#GetWidgetOutput": {"type": "structure", "members": {"Name": {"target": "smithy.api#String"}}}
+	}}`))
+	require.NoError(t, err)
+	latest, err := LoadSmithyModel([]byte(`{"shapes": {
+		"demo#CreateWidget": {"type": "operation", "input": {"target": "demo#CreateWidgetInput"}},
+		"demo#CreateWidgetInput": {"type": "structure", "members": {
+			"Name": {"target": "smithy.api#String"}, "Color": {"target": "smithy.api#String"},
+			"Hidden": {"target": "smithy.api#String"}}},
+		"demo#UpdateWidget": {"type": "operation", "input": {"target": "demo#CreateWidgetInput"}},
+		"demo#GetWidget": {"type": "operation", "input": {"target": "demo#GetWidgetInput"},
+			"output": {"target": "demo#GetWidgetOutput"}},
+		"demo#GetWidgetInput": {"type": "structure", "members": {"Name": {"target": "smithy.api#String"}}},
+		"demo#GetWidgetOutput": {"type": "structure", "members": {
+			"Name": {"target": "smithy.api#String"}, "Color": {"target": "smithy.api#String"},
+			"Hidden": {"target": "smithy.api#String"}}}
+	}}`))
+	require.NoError(t, err)
+	in := codegenFixtureInputs("")
+	// UpdateWidget sends both fields, so neither is create-only.
+	in.UsedOps = map[string]map[string]bool{"widget": {"CreateWidget": true, "GetWidget": true, "UpdateWidget": true}}
+	pin := &codegenCRD{Kind: "Widget", Spec: map[string]string{"name": "Name"}, Status: map[string]string{},
+		Ops: []string{"CreateWidget", "GetWidget", "UpdateWidget"}, Create: "CreateWidget"}
+	gen := *pin
+	gen.Spec = map[string]string{"name": "Name", "color": "Color"}
+	view := &codegenView{pin: codegenCRDs{"widget": pin}, latest: codegenCRDs{"widget": &gen}}
+
+	got := findingsWithCodegen(latest, baseline, in, view)
+	spec := map[string]Finding{}
+	for _, f := range got {
+		if f.Class == ClassSpecField {
+			spec[f.Subject] = f
+		}
+	}
+	require.Contains(t, spec, "Color")
+	require.Contains(t, spec, "Hidden")
+	assert.Equal(t, "GetWidget", spec["Color"].ReadBy)
+	assert.Equal(t, workServerDefault, spec["Color"].Work)
+	assert.Equal(t, "GetWidget", spec["Hidden"].ReadBy)
+	assert.Equal(t, workNotGenerated, spec["Hidden"].Work)
+	assert.NotContains(t, spec["Hidden"].Detail, "late_initialize")
 }

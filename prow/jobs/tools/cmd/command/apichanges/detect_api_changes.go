@@ -598,8 +598,15 @@ func analyzeService(
 	if err != nil {
 		return nil, baselineVersion, latestVersion, err
 	}
-	findings := reconcileWithCodegen(latest, collectFindings(latest, baselineModel, in), in, view)
-	return findings, baselineVersion, latestVersion, nil
+	return findingsWithCodegen(latest, baselineModel, in, view), baselineVersion, latestVersion, nil
+}
+
+// findingsWithCodegen collects the findings over one pair of models and
+// reconciles them with code-generator's view. markServerDefaults runs last: it
+// must not pre-empt reconcileWithCodegen's workNotGenerated.
+func findingsWithCodegen(latest, baseline *SmithyModel, in *ControllerInputs, view *codegenView) []Finding {
+	findings := reconcileWithCodegen(latest, collectFindings(latest, baseline, in), in, view)
+	return markServerDefaults(in, findings)
 }
 
 // collectFindings runs every producer over one pair of models.

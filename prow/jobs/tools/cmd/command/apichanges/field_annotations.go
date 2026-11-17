@@ -29,10 +29,11 @@ import (
 //     field's custom code.
 //   - A Spec field only a Create sends is immutable.
 //   - A Status `W.X` reading back Spec field X is folded into X.
-//   - A Spec field with no other work that a called read returns may have a
-//     server default (see workServerDefault).
 //
 // Last, each field's operations are split into those that set and return it.
+//
+// The server-default check runs later, in markServerDefaults, after
+// reconcileWithCodegen.
 func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	findings = foldReadBacks(latest, findings)
 
@@ -127,42 +128,67 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		f.SetBy, f.ReadBy, f.ReturnedBy = newEvidence(setBy), newEvidence(readBy), newEvidence(returnedBy)
 	}
 
-	// Last, because it reads ReadBy and yields to any other work.
+	return findings
+}
+
+// markServerDefaults flags new Spec fields a read the controller calls returns
+// (see workServerDefault). It runs after reconcileWithCodegen, because a field
+// codegen does not add (workNotGenerated) is not in the CRD and so cannot show
+// a delta. A field that already needs other work keeps it, with the hazard
+// added to its Detail: a server-defaulted is_immutable field fails every
+// existing resource.
+func markServerDefaults(in *ControllerInputs, findings []Finding) []Finding {
 	for i := range findings {
 		f := &findings[i]
-		if f.Class != ClassSpecField || f.Work != workNone || f.Detail != "" {
+		if f.Class != ClassSpecField || !f.NewSincePin || f.Work == workNotGenerated || !serverDefaultRead(in, *f) {
 			continue
 		}
-		if op := serverDefaultRead(in, *f); op != "" {
-			f.Detail, f.Work = serverDefaultDetail(op), workServerDefault
+		if f.Work == workNone {
+			f.Work = workServerDefault
+		}
+		if f.Detail == "" {
+			f.Detail = serverDefaultDetail
+		} else {
+			f.Detail += "; " + serverDefaultDetail
 		}
 	}
 	return findings
 }
 
-// serverDefaultRead returns the first ReadBy operation the resource's package
-// calls, or "" when it calls none. When the package's calls are unknown, any
-// read counts, so missing data cannot route a field to regeneration.
-func serverDefaultRead(in *ControllerInputs, f Finding) string {
+// serverDefaultRead reports whether a ReadBy operation is one the resource's
+// package calls. When the package's calls are unknown, or include no read
+// (scanUsedOps can miss reads made through helpers), any read counts, so
+// missing data cannot route a field to regeneration.
+func serverDefaultRead(in *ControllerInputs, f Finding) bool {
 	if f.ReadBy == "" {
-		return ""
+		return false
 	}
 	called := in.UsedOps[kindToResourceDir(f.Kind)]
-	for _, entry := range strings.Split(f.ReadBy, ",") {
-		op, _, _ := strings.Cut(entry, "=")
-		if len(called) == 0 || called[op] {
-			return op
+	declared := []string{}
+	if in.Config != nil {
+		declared = in.Config.ResourceNames()
+	}
+	known := false
+	for op := range called {
+		if opTypes, _ := in.ClassifyOpWithOverrides(op, declared); isReadOp(opTypes, op) {
+			known = true
+			break
 		}
 	}
-	return ""
+	for _, entry := range strings.Split(f.ReadBy, ",") {
+		op, _, _ := strings.Cut(entry, "=")
+		if !known || called[op] {
+			return true
+		}
+	}
+	return false
 }
 
-// serverDefaultDetail explains workServerDefault for the issue.
-func serverDefaultDetail(op string) string {
-	return fmt.Sprintf("read back by `%s`: if the service fills it in when it is unset, every existing "+
-		"resource shows a Spec delta after the upgrade; decide `late_initialize`, `compare.is_ignored`, "+
-		"or that it has no server default", op)
-}
+// serverDefaultDetail explains workServerDefault for the issue. The rendered
+// bullet already names the read.
+const serverDefaultDetail = "read back by the controller: if the service fills it in when it is unset, " +
+	"every existing resource shows a Spec delta after the upgrade; decide `late_initialize`, " +
+	"`compare.is_ignored`, or that it has no server default"
 
 // roleIndex answers where an operation's request or response carries a field,
 // caching each shape walk since every field is checked against every used operation.
