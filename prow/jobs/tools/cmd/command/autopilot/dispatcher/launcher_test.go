@@ -72,3 +72,13 @@ func TestRunningHelperLintsClean(t *testing.T) {
 	require.NoError(t, ledger.Save(root, ledgerOf(w)))
 	assert.Empty(t, ledger.Lint(root))
 }
+
+func TestShadowLauncherRecordsAborts(t *testing.T) {
+	s := &ShadowLauncher{}
+	require.NoError(t, s.Abort(context.Background(), "autopilot-x-r1"))
+	require.NoError(t, s.Abort(context.Background(), "autopilot-x-r1"))
+	assert.Equal(t, []string{"autopilot-x-r1", "autopilot-x-r1"}, s.Aborts)
+
+	_, err := NewLauncher(policy.Policy{Switches: policy.Switches{Launcher: policy.LauncherProw}})
+	assert.ErrorContains(t, err, "built by the dispatch command")
+}

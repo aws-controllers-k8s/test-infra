@@ -37,7 +37,7 @@ func TestResultMatchesTheSharedGolden(t *testing.T) {
 
 	rr, err := dispatcher.ParseResult(got, goldenWI)
 	require.NoError(t, err)
-	assert.Equal(t, dispatcher.RunResult{Outcome: "pr_opened", PR: goldenResult.PR}, rr)
+	assert.Equal(t, dispatcher.RunResult{Outcome: "pr_opened", PR: goldenResult.PR, Workflow: "sdk-bump", ProwJobID: "autopilot-0123456789abcdef-g1-r1"}, rr)
 }
 
 func TestWriteResultReplacesTheFile(t *testing.T) {
