@@ -82,3 +82,16 @@ func TestShadowLauncherRecordsAborts(t *testing.T) {
 	_, err := NewLauncher(policy.Policy{Switches: policy.Switches{Launcher: policy.LauncherProw}})
 	assert.ErrorContains(t, err, "built by the dispatch command")
 }
+
+func TestConfigOnlyLanePassesDetectorWork(t *testing.T) {
+	field := item("api-change|s3|Bucket|spec:Mode|needs-config", "config-only", ledger.Queued)
+	field.Resource, field.FieldPath = "Bucket", "Mode"
+	for work, want := range map[string]string{"server-default": "server-default", "create-only": "create-only",
+		"not-generated": "not-generated", "": "", "from-sibling": "", "bogus\n": ""} {
+		field.DetectorWork = work
+		got, ok := lanes["config-only"].args(field)["detector-work"]
+		assert.Equal(t, want != "", ok, work)
+		assert.Equal(t, want, got, work)
+	}
+	assert.Equal(t, 2, lanes["config-only"].MaxRunning)
+}

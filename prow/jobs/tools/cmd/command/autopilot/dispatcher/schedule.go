@@ -34,6 +34,10 @@ const (
 	CapOpenPRs           = "max_open_prs_per_repo_class"
 	CapSDKBumpDaily      = "max_sdk_bump_launches_per_day"
 	CapReview            = "max_prs_awaiting_review"
+	// CapLane: the lane's own MaxRunning (config-only: 2).
+	CapLane = "lane-max-running"
+	// CapAborting: policy abort_inflight is set, so nothing launches.
+	CapAborting = "abort_inflight"
 	// CapNoLane: a QUEUED item of a class no workflow handles. A guard for
 	// hand-edited ledgers: route returns no-lane items to TRIAGED before
 	// schedule runs.
@@ -57,20 +61,36 @@ type capped struct {
 type load struct {
 	runsPerRepo    map[string]int
 	llmRuns        int
+	laneRuns       map[string]int // workflow
+	busyServices   map[string]bool
 	openPRs        map[string]int // repo + "|" + class
 	awaitingReview int
 	launchesToday  map[string]int // class
 	expensiveToday map[string]int // service
 }
 
-func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time) *load {
-	l := &load{runsPerRepo: map[string]int{}, openPRs: map[string]int{}, launchesToday: map[string]int{}, expensiveToday: map[string]int{}}
+// newLoad counts the ledger's load, plus orphans: runs the launcher sees in
+// flight that no item claims. An orphan counts against its workflow's caps and
+// keeps its service busy.
+func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time, orphans []ActiveJob) *load {
+	l := &load{runsPerRepo: map[string]int{}, openPRs: map[string]int{}, launchesToday: map[string]int{},
+		expensiveToday: map[string]int{}, laneRuns: map[string]int{}, busyServices: map[string]bool{}}
+	for _, o := range orphans {
+		l.laneRuns[o.Workflow]++
+		if llmWorkflow(o.Workflow) {
+			l.llmRuns++
+		}
+		l.busyServices[o.Service] = true
+	}
 	dayAgo := now.Add(-24 * time.Hour)
 	for _, w := range items {
 		if w.State.ActiveRun() {
 			l.runsPerRepo[w.Repo]++
-			if w.Claim != nil && llmWorkflow(w.Claim.Workflow) {
-				l.llmRuns++
+			if w.Claim != nil {
+				l.laneRuns[w.Claim.Workflow]++
+				if llmWorkflow(w.Claim.Workflow) {
+					l.llmRuns++
+				}
 			}
 			// The run will open a PR.
 			l.openPRs[w.Repo+"|"+w.ChangeClass]++
@@ -102,6 +122,7 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time)
 
 func (l *load) add(w *ledger.WorkItem, ln lane, b policy.Budgets) {
 	l.runsPerRepo[w.Repo]++
+	l.laneRuns[ln.Workflow]++
 	if ln.LLM {
 		l.llmRuns++
 	}
@@ -118,6 +139,16 @@ func (l *load) add(w *ledger.WorkItem, ln lane, b policy.Budgets) {
 // schedule picks the QUEUED items to launch this tick, in launch order, and
 // says why each other QUEUED item waits. It changes no item.
 func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time) ([]candidate, []capped) {
+	return scheduleWith(items, p, now, nil, nil)
+}
+
+// scheduleWith is schedule with the launcher's view of what is in flight:
+// orphans count against the caps, and adopt holds the launch ids of runs
+// already in flight for a QUEUED item's next run (a launch whose ledger push
+// was lost). Such an item is weighed first and skips the load caps: Launch
+// adopts the running job, so picking it starts nothing, and its run must be
+// counted before anything else is weighed.
+func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time, orphans []ActiveJob, adopt map[string]bool) ([]candidate, []capped) {
 	sw, b := p.Switches, p.Budgets
 	lastVisit := map[string]string{}
 	var queue []*ledger.WorkItem
@@ -148,8 +179,9 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 		}
 		return a.Key < c.Key
 	})
+	sort.SliceStable(queue, func(i, j int) bool { return adopt[nextLaunchID(queue[i])] && !adopt[nextLaunchID(queue[j])] })
 
-	l := newLoad(items, b, now)
+	l := newLoad(items, b, now, orphans)
 	var picks []candidate
 	var waits []capped
 	for _, w := range queue {
@@ -175,16 +207,22 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 		switch {
 		case sw.Paused:
 			cap = CapPaused
+		case sw.AbortInflight:
+			cap = CapAborting
 		case sw.RepoPaused(w.Repo):
 			cap = CapRepoPaused
 		case !sw.ServiceEnabled(w.Service):
 			cap = CapServiceNotEnabled
 		case runs >= maxRuns:
 			cap = CapRuns
-		case l.runsPerRepo[w.Repo] >= b.MaxConcurrentRunsPerRepo:
+		case adopt[nextLaunchID(w)]:
+			// Already running: no load cap applies.
+		case l.runsPerRepo[w.Repo] >= b.MaxConcurrentRunsPerRepo || l.busyServices[w.Service]:
 			cap = CapRepoBusy
 		case ln.LLM && l.llmRuns >= b.MaxConcurrentLLMRuns:
 			cap = CapLLM
+		case ln.MaxRunning > 0 && l.laneRuns[ln.Workflow] >= ln.MaxRunning:
+			cap = CapLane
 		case b.Expensive(w.Service) && l.expensiveToday[w.Service] >= b.MaxExpensiveLaunchesPerDay:
 			cap = CapExpensive
 		case perClass && l.openPRs[w.Repo+"|"+w.ChangeClass] >= b.MaxOpenPRsPerRepoClass:
@@ -202,6 +240,15 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 		l.add(w, ln, b)
 	}
 	return picks, waits
+}
+
+// nextLaunchID is the launch id of the item's next run.
+func nextLaunchID(w *ledger.WorkItem) string {
+	run := 1
+	if w.Attempts != nil {
+		run = w.Attempts.Runs + 1
+	}
+	return launchID(w, run)
 }
 
 // queuedSince is when the item last entered QUEUED.

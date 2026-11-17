@@ -19,9 +19,17 @@ import "github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/au
 type lane struct {
 	Workflow string
 	// LLM counts the run against max_concurrent_llm_runs.
-	LLM  bool
-	args func(w *ledger.WorkItem) map[string]string
+	LLM bool
+	// MaxRunning caps this lane's runs in flight, whatever the policy says:
+	// the ledger's budgets can lower it, never raise it. 0 means no lane cap.
+	MaxRunning int
+	args       func(w *ledger.WorkItem) map[string]string
 }
+
+// detectorWorkArg lists the detector work names add-field accepts as
+// --detector-work (issuefinder configOnlyWork; workflows/validation.py
+// DETECTOR_WORKS). Other values are not passed.
+var detectorWorkArg = map[string]bool{"create-only": true, "not-generated": true, "server-default": true}
 
 // lanes maps a change class to the workflow that does it (design 3, 6). A
 // triaged item of a class not listed has no workflow in Phase 1 and is held
@@ -37,13 +45,20 @@ var lanes = map[string]lane{
 			"work-item": w.KeyHash, "change-class": w.ChangeClass,
 		}
 	}},
-	// add-field's required_args, plus the provenance optional_args in
-	// prow/agent-workflows/templates/add-field.tpl.
-	"config-only": {Workflow: "add-field", LLM: true, args: func(w *ledger.WorkItem) map[string]string {
-		return map[string]string{
+	// add-field's required_args, plus the provenance and detector-work
+	// optional_args in prow/agent-workflows/templates/add-field.tpl. At most
+	// two run at once (owner decision 2026-11-16).
+	"config-only": {Workflow: "add-field", LLM: true, MaxRunning: 2, args: func(w *ledger.WorkItem) map[string]string {
+		args := map[string]string{
 			"service": w.Service, "resource": w.Resource, "field": w.FieldPath,
 			"work-item": w.KeyHash, "change-class": w.ChangeClass,
 		}
+		// Plan 4 carry-over: a server-default item's field is already in the
+		// CRD after its bump; the agent's job is the decision about it.
+		if detectorWorkArg[w.DetectorWork] {
+			args["detector-work"] = w.DetectorWork
+		}
+		return args
 	}},
 }
 

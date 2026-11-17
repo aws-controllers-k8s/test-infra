@@ -273,3 +273,52 @@ func TestScheduleNoQueuedHistorySortsLast(t *testing.T) {
 	picks, _ := schedule(ledgerOf(a, b), p, now)
 	assert.Equal(t, []string{b.Key, a.Key}, pickKeys(picks))
 }
+
+func TestScheduleConfigOnlyLaneCapHoldsAboveThePolicy(t *testing.T) {
+	r1 := running(item("api-change|iam|Role|spec:A|needs-config", "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	r2 := running(item("api-change|rds|DBInstance|spec:A|needs-config", "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	q := queued("api-change|s3|Bucket|spec:A|needs-config", "config-only", 4, t0)
+	p := testPolicy(t)
+	p.Budgets.MaxConcurrentLLMRuns = 8 // a ledger edit cannot raise the lane's 2
+	picks, waits := schedule(ledgerOf(r1, r2, q), p, now)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{q.Key: CapLane}, waitCaps(waits))
+}
+
+func TestScheduleCountsOrphans(t *testing.T) {
+	q := queued("api-change|s3|Bucket|spec:A|needs-config", "config-only", 4, t0)
+	bump := queued("sdk-bump|iam|*|v1", "SDK-bump", 3, t0)
+	orphans := []ActiveJob{
+		{LaunchID: "autopilot-1111111111111111-g1-r1", Workflow: "add-field", Service: "rds"},
+		{LaunchID: "autopilot-2222222222222222-g1-r1", Workflow: "add-field", Service: "eks"},
+		{LaunchID: "autopilot-3333333333333333-g1-r1", Workflow: "sdk-bump", Service: "iam"},
+	}
+	picks, waits := scheduleWith(ledgerOf(q, bump), testPolicy(t), now, orphans, nil)
+	assert.Empty(t, picks)
+	assert.Equal(t, map[string]string{q.Key: CapLLM, bump.Key: CapRepoBusy}, waitCaps(waits))
+}
+
+func TestScheduleAbortInflightLaunchesNothing(t *testing.T) {
+	a := queued("sdk-bump|s3|*|v1", "SDK-bump", 0, t0)
+	p := testPolicy(t)
+	p.Switches.AbortInflight = true
+	picks, waits := schedule(ledgerOf(a), p, now)
+	assert.Empty(t, picks, "not even band 0")
+	assert.Equal(t, map[string]string{a.Key: CapAborting}, waitCaps(waits))
+}
+
+func TestScheduleAdoptsFirstAndSkipsLoadCaps(t *testing.T) {
+	r1 := running(item("api-change|iam|Role|spec:A|needs-config", "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	r2 := running(item("api-change|rds|DBInstance|spec:A|needs-config", "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	early := queued("api-change|eks|Cluster|spec:A|needs-config", "config-only", 4, t0)
+	lost := queued("api-change|s3|Bucket|spec:A|needs-config", "config-only", 4, "2026-11-12T08:45:00Z")
+	adopt := map[string]bool{nextLaunchID(lost): true}
+	picks, waits := scheduleWith(ledgerOf(r1, r2, early, lost), testPolicy(t), now, nil, adopt)
+	assert.Equal(t, []string{lost.Key}, pickKeys(picks), "already running: adopted whatever the load")
+	assert.Equal(t, map[string]string{early.Key: CapLLM}, waitCaps(waits))
+
+	p := testPolicy(t)
+	p.Switches.Paused = true
+	picks, _ = scheduleWith(ledgerOf(lost), p, now, nil, adopt)
+	assert.Empty(t, picks, "the kill switches still apply")
+}
