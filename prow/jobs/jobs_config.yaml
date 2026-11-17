@@ -118,6 +118,11 @@ ignore_field_drift_test_services:
 chainsaw_test_services:
 - ec2
 
+# ACK Autopilot Plan 5: services that get the optional <service>-autopilot-dod
+# presubmit, started only by hand with /test. It runs ack-dod and uploads its
+# verdict; it mounts no credentials. Empty: nothing is wired in Phase 1.
+autopilot_dod_services: []
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
