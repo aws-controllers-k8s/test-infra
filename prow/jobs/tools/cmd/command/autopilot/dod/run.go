@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -423,19 +424,40 @@ func WriteText(w io.Writer, v *Verdict, digest string) error {
 	return err
 }
 
-// BuildRevision is the binary's VCS revision, recorded in every verdict.
+// BuildRevision is the binary's VCS revision, recorded in every verdict (and
+// never used to decide it). It is the build's vcs.revision stamp; a binary
+// built without one (go build from a git worktree, go test) falls back to the
+// HEAD of the tools checkout it was compiled from, if that is still on disk;
+// otherwise "unknown".
 func BuildRevision() string {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "unknown"
+	var settings []debug.BuildSetting
+	if info, ok := debug.ReadBuildInfo(); ok {
+		settings = info.Settings
 	}
+	src := ""
+	if _, file, _, ok := runtime.Caller(0); ok && filepath.IsAbs(file) {
+		src = filepath.Dir(file)
+	}
+	return revisionFrom(settings, src)
+}
+
+func revisionFrom(settings []debug.BuildSetting, srcDir string) string {
 	rev, dirty := "", false
-	for _, s := range info.Settings {
+	for _, s := range settings {
 		switch s.Key {
 		case "vcs.revision":
 			rev = s.Value
 		case "vcs.modified":
 			dirty = s.Value == "true"
+		}
+	}
+	if rev == "" && srcDir != "" {
+		g := gitRepo{dir: srcDir}
+		ctx := context.Background()
+		if sha, err := g.commitSHA(ctx, "HEAD"); err == nil {
+			rev = sha
+			out, err := g.run(ctx, "status", "--porcelain", "--untracked-files=no")
+			dirty = err != nil || len(bytes.TrimSpace(out)) > 0
 		}
 	}
 	if rev == "" {

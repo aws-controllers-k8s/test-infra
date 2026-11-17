@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -326,4 +327,39 @@ func TestRunLeaksScanMergeCommitMessages(t *testing.T) {
 		found = found || fd.File == "commit:"+short
 	}
 	assert.True(t, found, "the merge commit's message is scanned: %+v", leaks.Findings)
+}
+
+func TestRevisionFrom(t *testing.T) {
+	stamped := []debug.BuildSetting{{Key: "vcs.revision", Value: "abc"}, {Key: "vcs.modified", Value: "true"}}
+	assert.Equal(t, "abc-dirty", revisionFrom(stamped, ""))
+
+	// No VCS stamp (a go build from a worktree, or go test): fall back to the
+	// tools checkout's HEAD.
+	r := dodtest.NewRepo(t)
+	r.Write("x", "x\n")
+	head := r.Commit("x")
+	assert.Equal(t, head, revisionFrom(nil, r.Dir))
+	r.Write("x", "y\n")
+	assert.Equal(t, head+"-dirty", revisionFrom(nil, r.Dir))
+
+	assert.Equal(t, "unknown", revisionFrom(nil, t.TempDir()))
+	assert.Equal(t, "unknown", revisionFrom(nil, ""))
+}
+
+// The tool revision is recorded, never judged: an unknown revision decides
+// nothing.
+func TestRunToolRevisionDoesNotDecide(t *testing.T) {
+	f := sdkBump(t)
+	o := options(t, f)
+	o.ToolRevision = ""
+	a, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.Equal(t, "unknown", a.Tool.Revision)
+	o.ToolRevision = "abc"
+	b, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, a.Verdict)
+	assert.Equal(t, b.Verdict, a.Verdict)
+	assert.Equal(t, b.Reasons, a.Reasons)
+	assert.Equal(t, b.Checks, a.Checks)
 }
