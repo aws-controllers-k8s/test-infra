@@ -198,16 +198,18 @@ type WorkItem struct {
 	PriorityBand  int    `json:"priority_band"`
 	// DetectorWork is the detector's Work name for a needs-config item. For a
 	// manual-review item, which has no Work, it holds the detector Class.
-	DetectorWork string       `json:"detector_work,omitempty"`
-	Evidence     Evidence     `json:"evidence"`
-	DependsOn    []string     `json:"depends_on,omitempty"`
-	Attempts     *Attempts    `json:"attempts,omitempty"`
-	Usage        *Usage       `json:"usage,omitempty"`
-	State        State        `json:"state"`
-	Links        Links        `json:"links"`
-	Claim        *Claim       `json:"claim,omitempty"`
-	Verdict      *Verdict     `json:"verdict"`
-	History      []Transition `json:"history"`
+	DetectorWork string    `json:"detector_work,omitempty"`
+	Evidence     Evidence  `json:"evidence"`
+	DependsOn    []string  `json:"depends_on,omitempty"`
+	Attempts     *Attempts `json:"attempts,omitempty"`
+	Usage        *Usage    `json:"usage,omitempty"`
+	State        State     `json:"state"`
+	Links        Links     `json:"links"`
+	Claim        *Claim    `json:"claim,omitempty"`
+	Verdict      *Verdict  `json:"verdict"`
+	// Triage is the triage workflow's record (Plan 8); needs-config items only.
+	Triage  *Triage      `json:"triage,omitempty"`
+	History []Transition `json:"history"`
 }
 
 // KeyHash is the short, stable id of a key: "sha256:" and 16 hex digits.
