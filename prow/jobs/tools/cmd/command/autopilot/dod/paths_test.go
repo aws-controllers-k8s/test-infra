@@ -23,6 +23,8 @@ import (
 
 const hdr = dodtest.GoHeader + "package x\n"
 
+const dodtestHeader = dodtest.GoHeader
+
 func mod(path string) changedFile {
 	return withGen(changedFile{Path: path, Status: 'M', Base: []byte("a\n"), Head: []byte("b\n")})
 }
