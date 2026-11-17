@@ -35,9 +35,10 @@ import tempfile
 from pathlib import Path
 
 SCHEMA = "ack.autopilot.result/v1"
-# Every workflow that writes a result. A new one (sdk-bump in Plan 6) must be
-# added here, or its runs cannot record anything.
-WORKFLOWS = ("add-resource", "add-field", "address-feedback")
+# Every workflow that writes a result. sdk-bump (Plan 6) is written by Go
+# (ack-build-tools autopilot sdk-bump, autopilot/sdkbump/result.go) with the
+# same bytes; tests/test_roles_offline.py checks its golden file here.
+WORKFLOWS = ("add-resource", "add-field", "address-feedback", "sdk-bump")
 # Design 4.1 outcomes a run can report, plus pr_opened (a run that left a PR
 # for review) and pr_updated (address-feedback pushed to an existing PR).
 OUTCOMES = frozenset({
