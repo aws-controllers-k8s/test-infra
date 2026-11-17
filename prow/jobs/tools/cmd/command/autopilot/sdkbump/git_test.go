@@ -117,6 +117,32 @@ func TestSameBumpIgnoresOnlyBuildDate(t *testing.T) {
 	assert.False(t, same, "the remote head must be one commit on this base")
 }
 
+// ack-generate also stamps the build date into pkg/version/version.go (seen in
+// the Task 16 dry run on s3-controller), so a re-run must ignore that line too.
+func TestSameBumpIgnoresTheVersionGoBuildDate(t *testing.T) {
+	ctx := context.Background()
+	r := newRepos(t)
+	g := gitOps{dir: r.ctrl.Dir, run: dod.ExecRunner}
+	base, _ := g.revParse(ctx, "HEAD")
+	commit := func(date, version string) string {
+		require.NoError(t, g.checkout(ctx, base))
+		r.ctrl.Write(metaPath, genMeta(r.cgSHA, "v1.97.3", date))
+		r.ctrl.Write(versionGoPath, "package version\n\nconst (\n\tACKGenerateVersion   = \""+version+"\"\n\tACKGenerateBuildDate = \""+date+"\"\n)\n")
+		c, err := g.commitBump(ctx, base, "bump", "ack-bot", botEmail)
+		require.NoError(t, err)
+		return c
+	}
+	a := commit("2026-11-16T00:00:01Z", "v0.68.0")
+	b := commit("2026-11-16T00:00:02Z", "v0.68.0")
+	c := commit("2026-11-16T00:00:03Z", "v0.69.0")
+	same, err := g.sameBump(ctx, base, a, b, metaPath)
+	require.NoError(t, err)
+	assert.True(t, same)
+	same, err = g.sameBump(ctx, base, a, c, metaPath)
+	require.NoError(t, err)
+	assert.False(t, same, "a version change is not volatile")
+}
+
 func TestWorktreeChecksOutARevision(t *testing.T) {
 	ctx := context.Background()
 	r := newRepos(t)

@@ -141,11 +141,16 @@ func (g gitOps) foreignCommits(ctx context.Context, base, head, botEmail string)
 	return foreign, nil
 }
 
-var volatileLine = regexp.MustCompile(`^[+-]\s*build_date:`)
+// versionGoPath is the generated file where ack-generate stamps its build
+// date as well (ACKGenerateBuildDate).
+const versionGoPath = "pkg/version/version.go"
+
+var volatileLine = regexp.MustCompile(`^[+-]\s*(build_date:|ACKGenerateBuildDate\s*=)`)
 
 // sameBump reports whether remote is one commit on base whose tree differs
-// from cand only in build_date: lines of the generation metadata, which
-// ack-generate stamps with the clock on every run.
+// from cand only in the build date lines ack-generate stamps with the clock on
+// every run: build_date: in the generation metadata and ACKGenerateBuildDate in
+// pkg/version/version.go.
 func (g gitOps) sameBump(ctx context.Context, base, remote, cand, metadataPath string) (bool, error) {
 	parents, err := g.git(ctx, "rev-list", "--parents", "-n", "1", remote)
 	if err != nil {
@@ -158,14 +163,16 @@ func (g gitOps) sameBump(ctx context.Context, base, remote, cand, metadataPath s
 	if err != nil {
 		return false, err
 	}
-	switch names {
-	case "":
+	if names == "" {
 		return true, nil
-	case metadataPath:
-	default:
-		return false, nil
 	}
-	diff, err := g.git(ctx, "diff", "-U0", "--no-ext-diff", remote, cand, "--", metadataPath)
+	files := strings.Split(names, "\n")
+	for _, f := range files {
+		if f != metadataPath && f != versionGoPath {
+			return false, nil
+		}
+	}
+	diff, err := g.git(ctx, append([]string{"diff", "-U0", "--no-ext-diff", remote, cand, "--"}, files...)...)
 	if err != nil {
 		return false, err
 	}
