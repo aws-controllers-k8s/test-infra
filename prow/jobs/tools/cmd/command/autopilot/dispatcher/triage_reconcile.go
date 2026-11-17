@@ -57,8 +57,7 @@ func reconcileTriage(ctx context.Context, items map[string]*ledger.WorkItem, l L
 			continue
 		}
 		if w.State != ledger.Detected {
-			t.AppendLog(ledger.TriageEvent{TS: ts, Event: ledger.TriageDiscarded, LaunchID: t.Claim.LaunchID, Reason: "ITEM_" + string(w.State)})
-			t.Claim = nil
+			discardTriage(w, ts)
 			continue
 		}
 		st, err := l.Status(ctx, t.Claim.LaunchID)
@@ -143,6 +142,15 @@ func applyTriage(w *ledger.WorkItem, r RunResult, maxRuns int, ts string) {
 	}
 }
 
+// discardTriage drops the run in flight of an item that has left DETECTED (the
+// issue finder closed it, or a hand edit moved it): the item stays where it
+// is, and nothing the run reports is kept.
+func discardTriage(w *ledger.WorkItem, ts string) {
+	t := w.Triage
+	t.AppendLog(ledger.TriageEvent{TS: ts, Event: ledger.TriageDiscarded, LaunchID: t.Claim.LaunchID, Reason: "ITEM_" + string(w.State)})
+	t.Claim = nil
+}
+
 // triageFailed ends the run in flight. The item may run again while retry is
 // set and runs are left; otherwise Failed holds it for a person.
 func triageFailed(w *ledger.WorkItem, reason string, retry bool, maxRuns int, ts string) {
@@ -168,9 +176,11 @@ func restale(w *ledger.WorkItem, ts string) {
 }
 
 // abortInflightTriage stops every triage run in flight (Plan 7's policy
-// abort_inflight). The item goes back to DETECTED with that run used
+// abort_inflight). An item in DETECTED stays there with that run used
 // (TRIAGE_FAILED ABORTED_BY_POLICY), so it is triaged again once the switch
-// is off and a run is left. A shadow or dry-run launcher stops nothing and
+// is off and a run is left. An item that has left DETECTED (its claim
+// survived a failed abort in reconcileTriage) keeps its state; the run is
+// discarded as reconcileTriage would have. A shadow or dry-run launcher stops nothing and
 // changes no item; one problem line says how many it would stop.
 func abortInflightTriage(ctx context.Context, items map[string]*ledger.WorkItem, l Launcher, p policy.Policy, ts string) []string {
 	var active []*ledger.WorkItem
@@ -193,6 +203,10 @@ func abortInflightTriage(ctx context.Context, items map[string]*ledger.WorkItem,
 	for _, w := range active {
 		if err := l.Abort(ctx, w.Triage.Claim.LaunchID); err != nil {
 			problems = append(problems, fmt.Sprintf("abort %s for %s: %v", w.Triage.Claim.LaunchID, w.Key, err))
+			continue
+		}
+		if w.State != ledger.Detected {
+			discardTriage(w, ts)
 			continue
 		}
 		triageFailed(w, "ABORTED_BY_POLICY", true, maxRuns, ts)

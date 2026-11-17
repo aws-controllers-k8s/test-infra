@@ -18,6 +18,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -243,4 +244,34 @@ func TestReconcileTriageResetsAStaleRecord(t *testing.T) {
 	assert.Equal(t, ledger.TriageInput(w), w.Triage.Input)
 	assert.Equal(t, ledger.TriageStale, w.Triage.Log[len(w.Triage.Log)-1].Event)
 	assert.True(t, triageCandidate(w))
+}
+
+// reconcileTriage could not abort the run of an item the finder closed, so the
+// claim stays; abort_inflight's abort then succeeds. The item stays closed:
+// the run is discarded, not failed back to DETECTED.
+func TestAbortInflightTriageLeavesAClosedItemClosed(t *testing.T) {
+	ctx := context.Background()
+	w := triaging(needsConfig(fieldKey, "config-only", "create-only"))
+	id := w.Triage.Claim.LaunchID
+	w.State = ledger.WontFix
+	w.Verdict = &ledger.Verdict{Outcome: "wont_fix:product_decision", Reason: "MAINTAINER_WONTFIX by m"}
+	w.History = append(w.History, ledger.Transition{TS: "2026-11-12T08:55:00Z", To: ledger.WontFix, By: "issue-finder"})
+	items := ledgerOf(w)
+	p := withTriage(t)
+	f := &fakeLauncher{abortErr: errors.New("transient")}
+	require.Len(t, reconcileTriage(ctx, items, f, p, now), 1)
+	require.NotNil(t, w.Triage.Claim)
+
+	f.abortErr = nil
+	assert.Empty(t, abortInflightTriage(ctx, items, f, p, now.UTC().Format(time.RFC3339)))
+	assert.Equal(t, []string{id}, f.aborted)
+	assert.Equal(t, ledger.WontFix, w.State)
+	assert.Equal(t, ledger.WontFix, last(w).To)
+	assert.Nil(t, w.Triage.Claim)
+	assert.Empty(t, w.Triage.Failed)
+	ev := w.Triage.Log[len(w.Triage.Log)-1]
+	assert.Equal(t, ledger.TriageDiscarded, ev.Event)
+	assert.Equal(t, id, ev.LaunchID)
+	assert.Equal(t, "ITEM_WONT_FIX", ev.Reason)
+	assertLints(t, items)
 }
