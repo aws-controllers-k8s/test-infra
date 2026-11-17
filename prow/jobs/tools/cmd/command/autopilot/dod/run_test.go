@@ -223,3 +223,23 @@ func TestSDKModelFromCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, b, "a missing model is not an error; the checks skip")
 }
+
+// A run that hits its deadline must give no verdict (exit 2, retry), not a
+// verdict whose checks failed because their tools were killed.
+func TestRunTimeoutGivesNoVerdict(t *testing.T) {
+	f := sdkBump(t)
+	o := options(t, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inner := o.Run
+	o.Run = func(c context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
+		if name == "go" {
+			cancel() // the deadline passes while go build runs
+			return nil, nil, c.Err()
+		}
+		return inner(c, dir, env, name, args...)
+	}
+	v, err := Run(ctx, o)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Nil(t, v)
+}

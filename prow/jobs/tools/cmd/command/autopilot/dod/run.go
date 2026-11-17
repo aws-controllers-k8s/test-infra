@@ -353,6 +353,11 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 	if err := loadModel(); err != nil {
 		return nil, err
 	}
+	// Tools killed by the deadline look like failing checks; a run that ran
+	// out of time has no verdict.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("dod did not finish: %w", err)
+	}
 
 	v := decide(o.ChangeClass, o.WorkItem, checks)
 	v.Tool = Tool{Name: ToolName, Revision: cmp.Or(o.ToolRevision, "unknown")}
