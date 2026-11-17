@@ -41,6 +41,9 @@ const (
 	// built from; Launch adopts an existing job only if it matches.
 	AnnotationRequest  = "ack-autopilot/request"
 	AnnotationWorkItem = "ack-autopilot/work-item"
+	// AnnotationDoNotDisrupt keeps Karpenter from evicting a long run's pod
+	// (sdk-bump only; Prow copies the job's annotations to the pod).
+	AnnotationDoNotDisrupt = "karpenter.sh/do-not-disrupt"
 )
 
 // Namespace is where Prow reads ProwJobs (prow/config/values.yaml
@@ -196,6 +199,15 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 	if w.E2E {
 		applyE2E(pod)
 	}
+	if w.pod.CensorSecret != "" {
+		pod.Volumes = append(pod.Volumes, Volume{Name: "github-token-censor", Secret: &SecretVolumeSource{SecretName: w.pod.CensorSecret}})
+		pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
+			VolumeMount{Name: "github-token-censor", MountPath: "/etc/github-censor", ReadOnly: true})
+	}
+	grace := 15 * time.Minute
+	if w.pod.GracePeriod > 0 {
+		grace = w.pod.GracePeriod
+	}
 
 	labels := map[string]string{
 		LabelWorkflow:                 req.Workflow,
@@ -224,6 +236,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		AnnotationRequest:              digest,
 		AnnotationWorkItem:             "sha256:" + hash,
 	}
+	if w.pod.DoNotDisrupt {
+		annotations[AnnotationDoNotDisrupt] = "true"
+	}
 	ui := utilityImages
 	return &ProwJob{
 		APIVersion: "prow.k8s.io/v1",
@@ -233,7 +248,7 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 			Type: "periodic", Agent: "kubernetes", Cluster: w.pod.Cluster, Job: job, ExtraRefs: refs,
 			DecorationConfig: &DecorationConfig{
 				Timeout:          timeout.String(),
-				GracePeriod:      (15 * time.Minute).String(),
+				GracePeriod:      grace.String(),
 				UtilityImages:    &ui,
 				GCSConfiguration: &GCSConfiguration{Bucket: cfg.Bucket, PathStrategy: "explicit"},
 				CensorSecrets:    boolPtr(true),

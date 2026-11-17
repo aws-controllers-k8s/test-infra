@@ -1,0 +1,84 @@
+# ACK Autopilot Plan 7: the AWS identity of the autopilot-dispatcher
+# ServiceAccount (EKS Pod Identity, through ACK, as in
+# flux/ack/charts/ack-pod-identity-roles and ack-pod-identities). It can:
+#   - read the ack-bot token the prow-secrets SecretProviderClass mounts for
+#     preset-github-secrets (the ledger and issue reads; Plan 1's App replaces it);
+#   - read one file per run: agent-result.json of the two allowlisted jobs;
+#   - write its own Prow logs (Prow's initupload and sidecar use the pod's
+#     credentials).
+# Nothing else: no other secret, no other bucket prefix, no AWS test account.
+# Apply (a human, after SECURITY-REVIEW.md) with the three values resolved:
+#   envsubst '${STACK_NAME} ${ACCOUNT_ID} ${REGION}' < pod-identity.yaml | kubectl apply -f -
+# (ack-system is where the ack-pod-identity-roles and ack-pod-identities charts
+# put theirs; ACK's IAM and EKS controllers reconcile them.)
+# No Argo CD Application or Flux Kustomization reads this directory.
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: autopilot-dispatcher-role
+  namespace: ack-system
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+spec:
+  name: ${STACK_NAME}-autopilot-dispatcher-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {"Service": "pods.eks.amazonaws.com"},
+          "Action": ["sts:AssumeRole", "sts:TagSession"]
+        }
+      ]
+    }
+  inlinePolicies:
+    GitHubToken: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+            "Resource": "arn:aws:secretsmanager:${REGION}:${ACCOUNT_ID}:secret:ack/prow/github-pat-token-*"
+          }
+        ]
+      }
+    RunResults: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:GetObject"],
+            "Resource": [
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/agent-workflow-add-field/*/artifacts/agent-result.json",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/autopilot-sdk-bump/*/artifacts/agent-result.json"
+            ]
+          }
+        ]
+      }
+    OwnLogs: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["s3:PutObject", "s3:GetObject"],
+            "Resource": "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/autopilot-dispatch/*"
+          }
+        ]
+      }
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: autopilot-dispatcher-pod-identity
+  namespace: ack-system
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+spec:
+  clusterName: ${STACK_NAME}-cluster
+  namespace: test-pods
+  serviceAccount: autopilot-dispatcher
+  roleARN: arn:aws:iam::${ACCOUNT_ID}:role/${STACK_NAME}-autopilot-dispatcher-role

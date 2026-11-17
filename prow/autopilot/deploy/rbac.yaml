@@ -1,0 +1,38 @@
+# ACK Autopilot Plan 7: what the autopilot-dispatcher ServiceAccount may do.
+# Only ProwJobs, only in the prow namespace (where Prow reads them):
+#   create      - start a run (Launch)
+#   get, list   - read a run's state (Status) and its own runs in flight
+#                 (the inventory that keeps the caps honest)
+#   patch       - abort a run (status.state=aborted; the CRD has no status
+#                 subresource, so this is a patch of the object)
+# Not update, delete, watch or deletecollection; nothing on pods, secrets or
+# any other resource. admission-policy.yaml narrows create and patch further.
+# Applied by a human (SECURITY-REVIEW.md); no Argo CD Application or Flux
+# Kustomization reads this directory.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: autopilot-dispatcher
+  namespace: prow
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+rules:
+- apiGroups: ["prow.k8s.io"]
+  resources: ["prowjobs"]
+  verbs: ["create", "get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autopilot-dispatcher
+  namespace: prow
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: autopilot-dispatcher
+subjects:
+- kind: ServiceAccount
+  name: autopilot-dispatcher
+  namespace: test-pods

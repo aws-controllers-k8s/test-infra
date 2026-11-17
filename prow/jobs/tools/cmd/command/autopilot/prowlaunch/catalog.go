@@ -103,6 +103,16 @@ type podShape struct {
 	// ArgEnv passes args as environment variables (arg -> variable) instead
 	// of --flags. An arg with no entry is checked but not passed.
 	ArgEnv map[string]string
+	// GracePeriod is the decoration grace period; zero means agent-plugin's
+	// 15 minutes.
+	GracePeriod time.Duration
+	// DoNotDisrupt annotates the job (and so its pod) with
+	// karpenter.sh/do-not-disrupt: "true".
+	DoNotDisrupt bool
+	// CensorSecret, when set, is a Kubernetes secret mounted read-only at
+	// /etc/github-censor only so that Prow's sidecar censors its value in the
+	// logs (the sidecar censors secret volumes, not a CSI mount).
+	CensorSecret string
 }
 
 // agentPod is agent-plugin's pod (pkg/prowjob CreateWorkflowProwJob).
@@ -254,6 +264,9 @@ func SDKBump(image, org string) Workflow {
 			Cluster: "default", ServiceAccount: "periodic-service-account",
 			SecretsVolume: "github-token", SecretProviderClass: "prow-secrets", SecretsMount: "/etc/github",
 			ArgEnv: map[string]string{"service": "SERVICE", "sdk-to": "SDK_TO", "work-item": "WORK_ITEM", "mode": "AUTOPILOT_SDK_BUMP_MODE"},
+			// As the Plan 6 periodic (autopilot-sdk-bump.tpl): a 3h run that
+			// Karpenter must not consolidate away, and the PAT censored.
+			GracePeriod: 10 * time.Minute, DoNotDisrupt: true, CensorSecret: "prowjob-github-pat-token",
 		},
 	}
 }

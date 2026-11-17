@@ -1,0 +1,161 @@
+# ACK Autopilot Plan 7: what the autopilot-dispatcher ServiceAccount may put
+# in a ProwJob. RBAC (rbac.yaml) cannot look inside an object, and a ProwJob
+# is a pod spec Prow runs as its own identity: without this policy the
+# ServiceAccount could run any image with any secret in test-pods. This policy
+# applies only to that ServiceAccount's requests and allows:
+#   CREATE: the two allowlisted jobs (prowlaunch.Allowed), each with exactly
+#           the pod prowlaunch.Build makes for it;
+#   UPDATE: an abort of a job it made (status.state=aborted), nothing else.
+# Apply (a human, after SECURITY-REVIEW.md) with the three values resolved:
+#   envsubst '${PROW_IMAGES_REPO_URI} ${TEST_INFRA_ORG} ${PROW_LOGS_BUCKET}' \
+#     < admission-policy.yaml | kubectl apply --server-side -f -
+# PROW_LOGS_BUCKET is the whole URL the Dispatcher's JOB_SPEC names,
+# "s3://<bucket>" (prow/config/values.yaml prowLogsBucketName, with s3://).
+# No Argo CD Application or Flux Kustomization reads this directory.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: autopilot-dispatcher-prowjobs
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["prow.k8s.io"]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["prowjobs"]
+  matchConditions:
+  - name: dispatcher-only
+    expression: "request.userInfo.username == 'system:serviceaccount:test-pods:autopilot-dispatcher'"
+  variables:
+  - name: labels
+    expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+  - name: annotations
+    expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+  # Every annotation prowlaunch.Build puts on a job (Prow copies a job's
+  # annotations to its pod, so this also bounds the pod's annotations).
+  - name: annotationKeys
+    expression: "['workflow-agent/workflow-name', 'workflow-agent/issue-number', 'workflow-agent/command-args', 'prow.k8s.io/job', 'prow.k8s.io/refs.org', 'prow.k8s.io/refs.repo', 'prow.k8s.io/refs.pull', 'ack-autopilot/request', 'ack-autopilot/work-item', 'karpenter.sh/do-not-disrupt']"
+  - name: job
+    expression: "has(object.spec.job) ? object.spec.job : ''"
+  - name: addField
+    expression: "variables.job == 'agent-workflow-add-field'"
+  - name: sdkBump
+    expression: "variables.job == 'autopilot-sdk-bump'"
+  - name: pod
+    expression: "object.spec.pod_spec"
+  - name: container
+    expression: "object.spec.pod_spec.containers[0]"
+  - name: dc
+    expression: "object.spec.decoration_config"
+  validations:
+  # --- CREATE -------------------------------------------------------------
+  - expression: >-
+      request.operation != 'CREATE' ||
+      ('ack-autopilot/managed-by' in variables.labels &&
+       variables.labels['ack-autopilot/managed-by'] == 'autopilot-dispatcher' &&
+       object.metadata.name.matches('^autopilot-[0-9a-f]{16}-g[0-9]{1,4}-(r[1-9][0-9]{0,2}|f[0-9a-f]{8})$'))
+    message: "a Dispatcher ProwJob is named by a launch id and labelled ack-autopilot/managed-by=autopilot-dispatcher"
+  - expression: >-
+      request.operation != 'CREATE' ||
+      (variables.annotations.all(k, k in variables.annotationKeys) &&
+       (!('karpenter.sh/do-not-disrupt' in variables.annotations) ||
+        (variables.sdkBump && object.metadata.annotations['karpenter.sh/do-not-disrupt'] == 'true')))
+    message: "only the annotations prowlaunch.Build sets; karpenter.sh/do-not-disrupt only as \"true\" on autopilot-sdk-bump"
+  - expression: >-
+      request.operation != 'CREATE' ||
+      (object.spec.type == 'periodic' && object.spec.agent == 'kubernetes' &&
+       (variables.addField || variables.sdkBump) &&
+       !has(object.spec.refs) && !has(object.spec.namespace) &&
+       !has(object.spec.jenkins_spec) && !has(object.spec.pipeline_run_spec) &&
+       !has(object.spec.tekton_pipeline_run_spec))
+    message: "only the periodic kubernetes jobs agent-workflow-add-field and autopilot-sdk-bump, with no refs, namespace or other agent"
+  - expression: >-
+      request.operation != 'CREATE' ||
+      (has(object.spec.pod_spec) && size(variables.pod.containers) == 1 &&
+       !has(variables.pod.initContainers) && !has(variables.pod.ephemeralContainers) &&
+       !has(variables.pod.nodeName) && !has(variables.pod.securityContext) &&
+       !(has(variables.pod.hostNetwork) && variables.pod.hostNetwork) &&
+       !(has(variables.pod.hostPID) && variables.pod.hostPID) &&
+       !(has(variables.pod.hostIPC) && variables.pod.hostIPC) &&
+       !has(variables.container.envFrom) && !has(variables.container.volumeDevices))
+    message: "one container, no init or ephemeral containers, no host namespaces, no envFrom"
+  - expression: >-
+      request.operation != 'CREATE' || !variables.addField ||
+      (object.spec.cluster == 'build' &&
+       variables.pod.serviceAccountName == 'workflow-runner' &&
+       variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:add-resource-') &&
+       variables.container.command == ['/app/prow-job.sh'])
+    message: "agent-workflow-add-field runs prow-job.sh from the add-resource image on the build cluster as workflow-runner"
+  - expression: >-
+      request.operation != 'CREATE' || !variables.sdkBump ||
+      ((!has(object.spec.cluster) || object.spec.cluster == 'default') &&
+       variables.pod.serviceAccountName == 'periodic-service-account' &&
+       variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:prow-auto-generate-controllers-') &&
+       variables.container.command == ['/bin/bash', '-c', './scripts/autopilot-sdk-bump.sh'] &&
+       !has(variables.container.args) && !has(variables.container.securityContext))
+    message: "autopilot-sdk-bump runs scripts/autopilot-sdk-bump.sh from the auto-generate-controllers image, unprivileged, as periodic-service-account"
+  - expression: >-
+      request.operation != 'CREATE' || !has(variables.container.env) ||
+      variables.container.env.all(e, !has(e.valueFrom) ||
+        (has(e.valueFrom.secretKeyRef) && !has(e.valueFrom.configMapKeyRef) &&
+         !has(e.valueFrom.fieldRef) && !has(e.valueFrom.resourceFieldRef) &&
+         e.valueFrom.secretKeyRef.name == (variables.sdkBump ? 'prowjob-github-pat-token' : 'agent-github-pat-token')))
+    message: "the only secret in the environment is the workflow's GitHub token"
+  - expression: >-
+      request.operation != 'CREATE' || !has(variables.pod.volumes) ||
+      variables.pod.volumes.all(v,
+        (has(v.csi) && v.csi.driver == 'secrets-store.csi.k8s.io' && has(v.csi.volumeAttributes) &&
+         'secretProviderClass' in v.csi.volumeAttributes &&
+         v.csi.volumeAttributes['secretProviderClass'] == (variables.sdkBump ? 'prow-secrets' : 'agent-secrets')) ||
+        (variables.sdkBump && v.name == 'github-token-censor' && has(v.secret) &&
+         v.secret.secretName == 'prowjob-github-pat-token') ||
+        (variables.addField && has(v.emptyDir)) ||
+        (variables.addField && has(v.hostPath) && v.hostPath.path in ['/lib/modules', '/sys/fs/cgroup']))
+    message: "volumes: the workflow's SecretProviderClass; for sdk-bump the PAT secret the sidecar censors; for add-field the kind-in-Docker emptyDirs and host paths"
+  - expression: >-
+      request.operation != 'CREATE' || !has(object.spec.extra_refs) ||
+      object.spec.extra_refs.all(r, r.org in ['aws-controllers-k8s', '${TEST_INFRA_ORG}'] &&
+        r.repo in ['code-generator', 'runtime', 'ack-dev-skills', 'test-infra'] &&
+        has(r.base_ref) && r.base_ref == 'main' && !has(r.clone_uri))
+    message: "extra_refs: main of code-generator, runtime, ack-dev-skills or test-infra"
+  - expression: >-
+      request.operation != 'CREATE' ||
+      (has(object.spec.decoration_config) && has(variables.dc.gcs_configuration) &&
+       variables.dc.gcs_configuration.bucket == '${PROW_LOGS_BUCKET}' &&
+       has(variables.dc.utility_images) &&
+       [variables.dc.utility_images.clonerefs, variables.dc.utility_images.initupload,
+        variables.dc.utility_images.entrypoint, variables.dc.utility_images.sidecar].all(i,
+         i.startsWith('public.ecr.aws/eks-distro-build-tooling/prow-')) &&
+       !has(variables.dc.gcs_credentials_secret) && !has(variables.dc.s3_credentials_secret) &&
+       !has(variables.dc.ssh_key_secrets) && !has(variables.dc.oauth_token_secret) &&
+       !has(variables.dc.github_app_private_key_secret) && !has(variables.dc.cookiefile_secret) &&
+       !has(variables.dc.default_service_account_name))
+    message: "decoration: the Prow logs bucket, Prow's utility images, and no credential secrets"
+  # --- UPDATE (abort) -----------------------------------------------------
+  - expression: >-
+      request.operation != 'UPDATE' ||
+      (has(oldObject.metadata.labels) && 'ack-autopilot/managed-by' in oldObject.metadata.labels &&
+       oldObject.metadata.labels['ack-autopilot/managed-by'] == 'autopilot-dispatcher' &&
+       object.spec == oldObject.spec &&
+       variables.labels == oldObject.metadata.labels &&
+       (has(object.metadata.annotations) ? object.metadata.annotations : {}) ==
+         (has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {}) &&
+       object.status.state == 'aborted')
+    message: "the Dispatcher may only abort its own ProwJobs"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: autopilot-dispatcher-prowjobs
+  labels:
+    app.kubernetes.io/part-of: ack-autopilot
+spec:
+  policyName: autopilot-dispatcher-prowjobs
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: prow

@@ -136,10 +136,15 @@ type SecurityContext struct {
 }
 
 type Volume struct {
-	Name     string          `json:"name"`
-	EmptyDir *EmptyDirSource `json:"emptyDir,omitempty"`
-	HostPath *HostPathSource `json:"hostPath,omitempty"`
-	CSI      *CSISource      `json:"csi,omitempty"`
+	Name     string              `json:"name"`
+	EmptyDir *EmptyDirSource     `json:"emptyDir,omitempty"`
+	HostPath *HostPathSource     `json:"hostPath,omitempty"`
+	CSI      *CSISource          `json:"csi,omitempty"`
+	Secret   *SecretVolumeSource `json:"secret,omitempty"`
+}
+
+type SecretVolumeSource struct {
+	SecretName string `json:"secretName"`
 }
 
 type EmptyDirSource struct{}

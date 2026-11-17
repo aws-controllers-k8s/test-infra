@@ -3,6 +3,7 @@
   "kind": "ProwJob",
   "metadata": {
     "annotations": {
+      "karpenter.sh/do-not-disrupt": "true",
       "prow.k8s.io/job": "autopilot-sdk-bump",
       "prow.k8s.io/refs.org": "aws-controllers-k8s",
       "prow.k8s.io/refs.pull": "0",
@@ -38,7 +39,7 @@
         "bucket": "s3://example-prow-logs",
         "path_strategy": "explicit"
       },
-      "grace_period": "15m0s",
+      "grace_period": "10m0s",
       "timeout": "3h0m0s",
       "utility_images": {
         "clonerefs": "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
@@ -145,6 +146,11 @@
               "mountPath": "/etc/github",
               "name": "github-token",
               "readOnly": true
+            },
+            {
+              "mountPath": "/etc/github-censor",
+              "name": "github-token-censor",
+              "readOnly": true
             }
           ]
         }
@@ -161,6 +167,12 @@
             }
           },
           "name": "github-token"
+        },
+        {
+          "name": "github-token-censor",
+          "secret": {
+            "secretName": "prowjob-github-pat-token"
+          }
         }
       ]
     },

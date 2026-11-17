@@ -159,3 +159,26 @@ func TestBuildAddsTheDispatcherLabels(t *testing.T) {
 	again := buildJSON(t, goldenAddField)
 	assert.Equal(t, string(buildJSON(t, goldenAddField)), string(again), "deterministic")
 }
+
+// TestSDKBumpMatchesThePeriodic: the sdk-bump job keeps what Plan 6's
+// autopilot-sdk-bump periodic sets for a long run: Karpenter may not evict
+// it, its grace period, and the github-token-censor secret volume (Prow's
+// sidecar censors only secret volumes, not the CSI mount at /etc/github).
+// add-field stays exactly agent-plugin's job (its golden).
+func TestSDKBumpMatchesThePeriodic(t *testing.T) {
+	var bump, field ProwJob
+	require.NoError(t, json.Unmarshal(buildJSON(t, goldenSDKBump), &bump))
+	require.NoError(t, json.Unmarshal(buildJSON(t, goldenAddField), &field))
+
+	assert.Equal(t, "true", bump.Metadata.Annotations[AnnotationDoNotDisrupt])
+	assert.NotContains(t, field.Metadata.Annotations, AnnotationDoNotDisrupt)
+	assert.Equal(t, "10m0s", bump.Spec.DecorationConfig.GracePeriod)
+	assert.Equal(t, "15m0s", field.Spec.DecorationConfig.GracePeriod)
+
+	pod := bump.Spec.PodSpec
+	assert.Contains(t, pod.Volumes, Volume{Name: "github-token-censor", Secret: &SecretVolumeSource{SecretName: "prowjob-github-pat-token"}})
+	assert.Contains(t, pod.Containers[0].VolumeMounts, VolumeMount{Name: "github-token-censor", MountPath: "/etc/github-censor", ReadOnly: true})
+	for _, v := range field.Spec.PodSpec.Volumes {
+		assert.Nil(t, v.Secret, v.Name)
+	}
+}
