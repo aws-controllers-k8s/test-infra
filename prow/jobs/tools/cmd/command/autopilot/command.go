@@ -505,6 +505,18 @@ func readResult(path, workItem string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "result outcome=%q reason=%q pr=%q tokens=%d e2e_runs=%d\n", r.Outcome, r.Reason, r.PR, r.Tokens, r.E2ERuns)
+	if _, err := fmt.Fprintf(out, "result outcome=%q reason=%q pr=%q tokens=%d e2e_runs=%d\n", r.Outcome, r.Reason, r.PR, r.Tokens, r.E2ERuns); err != nil {
+		return err
+	}
+	if len(r.Triage) == 0 {
+		return nil
+	}
+	if workItem == "" {
+		_, err = fmt.Fprintln(out, "triage verdict present; pass --work-item to check it")
+		return err
+	}
+	v := dispatcher.ParseTriage(r.Triage, workItem)
+	_, err = fmt.Fprintf(out, "triage decision=%q class=%q refs=%d invalid=%q\n",
+		v.Decision, ledger.DecisionClass[v.Decision], len(v.EvidenceRefs), strings.Join(v.Invalid, ","))
 	return err
 }

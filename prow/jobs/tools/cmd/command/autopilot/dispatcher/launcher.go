@@ -19,6 +19,7 @@ package dispatcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -56,6 +57,10 @@ type RunResult struct {
 	// checks them against the job it read the file from.
 	Workflow  string
 	ProwJobID string
+	// Triage is a triage run's raw verdict (ack.autopilot.triage/v1, Plan 8),
+	// or nil. reconcileTriage checks it with ParseTriage, and only after
+	// the outcome passed the job-state cross-check (consistent).
+	Triage json.RawMessage
 	// Tokens and E2ERuns are what the run spent; reconcile adds them to the
 	// item's usage.
 	Tokens  int64
