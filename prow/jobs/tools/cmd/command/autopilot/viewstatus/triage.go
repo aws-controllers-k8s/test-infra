@@ -11,9 +11,6 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-// Package viewstatus renders the Dispatcher's status comment on an api-change
-// issue and plans the one edit that keeps it current. The detector stays the
-// only writer of the issue body (design 4.5).
 package viewstatus
 
 import (
