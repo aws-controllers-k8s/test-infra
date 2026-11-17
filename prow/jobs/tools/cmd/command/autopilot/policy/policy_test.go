@@ -119,3 +119,19 @@ func TestLoadRejectsSymlink(t *testing.T) {
 	_, err := Load(root)
 	assert.ErrorContains(t, err, "regular file")
 }
+
+func TestLauncherProwAndAbortInflight(t *testing.T) {
+	p, err := Load(withFiles(t,
+		[3]string{SwitchesFile, "launcher: shadow", "launcher: prow"},
+		[3]string{SwitchesFile, "abort_inflight: false", "abort_inflight: true"}))
+	require.NoError(t, err)
+	assert.Equal(t, LauncherProw, p.Switches.Launcher)
+	assert.True(t, p.Switches.AbortInflight)
+
+	p, err = Load("testdata")
+	require.NoError(t, err)
+	assert.False(t, p.Switches.AbortInflight, "Phase 1 default")
+
+	_, err = Load(withFiles(t, [3]string{SwitchesFile, "abort_inflight: false\n", ""}))
+	assert.ErrorContains(t, err, `missing key "abort_inflight"`)
+}

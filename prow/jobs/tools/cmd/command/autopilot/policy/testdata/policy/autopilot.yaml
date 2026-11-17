@@ -3,8 +3,11 @@
 paused: false
 # Repos (owner/name) whose items are never launched.
 paused_repos: []
-# shadow: log what would be launched and start nothing. The only launcher
-# this version accepts.
+# shadow: log what would be launched and start nothing. prow: create ProwJobs
+# (also needs AUTOPILOT_LAUNCHER_ENABLED=true in the autopilot-dispatch job).
 launcher: shadow
 # Services whose items may be launched (Phase 1: the monitored five).
 services: [s3, iam, rds, ec2, eks]
+# true: abort every run in flight on each tick, escalate its item and launch
+# nothing. Needs launcher: prow; the shadow launcher only reports it.
+abort_inflight: false
