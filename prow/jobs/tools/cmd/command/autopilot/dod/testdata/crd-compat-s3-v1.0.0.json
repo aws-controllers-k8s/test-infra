@@ -1,0 +1,1840 @@
+{
+  "schema": "ack.crd-compat/v1",
+  "base_ref": "v1.0.0",
+  "breaking": true,
+  "files": [
+    {
+      "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+      "kind": "Bucket",
+      "status": "changed"
+    },
+    {
+      "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+      "kind": "Bucket",
+      "status": "changed"
+    },
+    {
+      "file": "helm/crds/services.k8s.aws_adoptedresources.yaml",
+      "kind": "AdoptedResource",
+      "status": "deleted"
+    },
+    {
+      "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+      "kind": "FieldExport",
+      "status": "changed"
+    },
+    {
+      "file": "helm/crds/services.k8s.aws_iamroleselectors.yaml",
+      "kind": "IAMRoleSelector",
+      "status": "new"
+    }
+  ],
+  "buckets": {
+    "added_optional_spec": [
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.abac",
+        "path": ".properties.spec.properties.abac",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.createBucketConfiguration.bucket",
+        "path": ".properties.spec.properties.createBucketConfiguration.properties.bucket",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.createBucketConfiguration.location",
+        "path": ".properties.spec.properties.createBucketConfiguration.properties.location",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.logging.loggingEnabled.targetObjectKeyFormat",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.properties.targetObjectKeyFormat",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.namespace",
+        "path": ".properties.spec.properties.namespace",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.notification.eventBridgeConfiguration",
+        "path": ".properties.spec.properties.notification.properties.eventBridgeConfiguration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.objectLockConfiguration",
+        "path": ".properties.spec.properties.objectLockConfiguration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.replication.roleRef",
+        "path": ".properties.spec.properties.replication.properties.roleRef",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.abac",
+        "path": ".properties.spec.properties.abac",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.createBucketConfiguration.bucket",
+        "path": ".properties.spec.properties.createBucketConfiguration.properties.bucket",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.createBucketConfiguration.location",
+        "path": ".properties.spec.properties.createBucketConfiguration.properties.location",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.logging.loggingEnabled.targetObjectKeyFormat",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.properties.targetObjectKeyFormat",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.namespace",
+        "path": ".properties.spec.properties.namespace",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.notification.eventBridgeConfiguration",
+        "path": ".properties.spec.properties.notification.properties.eventBridgeConfiguration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.objectLockConfiguration",
+        "path": ".properties.spec.properties.objectLockConfiguration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_optional_spec",
+        "field": "spec.replication.roleRef",
+        "path": ".properties.spec.properties.replication.properties.roleRef",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      }
+    ],
+    "added_required": [],
+    "added_status": [
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_status",
+        "field": "status.ackResourceMetadata.partition",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.partition",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_status",
+        "field": "status.conditions[].observedGeneration",
+        "path": ".properties.status.properties.conditions.items.properties.observedGeneration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_status",
+        "field": "status.ackResourceMetadata.partition",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.partition",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "added_status",
+        "field": "status.conditions[].observedGeneration",
+        "path": ".properties.status.properties.conditions.items.properties.observedGeneration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "added_status",
+        "field": "status.conditions[].observedGeneration",
+        "path": ".properties.status.properties.conditions.items.properties.observedGeneration",
+        "change_type": "PROPERTY_ADDED",
+        "breaking": false
+      }
+    ],
+    "crd_added": [
+      {
+        "file": "helm/crds/services.k8s.aws_iamroleselectors.yaml",
+        "kind": "IAMRoleSelector",
+        "bucket": "crd_added",
+        "change_type": "CRD_ADDED",
+        "breaking": false
+      }
+    ],
+    "crd_removed": [
+      {
+        "file": "helm/crds/services.k8s.aws_adoptedresources.yaml",
+        "kind": "AdoptedResource",
+        "bucket": "crd_removed",
+        "change_type": "CRD_REMOVED",
+        "breaking": true
+      }
+    ],
+    "default_changed": [],
+    "description_only": [
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "apiVersion",
+        "path": ".properties.apiVersion.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "kind",
+        "path": ".properties.kind.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec",
+        "path": ".properties.spec.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.acl",
+        "path": ".properties.spec.properties.acl.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[]",
+        "path": ".properties.spec.properties.analytics.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].filter",
+        "path": ".properties.spec.properties.analytics.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].filter.and",
+        "path": ".properties.spec.properties.analytics.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].storageClassAnalysis",
+        "path": ".properties.spec.properties.analytics.items.properties.storageClassAnalysis.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].storageClassAnalysis.dataExport",
+        "path": ".properties.spec.properties.analytics.items.properties.storageClassAnalysis.properties.dataExport.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.cors",
+        "path": ".properties.spec.properties.cors.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.encryption.rules[]",
+        "path": ".properties.spec.properties.encryption.properties.rules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.encryption.rules[].applyServerSideEncryptionByDefault",
+        "path": ".properties.spec.properties.encryption.properties.rules.items.properties.applyServerSideEncryptionByDefault.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantFullControl",
+        "path": ".properties.spec.properties.grantFullControl.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantRead",
+        "path": ".properties.spec.properties.grantRead.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantReadACP",
+        "path": ".properties.spec.properties.grantReadACP.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantWrite",
+        "path": ".properties.spec.properties.grantWrite.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantWriteACP",
+        "path": ".properties.spec.properties.grantWriteACP.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[]",
+        "path": ".properties.spec.properties.intelligentTiering.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].filter",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].filter.and",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].tierings[]",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.tierings.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[]",
+        "path": ".properties.spec.properties.inventory.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination.s3BucketDestination",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.properties.s3BucketDestination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination.s3BucketDestination.encryption",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.properties.s3BucketDestination.properties.encryption.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].filter",
+        "path": ".properties.spec.properties.inventory.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].schedule",
+        "path": ".properties.spec.properties.inventory.items.properties.schedule.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].abortIncompleteMultipartUpload",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.abortIncompleteMultipartUpload.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].expiration",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.expiration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].filter",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].filter.and",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].noncurrentVersionExpiration",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.noncurrentVersionExpiration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].noncurrentVersionTransitions[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.noncurrentVersionTransitions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].transitions[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.transitions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.logging.loggingEnabled",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.logging.loggingEnabled.targetGrants[]",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.properties.targetGrants.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[]",
+        "path": ".properties.spec.properties.metrics.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[].filter",
+        "path": ".properties.spec.properties.metrics.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[].filter.and",
+        "path": ".properties.spec.properties.metrics.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.name",
+        "path": ".properties.spec.properties.name.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification",
+        "path": ".properties.spec.properties.notification.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[]",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[]",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.objectLockEnabledForBucket",
+        "path": ".properties.spec.properties.objectLockEnabledForBucket.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.ownershipControls",
+        "path": ".properties.spec.properties.ownershipControls.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.ownershipControls.rules[].objectOwnership",
+        "path": ".properties.spec.properties.ownershipControls.properties.rules.items.properties.objectOwnership.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.policy",
+        "path": ".properties.spec.properties.policy.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.publicAccessBlock",
+        "path": ".properties.spec.properties.publicAccessBlock.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication",
+        "path": ".properties.spec.properties.replication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].deleteMarkerReplication",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.deleteMarkerReplication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.encryptionConfiguration",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.encryptionConfiguration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.metrics",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.metrics.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.metrics.eventThreshold",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.metrics.properties.eventThreshold.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.replicationTime",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.replicationTime.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.replicationTime.time",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.replicationTime.properties.time.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].existingObjectReplication",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.existingObjectReplication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].filter",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].filter.and",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria.replicaModifications",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.properties.replicaModifications.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria.sseKMSEncryptedObjects",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.properties.sseKMSEncryptedObjects.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.redirectAllRequestsTo",
+        "path": ".properties.spec.properties.website.properties.redirectAllRequestsTo.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[]",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[].condition",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.properties.condition.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[].redirect",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.properties.redirect.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata",
+        "path": ".properties.status.properties.ackResourceMetadata.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata.arn",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.arn.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata.ownerAccountID",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.ownerAccountID.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.conditions",
+        "path": ".properties.status.properties.conditions.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "config/crd/bases/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.conditions[]",
+        "path": ".properties.status.properties.conditions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "apiVersion",
+        "path": ".properties.apiVersion.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "kind",
+        "path": ".properties.kind.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec",
+        "path": ".properties.spec.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.acl",
+        "path": ".properties.spec.properties.acl.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[]",
+        "path": ".properties.spec.properties.analytics.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].filter",
+        "path": ".properties.spec.properties.analytics.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].filter.and",
+        "path": ".properties.spec.properties.analytics.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].storageClassAnalysis",
+        "path": ".properties.spec.properties.analytics.items.properties.storageClassAnalysis.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.analytics[].storageClassAnalysis.dataExport",
+        "path": ".properties.spec.properties.analytics.items.properties.storageClassAnalysis.properties.dataExport.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.cors",
+        "path": ".properties.spec.properties.cors.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.encryption.rules[]",
+        "path": ".properties.spec.properties.encryption.properties.rules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.encryption.rules[].applyServerSideEncryptionByDefault",
+        "path": ".properties.spec.properties.encryption.properties.rules.items.properties.applyServerSideEncryptionByDefault.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantFullControl",
+        "path": ".properties.spec.properties.grantFullControl.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantRead",
+        "path": ".properties.spec.properties.grantRead.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantReadACP",
+        "path": ".properties.spec.properties.grantReadACP.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantWrite",
+        "path": ".properties.spec.properties.grantWrite.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.grantWriteACP",
+        "path": ".properties.spec.properties.grantWriteACP.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[]",
+        "path": ".properties.spec.properties.intelligentTiering.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].filter",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].filter.and",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.intelligentTiering[].tierings[]",
+        "path": ".properties.spec.properties.intelligentTiering.items.properties.tierings.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[]",
+        "path": ".properties.spec.properties.inventory.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination.s3BucketDestination",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.properties.s3BucketDestination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].destination.s3BucketDestination.encryption",
+        "path": ".properties.spec.properties.inventory.items.properties.destination.properties.s3BucketDestination.properties.encryption.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].filter",
+        "path": ".properties.spec.properties.inventory.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.inventory[].schedule",
+        "path": ".properties.spec.properties.inventory.items.properties.schedule.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].abortIncompleteMultipartUpload",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.abortIncompleteMultipartUpload.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].expiration",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.expiration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].filter",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].filter.and",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].noncurrentVersionExpiration",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.noncurrentVersionExpiration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].noncurrentVersionTransitions[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.noncurrentVersionTransitions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.lifecycle.rules[].transitions[]",
+        "path": ".properties.spec.properties.lifecycle.properties.rules.items.properties.transitions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.logging.loggingEnabled",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.logging.loggingEnabled.targetGrants[]",
+        "path": ".properties.spec.properties.logging.properties.loggingEnabled.properties.targetGrants.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[]",
+        "path": ".properties.spec.properties.metrics.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[].filter",
+        "path": ".properties.spec.properties.metrics.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.metrics[].filter.and",
+        "path": ".properties.spec.properties.metrics.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.name",
+        "path": ".properties.spec.properties.name.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification",
+        "path": ".properties.spec.properties.notification.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.lambdaFunctionConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.lambdaFunctionConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[]",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.queueConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.queueConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[]",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter.key.filterRules",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.properties.key.properties.filterRules.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].filter.key.filterRules[]",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.filter.properties.key.properties.filterRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.notification.topicConfigurations[].id",
+        "path": ".properties.spec.properties.notification.properties.topicConfigurations.items.properties.id.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.objectLockEnabledForBucket",
+        "path": ".properties.spec.properties.objectLockEnabledForBucket.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.ownershipControls",
+        "path": ".properties.spec.properties.ownershipControls.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.ownershipControls.rules[].objectOwnership",
+        "path": ".properties.spec.properties.ownershipControls.properties.rules.items.properties.objectOwnership.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.policy",
+        "path": ".properties.spec.properties.policy.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.publicAccessBlock",
+        "path": ".properties.spec.properties.publicAccessBlock.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication",
+        "path": ".properties.spec.properties.replication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].deleteMarkerReplication",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.deleteMarkerReplication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.encryptionConfiguration",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.encryptionConfiguration.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.metrics",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.metrics.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.metrics.eventThreshold",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.metrics.properties.eventThreshold.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.replicationTime",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.replicationTime.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].destination.replicationTime.time",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.destination.properties.replicationTime.properties.time.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].existingObjectReplication",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.existingObjectReplication.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].filter",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.filter.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].filter.and",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.filter.properties.and.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria.replicaModifications",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.properties.replicaModifications.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.replication.rules[].sourceSelectionCriteria.sseKMSEncryptedObjects",
+        "path": ".properties.spec.properties.replication.properties.rules.items.properties.sourceSelectionCriteria.properties.sseKMSEncryptedObjects.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.redirectAllRequestsTo",
+        "path": ".properties.spec.properties.website.properties.redirectAllRequestsTo.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[]",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[].condition",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.properties.condition.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "spec.website.routingRules[].redirect",
+        "path": ".properties.spec.properties.website.properties.routingRules.items.properties.redirect.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata",
+        "path": ".properties.status.properties.ackResourceMetadata.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata.arn",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.arn.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.ackResourceMetadata.ownerAccountID",
+        "path": ".properties.status.properties.ackResourceMetadata.properties.ownerAccountID.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.conditions",
+        "path": ".properties.status.properties.conditions.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/s3.services.k8s.aws_buckets.yaml",
+        "kind": "Bucket",
+        "bucket": "description_only",
+        "field": "status.conditions[]",
+        "path": ".properties.status.properties.conditions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "apiVersion",
+        "path": ".properties.apiVersion.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "kind",
+        "path": ".properties.kind.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "spec.from",
+        "path": ".properties.spec.properties.from.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "spec.from.resource",
+        "path": ".properties.spec.properties.from.properties.resource.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "spec.to",
+        "path": ".properties.spec.properties.to.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "spec.to.kind",
+        "path": ".properties.spec.properties.to.properties.kind.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "status.conditions",
+        "path": ".properties.status.properties.conditions.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      },
+      {
+        "file": "helm/crds/services.k8s.aws_fieldexports.yaml",
+        "kind": "FieldExport",
+        "bucket": "description_only",
+        "field": "status.conditions[]",
+        "path": ".properties.status.properties.conditions.items.description",
+        "change_type": "DESCRIPTION_CHANGED",
+        "breaking": false
+      }
+    ],
+    "enum_changed": [],
+    "other": [],
+    "removed": [],
+    "type_changed": [],
+    "validation_relaxed": [],
+    "validation_tightened": []
+  },
+  "sensitive_candidates": []
+}
