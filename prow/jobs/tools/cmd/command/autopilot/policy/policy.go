@@ -12,7 +12,8 @@
 // permissions and limitations under the License.
 
 // Package policy reads the ACK Autopilot Dispatcher's policy files from the
-// ledger: policy/autopilot.yaml (switches) and policy/budgets.yaml (caps).
+// ledger: policy/autopilot.yaml (switches), policy/budgets.yaml (caps) and,
+// optionally, policy/triage.yaml (the triage lane).
 // People change them by pull request; jobs only read them. Anything missing
 // or malformed is an error, and the Dispatcher then launches nothing.
 package policy
@@ -44,6 +45,10 @@ const (
 	// maxJobTimeoutMinutes is Prow's hard limit for an agent job (design 5.4).
 	maxJobTimeoutMinutes  = 360
 	minReaperGraceMinutes = 30
+	// TriageFile is optional: without it no triage run starts (Plan 8).
+	TriageFile              = "policy/triage.yaml"
+	minTriageTimeoutMinutes = 5
+	maxTriageTimeoutMinutes = 60
 )
 
 type Switches struct {
@@ -73,9 +78,33 @@ type Budgets struct {
 	ReaperGraceMinutes         int      `yaml:"reaper_grace_minutes"`
 }
 
+// triageModes are the triage modes this version runs (design 5.1).
+var triageModes = []string{"api"}
+
+// Triage caps the triage lane (design 5.1; Plan 8). Once the file exists
+// every key is required, like the other policy files.
+type Triage struct {
+	Modes                   []string `yaml:"modes"`
+	MaxConcurrentTriageRuns int      `yaml:"max_concurrent_triage_runs"`
+	MaxTriageLaunchesPerDay int      `yaml:"max_triage_launches_per_day"`
+	MaxTriageRunsPerItem    int      `yaml:"max_triage_runs_per_item"`
+	JobTimeoutMinutes       int      `yaml:"job_timeout_minutes"`
+	// ReservedReviewSlotsTriaged is how many of max_prs_awaiting_review
+	// SDK-bump launches leave free while a triaged item is QUEUED (README
+	// open decision 8).
+	ReservedReviewSlotsTriaged int `yaml:"reserved_review_slots_triaged"`
+}
+
+func (t Triage) ModeEnabled(mode string) bool { return slices.Contains(t.Modes, mode) }
+func (t Triage) JobTimeout() time.Duration {
+	return time.Duration(t.JobTimeoutMinutes) * time.Minute
+}
+
 type Policy struct {
 	Switches Switches
 	Budgets  Budgets
+	// Triage is nil when policy/triage.yaml does not exist: no triage lane.
+	Triage *Triage
 }
 
 func (s Switches) ServiceEnabled(svc string) bool { return slices.Contains(s.Services, svc) }
@@ -118,6 +147,16 @@ func load(root string) (Policy, []error) {
 		return Policy{}, []error{err}
 	}
 	if err := decodeFile(filepath.Join(root, BudgetsFile), &p.Budgets); err != nil {
+		return Policy{}, []error{err}
+	}
+	tp := filepath.Join(root, TriageFile)
+	if _, err := os.Lstat(tp); err == nil {
+		var tr Triage
+		if err := decodeFile(tp, &tr); err != nil {
+			return Policy{}, []error{err}
+		}
+		p.Triage = &tr
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return Policy{}, []error{err}
 	}
 	if errs := p.validate(); len(errs) > 0 {
@@ -233,6 +272,25 @@ func (p Policy) validate() []error {
 	}
 	if b.ReaperGraceMinutes < minReaperGraceMinutes {
 		bad(BudgetsFile, "reaper_grace_minutes must be at least %d", minReaperGraceMinutes)
+	}
+	if t := p.Triage; t != nil {
+		for _, m := range t.Modes {
+			if !slices.Contains(triageModes, m) {
+				bad(TriageFile, "mode %q is not supported (only %s)", m, strings.Join(triageModes, ", "))
+			}
+		}
+		if t.MaxConcurrentTriageRuns < 0 || t.MaxTriageLaunchesPerDay < 0 {
+			bad(TriageFile, "max_concurrent_triage_runs and max_triage_launches_per_day must not be negative")
+		}
+		if t.MaxTriageRunsPerItem < 1 {
+			bad(TriageFile, "max_triage_runs_per_item must be at least 1")
+		}
+		if t.JobTimeoutMinutes < minTriageTimeoutMinutes || t.JobTimeoutMinutes > maxTriageTimeoutMinutes {
+			bad(TriageFile, "job_timeout_minutes must be %d..%d", minTriageTimeoutMinutes, maxTriageTimeoutMinutes)
+		}
+		if t.ReservedReviewSlotsTriaged < 0 || t.ReservedReviewSlotsTriaged > b.MaxPRsAwaitingReview {
+			bad(TriageFile, "reserved_review_slots_triaged must be 0..max_prs_awaiting_review (%d)", b.MaxPRsAwaitingReview)
+		}
 	}
 	return errs
 }
