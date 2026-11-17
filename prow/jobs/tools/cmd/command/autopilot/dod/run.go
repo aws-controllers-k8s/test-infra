@@ -230,6 +230,11 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 	if err != nil {
 		return nil, err
 	}
+	headCommit, err := src.commitInfo(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	provenanceBinds := o.WorkItem != "" || autopilotHead(headCommit, o.BotEmails)
 
 	in := Inputs{ChangeClass: o.ChangeClass, WorkItem: o.WorkItem, SkippedByFlag: slices.Clone(o.Skip)}
 	if o.CodegenDir != "" {
@@ -363,7 +368,7 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 		return nil, fmt.Errorf("dod did not finish: %w", err)
 	}
 
-	v := decide(o.ChangeClass, o.WorkItem, checks)
+	v := decide(o.ChangeClass, provenanceBinds, checks)
 	v.Tool = Tool{Name: ToolName, Revision: cmp.Or(o.ToolRevision, "unknown")}
 	v.Subject = Subject{Repo: o.Repo, Service: o.Service, BaseSHA: mb, HeadTree: tree}
 	v.Inputs = in

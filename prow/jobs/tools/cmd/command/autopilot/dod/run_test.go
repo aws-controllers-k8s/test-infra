@@ -243,3 +243,32 @@ func TestRunTimeoutGivesNoVerdict(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, v)
 }
+
+// A bot-authored head binds provenance even when no --work-item is given (the
+// Prow script passes one only if the head carries the trailer), so a bot head
+// without a Work-Item fails instead of passing unchecked.
+func TestRunBotHeadWithoutWorkItemFails(t *testing.T) {
+	f := sdkBump(t)
+	f.repo.Write("pkg/resource/widget/sdk.go", genSDK+"\nvar NewField = 2\n")
+	f.head = f.repo.CommitAs(dodtest.Bot, "regen\n\nProducer: autopilot/sdk-bump\nChange-Class: SDK-bump")
+	f.regen["pkg/resource/widget/sdk.go"] = genSDK + "\nvar NewField = 2\n"
+	o := options(t, f)
+	o.WorkItem = ""
+	v, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	assert.Equal(t, StatusFail, v.Verdict)
+	assert.Equal(t, []string{"provenance:BOT_COMMIT_WITHOUT_WORK_ITEM"}, v.Reasons)
+
+	// A human head with no work item still leaves provenance informational.
+	f.repo.Write("README.md", "docs\n")
+	f.head = f.repo.Commit("docs")
+	o = options(t, f)
+	o.WorkItem = ""
+	v, err = Run(context.Background(), o)
+	require.NoError(t, err)
+	for _, c := range v.Checks {
+		if c.ID == CheckProvenance {
+			assert.False(t, c.Binding)
+		}
+	}
+}

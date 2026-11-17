@@ -138,6 +138,19 @@ type commit struct {
 	SHA, AuthorEmail, Message string
 }
 
+// commitInfo reads one commit's author email and message.
+func (g gitRepo) commitInfo(ctx context.Context, rev string) (commit, error) {
+	out, err := g.run(ctx, "log", "-1", "--format=%H%x00%ae%x00%B", "--end-of-options", rev, "--")
+	if err != nil {
+		return commit{}, err
+	}
+	parts := strings.SplitN(string(out), "\x00", 3)
+	if len(parts) != 3 {
+		return commit{}, fmt.Errorf("git log: malformed record")
+	}
+	return commit{SHA: parts[0], AuthorEmail: parts[1], Message: strings.TrimSpace(parts[2])}, nil
+}
+
 // commits lists base..head without merges, oldest first.
 func (g gitRepo) commits(ctx context.Context, base, head string) ([]commit, error) {
 	out, err := g.run(ctx, "log", "--no-merges", "--reverse", "--format=%H%x00%ae%x00%B%x1e", base+".."+head, "--")

@@ -99,8 +99,8 @@ var notCovered = map[string][]string{
 	ClassNewResource: {"real-aws-e2e", "behavior-probe", "plan-schema-hash", "crud-tags-adoption-e2e", "iam-recommended-policy", "aws-resource-leak-check"},
 }
 
-func binding(class, workItem, id string) bool {
-	if id == CheckProvenance && workItem == "" {
+func binding(class string, provenanceBinds bool, id string) bool {
+	if id == CheckProvenance && !provenanceBinds {
 		return false
 	}
 	return slices.Contains(gateSets[class], id)
@@ -109,12 +109,12 @@ func binding(class, workItem, id string) bool {
 // decide applies the class's gate set: the verdict passes only when every
 // binding check passes. Reclassification comes from binding checks and only
 // ever moves up.
-func decide(class, workItem string, checks []Check) Verdict {
+func decide(class string, provenanceBinds bool, checks []Check) Verdict {
 	v := Verdict{Schema: Schema, Verdict: StatusPass, NotCovered: slices.Clone(notCovered[class])}
 	reclass := ""
 	for i := range checks {
 		c := &checks[i]
-		c.Binding = binding(class, workItem, c.ID)
+		c.Binding = binding(class, provenanceBinds, c.ID)
 		v.Labels = append(v.Labels, c.Labels...)
 		if !c.Binding {
 			continue

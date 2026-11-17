@@ -38,7 +38,7 @@ func with(checks []Check, c Check) []Check {
 }
 
 func TestDecideAllPass(t *testing.T) {
-	v := decide(ClassSDKBump, "sha256:0123456789abcdef", allPass())
+	v := decide(ClassSDKBump, true, allPass())
 	assert.Equal(t, StatusPass, v.Verdict)
 	assert.Empty(t, v.Reasons)
 	assert.Empty(t, v.ReclassifyTo)
@@ -51,7 +51,7 @@ func TestDecideAllPass(t *testing.T) {
 func TestDecideBindingFailAndSkip(t *testing.T) {
 	fail := newCheck(CheckPathAllowlist, []Finding{{Signature: "PATH_NOT_ALLOWED", Fails: true}})
 	fail.Reclassify = ClassHandWritten
-	v := decide(ClassSDKBump, "", with(with(allPass(), fail), skipCheck(CheckRegenClean, "CODEGEN_DIR_NOT_SET")))
+	v := decide(ClassSDKBump, false, with(with(allPass(), fail), skipCheck(CheckRegenClean, "CODEGEN_DIR_NOT_SET")))
 	assert.Equal(t, StatusFail, v.Verdict)
 	assert.ElementsMatch(t, []string{"path-allowlist:PATH_NOT_ALLOWED", "regen-clean:CODEGEN_DIR_NOT_SET"}, v.Reasons)
 	assert.Equal(t, ClassHandWritten, v.ReclassifyTo)
@@ -59,27 +59,27 @@ func TestDecideBindingFailAndSkip(t *testing.T) {
 
 func TestDecideIgnoresNonBindingFailures(t *testing.T) {
 	// ignore-effective is not in the SDK-bump gate set; provenance binds only
-	// with a work item.
+	// with a work item or an autopilot head.
 	ig := newCheck(CheckIgnore, []Finding{{Signature: "IGNORE_FIELD_PATH_NO_EFFECT", Fails: true}})
 	pv := newCheck(CheckProvenance, []Finding{{Signature: "NO_BOT_COMMIT", Fails: true}})
-	v := decide(ClassSDKBump, "", with(with(allPass(), ig), pv))
+	v := decide(ClassSDKBump, false, with(with(allPass(), ig), pv))
 	assert.Equal(t, StatusPass, v.Verdict)
 
-	v = decide(ClassSDKBump, "sha256:0123456789abcdef", with(allPass(), pv))
+	v = decide(ClassSDKBump, true, with(allPass(), pv))
 	assert.Equal(t, StatusFail, v.Verdict)
 }
 
 func TestDecideReclassifiesOnlyUpward(t *testing.T) {
 	c := newCheck(CheckPathAllowlist, []Finding{{Signature: "PATH_NOT_ALLOWED", Fails: true}})
 	c.Reclassify = ClassConfigOnly
-	v := decide(ClassHandWritten, "", with(allPass(), c))
+	v := decide(ClassHandWritten, false, with(allPass(), c))
 	assert.Empty(t, v.ReclassifyTo)
 }
 
 func TestDecideCollectsLabelsFromEveryCheck(t *testing.T) {
 	c := newCheck(CheckIgnore, nil)
 	c.Labels = []string{LabelSensitivePath}
-	v := decide(ClassMechanical, "", with(allPass(), c))
+	v := decide(ClassMechanical, false, with(allPass(), c))
 	assert.Equal(t, []string{LabelSensitivePath}, v.Labels)
 }
 

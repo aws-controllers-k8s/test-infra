@@ -106,7 +106,7 @@ func init() {
 	f.StringVar(&dodOpts.baseRef, "base-ref", "", "the PR's base; dod diffs from its merge base with --head-ref")
 	f.StringVar(&dodOpts.headRef, "head-ref", "HEAD", "the PR's head")
 	f.StringVar(&dodOpts.changeClass, "change-class", "", "mechanical, docs-only, SDK-bump, config-only, hand-written-code or new-resource")
-	f.StringVar(&dodOpts.workItem, "work-item", "", "ledger key hash (sha256:<16 hex>); makes provenance binding")
+	f.StringVar(&dodOpts.workItem, "work-item", "", "ledger key hash (sha256:<16 hex>); makes provenance binding (so does a bot-authored or Producer: autopilot/* head)")
 	f.StringArrayVar(&dodOpts.botEmails, "bot-email", nil, "author email of autopilot commits (repeatable)")
 	f.StringVar(&dodOpts.codegenDir, "codegen-dir", "", "code-generator checkout at the pinned SHA (regen-clean skips without it)")
 	f.StringVar(&dodOpts.runtimeDir, "runtime-dir", "", "runtime checkout at the pinned SHA (RUNTIME_CRD_DIR for regeneration)")

@@ -25,6 +25,18 @@ func firstValue(vs []string) string {
 	return vs[0]
 }
 
+func isBot(c commit, botEmails []string) bool {
+	return slices.ContainsFunc(botEmails, func(e string) bool { return strings.EqualFold(e, c.AuthorEmail) })
+}
+
+// autopilotHead reports whether the PR head claims to be autopilot's: its
+// author is a bot email, or it carries a Producer: autopilot/* trailer. Such a
+// head makes provenance binding even without --work-item, so a bot head that
+// lacks its Work-Item trailer fails instead of going unchecked.
+func autopilotHead(head commit, botEmails []string) bool {
+	return isBot(head, botEmails) || strings.HasPrefix(firstValue(parseTrailers(head.Message)["Producer"]), "autopilot/")
+}
+
 // checkProvenance applies design §4.4: a commit by a bot email must carry the
 // Plan 3 trailers for this work item and class (fail closed); any other commit
 // is a human commit, allowed and counted. It returns the human commit count.
@@ -39,7 +51,7 @@ func checkProvenance(commits []commit, botEmails []string, workItem, class strin
 		if len(short) > 12 {
 			short = short[:12]
 		}
-		if !slices.ContainsFunc(botEmails, func(e string) bool { return strings.EqualFold(e, c.AuthorEmail) }) {
+		if !isBot(c, botEmails) {
 			humans++
 			findings = append(findings, Finding{Signature: "HUMAN_COMMIT", Detail: "commit " + short})
 			continue
@@ -50,6 +62,8 @@ func checkProvenance(commits []commit, botEmails []string, workItem, class strin
 		switch {
 		case !strings.HasPrefix(firstValue(t["Producer"]), "autopilot/"):
 			sig = "BOT_COMMIT_WITHOUT_TRAILERS"
+		case firstValue(t["Work-Item"]) == "":
+			sig = "BOT_COMMIT_WITHOUT_WORK_ITEM"
 		case workItem != "" && firstValue(t["Work-Item"]) != workItem:
 			sig = "BOT_COMMIT_WRONG_WORK_ITEM"
 		case firstValue(t["Change-Class"]) != class:
