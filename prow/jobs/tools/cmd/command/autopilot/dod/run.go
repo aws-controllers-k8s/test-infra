@@ -228,11 +228,11 @@ func sensitiveCheck(d *crdCompat, docErr error, runFailed bool, crds map[string]
 	return checkSensitive(d, crds, names, extra)
 }
 
-func sdkPinCheck(base sdkPins, baseErr error, head sdkPins, headErr error) Check {
+func sdkPinCheck(class string, base sdkPins, baseErr error, head sdkPins, headErr error) Check {
 	if baseErr != nil || headErr != nil {
 		return newCheck(CheckSDKPin, []Finding{{Signature: "SDK_PIN_UNREADABLE", Fails: true}})
 	}
-	return checkSDKPin(base, head)
+	return checkSDKPin(class, base, head)
 }
 
 // runOrder is the order checks run in; build is last (it runs PR code).
@@ -406,7 +406,7 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 		case CheckLeaks:
 			c = checkLeaks(files, commits, o.PRBody)
 		case CheckSDKPin:
-			c = sdkPinCheck(basePins, basePinErr, headPins, headPinErr)
+			c = sdkPinCheck(o.ChangeClass, basePins, basePinErr, headPins, headPinErr)
 		case CheckIgnore:
 			if err := loadModel(); err != nil {
 				return nil, err
