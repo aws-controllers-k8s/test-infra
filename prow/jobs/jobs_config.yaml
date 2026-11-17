@@ -123,6 +123,11 @@ chainsaw_test_services:
 # verdict; it mounts no credentials. Empty: nothing is wired in Phase 1.
 autopilot_dod_services: []
 
+# ACK Autopilot Plan 6: services that get the autopilot-sdk-bump-<service>
+# periodic (deterministic SDK bump, ack-dod, draft PR). It is a dry run
+# (AUTOPILOT_SDK_BUMP_WRITE=false in the template). Empty: nothing runs in Phase 1.
+autopilot_sdk_bump_services: []
+
 # List of AWS services onboarded for soak testing, executing in their Prow
 # cluster on every release
 soak_test_on_release_service_names: []
