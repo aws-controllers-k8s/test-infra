@@ -145,3 +145,18 @@ func TestRegenPassesTheEnvironment(t *testing.T) {
 		"RUNTIME_CRD_DIR=" + filepath.Join("/rt", "config"), "ACK_GENERATE_CACHE_DIR=/cache",
 	}, got)
 }
+
+// build must test the head tree: if regen-clean could not put the scratch
+// clone back, the run stops instead of building regenerated code.
+func TestScratchAtHead(t *testing.T) {
+	r, head := regenRepo(t)
+	s, cleanup, err := cloneScratch(context.Background(), gitRepo{dir: r.Dir}, head)
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, scratchAtHead(context.Background(), s, head))
+	require.NoError(t, os.WriteFile(filepath.Join(s.dir, "pkg/resource/widget/sdk.go"), []byte("changed"), 0o644))
+	assert.Error(t, scratchAtHead(context.Background(), s, head))
+	require.NoError(t, s.reset(context.Background(), head))
+	require.NoError(t, os.WriteFile(filepath.Join(s.dir, "untracked.go"), []byte("x"), 0o644))
+	assert.Error(t, scratchAtHead(context.Background(), s, head))
+}

@@ -323,6 +323,10 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 				Service: o.Service, CodegenDir: o.CodegenDir, RuntimeDir: o.RuntimeDir, CacheDir: o.CacheDir, Run: o.Run, Log: o.Log,
 			})
 		case CheckBuild:
+			// regen-clean resets the clone; never build anything but head.
+			if err := scratchAtHead(ctx, scratch, head); err != nil {
+				return nil, fmt.Errorf("build: %w", err)
+			}
 			c = checkBuild(ctx, o.ChangeClass, scratch, o.Run, o.Log)
 		case CheckCRDDiff:
 			if p, bad := crdDocProblem(id, compat, compatErr, runFailed); bad {

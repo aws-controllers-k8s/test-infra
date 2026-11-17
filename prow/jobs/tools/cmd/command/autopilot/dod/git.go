@@ -234,3 +234,23 @@ func gather(ctx context.Context, g gitRepo, base, head string) ([]changedFile, e
 	}
 	return files, nil
 }
+
+// scratchAtHead errors unless the scratch clone is exactly head: HEAD is head
+// and nothing is modified or untracked (ignored files included).
+func scratchAtHead(ctx context.Context, g gitRepo, head string) error {
+	at, err := g.commitSHA(ctx, "HEAD")
+	if err != nil {
+		return err
+	}
+	if at != head {
+		return fmt.Errorf("scratch clone is at %s, not %s", at, head)
+	}
+	out, err := g.run(ctx, "status", "--porcelain=v1", "--untracked-files=all", "--ignored")
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(out)) > 0 {
+		return fmt.Errorf("scratch clone is not clean at %s", head)
+	}
+	return nil
+}
