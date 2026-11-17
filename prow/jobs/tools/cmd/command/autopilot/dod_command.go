@@ -48,6 +48,7 @@ type dodFlags struct {
 
 type verifyFlags struct {
 	file, repoDir, commit, gateVerdict, prBody string
+	allowFail                                  bool
 }
 
 var (
@@ -75,10 +76,12 @@ Exit 0 = pass, 1 = fail, 2 = no verdict. Needs no credentials.`,
 var verifyVerdictCmd = &cobra.Command{
 	Use:   "verify-verdict",
 	Short: "check a Gate-Verdict value against a verdict file and a commit",
-	Long: `Exit 0 when the verdict file's SHA-256 is the Gate-Verdict value (--gate-verdict,
-or the last Gate-Verdict trailer in --pr-body-file), --commit has the verdict's
-head tree and the verdict's base is its ancestor; 1 when one of those does not
-hold; 2 on any other error.`,
+	Long: `Checks that a verdict is genuine: the verdict file's SHA-256 is the Gate-Verdict
+value (--gate-verdict, or the last Gate-Verdict trailer in --pr-body-file),
+--commit has the verdict's head tree and the verdict's base is its ancestor.
+Exit 0 = genuine and its verdict is pass; 1 = genuine but its verdict is fail
+(0 with --allow-fail, which checks authenticity only); 2 = not genuine (no
+trailer, digest, tree or base mismatch, unparseable file) or any other error.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runVerify(cmd.Context(), verifyOpts, cmd.OutOrStdout())
@@ -127,6 +130,7 @@ func init() {
 	v.StringVar(&verifyOpts.commit, "commit", "HEAD", "commit the verdict must describe (a PR head)")
 	v.StringVar(&verifyOpts.gateVerdict, "gate-verdict", "", "expected sha256:<hex>")
 	v.StringVar(&verifyOpts.prBody, "pr-body-file", "", "read the Gate-Verdict trailer from this PR body")
+	v.BoolVar(&verifyOpts.allowFail, "allow-fail", false, "exit 0 for a genuine verdict even if it is fail (authenticity only)")
 	_ = verifyVerdictCmd.MarkFlagRequired("file")
 
 	Command.AddCommand(dodCmd, verifyVerdictCmd)
@@ -203,31 +207,34 @@ func runDod(ctx context.Context, f dodFlags, stdin io.Reader, out, errw io.Write
 }
 
 func runVerify(ctx context.Context, f verifyFlags, out io.Writer) error {
+	notGenuine := func(err error) error { return exitError{code: 2, err: err} }
 	data, err := os.ReadFile(f.file)
 	if err != nil {
-		return exitError{code: 2, err: err}
+		return notGenuine(err)
 	}
 	want := f.gateVerdict
 	if want == "" && f.prBody != "" {
 		body, err := os.ReadFile(f.prBody)
 		if err != nil {
-			return exitError{code: 2, err: err}
+			return notGenuine(err)
 		}
 		var ok bool
 		if want, ok = dod.TrailerValue(body); !ok {
-			return exitError{code: 1, err: errors.New("the PR body has no Gate-Verdict trailer")}
+			return notGenuine(errors.New("the PR body has no Gate-Verdict trailer"))
 		}
 	}
 	if want == "" {
-		return exitError{code: 2, err: errors.New("give --gate-verdict or --pr-body-file")}
+		return notGenuine(errors.New("give --gate-verdict or --pr-body-file"))
 	}
 	v, err := dod.Verify(ctx, f.repoDir, f.commit, data, want)
-	switch {
-	case errors.Is(err, dod.ErrDigestMismatch), errors.Is(err, dod.ErrTreeMismatch), errors.Is(err, dod.ErrBaseNotAncestor):
-		return exitError{code: 1, err: err}
-	case err != nil:
-		return exitError{code: 2, err: err}
+	if err != nil {
+		return notGenuine(err)
 	}
-	_, err = fmt.Fprintf(out, "verdict ok digest=%s verdict=%s reclassify_to=%q\n", want, v.Verdict, v.ReclassifyTo)
-	return err
+	if _, err := fmt.Fprintf(out, "verdict ok digest=%s verdict=%s reclassify_to=%q\n", want, v.Verdict, v.ReclassifyTo); err != nil {
+		return notGenuine(err)
+	}
+	if v.Verdict != dod.StatusPass && !f.allowFail {
+		return exitError{code: 1, err: fmt.Errorf("genuine verdict, but it is %s: %s", v.Verdict, strings.Join(v.Reasons, " "))}
+	}
+	return nil
 }

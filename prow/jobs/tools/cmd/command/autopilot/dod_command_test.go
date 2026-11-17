@@ -79,7 +79,7 @@ func TestRunDodPassWritesVerdictAndTrailer(t *testing.T) {
 	assert.Contains(t, vout.String(), "verdict ok")
 
 	require.NoError(t, os.WriteFile(body, []byte("no trailer\n"), 0o644))
-	assert.Equal(t, 1, exitCodeOf(t, runVerify(context.Background(), verifyFlags{file: f.verdictOut, repoDir: r.Dir, commit: "HEAD", prBody: body}, io.Discard)))
+	assert.Equal(t, 2, exitCodeOf(t, runVerify(context.Background(), verifyFlags{file: f.verdictOut, repoDir: r.Dir, commit: "HEAD", prBody: body}, io.Discard)))
 }
 
 func TestRunDodExitCodes(t *testing.T) {
@@ -98,4 +98,42 @@ func TestRunDodExitCodes(t *testing.T) {
 	assert.Equal(t, 2, exitCodeOf(t, runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard)))
 	f.output, f.crdCompat, f.prBody = "text", "-", "-"
 	assert.Equal(t, 2, exitCodeOf(t, runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard)))
+}
+
+// TestVerifyVerdictExitCodes: 0 only for a genuine passing verdict; 1 for a
+// genuine failing one (0 with --allow-fail); 2 for anything not genuine.
+func TestVerifyVerdictExitCodes(t *testing.T) {
+	ctx := context.Background()
+	r, base := mechanicalRepo(t)
+	dir := t.TempDir()
+	pass := filepath.Join(dir, "pass.json")
+	f := dodFlags{repoDir: r.Dir, service: "c", baseRef: base, headRef: "HEAD", changeClass: "mechanical", output: "json", verdictOut: pass}
+	require.NoError(t, runDod(ctx, f, strings.NewReader(""), io.Discard, io.Discard))
+	pb, err := os.ReadFile(pass)
+	require.NoError(t, err)
+
+	r.Write("pkg/x.go", "package pkg\n")
+	r.Commit("hand-written")
+	failing := filepath.Join(dir, "fail.json")
+	f.verdictOut = failing
+	require.Equal(t, 1, exitCodeOf(t, runDod(ctx, f, strings.NewReader(""), io.Discard, io.Discard)))
+	fb, err := os.ReadFile(failing)
+	require.NoError(t, err)
+
+	verify := func(file, commit, want string, allowFail bool) error {
+		return runVerify(ctx, verifyFlags{file: file, repoDir: r.Dir, commit: commit, gateVerdict: want, allowFail: allowFail}, io.Discard)
+	}
+	assert.NoError(t, verify(pass, "HEAD~1", dod.Digest(pb), false), "genuine pass")
+	assert.Equal(t, 1, exitCodeOf(t, verify(failing, "HEAD", dod.Digest(fb), false)), "genuine fail")
+	assert.NoError(t, verify(failing, "HEAD", dod.Digest(fb), true), "--allow-fail: genuine is enough")
+
+	assert.Equal(t, 2, exitCodeOf(t, verify(pass, "HEAD~1", dod.Digest(fb), false)), "digest mismatch")
+	assert.Equal(t, 2, exitCodeOf(t, verify(pass, "HEAD", dod.Digest(pb), false)), "tree mismatch")
+	assert.Equal(t, 2, exitCodeOf(t, verify(failing, "HEAD", dod.Digest(pb), true)), "--allow-fail never accepts a forgery")
+
+	forged := filepath.Join(dir, "forged.json")
+	fake := strings.Replace(string(fb), `"verdict": "fail"`, `"verdict": "pass"`, 1)
+	require.NotEqual(t, string(fb), fake)
+	require.NoError(t, os.WriteFile(forged, []byte(fake), 0o644))
+	assert.Equal(t, 2, exitCodeOf(t, verify(forged, "HEAD", dod.Digest(fb), false)), "edited verdict")
 }
