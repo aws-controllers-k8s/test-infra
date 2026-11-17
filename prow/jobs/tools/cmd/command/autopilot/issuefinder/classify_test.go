@@ -139,7 +139,7 @@ func TestClassifyNoBumpWhenNothingNeedsIt(t *testing.T) {
 }
 
 func TestClassifyConfigOnlyWork(t *testing.T) {
-	for _, work := range []string{"create-only", "not-generated"} {
+	for _, work := range []string{"create-only", "not-generated", "server-default"} {
 		l := modeField
 		l.Work = work
 		w := classify(t, l)["api-change|s3|Bucket|spec:Mode|needs-config"]

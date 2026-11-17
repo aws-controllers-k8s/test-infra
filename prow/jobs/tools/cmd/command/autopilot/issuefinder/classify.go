@@ -34,8 +34,9 @@ const source = "api-change"
 // for a field sent beside one that custom code reconciles, so adding it means
 // updating that hook.
 var configOnlyWork = map[string]bool{
-	"create-only":   true, // is_immutable
-	"not-generated": true, // a from: field codegen does not add itself
+	"create-only":    true, // is_immutable
+	"not-generated":  true, // a from: field codegen does not add itself
+	"server-default": true, // late_initialize, compare.is_ignored, or no default
 }
 
 // classToken shortens a detector FindingClass name for use in a key.
