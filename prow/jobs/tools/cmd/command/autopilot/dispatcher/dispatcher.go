@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/issuefinder"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/policy"
 )
@@ -39,6 +40,9 @@ type Config struct {
 	// Launcher is, so a dry run can never start or stop anything. Reconcile
 	// still reads run status, and the inventory, through Launcher.
 	DryRun bool
+	// TriageCommands are maintainers' /autopilot triage replies
+	// (issuefinder.TriageCommands), oldest first.
+	TriageCommands []issuefinder.TriageCommand
 }
 
 // Launch is one launch the tick made (or, with a shadow launcher, would make).
@@ -60,6 +64,12 @@ type Result struct {
 	// Problems are failures the next tick retries: unreadable policy, run
 	// status or launch errors. The ledger stays consistent.
 	Problems []string
+	// Skipped explains each triage reply the tick ignored.
+	Skipped []string
+	// TriageOff: the policy has no triage lane for mode api.
+	TriageOff bool
+	// TriageStats are the TriageAcceptRate inputs (design 10), for Plan 10.
+	TriageStats []TriageStat
 }
 
 // Tick runs one Dispatcher pass over items, in place: reconcile, route,
@@ -83,10 +93,16 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 		launcher = &dryRun{real: cfg.Launcher}
 	}
 	res.Problems = reconcile(ctx, items, launcher, p.Budgets, cfg.Now)
+	res.Problems = append(res.Problems, reconcileTriage(ctx, items, launcher, p, cfg.Now)...)
 	if p.Switches.AbortInflight {
 		res.Problems = append(res.Problems, abortInflight(ctx, items, launcher, ts)...)
+		res.Problems = append(res.Problems, abortInflightTriage(ctx, items, launcher, p, ts)...)
 	}
+	res.Skipped = applyTriageCommands(items, cfg.TriageCommands, ts)
 	res.Held = route(items, ts)
+	// Set before the inventory read, whose failure returns early.
+	res.TriageOff = !triageEnabled(p)
+	res.TriageStats = TriageStats(items)
 	orphans, adopt, err := findOrphans(ctx, cfg.Launcher, items)
 	if err != nil {
 		// Without the inventory the caps cannot be trusted: launch nothing.
@@ -101,7 +117,18 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 			}
 		}
 	}
-	picks, waits := scheduleWith(items, p, cfg.Now, orphans, adopt)
+	// Triage runs in flight that no item claims fill triage slots, not the
+	// workflow caps: triage opens no PR and holds no repo (decision 10).
+	var wfOrphans []ActiveJob
+	triageOrphans := 0
+	for _, o := range orphans {
+		if o.Workflow == triageWorkflow {
+			triageOrphans++
+			continue
+		}
+		wfOrphans = append(wfOrphans, o)
+	}
+	picks, waits := scheduleWith(items, p, cfg.Now, wfOrphans, adopt)
 	for _, c := range waits {
 		res.Waiting = append(res.Waiting, Wait{Key: c.item.Key, KeyHash: c.item.KeyHash, Cap: c.cap})
 	}
@@ -122,6 +149,23 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 		}
 	}
 	res.Problems = append(res.Problems, refreshBumps(ctx, items, launcher, p.Switches, &res)...)
+	// The triage lane (design 5.1): tool-less runs that only propose.
+	tpicks, twaits := scheduleTriageWith(items, p, cfg.Now, triageOrphans, adopt)
+	for _, c := range twaits {
+		res.Waiting = append(res.Waiting, Wait{Key: c.item.Key, KeyHash: c.item.KeyHash, Cap: c.cap})
+	}
+	for _, c := range tpicks {
+		w := c.item
+		req := LaunchRequest{LaunchID: nextTriageLaunchID(w), Workflow: triageWorkflow, Args: c.args, Timeout: p.Triage.JobTimeout()}
+		if err := launcher.Launch(ctx, req); err != nil {
+			res.Problems = append(res.Problems, fmt.Sprintf("launch %s for %s: %v", req.LaunchID, w.Key, err))
+			continue
+		}
+		res.Launched = append(res.Launched, Launch{Key: w.Key, KeyHash: w.KeyHash, Workflow: req.Workflow, LaunchID: req.LaunchID, Shadow: launcher.Shadow()})
+		if !launcher.Shadow() {
+			startTriage(w, req, cfg.Now)
+		}
+	}
 	return res
 }
 
@@ -136,7 +180,7 @@ func NextLaunch(w *ledger.WorkItem, b policy.Budgets) (LaunchRequest, bool) {
 }
 
 // findOrphans sorts the runs the launcher sees in flight: a run that is the
-// next run of a QUEUED item goes to adopt (that item's next Launch adopts it);
+// next run of a QUEUED item, or of a triage candidate, goes to adopt (that item's next Launch adopts it);
 // a run no item claims is an orphan. Refresh runs are neither. A shadow
 // launcher, or one without an inventory, sees none.
 func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkItem) ([]ActiveJob, map[string]bool, error) {
@@ -153,8 +197,17 @@ func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkI
 		if w.Claim != nil {
 			claimed[w.Claim.LaunchID] = true
 		}
+		// A triage run lives in w.Triage.Claim, not w.Claim (Plan 8).
+		if w.Triage != nil && w.Triage.Claim != nil {
+			claimed[w.Triage.Claim.LaunchID] = true
+		}
 		if w.State == ledger.Queued {
 			next[nextLaunchID(w)] = true
+		}
+		// A triage candidate's next run in flight is a lost ledger push:
+		// scheduleTriageWith adopts it.
+		if triageCandidate(w) {
+			next[nextTriageLaunchID(w)] = true
 		}
 	}
 	var orphans []ActiveJob

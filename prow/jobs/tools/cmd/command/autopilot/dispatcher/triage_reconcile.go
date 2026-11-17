@@ -166,3 +166,36 @@ func restale(w *ledger.WorkItem, ts string) {
 	t.Input, t.Runs, t.Claim, t.Failed, t.Proposal, t.Review = ledger.TriageInput(w), 0, nil, "", nil, nil
 	t.AppendLog(ledger.TriageEvent{TS: ts, Event: ledger.TriageStale, LaunchID: id})
 }
+
+// abortInflightTriage stops every triage run in flight (Plan 7's policy
+// abort_inflight). The item goes back to DETECTED with that run used
+// (TRIAGE_FAILED ABORTED_BY_POLICY), so it is triaged again once the switch
+// is off and a run is left. A shadow or dry-run launcher stops nothing and
+// changes no item; one problem line says how many it would stop.
+func abortInflightTriage(ctx context.Context, items map[string]*ledger.WorkItem, l Launcher, p policy.Policy, ts string) []string {
+	var active []*ledger.WorkItem
+	for _, k := range sortedKeys(items) {
+		if w := items[k]; w.Triage != nil && w.Triage.Claim != nil {
+			active = append(active, w)
+		}
+	}
+	if len(active) == 0 {
+		return nil
+	}
+	if l.Shadow() {
+		for _, w := range active {
+			_ = l.Abort(ctx, w.Triage.Claim.LaunchID)
+		}
+		return []string{fmt.Sprintf("abort_inflight: %d triage run(s) in flight; this launcher aborts nothing", len(active))}
+	}
+	maxRuns := triageMaxRuns(p)
+	var problems []string
+	for _, w := range active {
+		if err := l.Abort(ctx, w.Triage.Claim.LaunchID); err != nil {
+			problems = append(problems, fmt.Sprintf("abort %s for %s: %v", w.Triage.Claim.LaunchID, w.Key, err))
+			continue
+		}
+		triageFailed(w, "ABORTED_BY_POLICY", true, maxRuns, ts)
+	}
+	return problems
+}
