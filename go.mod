@@ -47,7 +47,7 @@ require (
 	github.com/spf13/pflag v1.0.9
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/mod v0.37.0
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
