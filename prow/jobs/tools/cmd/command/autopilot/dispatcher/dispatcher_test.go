@@ -274,3 +274,47 @@ func TestNextLaunch(t *testing.T) {
 	_, ok = NextLaunch(item(fieldKey, "hand-written-code", ledger.Queued), testPolicy(t).Budgets)
 	assert.False(t, ok)
 }
+
+// TestTickNeverRelaunchesAGoneJob: once a launch id is in the ledger (the
+// claim, links.prowjobs), no tick launches it again, even when the launcher no
+// longer knows the job (Prow's sinker deleted it: PhaseUnknown). The run is
+// reaped after deadline plus grace and the next run gets a new id.
+func TestTickNeverRelaunchesAGoneJob(t *testing.T) {
+	bump := item(bumpKey, "SDK-bump", ledger.Queued)
+	items := ledgerOf(bump)
+	p := testPolicy(t)
+	f := &fakeLauncher{} // every Status is PhaseUnknown: the job is gone
+	at := now
+	for i := 0; i < 40; i++ { // 20 hours of ticks
+		Tick(context.Background(), Config{Now: at, Policy: &p, Launcher: f}, items)
+		at = at.Add(30 * time.Minute)
+	}
+	seen := map[string]bool{}
+	for _, r := range f.launched {
+		assert.False(t, seen[r.LaunchID], "launch id %s requested twice", r.LaunchID)
+		seen[r.LaunchID] = true
+	}
+	// Deadline 5h + grace 30m per run: r1 at 09:00, r2 at 14:30, r3 at 20:00;
+	// then max runs (3) are spent and the item is escalated.
+	require.Len(t, f.launched, 3)
+	for i, r := range f.launched {
+		assert.Equal(t, launchID(bump, i+1), r.LaunchID)
+	}
+	assert.Equal(t, []string{launchID(bump, 1), launchID(bump, 2), launchID(bump, 3)}, bump.Links.ProwJobs)
+	assert.NotEqual(t, ledger.Running, bump.State)
+	assertLints(t, items)
+
+	// A refresh id is consumed the same way: recorded in links.prowjobs, never
+	// relaunched while the dependents' states are the same, job or no job.
+	open := item("sdk-bump|s3|*|v1.2.0", "SDK-bump", ledger.HumanReview)
+	open.Links.PR = "https://github.com/aws-controllers-k8s/s3-controller/pull/9"
+	dep := item(fieldKey, "config-only", ledger.Blocked)
+	dep.DetectorWork, dep.DependsOn = "server-default", []string{open.Key}
+	items = ledgerOf(open, dep)
+	f = &fakeLauncher{}
+	for i := 0; i < 10; i++ {
+		Tick(context.Background(), Config{Now: now.Add(time.Duration(i) * 30 * time.Minute), Policy: &p, Launcher: f}, items)
+	}
+	require.Len(t, f.launched, 1)
+	assert.Equal(t, "refresh", f.launched[0].Args["mode"])
+}

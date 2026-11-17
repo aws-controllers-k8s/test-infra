@@ -102,9 +102,15 @@ type Launcher interface {
 	// tick that launched but lost its ledger push is safe to repeat. That holds
 	// only if the rerun picks the same items; the real launcher must adopt or
 	// reap orphaned runs by id prefix. The same
-	// LaunchID with a different Workflow or Args is an error. A real launcher
-	// must remember the ids it has started even after Prow deletes the job,
-	// so that a relaunch never starts a second run.
+	// LaunchID with a different Workflow or Args is an error. A launcher
+	// need not remember ids whose job Prow has deleted: Status then reports
+	// PhaseUnknown, and Launch with that id would start a new job. The
+	// Dispatcher never asks for that: an id is consumed once the ledger
+	// records it (the claim and links.prowjobs; Attempts.Runs picks the next
+	// run's id), a claimed run with no job is reaped after its deadline plus
+	// grace, and the next run gets a new id (TestTickNeverRelaunchesAGoneJob).
+	// The one gap is a tick whose ledger push is lost: the next tick repeats
+	// the id, and is adopted only while the job still exists.
 	Launch(ctx context.Context, r LaunchRequest) error
 	Status(ctx context.Context, launchID string) (Status, error)
 	// Abort stops a run. It must be idempotent: aborting a run that is
