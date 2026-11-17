@@ -234,15 +234,16 @@ func bump(ctx context.Context, o Options, t Target) Report {
 // returns the failure reason, or "".
 func regenerate(ctx context.Context, o Options, t Target, codegen, runtime string) string {
 	goEnv := []string{"GOFLAGS=-mod=mod"}
-	// codegen is a fresh worktree: make build-controller builds its
+	// codegen and runtime are fresh worktrees: make build-controller builds
 	// bin/ack-generate, but build-controller-release.sh looks for the binary
-	// and the templates at a GOPATH-relative path unless told (as dod's
-	// regen-clean does).
+	// and the templates at a GOPATH-relative path, and for the runtime next to
+	// the code-generator, unless told (as dod's regen-clean is).
 	mk := []string{
 		"SERVICE=" + o.Service, "SERVICE_CONTROLLER_SOURCE_PATH=" + o.ControllerDir,
 		"ACK_GENERATE_BIN_PATH=" + filepath.Join(codegen, "bin", "ack-generate"),
 		"TEMPLATES_DIR=" + filepath.Join(codegen, "templates"),
-		"RUNTIME_CRD_DIR=" + filepath.Join(runtime, "config"), "AWS_SERVICE_SDK_VERSION=" + t.Version,
+		"RUNTIME_CRD_DIR=" + filepath.Join(runtime, "config"), "RUNTIME_DIR=" + runtime,
+		"AWS_SERVICE_SDK_VERSION=" + t.Version,
 	}
 	if o.CacheDir != "" {
 		mk = append(mk, "ACK_GENERATE_CACHE_DIR="+o.CacheDir)

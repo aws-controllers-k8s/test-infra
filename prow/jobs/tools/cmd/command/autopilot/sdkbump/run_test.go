@@ -350,9 +350,10 @@ type writingForge struct{ *FakeForge }
 
 func (writingForge) Writes() bool { return true }
 
-// The codegen checkout is a fresh worktree: build-controller-release.sh looks
-// for ack-generate and the templates at a GOPATH-relative path unless told
-// where they are (dod's regen-clean passes the same two variables).
+// The codegen and runtime checkouts are fresh worktrees in unrelated temporary
+// directories: build-controller-release.sh looks for ack-generate and the
+// templates at a GOPATH-relative path, and for the runtime next to the
+// code-generator, unless told where they are (as dod's regen-clean is).
 func TestRegeneratePointsMakeAtTheCodegenWorktree(t *testing.T) {
 	type call struct {
 		dir string
@@ -374,6 +375,7 @@ func TestRegeneratePointsMakeAtTheCodegenWorktree(t *testing.T) {
 		assert.Contains(t, m.env, "ACK_GENERATE_BIN_PATH="+filepath.Join(cg, "bin", "ack-generate"))
 		assert.Contains(t, m.env, "TEMPLATES_DIR="+filepath.Join(cg, "templates"))
 		assert.Contains(t, m.env, "RUNTIME_CRD_DIR="+filepath.Join(rt, "config"))
+		assert.Contains(t, m.env, "RUNTIME_DIR="+rt)
 		assert.Contains(t, m.env, "ACK_GENERATE_CACHE_DIR=/work/cache")
 	}
 }
