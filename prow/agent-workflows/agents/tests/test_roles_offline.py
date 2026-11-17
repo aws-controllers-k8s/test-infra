@@ -1195,6 +1195,71 @@ def test_triage_input_validation():
     check("cli invalid", cli(**{**TRIAGE_ARGS, "finding_class": "operation"}) != 0, True)
 
 
+TRIAGE_FIXTURES = _PKG_ROOT / "tests" / "fixtures" / "triage"
+
+
+def _triage_pack(**change):
+    from workflows.triage_evidence import Item, Model, build
+
+    model = Model.load(TRIAGE_FIXTURES / "model.json")
+    return build(Item(**{**TRIAGE_ARGS, **change}), model, TRIAGE_FIXTURES / "controller")
+
+
+def test_triage_evidence():
+    """The evidence pack is computed by code from the model and the controller repo."""
+    print("triage evidence:")
+    from workflows.triage_evidence import Model, generator_config, model_name
+
+    pack = _triage_pack()
+    check("field found", pack.field_found, True)
+    check("member type", (pack.member_type, pack.member_shape), ("boolean", "com.amazonaws.s3#DefaultEventHold"))
+    check("set by", pack.set_by, ["PutObjectLockConfiguration"])
+    check("read by", pack.read_by, ["GetObjectLockConfiguration"])
+    check("resource operations", pack.resource_operations, ["CreateBucket", "DeleteBucket"])
+    check("not in the CRD yet", pack.crd_has_field, False)
+    check("CRD neighbours", pack.crd_nearby, [
+        "crd:spec.objectlockconfiguration",
+        "crd:spec.objectlockconfiguration.objectlockenabled",
+        "crd:spec.objectlockconfiguration.rule",
+        "crd:spec.objectlockconfiguration.rule.defaultretention",
+        "crd:spec.objectlockconfiguration.rule.defaultretention.days",
+        "crd:spec.objectlockconfiguration.rule.defaultretention.mode",
+    ])
+    check("documentation is plain text", pack.documentation.startswith("Whether new objects get a legal hold."), True)
+    check("no tags left", "<" in pack.documentation, False)
+    check("generator excerpt", "PutObjectLockConfiguration" in pack.generator_excerpt, True)
+    check("model name", model_name(generator_config(TRIAGE_FIXTURES / "controller"), "s3"), "s3")
+    check("model name default", model_name({}, "s3"), "s3")
+    check("model name refuses a path", model_name({"sdk_names": {"model_name": "../x"}}, "s3"), "s3")
+
+    for ref, want in {
+        "op:PutObjectLockConfiguration": True,
+        "op:PutBucketPolicy": False,
+        "shape:DefaultRetention": True,
+        "shape:Nope": False,
+        "field:" + EVENT_HOLD: True,
+        "field:objectlockconfiguration.rule": True,
+        "field:ObjectLockConfiguration.Rule.Nope": False,
+        "crd:spec.objectLockConfiguration.rule": True,
+        "crd:status.location": True,
+        "crd:spec.nope": False,
+        "op:Put Bucket": False,
+        "url:https://example.com": False,
+    }.items():
+        check(f"ref {ref}", pack.ref_exists(ref), want)
+
+    missing = _triage_pack(field="ObjectLockConfiguration.Rule.Gone")
+    check("missing field", (missing.field_found, missing.set_by, missing.documentation), (False, [], ""))
+
+    for bad in ({}, {"shapes": {}}, {"shapes": {"a#S": {"type": "service"}, "b#S": {"type": "service"}}}):
+        try:
+            Model(bad)
+            raised = False
+        except ValueError:
+            raised = True
+        check(f"rejects model {bad}", raised, True)
+
+
 def test_result_contract():
     """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
     print("result contract:")
@@ -1563,6 +1628,7 @@ def main():
                test_autopilot_arg_validation,
                test_triage_result_contract,
                test_triage_input_validation,
+               test_triage_evidence,
                test_sdk_bump_result_fixture,
                test_detector_work):
         fn()

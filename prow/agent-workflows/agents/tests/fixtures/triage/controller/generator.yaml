@@ -1,0 +1,12 @@
+sdk_names:
+  model_name: s3
+resources:
+  Bucket:
+    fields:
+      ObjectLockConfiguration:
+        from:
+          operation: PutObjectLockConfiguration
+          path: ObjectLockConfiguration
+    hooks:
+      sdk_update_pre_build_request:
+        template_path: hooks/bucket/sdk_update_pre_build_request.go.tpl
