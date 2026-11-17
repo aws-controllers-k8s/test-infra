@@ -258,9 +258,12 @@ func startTriage(w *ledger.WorkItem, req LaunchRequest, now time.Time) {
 }
 
 // triageHold says why route keeps a triage item where it is, or "" when its
-// decision lets it move on. A needs-config item past TRIAGED without a
-// decision (only a hand edit can do that) goes back to TRIAGED: a triage
-// item never runs on the detector's guess alone (design 5.1).
+// decision lets it move on. A triage item never runs on the detector's guess
+// alone (design 5.1): a needs-config item past TRIAGED without a decision
+// (only a hand edit can do that) goes back to TRIAGED when it has a proposal
+// a reply can still decide, and to DETECTED, to be triaged again, when it has
+// none. So does an item in TRIAGED without a proposal: no reply can decide
+// it, and DETECTED only ever launches a triage run.
 func triageHold(w *ledger.WorkItem, ts string) string {
 	t := w.Triage
 	switch w.State {
@@ -277,16 +280,23 @@ func triageHold(w *ledger.WorkItem, ts string) string {
 		return HoldAwaitingTriage
 	case ledger.Triaged:
 		switch {
-		case t == nil || t.Proposal == nil || t.Review == nil:
+		case t == nil || t.Proposal == nil:
+			transition(w, ledger.Detected, ts, "TRIAGE_REQUIRED")
+			return triageHold(w, ts)
+		case t.Review == nil:
 			return HoldAwaitingTriageReview
 		case t.Decided() == "":
 			return HoldTriageRejected
 		}
 		return ""
 	}
-	if t.Decided() == "" {
-		transition(w, ledger.Triaged, ts, "TRIAGE_REQUIRED")
-		return HoldAwaitingTriageReview
+	if t.Decided() != "" {
+		return ""
 	}
-	return ""
+	if t == nil || t.Proposal == nil {
+		transition(w, ledger.Detected, ts, "TRIAGE_REQUIRED")
+	} else {
+		transition(w, ledger.Triaged, ts, "TRIAGE_REQUIRED")
+	}
+	return triageHold(w, ts)
 }

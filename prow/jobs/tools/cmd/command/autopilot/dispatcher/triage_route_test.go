@@ -36,15 +36,31 @@ func TestRouteTriageHolds(t *testing.T) {
 	edited := needsConfig(key("G"), "config-only", "create-only")
 	edited.State = ledger.Queued
 	edited.History = append(edited.History, ledger.Transition{TS: t0, To: ledger.Queued, By: "hand-edit"})
-	items := ledgerOf(item(bumpKey, "SDK-bump", ledger.Queued), awaiting, inFlight, failed, ineligible, pending, rejected, edited)
+	editedPending := proposed(t, needsConfig(key("H"), "config-only", "create-only"), ledger.DecisionFieldConfig)
+	editedPending.State = ledger.Queued
+	editedPending.History = append(editedPending.History, ledger.Transition{TS: t0, To: ledger.Queued, By: "hand-edit"})
+	bareTriaged := needsConfig(key("I"), "config-only", "create-only")
+	bareTriaged.State = ledger.Triaged
+	bareTriaged.History = append(bareTriaged.History, ledger.Transition{TS: t0, To: ledger.Triaged, By: "hand-edit"})
+	items := ledgerOf(item(bumpKey, "SDK-bump", ledger.Queued), awaiting, inFlight, failed, ineligible, pending, rejected,
+		edited, editedPending, bareTriaged)
 
 	held := route(items, replyTS)
 	assert.Equal(t, map[string]int{
-		HoldAwaitingTriage: 1, HoldTriageRunning: 1, HoldTriageFailed: 1, HoldTriageIneligible: 1,
+		HoldAwaitingTriage: 3, HoldTriageRunning: 1, HoldTriageFailed: 1, HoldTriageIneligible: 1,
 		HoldAwaitingTriageReview: 2, HoldTriageRejected: 1,
 	}, held)
-	assert.Equal(t, ledger.Triaged, edited.State, "a needs-config item never runs without a decision")
-	assert.Equal(t, "TRIAGE_REQUIRED", last(edited).Reason)
+	// A needs-config item never runs without a decision. Without a proposal
+	// to decide on, it goes back to DETECTED to be triaged again; with a
+	// pending one, to TRIAGED to wait for the reply.
+	for _, w := range []*ledger.WorkItem{edited, bareTriaged} {
+		assert.Equal(t, ledger.Detected, w.State, w.Key)
+		assert.Equal(t, "TRIAGE_REQUIRED", last(w).Reason, w.Key)
+		assert.True(t, triageCandidate(w), w.Key)
+	}
+	assert.Equal(t, ledger.Triaged, editedPending.State)
+	assert.Equal(t, "TRIAGE_REQUIRED", last(editedPending).Reason)
+	assert.True(t, editedPending.Triage.Pending())
 	for _, w := range []*ledger.WorkItem{awaiting, inFlight, failed, ineligible, pending, rejected} {
 		assert.Contains(t, []ledger.State{ledger.Detected, ledger.Triaged}, w.State, w.Key)
 	}
