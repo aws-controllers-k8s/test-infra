@@ -300,3 +300,65 @@ func TestApplySDKBumpOutcomes(t *testing.T) {
 		assert.Equal(t, want, w.State, outcome)
 	}
 }
+
+func finishedAs(job JobState, outcome, reason, pr string) *Status {
+	st := finished(outcome, reason, pr)
+	st.Job = job
+	return st
+}
+
+func TestReconcileCrossChecksTheJobState(t *testing.T) {
+	pr := "https://github.com/aws-controllers-k8s/s3-controller/pull/240"
+	for name, tc := range map[string]struct {
+		st     *Status
+		state  ledger.State
+		reason string
+	}{
+		"succeeded, pr_opened":       {finishedAs(JobSucceeded, "pr_opened", "", pr), ledger.HumanReview, "PR_OPENED"},
+		"succeeded, no change":       {finishedAs(JobSucceeded, "completed_no_change", "NO_DIFF", ""), ledger.Done, "NO_DIFF"},
+		"failed, failed":             {finishedAs(JobFailed, "failed", "BUILD_FAILED", ""), ledger.Queued, "RETRY BUILD_FAILED"},
+		"failed, needs_human":        {finishedAs(JobFailed, "needs_human", "GATE_FAILED", ""), ledger.Escalated, "GATE_FAILED"},
+		"failed job says pr_opened":  {finishedAs(JobFailed, "pr_opened", "", pr), ledger.Queued, "RETRY RESULT_STATE_MISMATCH"},
+		"failed job says no change":  {finishedAs(JobFailed, "completed_no_change", "", ""), ledger.Queued, "RETRY RESULT_STATE_MISMATCH"},
+		"succeeded job says failed":  {finishedAs(JobSucceeded, "failed", "X", ""), ledger.Queued, "RETRY RESULT_STATE_MISMATCH"},
+		"succeeded job says wontfix": {finishedAs(JobSucceeded, "wont_fix:not_real", "", ""), ledger.Queued, "RETRY RESULT_STATE_MISMATCH"},
+		"aborted by someone":         {&Status{Phase: PhaseFinished, Job: JobAborted}, ledger.Escalated, "RUN_ABORTED"},
+		"aborted ignores the file":   {finishedAs(JobAborted, "pr_opened", "", pr), ledger.Escalated, "RUN_ABORTED"},
+		"errored":                    {&Status{Phase: PhaseFinished, Job: JobErrored}, ledger.Queued, "RETRY INFRA_JOB_ERROR"},
+		"no file":                    {&Status{Phase: PhaseFinished, Job: JobSucceeded, Problem: "RESULT_MISSING"}, ledger.Queued, "RETRY RESULT_MISSING"},
+		"bad problem token":          {&Status{Phase: PhaseFinished, Job: JobFailed, Problem: "not a token"}, ledger.Queued, "RETRY INVALID_REASON"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, problems := runWith(t, 1, 3, tc.st)
+			assert.Empty(t, problems)
+			assert.Equal(t, tc.state, w.State)
+			assert.Equal(t, tc.reason, last(w).Reason)
+			assert.Nil(t, w.Claim)
+			if tc.reason == "RETRY RESULT_STATE_MISMATCH" {
+				assert.Empty(t, w.Links.PR, "a mismatched file never reaches the ledger")
+				assert.Nil(t, w.Usage)
+			}
+		})
+	}
+}
+
+func TestReconcileAbortsLiveOverdueRuns(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T02:00:00Z", 1, 3)
+	f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: {Phase: PhaseRunning}}}
+	id := w.Claim.LaunchID
+	problems := reconcile(context.Background(), ledgerOf(w), f, testPolicy(t).Budgets, now.Add(2*time.Hour))
+	assert.Empty(t, problems)
+	assert.Equal(t, []string{id}, f.aborted)
+	assert.Equal(t, ledger.Escalated, w.State)
+	assert.Equal(t, "RUN_OVERDUE", last(w).Reason)
+}
+
+func TestReconcileKeepsOverdueRunWhenAbortFails(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T02:00:00Z", 1, 3)
+	f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: {Phase: PhaseRunning}}, abortErr: errors.New("forbidden")}
+	problems := reconcile(context.Background(), ledgerOf(w), f, testPolicy(t).Budgets, now.Add(2*time.Hour))
+	require.Len(t, problems, 1)
+	assert.Contains(t, problems[0], "forbidden")
+	assert.Equal(t, ledger.Running, w.State, "retried next tick")
+	assert.NotNil(t, w.Claim)
+}
