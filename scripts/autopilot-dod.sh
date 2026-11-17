@@ -25,7 +25,9 @@
 #   AUTOPILOT_DOD_BOT_LOGIN    GitHub login of the autopilot bot (default
 #                              ack-bot); the PR author decides "autopilot PR"
 #   AUTOPILOT_DOD_BOT_EMAIL    author email of autopilot commits
-#                              (default ack-bot@users.noreply.github.com)
+#                              (default ack-bot@users.noreply.github.com;
+#                              ack-bot's GitHub noreply address
+#                              82905295+ack-bot@… is always accepted too)
 #   AUTOPILOT_DOD_PR_BODY_FILE the PR description to scan for leaks (default:
 #                              fetched anonymously from the GitHub API)
 #
@@ -69,6 +71,7 @@ args=(autopilot dod
   --work-item "$AUTOPILOT_DOD_WORK_ITEM"
   --pr-author "$PR_AUTHOR" --bot-login "${AUTOPILOT_DOD_BOT_LOGIN:-ack-bot}"
   --bot-email "${AUTOPILOT_DOD_BOT_EMAIL:-ack-bot@users.noreply.github.com}"
+  --bot-email 82905295+ack-bot@users.noreply.github.com
   --pr-body-file "$PR_BODY"
   --codegen-dir "$CODEGEN_DIR" --runtime-dir "$RUNTIME_DIR"
   --ack-generate "$CODEGEN_DIR/bin/ack-generate"
