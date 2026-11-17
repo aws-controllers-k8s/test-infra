@@ -281,8 +281,10 @@ reconciles finished runs, routes items through the state machine, applies the
 caps in policy/budgets.yaml and launches with the launcher policy/autopilot.yaml
 names: "shadow" starts nothing; "prow" creates ProwJobs, and only when
 AUTOPILOT_LAUNCHER_ENABLED=true and --test-infra-dir is given. --dry-run never
-starts or aborts a run. Saves and lints the ledger unless --dry-run. The GitHub
-token is read from GITHUB_TOKEN.`,
+starts or aborts a run. It also launches triage runs for needs-config items
+(policy/triage.yaml) and applies maintainers' /autopilot triage replies; nothing
+a triage run proposes applies without a reply. Saves and lints the ledger unless
+--dry-run. The GitHub token is read from GITHUB_TOKEN.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := githubClient()
 		if err != nil {
@@ -299,8 +301,9 @@ var postStatusCmd = &cobra.Command{
 	Short: "create or update the Dispatcher's status comment on each open api-change issue",
 	Long: `Reads the ledger and the open api-change issues and keeps one comment per issue
 (by --comment-login, starting with the status marker) listing that issue's work
-items. Never edits the issue body or anyone else's comment. --dry-run prints the
-planned edits. The GitHub token is read from GITHUB_TOKEN.`,
+items. It also posts one comment per pending triage proposal (never edited) with
+the reply lines a team member uses to accept or reject it. Never edits the issue
+body or anyone else's comment. --dry-run prints the planned edits. The GitHub token is read from GITHUB_TOKEN.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := githubClient()
 		if err != nil {
@@ -349,10 +352,16 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 		return err
 	}
 	ts := now.UTC().Format(time.RFC3339)
-	ing := issuefinder.Ingest(issuefinder.Config{BotLogin: o.BotLogin, Team: team, Now: ts}, issues, items)
+	icfg := issuefinder.Config{BotLogin: o.BotLogin, Team: team, Now: ts}
+	ing := issuefinder.Ingest(icfg, issues, items)
+	// Triage replies are read with the same trust rules as /autopilot
+	// wontfix, then applied by the tick (Plan 8).
+	cmds, cmdSkipped := issuefinder.TriageCommands(icfg, issues)
+	cfg.TriageCommands = cmds
 	tick := dispatcher.Tick(ctx, cfg, items)
 
-	for _, s := range ing.Skipped {
+	skipped := append(append(append([]string{}, ing.Skipped...), cmdSkipped...), tick.Skipped...)
+	for _, s := range skipped {
 		fmt.Fprintf(out, "skipped %s\n", s)
 	}
 	changed, err := changedKeys(before, items)
@@ -389,8 +398,16 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	for _, p := range tick.Problems {
 		fmt.Fprintf(out, "problem %s\n", p)
 	}
+	if tick.TriageOff {
+		fmt.Fprintln(out, "triage off: no policy/triage.yaml, or it lists no mode")
+	}
+	// The TriageAcceptRate inputs (design 10); Plan 10 publishes them.
+	for _, s := range tick.TriageStats {
+		fmt.Fprintf(out, "triage-stat %s %s %s proposed=%d invalid=%d accepted=%d rejected=%d overridden=%d\n",
+			s.Mode, s.Work, s.Decision, s.Proposed, s.Invalid, s.Accepted, s.Rejected, s.Overridden)
+	}
 	fmt.Fprintf(out, "%d issue(s) read, %d skipped, %d item(s) changed, %d launch(es), %d waiting, %d held, %d problem(s)\n",
-		len(issues), len(ing.Skipped), len(changed), len(tick.Launched), len(tick.Waiting), held, len(tick.Problems))
+		len(issues), len(skipped), len(changed), len(tick.Launched), len(tick.Waiting), held, len(tick.Problems))
 	if o.DryRun {
 		fmt.Fprintln(out, "dry run: ledger not written")
 		return nil
@@ -442,11 +459,20 @@ func postStatus(ctx context.Context, client *github.Client, o statusOptions, out
 		for _, id := range a.Duplicates {
 			fmt.Fprintf(out, "status #%d duplicate %d\n", is.Number, id)
 		}
+		actions := []viewstatus.Action{a}
+		// One comment per pending triage proposal (Plan 8; draft comments
+		// first). Like the status comment, it needs AUTOPILOT_COMMENT=true.
+		for _, ta := range viewstatus.PlanTriage(is, o.CommentLogin, byIssue[is.URL]) {
+			fmt.Fprintf(out, "triage #%d %s %s\n", is.Number, ta.Kind, ta.LaunchID)
+			actions = append(actions, ta)
+		}
 		if o.DryRun {
 			continue
 		}
-		if err := viewstatus.Apply(ctx, client, o.Owner, o.Repo, a); err != nil {
-			return err
+		for _, act := range actions {
+			if err := viewstatus.Apply(ctx, client, o.Owner, o.Repo, act); err != nil {
+				return err
+			}
 		}
 	}
 	if o.DryRun {
