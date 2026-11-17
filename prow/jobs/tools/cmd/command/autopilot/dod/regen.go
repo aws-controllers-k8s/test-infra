@@ -159,7 +159,10 @@ func checkRegen(ctx context.Context, scratch gitRepo, head string, o regenOption
 			}
 		}
 	}
-	env := []string{"SERVICE=" + o.Service, "SERVICE_CONTROLLER_SOURCE_PATH=" + scratch.dir}
+	// make build-controller builds bin/ack-generate first; the release step
+	// would otherwise look for it at a GOPATH-relative path.
+	env := []string{"SERVICE=" + o.Service, "SERVICE_CONTROLLER_SOURCE_PATH=" + scratch.dir,
+		"ACK_GENERATE_BIN_PATH=" + filepath.Join(o.CodegenDir, "bin", "ack-generate")}
 	if o.RuntimeDir != "" {
 		env = append(env, "RUNTIME_CRD_DIR="+filepath.Join(o.RuntimeDir, "config"))
 	}
