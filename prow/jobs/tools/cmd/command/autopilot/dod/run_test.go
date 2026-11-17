@@ -297,3 +297,33 @@ func TestRunCRDCompatFileMustMatchHead(t *testing.T) {
 		assert.Contains(t, v.Reasons, "sensitive-field:"+tc.want, name)
 	}
 }
+
+// Merge commits are commits too: a secret in a merge message must not slip
+// past leak-inventory because git log --no-merges hid it.
+func TestRunLeaksScanMergeCommitMessages(t *testing.T) {
+	f := sdkBump(t)
+	r := f.repo
+	r.Git("checkout", "--quiet", "-b", "side", f.base)
+	r.Write("README.md", "side\n")
+	r.Commit("side")
+	r.Git("checkout", "--quiet", "main")
+	r.Git("merge", "--quiet", "--no-ff", "-m", "Merge side\n\nkey AKIA"+"Z7QWERTYUIOPASDF", "side")
+	f.head = r.Git("rev-parse", "HEAD")
+	o := options(t, f)
+	o.CRDCompatJSON = compatJSON(t, f.base, f.head)
+	v, err := Run(context.Background(), o)
+	require.NoError(t, err)
+	var leaks Check
+	for _, c := range v.Checks {
+		if c.ID == CheckLeaks {
+			leaks = c
+		}
+	}
+	assert.Equal(t, StatusFail, leaks.Status, "%+v", leaks.Findings)
+	short := f.head[:12]
+	found := false
+	for _, fd := range leaks.Findings {
+		found = found || fd.File == "commit:"+short
+	}
+	assert.True(t, found, "the merge commit's message is scanned: %+v", leaks.Findings)
+}

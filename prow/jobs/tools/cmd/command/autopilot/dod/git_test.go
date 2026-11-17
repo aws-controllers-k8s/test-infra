@@ -64,6 +64,7 @@ func TestGatherAndCommits(t *testing.T) {
 	require.Len(t, cs, 1)
 	assert.Equal(t, dodtest.Bot, cs[0].AuthorEmail)
 	assert.Equal(t, []string{"autopilot/sdk-bump"}, parseTrailers(cs[0].Message)["Producer"])
+	assert.False(t, cs[0].Merge)
 
 	tree, err := g.treeSHA(ctx, head)
 	require.NoError(t, err)

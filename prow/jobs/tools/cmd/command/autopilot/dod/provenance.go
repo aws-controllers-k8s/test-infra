@@ -47,6 +47,9 @@ func checkProvenance(commits []commit, botEmails []string, workItem, class strin
 	var findings []Finding
 	humans, bots := 0, 0
 	for _, c := range commits {
+		if c.Merge {
+			continue
+		}
 		short := c.SHA
 		if len(short) > 12 {
 			short = short[:12]

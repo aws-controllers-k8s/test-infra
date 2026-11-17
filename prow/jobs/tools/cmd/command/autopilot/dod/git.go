@@ -136,6 +136,8 @@ func parseAddedLines(diff []byte) map[string][]addedLine {
 
 type commit struct {
 	SHA, AuthorEmail, Message string
+	// Merge is a commit with more than one parent.
+	Merge bool
 }
 
 // commitInfo reads one commit's author email and message.
@@ -151,9 +153,9 @@ func (g gitRepo) commitInfo(ctx context.Context, rev string) (commit, error) {
 	return commit{SHA: parts[0], AuthorEmail: parts[1], Message: strings.TrimSpace(parts[2])}, nil
 }
 
-// commits lists base..head without merges, oldest first.
+// commits lists every commit in base..head, merges included, oldest first.
 func (g gitRepo) commits(ctx context.Context, base, head string) ([]commit, error) {
-	out, err := g.run(ctx, "log", "--no-merges", "--reverse", "--format=%H%x00%ae%x00%B%x1e", base+".."+head, "--")
+	out, err := g.run(ctx, "log", "--reverse", "--format=%H%x00%P%x00%ae%x00%B%x1e", base+".."+head, "--")
 	if err != nil {
 		return nil, err
 	}
@@ -163,11 +165,12 @@ func (g gitRepo) commits(ctx context.Context, base, head string) ([]commit, erro
 		if rec == "" {
 			continue
 		}
-		parts := strings.SplitN(rec, "\x00", 3)
-		if len(parts) != 3 {
+		parts := strings.SplitN(rec, "\x00", 4)
+		if len(parts) != 4 {
 			return nil, fmt.Errorf("git log: malformed record")
 		}
-		cs = append(cs, commit{SHA: parts[0], AuthorEmail: parts[1], Message: strings.TrimSpace(parts[2])})
+		cs = append(cs, commit{SHA: parts[0], Merge: len(strings.Fields(parts[1])) > 1,
+			AuthorEmail: parts[2], Message: strings.TrimSpace(parts[3])})
 	}
 	return cs, nil
 }
