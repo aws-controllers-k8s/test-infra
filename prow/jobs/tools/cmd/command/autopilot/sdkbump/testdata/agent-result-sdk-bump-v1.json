@@ -1,0 +1,22 @@
+{
+  "e2e": {
+    "attempts": 0,
+    "status": "NOT_RUN"
+  },
+  "iterations": {
+    "impl": 0,
+    "replan": 0
+  },
+  "outcome": "pr_opened",
+  "pr": "https://github.com/aws-controllers-k8s/s3-controller/pull/241",
+  "prow_job_id": "autopilot-0123456789abcdef-g1-r1",
+  "reason": "",
+  "schema": "ack.autopilot.result/v1",
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0
+  },
+  "work_item": "sha256:0123456789abcdef",
+  "workflow": "sdk-bump"
+}
