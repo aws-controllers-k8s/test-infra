@@ -248,7 +248,12 @@ func checkCodeScan(class string, files []changedFile) Check {
 	var findings []Finding
 	sensitive := false
 	for _, f := range files {
-		if f.Status == 'D' || f.Binary {
+		if f.Status == 'D' {
+			continue
+		}
+		if f.Binary {
+			// Nothing below (nor leak-inventory) can read it: fail closed.
+			findings = append(findings, Finding{Signature: "BINARY_FILE", File: f.Path, Fails: true})
 			continue
 		}
 		switch {

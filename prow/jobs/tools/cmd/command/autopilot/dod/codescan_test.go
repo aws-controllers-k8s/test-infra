@@ -90,3 +90,13 @@ func TestCodeScanIAM(t *testing.T) {
 	assert.Equal(t, []string{"IAM_POLICY_UNPARSEABLE"}, scanReasons(ClassConfigOnly, edit("config/iam/recommended-inline-policy", base, "{")))
 	assert.Equal(t, []string{"IAM_ADMIN_POLICY"}, scanReasons(ClassConfigOnly, edit("config/iam/recommended-policy-arn", "arn:aws:iam::aws:policy/AmazonS3FullAccess\n", "arn:aws:iam::aws:policy/AdministratorAccess\n")))
 }
+
+// Binary content cannot be scanned for imports, literals or secrets, so it
+// must not pass the scan silently.
+func TestCodeScanFailsOnBinaryFiles(t *testing.T) {
+	blob := changedFile{Path: "pkg/resource/bucket/blob.bin", Status: 'A', Head: []byte("x\x00y"), Binary: true}
+	got := checkCodeScan(ClassHandWritten, []changedFile{blob})
+	assert.Equal(t, []string{"BINARY_FILE"}, got.Reasons)
+	gone := changedFile{Path: "pkg/resource/bucket/blob.bin", Status: 'D', Base: []byte("x\x00y"), Binary: true}
+	assert.Empty(t, checkCodeScan(ClassHandWritten, []changedFile{gone}).Reasons, "deleting a binary is fine")
+}
