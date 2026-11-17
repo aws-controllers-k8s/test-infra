@@ -148,6 +148,8 @@ periodics:
     preset-github-secrets: "true"
   agent: kubernetes
   spec:
+    # Becomes autopilot-dispatcher (prow/autopilot/deploy/) when the real
+    # launcher goes live; periodic-service-account cannot create ProwJobs.
     serviceAccountName: periodic-service-account
     containers:
       - image: ${PROW_IMAGES_REPO_URI}:prow-detect-api-changes-0.0.2
@@ -169,6 +171,17 @@ periodics:
           # writes, and Issues: write on the dedicated token.
           - name: AUTOPILOT_COMMENT
             value: "false"
+          # "true" lets policy/autopilot.yaml `launcher: prow` create ProwJobs
+          # (ACK Autopilot Plan 7). Do not set until every item of
+          # prow/autopilot/deploy/SECURITY-REVIEW.md "Going live" is done:
+          # Plan P's rulesets, the review, the manifests in that directory
+          # applied, and serviceAccountName above set to autopilot-dispatcher.
+          - name: AUTOPILOT_LAUNCHER_ENABLED
+            value: "false"
+          # The prow launcher resolves agent-workflows.yaml's image repository
+          # with it, as the agent-workflow-config chart does for agent-plugin.
+          - name: PROW_IMAGES_REPO_URI
+            value: "${PROW_IMAGES_REPO_URI}"
         command: ["/bin/sh", "-ec"]
         args:
           - |
