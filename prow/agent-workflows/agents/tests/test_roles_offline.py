@@ -1379,6 +1379,32 @@ def test_sdk_bump_result_fixture():
     check("SDK-bump is a change class", "SDK-bump" in CHANGE_CLASSES, True)
 
 
+def test_detector_work():
+    """--detector-work is checked, and reaches add-field roles only when set."""
+    print("detector work:")
+    from workflows.validation import validate_inputs
+
+    base = dict(service="s3", resource="Bucket")
+    check("known work", validate_inputs(detector_work="server-default", **base), [])
+    check("unknown work", len(validate_inputs(detector_work="from-sibling", **base)), 1)
+    kw = dict(service="s3", resource="Bucket", workflow=ADD_FIELD, field="mode",
+              controller_dir="/tmp/c", codegen_dir="/tmp/g", skills_dir=str(SKILLS))
+    saved = os.environ.pop("ACK_DETECTOR_WORK", None)
+    try:
+        with_work = Config.resolve(inputs={"ACK_DETECTOR_WORK": "server-default"}, **kw)
+        without = Config.resolve(**kw)
+    finally:
+        if saved is not None:
+            os.environ["ACK_DETECTOR_WORK"] = saved
+    check("input kept", with_work.inputs.get("ACK_DETECTOR_WORK"), "server-default")
+    check("not required", without.input_problems(), [])
+    lines = dict(service="s3", resource="Bucket", field="mode", controller_dir="/c",
+                 codegen_dir="/g", skills_dir="/s", aws_sdk_go_version="v1")
+    check("shown when set", "ACK_DETECTOR_WORK=server-default" in ADD_FIELD.context_lines(inputs=with_work.inputs, **lines), True)
+    check("hidden when unset", "ACK_DETECTOR_WORK" in ADD_FIELD.context_lines(inputs=without.inputs, **lines), False)
+    check("add-resource ignores it", ADD_RESOURCE.optional_context_env, ())
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1403,7 +1429,8 @@ def main():
                test_token_accounting, test_harness_result_fields,
                test_record_result,
                test_autopilot_arg_validation,
-               test_sdk_bump_result_fixture):
+               test_sdk_bump_result_fixture,
+               test_detector_work):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

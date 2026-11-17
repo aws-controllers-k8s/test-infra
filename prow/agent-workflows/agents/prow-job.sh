@@ -20,6 +20,9 @@ Environment variables:
 add-resource and add-field, when started by ACK Autopilot's Dispatcher:
   --work-item:         Ledger key hash (sha256:<16 hex>); adds provenance trailers.
   --change-class:      Ledger change class of the item (given with --work-item).
+  --detector-work:     add-field only: what the API change detector found the
+                       field needs (create-only, not-generated, server-default).
+                       Shown to every role as ACK_DETECTOR_WORK.
 
 Every run writes agent-result.json (workflows/result.py) to \$ARTIFACTS.
 
@@ -45,6 +48,7 @@ MODEL=""
 AWS_SDK_VERSION=""
 WORK_ITEM=""
 CHANGE_CLASS=""
+DETECTOR_WORK=""
 SCRIPT_NAME="prow-job.sh"
 
 
@@ -91,6 +95,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --change-class)
       CHANGE_CLASS="$2"
+      shift 2
+      ;;
+    --detector-work)
+      DETECTOR_WORK="$2"
       shift 2
       ;;
     *)
@@ -141,6 +149,7 @@ VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
 [ -n "$AWS_SDK_VERSION" ] && VALIDATION_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
 [ -n "$WORK_ITEM" ] && VALIDATION_ARGS+=(--work-item "$WORK_ITEM")
 [ -n "$CHANGE_CLASS" ] && VALIDATION_ARGS+=(--change-class "$CHANGE_CLASS")
+[ -n "$DETECTOR_WORK" ] && VALIDATION_ARGS+=(--detector-work "$DETECTOR_WORK")
 case "${WORKFLOW_NAME:-}" in
   add-resource)
     if [ -n "$FIELD" ]; then
@@ -208,6 +217,11 @@ if ! python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"; the
   exit 2
 fi
 VALIDATED=true
+# The harness shows it to every add-field role (roles/workflow.py ADD_FIELD
+# optional_context_env); it was validated above.
+if [ -n "$DETECTOR_WORK" ]; then
+  export ACK_DETECTOR_WORK="$DETECTOR_WORK"
+fi
 if [ -n "$WORK_ITEM" ]; then
   python "$WORKFLOW_DIR/workflows/result.py" set --work-item "$WORK_ITEM" \
     || echo "$SCRIPT_NAME][WARN] could not record the work item" >&2

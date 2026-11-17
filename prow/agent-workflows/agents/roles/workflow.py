@@ -37,6 +37,9 @@ class WorkflowDefinition:
     # values are shown to every role in the task context, e.g. the path of a
     # file the script prepared.
     context_env: tuple[str, ...] = ()
+    # Like context_env, but optional: a variable is shown only when the job
+    # script set it, and its absence is not an input problem.
+    optional_context_env: tuple[str, ...] = ()
     # System prompt for the pr_writer agent. Empty selects the default pull
     # request description prompt.
     pr_writer_prompt: str = ""
@@ -87,6 +90,7 @@ class WorkflowDefinition:
         )
         inputs = inputs or {}
         values.extend((name, inputs.get(name, "")) for name in self.context_env)
+        values.extend((name, inputs[name]) for name in self.optional_context_env if inputs.get(name))
         return "\n".join(f"{name}={value}" for name, value in values)
 
 
@@ -118,9 +122,16 @@ ADD_FIELD = WorkflowDefinition(
     role_instruction=(
         "OPERATING MODE: single-field addition. Follow the field-addition "
         "reference and keep all work scoped to the requested field on the "
-        "existing resource."
+        "existing resource. If ACK_DETECTOR_WORK is set, it is what the API "
+        "change detector found the field needs: server-default means the "
+        "field is already in the CRD after an SDK bump and the service "
+        "returns a value for it the user did not set, so the work is to "
+        "decide late_initialize, compare.is_ignored, or no default, not to "
+        "add the field again; create-only means the field must be "
+        "is_immutable; not-generated means it needs a from: field."
     ),
     references=("field-addition",),
+    optional_context_env=("ACK_DETECTOR_WORK",),
 )
 
 

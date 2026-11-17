@@ -182,7 +182,7 @@ class Config:
             run_e2e=run_e2e,
             inputs={
                 name: (inputs or {}).get(name) or os.environ.get(name, "")
-                for name in workflow.context_env
+                for name in workflow.context_env + workflow.optional_context_env
             },
         )
 
