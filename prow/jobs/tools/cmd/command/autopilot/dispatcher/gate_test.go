@@ -331,8 +331,8 @@ func TestGateLaunchesWaitWhilePaused(t *testing.T) {
 // erringVerdicts is a gateLauncher whose verdict read always fails.
 type erringVerdicts struct{ gateLauncher }
 
-func (erringVerdicts) Verdict(context.Context, string) ([]byte, error) {
-	return nil, errors.New("s3: throttled")
+func (erringVerdicts) Verdict(context.Context, string) ([]byte, []byte, error) {
+	return nil, nil, errors.New("s3: throttled")
 }
 
 // TestGateStalledEscalates (Plan 9 review F3): an item that has been

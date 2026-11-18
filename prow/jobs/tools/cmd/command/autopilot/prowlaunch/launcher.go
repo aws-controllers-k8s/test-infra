@@ -192,33 +192,51 @@ func (l *Launcher) Abort(ctx context.Context, id string) error {
 
 // Verdict reads the verdict.json of a finished sdk-bump or dod job the
 // Dispatcher made. A missing, unreadable or too large file is
-// dispatcher.ErrNoVerdict (an environment failure for gate).
-func (l *Launcher) Verdict(ctx context.Context, id string) ([]byte, error) {
+// dispatcher.ErrNoVerdict (an environment failure for gate). For a dod job
+// it also reads verdict.sig (Plan 9 review): a missing or too large one is a
+// nil signature, and gate escalates the verdict as unsigned. sdk-bump's
+// verdict is bound to the PR body's trailer, so its signature is never read.
+func (l *Launcher) Verdict(ctx context.Context, id string) (verdict, signature []byte, err error) {
 	pj, err := l.jobs.Get(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		return nil, dispatcher.ErrNoVerdict
+		return nil, nil, dispatcher.ErrNoVerdict
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if !managed(pj) || !verdictWorkflows[pj.Metadata.Labels[LabelWorkflow]] {
-		return nil, fmt.Errorf("ProwJob %s is not a Dispatcher sdk-bump or dod job", id)
+	wf := pj.Metadata.Labels[LabelWorkflow]
+	if !managed(pj) || !verdictWorkflows[wf] {
+		return nil, nil, fmt.Errorf("ProwJob %s is not a Dispatcher sdk-bump or dod job", id)
 	}
 	if s := pj.Status.State; s != "success" && s != "failure" {
-		return nil, dispatcher.ErrNoVerdict
+		return nil, nil, dispatcher.ErrNoVerdict
 	}
 	key, ok := resultKey(pj, "verdict.json")
 	if !ok {
-		return nil, dispatcher.ErrNoVerdict
+		return nil, nil, dispatcher.ErrNoVerdict
 	}
 	data, err := l.art.Get(ctx, key, dispatcher.MaxVerdictBytes)
 	switch {
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrTooLarge):
-		return nil, dispatcher.ErrNoVerdict
+		return nil, nil, dispatcher.ErrNoVerdict
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	}
-	return data, nil
+	if wf != "dod" {
+		return data, nil, nil
+	}
+	sigKey, ok := resultKey(pj, "verdict.sig")
+	if !ok {
+		return data, nil, nil
+	}
+	sig, err := l.art.Get(ctx, sigKey, dispatcher.MaxSignatureBytes)
+	switch {
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrTooLarge):
+		return data, nil, nil
+	case err != nil:
+		return nil, nil, err
+	}
+	return data, sig, nil
 }
 
 // FeedbackActive reports whether an agent-plugin address-feedback job for the

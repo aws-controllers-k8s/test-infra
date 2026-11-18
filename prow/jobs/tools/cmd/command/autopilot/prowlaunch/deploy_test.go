@@ -122,7 +122,7 @@ func TestPodIdentityIsNarrow(t *testing.T) {
 	// Exactly the files the launcher reads (Status, Verdict).
 	files := map[string][]string{
 		"add-field": {"agent-result.json"}, "sdk-bump": {"agent-result.json", "verdict.json"},
-		"triage": {"agent-result.json"}, "add-resource": {"agent-result.json"}, "dod": {"verdict.json"},
+		"triage": {"agent-result.json"}, "add-resource": {"agent-result.json"}, "dod": {"verdict.json", "verdict.sig"},
 	}
 	require.Len(t, files, len(Allowed))
 	want := 0

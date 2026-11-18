@@ -182,7 +182,7 @@ func (d *dryRun) Abort(ctx context.Context, id string) error { return d.shadow.A
 
 // Verdict and FeedbackActive are reads: a dry run makes them through the
 // real launcher, like Status.
-func (d *dryRun) Verdict(ctx context.Context, id string) ([]byte, error) {
+func (d *dryRun) Verdict(ctx context.Context, id string) (verdict, signature []byte, err error) {
 	return readVerdict(ctx, d.real, id)
 }
 

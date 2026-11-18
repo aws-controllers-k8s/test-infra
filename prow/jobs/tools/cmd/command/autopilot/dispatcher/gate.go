@@ -150,7 +150,7 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 			return nil // still gating
 		}
 	}
-	data, err := readVerdict(ctx, e.l, w.Claim.LaunchID)
+	data, _, err := readVerdict(ctx, e.l, w.Claim.LaunchID)
 	switch {
 	case errors.Is(err, ErrNoVerdict):
 		return envRetry(ctx, w, pr, e, "GATE_NO_VERDICT")
@@ -395,10 +395,10 @@ func clearReady(w *ledger.WorkItem) {
 	}
 }
 
-func readVerdict(ctx context.Context, l Launcher, id string) ([]byte, error) {
+func readVerdict(ctx context.Context, l Launcher, id string) (verdict, signature []byte, err error) {
 	vr, ok := l.(VerdictReader)
 	if !ok {
-		return nil, ErrNoVerdict
+		return nil, nil, ErrNoVerdict
 	}
 	return vr.Verdict(ctx, id)
 }

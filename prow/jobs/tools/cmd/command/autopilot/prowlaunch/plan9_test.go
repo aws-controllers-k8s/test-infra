@@ -16,6 +16,7 @@ package prowlaunch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,29 +169,69 @@ func TestVerdictReadsTheJobsVerdict(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, l.Launch(ctx, goldenDod))
 
-	_, err := l.Verdict(ctx, goldenDod.LaunchID)
+	_, _, err := l.Verdict(ctx, goldenDod.LaunchID)
 	assert.ErrorIs(t, err, dispatcher.ErrNoVerdict, "not finished")
 
 	finish(api, goldenDod.LaunchID, "failure", "41")
-	_, err = l.Verdict(ctx, goldenDod.LaunchID)
+	_, _, err = l.Verdict(ctx, goldenDod.LaunchID)
 	assert.ErrorIs(t, err, dispatcher.ErrNoVerdict, "dod exit 2 leaves no file")
 
 	art.objects["logs/autopilot-dod/41/artifacts/verdict.json"] = []byte(`{"schema":"x"}`)
-	got, err := l.Verdict(ctx, goldenDod.LaunchID)
+	got, sig, err := l.Verdict(ctx, goldenDod.LaunchID)
 	require.NoError(t, err)
 	assert.Equal(t, `{"schema":"x"}`, string(got))
+	assert.Nil(t, sig, "no verdict.sig: a nil signature and no error; gate decides")
 
 	art.objects["logs/autopilot-dod/41/artifacts/verdict.json"] = make([]byte, dispatcher.MaxVerdictBytes+1)
-	_, err = l.Verdict(ctx, goldenDod.LaunchID)
+	_, _, err = l.Verdict(ctx, goldenDod.LaunchID)
 	assert.ErrorIs(t, err, dispatcher.ErrNoVerdict, "too large")
 
-	_, err = l.Verdict(ctx, "autopilot-0123456789abcdef-g1-d9")
+	_, _, err = l.Verdict(ctx, "autopilot-0123456789abcdef-g1-d9")
 	assert.ErrorIs(t, err, dispatcher.ErrNoVerdict, "gone")
 
 	require.NoError(t, l.Launch(ctx, goldenAddResource))
 	finish(api, goldenAddResource.LaunchID, "success", "42")
-	_, err = l.Verdict(ctx, goldenAddResource.LaunchID)
+	_, _, err = l.Verdict(ctx, goldenAddResource.LaunchID)
 	assert.ErrorContains(t, err, "not a Dispatcher sdk-bump or dod job", "an agent's pod could write a verdict.json")
+}
+
+// TestVerdictReadsTheDodSignature (Plan 9 review): a dod job's verdict.sig
+// comes back with its verdict, at most MaxSignatureBytes; sdk-bump's is
+// never read (its verdict is bound to the PR body's trailer).
+func TestVerdictReadsTheDodSignature(t *testing.T) {
+	l, api, art := testLauncher(t)
+	ctx := context.Background()
+	require.NoError(t, l.Launch(ctx, goldenDod))
+	finish(api, goldenDod.LaunchID, "success", "41")
+	art.objects["logs/autopilot-dod/41/artifacts/verdict.json"] = []byte(`{"schema":"x"}`)
+	art.objects["logs/autopilot-dod/41/artifacts/verdict.sig"] = []byte("c2ln\n")
+	v, sig, err := l.Verdict(ctx, goldenDod.LaunchID)
+	require.NoError(t, err)
+	assert.Equal(t, `{"schema":"x"}`, string(v))
+	assert.Equal(t, "c2ln\n", string(sig))
+
+	art.objects["logs/autopilot-dod/41/artifacts/verdict.sig"] = make([]byte, dispatcher.MaxSignatureBytes+1)
+	v, sig, err = l.Verdict(ctx, goldenDod.LaunchID)
+	require.NoError(t, err, "a too large signature is no signature: gate escalates")
+	assert.NotNil(t, v)
+	assert.Nil(t, sig)
+	assert.Equal(t, int64(1<<10), int64(dispatcher.MaxSignatureBytes))
+
+	art.err = errors.New("s3: throttled")
+	_, _, err = l.Verdict(ctx, goldenDod.LaunchID)
+	assert.ErrorContains(t, err, "throttled")
+	art.err = nil
+
+	require.NoError(t, l.Launch(ctx, goldenSDKBump))
+	finish(api, goldenSDKBump.LaunchID, "success", "43")
+	art.objects["logs/autopilot-sdk-bump/43/artifacts/verdict.json"] = []byte(`{"schema":"y"}`)
+	art.objects["logs/autopilot-sdk-bump/43/artifacts/verdict.sig"] = []byte("c2ln\n")
+	art.keys = nil
+	v, sig, err = l.Verdict(ctx, goldenSDKBump.LaunchID)
+	require.NoError(t, err)
+	assert.Equal(t, `{"schema":"y"}`, string(v))
+	assert.Nil(t, sig)
+	assert.Equal(t, []string{"logs/autopilot-sdk-bump/43/artifacts/verdict.json"}, art.keys, "sdk-bump never reads a signature")
 }
 
 func TestFeedbackActiveSelectsAgentPluginsJob(t *testing.T) {

@@ -46,9 +46,9 @@ var (
 	bucketRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
 	regionRE = regexp.MustCompile(`^[a-z]{2}(-[a-z]+)+-[0-9]$`)
 	// resultKeyRE is the only kind of key the Dispatcher reads: one run's
-	// agent-result.json or verdict.json (Prow's path_strategy explicit,
-	// periodic layout).
-	resultKeyRE = regexp.MustCompile(`^logs/[a-z0-9-]{1,63}/[0-9]{1,20}/artifacts/(agent-result|verdict)\.json$`)
+	// agent-result.json, verdict.json or verdict.sig (Prow's path_strategy
+	// explicit, periodic layout).
+	resultKeyRE = regexp.MustCompile(`^logs/[a-z0-9-]{1,63}/[0-9]{1,20}/artifacts/((agent-result|verdict)\.json|verdict\.sig)$`)
 )
 
 // S3Artifacts reads the bucket with SigV4-signed GETs, using the pod's AWS
@@ -87,7 +87,7 @@ func newS3Artifacts(bucketURL, region string, creds aws.CredentialsProvider, cli
 
 func (s *S3Artifacts) Get(ctx context.Context, key string, max int64) ([]byte, error) {
 	if !resultKeyRE.MatchString(key) {
-		return nil, fmt.Errorf("refusing to read %q: not a run's agent-result.json or verdict.json", key)
+		return nil, fmt.Errorf("refusing to read %q: not a run's agent-result.json, verdict.json or verdict.sig", key)
 	}
 	u := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucket, s.region, key)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)

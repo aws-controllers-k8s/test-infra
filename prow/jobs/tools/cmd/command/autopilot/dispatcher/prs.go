@@ -94,8 +94,10 @@ var ErrNoVerdict = errors.New("no verdict")
 // verdict.json (sdk-bump's in-process verdict, or an autopilot-dod job's).
 type VerdictReader interface {
 	// Verdict returns the run's verdict.json, at most MaxVerdictBytes, or
-	// ErrNoVerdict.
-	Verdict(ctx context.Context, launchID string) ([]byte, error)
+	// ErrNoVerdict. For a dod job it also returns verdict.sig (at most
+	// MaxSignatureBytes); a missing one is a nil signature and no error, and
+	// gate decides (Plan 9 review). sdk-bump's signature is always nil.
+	Verdict(ctx context.Context, launchID string) (verdict, signature []byte, err error)
 }
 
 // FeedbackJobs is implemented by launchers that can see agent-plugin's
@@ -108,6 +110,10 @@ type FeedbackJobs interface {
 // MaxVerdictBytes bounds a verdict.json read. A real verdict is a few KiB;
 // dod itself refuses more than 4 MiB.
 const MaxVerdictBytes = 1 << 20
+
+// MaxSignatureBytes bounds a verdict.sig read: a base64 Ed25519 signature is
+// 89 bytes.
+const MaxSignatureBytes = 1 << 10
 
 // prNumber is the number of the PR links.pr names in w's repo.
 func prNumber(w *ledger.WorkItem) (int, bool) {

@@ -113,14 +113,16 @@ func (f *fakeGH) MarkDraft(_ context.Context, _ string, n int) error {
 type gateLauncher struct {
 	*fakeLauncher
 	verdicts map[string][]byte
+	// sigs are the dod jobs' verdict.sig files; a missing one is nil.
+	sigs     map[string][]byte
 	feedback bool
 }
 
-func (g gateLauncher) Verdict(_ context.Context, id string) ([]byte, error) {
+func (g gateLauncher) Verdict(_ context.Context, id string) ([]byte, []byte, error) {
 	if b, ok := g.verdicts[id]; ok {
-		return b, nil
+		return b, g.sigs[id], nil
 	}
-	return nil, ErrNoVerdict
+	return nil, nil, ErrNoVerdict
 }
 
 func (g gateLauncher) FeedbackActive(context.Context, string, int) (bool, error) {
