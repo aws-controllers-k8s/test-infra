@@ -67,9 +67,14 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		w.Review = &ledger.Review{Number: n, Author: pr.Author}
 	}
 	r := w.Review
-	rounds, err := countHumans(ctx, w, pr, e)
-	if err != nil {
+	if err := countCommits(ctx, w, pr, e); err != nil {
 		return err
+	}
+	if pr.Merged || pr.State != "open" {
+		// The final record: count the reviews; no round moves the item now.
+		if _, err := countReviews(ctx, w, pr, e); err != nil {
+			return err
+		}
 	}
 	switch {
 	case pr.Merged:
@@ -87,8 +92,14 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		return nil
 	}
 	if w.State.ActiveRun() || w.State == ledger.PRReady {
-		// gate owns the item until it reaches HUMAN_REVIEW.
+		// gate owns the item until it reaches HUMAN_REVIEW. Reviews wait
+		// (LastReviewID does not move), so a change request made while
+		// gating moves the item to FEEDBACK later (Plan 9 review F8).
 		return nil
+	}
+	rounds, err := countReviews(ctx, w, pr, e)
+	if err != nil {
+		return err
 	}
 
 	if w.Gate != nil && pr.HeadSHA != w.Gate.HeadSHA {
@@ -96,9 +107,9 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		if err != nil {
 			return err
 		}
-		// Pinning comes only from countHumans (human commits, team
-		// reviews), not from the head move itself: the bot's own push
-		// does not pin the PR (Plan 9 review F7).
+		// Pinning comes only from countCommits and countReviews (human
+		// commits, team reviews), not from the head move itself: the
+		// bot's own push does not pin the PR (Plan 9 review F7).
 		derr := unready(ctx, w, pr, e)
 		if active {
 			toFeedback(w, e.ts, "FEEDBACK_RUNNING")
@@ -123,15 +134,14 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 	return nil
 }
 
-// countHumans updates the Review's human commits and review rounds from the
-// PR, and its last activity, and returns how many review rounds are new. Any
-// human commit or a team member's non-approval review pins the PR to
+// countCommits updates the Review's human commits and its last activity
+// from the PR's commits and gate. Any human commit pins the PR to
 // human-merge for good.
-func countHumans(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) (int, error) {
+func countCommits(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) error {
 	r := w.Review
 	commits, err := e.gh.Commits(ctx, w.Repo, pr.Number)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	humans := 0
 	for _, c := range commits {
@@ -144,6 +154,17 @@ func countHumans(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) (int, 
 		r.HumanCommits = humans
 		pin(r)
 	}
+	if w.Gate != nil {
+		r.LastActivity = latest(r.LastActivity, w.Gate.TS)
+	}
+	return nil
+}
+
+// countReviews updates the Review's review rounds and last activity from
+// the reviews since LastReviewID, and returns how many rounds are new. A
+// team member's non-approval review pins the PR to human-merge for good.
+func countReviews(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) (int, error) {
+	r := w.Review
 	reviews, err := e.gh.Reviews(ctx, w.Repo, pr.Number)
 	if err != nil {
 		return 0, err
@@ -163,9 +184,6 @@ func countHumans(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) (int, 
 			rounds++
 			pin(r)
 		}
-	}
-	if w.Gate != nil {
-		r.LastActivity = latest(r.LastActivity, w.Gate.TS)
 	}
 	return rounds, nil
 }

@@ -362,3 +362,24 @@ func TestTrackBotPushRegatesWithoutPinning(t *testing.T) {
 	assert.Equal(t, ledger.WouldMergeYes, w.Review.WouldMerge)
 	assertLints(t, items)
 }
+
+// TestTrackReviewDuringGatingIsCountedInReview (Plan 9 review F8): a change
+// request that arrives while the item gates is not consumed then; it moves
+// the item to FEEDBACK once it is in HUMAN_REVIEW.
+func TestTrackReviewDuringGatingIsCountedInReview(t *testing.T) {
+	w, gh, l := bumpGating(t, dod.StatusPass, "")
+	gh.reviews[7] = []PRReview{{ID: 5, Author: "alice", State: "CHANGES_REQUESTED", SubmittedAt: "2026-11-12T08:50:00Z"}}
+	items := ledgerOf(w)
+	e := trackEnv(gh, l)
+	assert.Empty(t, trackPRs(context.Background(), items, e))
+	assert.Equal(t, ledger.Gating, w.State)
+	assert.Zero(t, w.Review.LastReviewID, "gate owns the item: the review waits")
+
+	assert.Empty(t, gate(context.Background(), items, e))
+	require.Equal(t, ledger.HumanReview, w.State)
+	assert.Empty(t, trackPRs(context.Background(), items, e))
+	assert.Equal(t, ledger.Feedback, w.State)
+	assert.Equal(t, "CHANGES_REQUESTED", last(w).Reason)
+	assert.Equal(t, 1, w.Review.ReviewRounds)
+	assertLints(t, items)
+}
