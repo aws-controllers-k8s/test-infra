@@ -337,6 +337,10 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	if err != nil {
 		return err
 	}
+	dodKey, err := dodPublicKeyFor(getenv)
+	if err != nil {
+		return err
+	}
 	team, err := issuefinder.FetchTeam(ctx, client, o.teamOwner(), o.TeamSlug)
 	if err != nil {
 		return err
@@ -350,7 +354,7 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 		return err
 	}
 	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun, GitHub: prReader(client), PRWriter: pw, Team: team,
-		PRAuthors: prOpts.prAuthors(), BotLogins: prOpts.bots()}
+		PRAuthors: prOpts.prAuthors(), BotLogins: prOpts.bots(), DodPublicKey: dodKey}
 	if pol, perr := policy.Load(o.LedgerDir); perr != nil {
 		cfg.PolicyErr = perr
 	} else if l, lerr := launcherFor(ctx, pol, o.TestInfraDir, getenv); lerr != nil {

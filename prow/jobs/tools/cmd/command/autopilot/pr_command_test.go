@@ -15,7 +15,12 @@ package autopilot
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v63/github"
@@ -23,6 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dod"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/prs"
 )
 
@@ -67,4 +74,61 @@ func TestPROptionsValidate(t *testing.T) {
 	assert.Error(t, prOptions{SDKBumpAuthor: "ack-bot", AgentAuthor: "a b"}.validate())
 	assert.Equal(t, map[string]string{"sdk-bump": "ack-bot", "add-field": "ack-agent", "add-resource": "ack-agent"},
 		prOptions{SDKBumpAuthor: "ack-bot", AgentAuthor: "ack-agent"}.prAuthors())
+}
+
+func TestDodPublicKeyFromEnv(t *testing.T) {
+	k, err := dodPublicKeyFor(envMap(nil))
+	require.NoError(t, err)
+	assert.Nil(t, k, "empty: no key; dod gates wait")
+
+	_, pub, err := dod.GenerateKey()
+	require.NoError(t, err)
+	k, err = dodPublicKeyFor(envMap(map[string]string{dodPublicKeyEnv: pub}))
+	require.NoError(t, err)
+	want, err := dod.ParsePublicKey(pub)
+	require.NoError(t, err)
+	assert.Equal(t, want, k)
+
+	for _, bad := range []string{"not base64!", base64.StdEncoding.EncodeToString(make([]byte, 31))} {
+		_, err = dodPublicKeyFor(envMap(map[string]string{dodPublicKeyEnv: bad}))
+		assert.ErrorContains(t, err, dodPublicKeyEnv, bad)
+	}
+	assert.Equal(t, "AUTOPILOT_DOD_PUBLIC_KEY", dodPublicKeyEnv)
+}
+
+// TestDispatchRefusesAnInvalidDodPublicKey: an invalid key stops dispatch
+// before the tick; nothing is read, ticked or written.
+func TestDispatchRefusesAnInvalidDodPublicKey(t *testing.T) {
+	saved := getenv
+	t.Cleanup(func() { getenv = saved })
+	getenv = envMap(map[string]string{dodPublicKeyEnv: "AAAA"})
+	dir := t.TempDir()
+	copyPolicy(t, dir)
+	var out strings.Builder
+	err := dispatch(context.Background(), fakeGitHub(t), opts(dir), tickTime, &out)
+	assert.ErrorContains(t, err, dodPublicKeyEnv)
+	assert.Empty(t, out.String())
+	items, lerr := ledger.Load(dir)
+	require.NoError(t, lerr)
+	assert.Empty(t, items)
+}
+
+// TestDispatchPeriodicNamesTheDodPublicKey: the periodic's template and
+// rendered job set AUTOPILOT_DOD_PUBLIC_KEY (empty until the key exists)
+// right after AUTOPILOT_PR_WRITE, identically.
+func TestDispatchPeriodicNamesTheDodPublicKey(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..", "..", "..")
+	block := regexp.MustCompile(`(?s)          - name: AUTOPILOT_PR_WRITE\n            value: "false"\n((?:          #[^\n]*\n)+          - name: AUTOPILOT_DOD_PUBLIC_KEY\n            value: ""\n)`)
+	var got []string
+	for _, f := range []string{filepath.Join("prow", "jobs", "templates", "periodics", "autopilot-dispatch.tpl"), filepath.Join("prow", "jobs", "jobs.yaml")} {
+		b, err := os.ReadFile(filepath.Join(root, f))
+		require.NoError(t, err)
+		m := block.FindStringSubmatch(string(b))
+		require.NotNil(t, m, "%s sets AUTOPILOT_DOD_PUBLIC_KEY under AUTOPILOT_PR_WRITE", f)
+		assert.Contains(t, m[1], "autopilot-dod-signing-key", f)
+		assert.Contains(t, m[1], "dod-keygen", f)
+		assert.Contains(t, m[1], "not a secret", f)
+		got = append(got, m[1])
+	}
+	assert.Equal(t, got[0], got[1], "edited identically in both files")
 }

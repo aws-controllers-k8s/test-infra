@@ -14,13 +14,16 @@
 package autopilot
 
 import (
+	"crypto/ed25519"
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/google/go-github/v63/github"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dod"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/prs"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/sdkbump"
 )
@@ -34,6 +37,25 @@ const (
 	prWriteEnv      = "AUTOPILOT_PR_WRITE"
 	prWriteTokenEnv = "AUTOPILOT_PR_GITHUB_TOKEN"
 )
+
+// dodPublicKeyEnv is the base64 public half of autopilot-dod-signing-key
+// (autopilot dod-keygen; Plan 9 review). It is not a secret. Empty trusts no
+// dod verdict: those gates wait, then escalate GATE_STALLED.
+const dodPublicKeyEnv = "AUTOPILOT_DOD_PUBLIC_KEY"
+
+// dodPublicKeyFor is the dod verdict key the job's environment names, or
+// nil. An invalid one is an error: dispatch stops before the tick.
+func dodPublicKeyFor(env func(string) string) (ed25519.PublicKey, error) {
+	v := strings.TrimSpace(env(dodPublicKeyEnv))
+	if v == "" {
+		return nil, nil
+	}
+	k, err := dod.ParsePublicKey(v)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", dodPublicKeyEnv, err)
+	}
+	return k, nil
+}
 
 // prOptions are the dispatch flags for PR tracking (Plan 9).
 type prOptions struct {

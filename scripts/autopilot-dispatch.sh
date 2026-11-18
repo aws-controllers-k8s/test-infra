@@ -30,7 +30,9 @@
 #
 # The tick reads the PRs its items link to (Plan 9) with GITHUB_TOKEN. It marks a
 # gated draft ready only with AUTOPILOT_PR_WRITE=true (the periodic sets "false")
-# and AUTOPILOT_PR_GITHUB_TOKEN; a dry run never does.
+# and AUTOPILOT_PR_GITHUB_TOKEN; a dry run never does. It trusts a dod verdict
+# only with a valid signature from AUTOPILOT_DOD_PUBLIC_KEY (base64, the public
+# half of autopilot-dod-signing-key; empty trusts none, invalid stops the tick).
 #
 # POSIX sh only: the job image (golang alpine) has no bash.
 #

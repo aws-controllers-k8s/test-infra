@@ -184,6 +184,13 @@ periodics:
           # gated drafts stay draft and a person marks them ready.
           - name: AUTOPILOT_PR_WRITE
             value: "false"
+          # The base64 public half of the secret autopilot-dod-signing-key,
+          # printed by "ack-build-tools autopilot dod-keygen" (Plan 9 review).
+          # It is not a secret. The Dispatcher trusts a dod verdict only with
+          # a valid signature from that key; empty trusts none, and dod gates
+          # wait until they escalate GATE_STALLED.
+          - name: AUTOPILOT_DOD_PUBLIC_KEY
+            value: ""
           # The prow launcher resolves agent-workflows.yaml's image repository
           # with it, as the agent-workflow-config chart does for agent-plugin.
           - name: PROW_IMAGES_REPO_URI
