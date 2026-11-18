@@ -15,6 +15,7 @@ package autopilot
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"io"
@@ -44,7 +45,7 @@ type dodFlags struct {
 	botEmails, botLogins, skip                                      []string
 	codegenDir, runtimeDir, ackGenerate, crdCompat, sdkModel        string
 	cacheDir, prBody, output, verdictOut, trailerOut                string
-	buildSandbox                                                    string
+	buildSandbox, signKey, signatureOut                             string
 	timeout                                                         time.Duration
 }
 
@@ -124,6 +125,8 @@ func init() {
 	f.StringVar(&dodOpts.verdictOut, "verdict-out", "", "write the verdict document here")
 	f.StringVar(&dodOpts.trailerOut, "trailer-out", "", "write the Gate-Verdict trailer line here")
 	f.StringVar(&dodOpts.buildSandbox, "build-sandbox", "", "run every build step as <path> go <args> (an unprivileged sandbox); a sandbox that cannot run fails the build check")
+	f.StringVar(&dodOpts.signKey, "sign-key", "", "Ed25519 seed file (base64, mode 0600 or tighter) to sign the verdict bytes with; needs --signature-out")
+	f.StringVar(&dodOpts.signatureOut, "signature-out", "", "write the verdict's signature (base64) here; needs --sign-key")
 	f.DurationVar(&dodOpts.timeout, "timeout", 90*time.Minute, "give up (exit 2) after this long")
 	for _, name := range []string{"service", "base-ref", "change-class"} {
 		_ = dodCmd.MarkFlagRequired(name)
@@ -155,6 +158,18 @@ func runDod(ctx context.Context, f dodFlags, stdin io.Reader, out, errw io.Write
 	}
 	if f.crdCompat == "-" && f.prBody == "-" {
 		return noVerdict(errors.New(`only one of --crd-compat-json and --pr-body-file can be "-"`))
+	}
+	if (f.signKey == "") != (f.signatureOut == "") {
+		return noVerdict(errors.New("give both --sign-key and --signature-out, or neither"))
+	}
+	// Load the key before the run: a key that cannot sign is no verdict.
+	var signKey ed25519.PrivateKey
+	if f.signKey != "" {
+		k, err := dod.LoadSigningKey(f.signKey)
+		if err != nil {
+			return noVerdict(err)
+		}
+		signKey = k
 	}
 	o := dod.Options{
 		RepoDir: f.repoDir, Repo: f.repo, Service: f.service, BaseRef: f.baseRef, HeadRef: f.headRef,
@@ -193,6 +208,11 @@ func runDod(ctx context.Context, f dodFlags, stdin io.Reader, out, errw io.Write
 	}
 	if f.verdictOut != "" {
 		if err := os.WriteFile(f.verdictOut, b, 0o644); err != nil {
+			return noVerdict(err)
+		}
+	}
+	if signKey != nil {
+		if err := os.WriteFile(f.signatureOut, dod.Sign(signKey, b), 0o644); err != nil {
 			return noVerdict(err)
 		}
 	}
