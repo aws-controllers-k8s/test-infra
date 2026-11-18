@@ -116,11 +116,11 @@ namespace; no ClusterRole.
   `scripts/autopilot-dod-sandbox.sh` (`--build-sandbox`): as uid/gid 65532
   (`setpriv --clear-groups --no-new-privs`), with a clean environment and its
   own HOME, Go caches and TMPDIR, and every process of that uid is killed
-  (`pkill -9 -U 65532`) after each step; a survivor fails the step.
+  (by real uid from `/proc/<pid>/status`; the dod image has no procps) after each step; a survivor fails the step.
   `verdict.json` and `gate-verdict.txt` are written only by root: first into a
   private `mktemp -d` directory, then copied into `$ARTIFACTS`, which must be
   root-owned and is made 0755. It fails closed: if the pod cannot `setpriv`
-  (not root, no `setpriv`/`pkill`/`pgrep`), the build check records
+  (not root, no `setpriv`), the build check records
   `BUILD_SANDBOX_FAILED`, nothing runs unsandboxed, and the Dispatcher counts
   it as an environment failure (RETRY_ENV, then ESCALATED); it never passes.
 - **Why the dod verdict is signed** (Plan 9 review, owner decision
