@@ -404,3 +404,29 @@ func TestGatePassOnAReadyPRSaysAlreadyReady(t *testing.T) {
 	assert.Equal(t, "ALREADY_READY", last(w).Reason)
 	assert.Empty(t, gh.ready)
 }
+
+// TestGateHeadMovedBeforeTheVerdictChargesNoEnvRetry (Plan 9 review F9): a
+// dod job that finished with no verdict (exit 2: the head moved) re-gates
+// the new head without charging it an env retry.
+func TestGateHeadMovedBeforeTheVerdictChargesNoEnvRetry(t *testing.T) {
+	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
+	gh := newFakeGH()
+	gh.prs[7] = openPR("ack-agent")
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	e := testEnv(gh, l, true)
+	gate(context.Background(), ledgerOf(w), e)
+	d1 := w.Claim.LaunchID
+	l.statuses[d1] = Status{Phase: PhaseFinished, Job: JobFailed}
+	p := gh.prs[7]
+	p.HeadSHA = head2
+	gh.prs[7] = p
+	items := ledgerOf(w)
+	assert.Empty(t, gate(context.Background(), items, e))
+	require.Len(t, l.launched, 2)
+	assert.Equal(t, head2, l.launched[1].Args["head-sha"])
+	assert.Equal(t, ledger.Gating, w.State)
+	assert.Equal(t, head2, w.Gate.HeadSHA)
+	assert.Zero(t, w.Gate.EnvRetries)
+	assert.NotContains(t, states(w), ledger.RetryEnv)
+	assertLints(t, items)
+}

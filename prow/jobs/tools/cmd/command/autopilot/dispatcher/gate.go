@@ -127,6 +127,12 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		if err != nil {
 			return err
 		}
+		if st.Phase == PhaseFinished && w.Gate != nil && w.Gate.HeadSHA != "" && w.Gate.HeadSHA != pr.HeadSHA {
+			// The head moved while the dod job ran: whatever it left (no
+			// verdict, exit 2) says nothing about the new head, which gates
+			// with no env retry charged (Plan 9 review F9).
+			return launchGate(ctx, w, pr, e, "GATE_HEAD_MOVED")
+		}
 		switch {
 		case st.Phase == PhaseFinished && (st.Job == JobAborted || st.Job == JobErrored):
 			return envRetry(ctx, w, pr, e, "GATE_JOB_"+strings.ToUpper(string(st.Job)))
