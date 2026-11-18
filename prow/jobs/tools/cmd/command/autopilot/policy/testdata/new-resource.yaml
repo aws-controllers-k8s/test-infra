@@ -1,0 +1,8 @@
+# ACK Autopilot new-resource lane (Plan 9; owner decision 2026-11-17, option
+# A). Change by pull request. Without this file, or with enabled: false, no
+# add-resource run starts; new-resource items wait as new-resource-off.
+enabled: true
+# Owner ceilings: at most 1 launch a day org-wide and at most 1 open
+# new-resource PR per repo. Lower values are allowed; higher fail the policy.
+max_launches_per_day: 1
+max_open_prs_per_repo: 1
