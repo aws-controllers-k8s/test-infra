@@ -227,13 +227,13 @@ func TestBumpNeverForcePushesOverHumans(t *testing.T) {
 	assert.NotContains(t, pr.Labels, LabelBlockedServerDefault)
 }
 
-func TestBumpReadyWhenNothingBlocks(t *testing.T) {
+func TestBumpLeavesReadyToTheDispatcher(t *testing.T) {
 	f := newBumpFixture(t)
 	f.saveLedger(bumpItem(ledger.Queued), dependent("Bucket", "logging.prefix", ServerDefaultWork, ledger.WontFix))
 	rep := Run(context.Background(), f.options())
 	require.Equal(t, OutcomePROpened, rep.Outcome)
 	pr := f.forge.PRs[testRepo][0]
-	assert.False(t, pr.Draft)
+	assert.True(t, pr.Draft, "nothing blocks, but only the Dispatcher's GATING marks it ready (Plan 9)")
 	assert.Equal(t, "success", f.status(rep.Head, ContextServerDefault))
 	assert.NotContains(t, pr.Labels, LabelBlockedServerDefault)
 }

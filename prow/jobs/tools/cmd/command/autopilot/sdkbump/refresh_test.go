@@ -51,7 +51,7 @@ func TestRefreshClearsTheBlockWhenADependentCloses(t *testing.T) {
 	assert.Equal(t, Result{Outcome: OutcomePROpened, Reason: "REFRESHED", PR: first.PR}, rep.Result)
 	assert.Equal(t, builds, f.builds, "refresh never regenerates")
 	pr := f.forge.PRs[testRepo][0]
-	assert.False(t, pr.Draft)
+	assert.True(t, pr.Draft, "the Dispatcher marks it ready once the block is gone (Plan 9)")
 	assert.Contains(t, pr.Body, "- [x] `Bucket` `logging.prefix`")
 	assert.NotContains(t, pr.Labels, LabelBlockedServerDefault)
 	assert.Equal(t, "success", f.status(first.Head, ContextServerDefault))

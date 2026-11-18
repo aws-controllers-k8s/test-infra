@@ -103,9 +103,12 @@ func setGateStatus(ctx context.Context, o Options, head string, v *dod.Verdict, 
 }
 
 // applyMergeBlock sets autopilot/server-default on head, the labels, and the
-// draft state: ready only when the gate passed and nothing blocks. It adds
-// only the labels it owns (plus autopilot/sensitive-path from the verdict)
-// and removes only the block label.
+// draft state. It never marks the PR ready: since Plan 9 the Dispatcher does,
+// after its own GATING pass checks this run's verdict against the PR head. It
+// only turns a ready PR back into a draft when the gate failed or a
+// server-default field blocks it. It adds only the labels it owns (plus
+// autopilot/sensitive-path from the verdict) and removes only the block
+// label.
 func applyMergeBlock(ctx context.Context, o Options, pr PR, head string, gatePass bool, deps Dependents, verdictLabels []string) error {
 	s := CommitStatus{Context: ContextServerDefault, TargetURL: o.statusURL()}
 	n, u := len(deps.Items), deps.Unresolved()
@@ -147,9 +150,8 @@ func applyMergeBlock(ctx context.Context, o Options, pr PR, head string, gatePas
 		}
 	}
 
-	ready := gatePass && !deps.Blocked()
-	if pr.Draft == ready { // draft but ready, or ready but blocked
-		return o.Forge.SetDraft(ctx, o.repo(), pr.Number, !ready)
+	if ready := gatePass && !deps.Blocked(); !ready && !pr.Draft {
+		return o.Forge.SetDraft(ctx, o.repo(), pr.Number, true)
 	}
 	return nil
 }
