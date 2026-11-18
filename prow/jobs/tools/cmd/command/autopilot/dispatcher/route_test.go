@@ -107,6 +107,22 @@ func TestRouteDedupeKeepsTheRunningItem(t *testing.T) {
 	assert.Equal(t, ledger.Superseded, detector.State)
 }
 
+// TestRouteDedupeNeverSupersedesAnItemWithAPR (Plan 9 review F2): a triage
+// item requeued with its PR open (QUEUED, never superseded) is kept over the
+// detector's new item for the same Kind.
+func TestRouteDedupeNeverSupersedesAnItemWithAPR(t *testing.T) {
+	triaged := item("api-change|s3|Table|transient:Table|manual-review", "new-resource", ledger.Queued)
+	triaged.Resource, triaged.AutonomyLevel = "Table", "draft"
+	triaged.Links.PR = "https://github.com/aws-controllers-k8s/s3-controller/pull/7"
+	detector := newResource("Table", ledger.Detected)
+	items := ledgerOf(triaged, detector)
+	route(items, "2026-11-12T09:00:00Z")
+	assert.Equal(t, ledger.Queued, triaged.State)
+	assert.Equal(t, ledger.Superseded, detector.State)
+	assert.Equal(t, "DUPLICATE_OF "+triaged.KeyHash, last(detector).Reason)
+	assertLints(t, items)
+}
+
 func TestRouteBlocksUntilDependencyLands(t *testing.T) {
 	bump := item(bumpKey, "SDK-bump", ledger.Queued)
 	field := item(fieldKey, "config-only", ledger.Triaged)

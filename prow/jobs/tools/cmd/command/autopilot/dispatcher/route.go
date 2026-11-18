@@ -137,7 +137,7 @@ func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) (why
 }
 
 // dedupeNewResources keeps one new-resource item per (service, resource): one
-// a workflow has picked up, else the detector's own (key
+// a workflow has picked up or that has a PR, else the detector's own (key
 // api-change|<svc>|<Kind>|new-resource), else the first by key. Every other pre-dispatch new-resource item for the
 // same Kind, such as a triage "resource" decision, is SUPERSEDED by it, so one
 // Kind never gets two add-resource runs.
@@ -145,7 +145,9 @@ func dedupeNewResources(items map[string]*ledger.WorkItem, ts string) {
 	keep := map[string]*ledger.WorkItem{}
 	rank := func(w *ledger.WorkItem) int {
 		switch {
-		case !w.State.PreDispatch():
+		case w.EverDispatched() || w.Links.PR != "":
+			// Plan 9 review F2: an item with a PR (say requeued after a
+			// retry) is kept, never superseded.
 			return 0
 		case w.Key == "api-change|"+w.Service+"|"+w.Resource+"|new-resource":
 			return 1
@@ -164,7 +166,7 @@ func dedupeNewResources(items map[string]*ledger.WorkItem, ts string) {
 	}
 	for _, k := range sortedKeys(items) {
 		w := items[k]
-		if w.ChangeClass != "new-resource" || !w.State.PreDispatch() || w.State == ledger.Superseded {
+		if w.ChangeClass != "new-resource" || !w.State.PreDispatch() || w.State == ledger.Superseded || w.Links.PR != "" {
 			continue
 		}
 		if kept := keep[w.Service+"|"+w.Resource]; kept != nil && kept != w {
