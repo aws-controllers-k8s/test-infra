@@ -178,9 +178,13 @@ func TestKindAdmitsThePlan9Jobs(t *testing.T) {
 	cat := testCatalog(t)
 	l, err := New(cat, testConfig, k, &fakeArtifacts{})
 	require.NoError(t, err)
-	require.NoError(t, l.Launch(ctx, goldenAddResource))
+	// goldenAddResource shares add-field's launch id, which
+	// TestKindRBACAndAdmissionPolicy has already created: use generation 2.
+	addResource := goldenAddResource
+	addResource.LaunchID = "autopilot-0123456789abcdef-g2-r1"
+	require.NoError(t, l.Launch(ctx, addResource))
 	require.NoError(t, l.Launch(ctx, goldenDod))
-	require.NoError(t, l.Abort(ctx, goldenAddResource.LaunchID))
+	require.NoError(t, l.Abort(ctx, addResource.LaunchID))
 	require.NoError(t, l.Abort(ctx, goldenDod.LaunchID))
 
 	podSpec := func(m map[string]any) map[string]any {
