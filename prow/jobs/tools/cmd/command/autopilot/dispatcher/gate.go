@@ -252,6 +252,7 @@ func launchGate(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv, reason 
 	}
 	w.Gate = &ledger.Gate{Source: ledger.GateSourceDod, LaunchID: id, HeadSHA: pr.HeadSHA, BaseSHA: pr.BaseSHA,
 		EnvRetries: retries, Gates: gates + 1, TS: e.ts}
+	clearReady(w)
 	if w.Attempts == nil {
 		w.Attempts = &ledger.Attempts{Runs: 0, MaxRuns: 1}
 	}
@@ -340,6 +341,16 @@ func recordGate(w *ledger.WorkItem, pr PR, v *dod.Verdict, digest, ts string) {
 	g.Verdict, g.Digest = string(v.Verdict), digest
 	g.Reasons, g.ReclassifyTo, g.NotCovered = v.Reasons, v.ReclassifyTo, v.NotCovered
 	w.Gate = g
+	clearReady(w)
+}
+
+// clearReady starts a new gate pass (Plan 9 review F5): ReadyAt ("marked
+// ready once; a person who turns it back to draft is not overruled") holds
+// only until the next gate.
+func clearReady(w *ledger.WorkItem) {
+	if w.Review != nil {
+		w.Review.ReadyAt = ""
+	}
 }
 
 func readVerdict(ctx context.Context, l Launcher, id string) ([]byte, error) {

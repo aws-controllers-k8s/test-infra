@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dod"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
 )
 
@@ -261,4 +262,33 @@ func TestTrackReadsOnlyLinkedPRs(t *testing.T) {
 	trackPRs(context.Background(), items, trackEnv(newFakeGH(), &fakeLauncher{}))
 	assert.Equal(t, ledger.Escalated, w.State)
 	assert.Equal(t, "INVALID_PR_LINK", w.Verdict.Reason)
+}
+
+// TestTrackMarksReadyAgainAfterANewGate (Plan 9 review F5): ReadyAt holds
+// only within one gate pass. A PR marked ready, back to draft while a new
+// head re-gates, is marked ready again when that head passes.
+func TestTrackMarksReadyAgainAfterANewGate(t *testing.T) {
+	w := inReview(item(fieldKey, "config-only", ledger.Queued), "ack-agent")
+	gh := newFakeGH()
+	gh.trees[head2] = tree1
+	p := openPR("ack-agent")
+	p.HeadSHA = head2
+	gh.prs[7] = p
+	gh.commits[7] = []PRCommit{
+		{SHA: head1, Author: "ack-agent", Date: "2026-11-12T07:30:00Z"},
+		{SHA: head2, Author: "ack-agent", Date: "2026-11-12T08:40:00Z"},
+	}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	e := trackEnv(gh, l)
+	items := ledgerOf(w)
+	trackPRs(context.Background(), items, e)
+	require.Equal(t, ledger.Gating, w.State)
+	id := w.Claim.LaunchID
+	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
+	l.verdicts[id] = verdictFor(t, w, dod.StatusPass, "")
+	assert.Empty(t, gate(context.Background(), items, e))
+	assert.Equal(t, ledger.HumanReview, w.State)
+	assert.Equal(t, "MARKED_READY", last(w).Reason)
+	assert.Equal(t, []int{7}, gh.ready)
+	assertLints(t, items)
 }
