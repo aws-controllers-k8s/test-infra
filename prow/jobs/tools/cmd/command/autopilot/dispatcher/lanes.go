@@ -34,7 +34,7 @@ var detectorWorkArg = map[string]bool{"create-only": true, "not-generated": true
 // lanes maps a change class to the workflow that does it (design 3, 6). A
 // triaged item of a class not listed has no workflow in Phase 1 and is held
 // as "awaiting-workflow" in TRIAGED: hand-written-code waits for fix-bug
-// (Phase 2), new-resource for the plan gate.
+// (Phase 2).
 var lanes = map[string]lane{
 	// The sdk-bump workflow (ack-build-tools autopilot sdk-bump, Plan 6).
 	// With the shadow launcher these args only appear in launch lines.
@@ -60,10 +60,22 @@ var lanes = map[string]lane{
 		}
 		return args
 	}},
+	// The add-resource workflow plans, reviews its plan and implements in one
+	// run (owner decision 2026-11-17, option A: no plan gate). It is off
+	// unless policy/new-resource.yaml enables it, at most 1 runs at once, and
+	// its PR stays draft for the API-surface review (draft level).
+	"new-resource": {Workflow: "add-resource", LLM: true, MaxRunning: 1, args: func(w *ledger.WorkItem) map[string]string {
+		return map[string]string{
+			"service": w.Service, "resource": w.Resource,
+			"work-item": w.KeyHash, "change-class": w.ChangeClass,
+		}
+	}},
 }
 
 // skipsTriage holds the change classes that go from DETECTED straight to
 // TRIAGED. Every other class waits in DETECTED for triage (design 5.1):
 // needs-config items for the mode-api triage lane (Plan 8, triageHold), other
 // classes as awaiting-triage.
-var skipsTriage = map[string]bool{"SDK-bump": true}
+// new-resource items from the detector need no triage either: add-resource
+// plans and reviews its own plan (option A).
+var skipsTriage = map[string]bool{"SDK-bump": true, "new-resource": true}

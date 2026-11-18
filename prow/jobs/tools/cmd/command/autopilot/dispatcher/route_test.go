@@ -51,18 +51,60 @@ func TestRouteQueuesSDKBump(t *testing.T) {
 
 func TestRouteHolds(t *testing.T) {
 	field := item(fieldKey, "config-only", ledger.Detected)
-	res := item("api-change|s3|Table|new-resource", "new-resource", ledger.Detected)
-	res.AutonomyLevel = "draft"
 	manual := item("api-change|s3|Quote|transient:Quote|manual-review", "unclassified", ledger.Detected)
 	manual.AutonomyLevel = "observe"
-	plan := item("api-change|s3|Index|new-resource", "new-resource", ledger.PlanPending)
-	held := route(ledgerOf(field, res, manual, plan), "2026-11-12T09:00:00Z")
-	assert.Equal(t, map[string]int{
-		HoldAwaitingTriage: 1, HoldAwaitingPlanWorkflow: 1, HoldObserve: 1, HoldAwaitingPlanApproval: 1,
-	}, held)
-	for _, w := range []*ledger.WorkItem{field, res, manual, plan} {
+	held := route(ledgerOf(field, manual), "2026-11-12T09:00:00Z")
+	assert.Equal(t, map[string]int{HoldAwaitingTriage: 1, HoldObserve: 1}, held)
+	for _, w := range []*ledger.WorkItem{field, manual} {
 		assert.Len(t, w.History, 1, w.Key)
 	}
+}
+
+// newResource is the detector's new-resource item for Kind in s3.
+func newResource(kind string, state ledger.State) *ledger.WorkItem {
+	w := item("api-change|s3|"+kind+"|new-resource", "new-resource", state)
+	w.Resource, w.AutonomyLevel, w.PriorityBand = kind, "draft", 6
+	return w
+}
+
+func TestRouteQueuesNewResources(t *testing.T) {
+	// Option A (2026-11-17): no plan gate. A detector new-resource item
+	// needs no triage, and an item an older Dispatcher left in PLAN_PENDING
+	// goes on as triaged.
+	res := newResource("Table", ledger.Detected)
+	plan := newResource("Index", ledger.PlanPending)
+	held := route(ledgerOf(res, plan), "2026-11-12T09:00:00Z")
+	assert.Empty(t, held)
+	assert.Equal(t, []ledger.State{ledger.Detected, ledger.Triaged, ledger.Queued}, states(res))
+	assert.Equal(t, []ledger.State{ledger.PlanPending, ledger.Triaged, ledger.Queued}, states(plan))
+	assert.Equal(t, "PLAN_GATE_REMOVED", plan.History[1].Reason)
+	assertLints(t, ledgerOf(res, plan))
+}
+
+func TestRouteDedupesNewResourcesByKind(t *testing.T) {
+	detector := newResource("Table", ledger.Queued)
+	triaged := item("api-change|s3|Table|transient:Table|manual-review", "new-resource", ledger.Triaged)
+	triaged.Resource, triaged.AutonomyLevel = "Table", "draft"
+	other := item("api-change|s3|Index|transient:Index|manual-review", "new-resource", ledger.Triaged)
+	other.Resource, other.AutonomyLevel = "Index", "draft"
+	items := ledgerOf(detector, triaged, other)
+	route(items, "2026-11-12T09:00:00Z")
+	assert.Equal(t, ledger.Superseded, triaged.State)
+	assert.Equal(t, "DUPLICATE_OF "+detector.KeyHash, last(triaged).Reason)
+	assert.Equal(t, ledger.Queued, detector.State)
+	assert.Equal(t, ledger.Queued, other.State, "a Kind with one item is kept")
+	assertLints(t, items)
+}
+
+func TestRouteDedupeKeepsTheRunningItem(t *testing.T) {
+	// A Kind already running (or with a PR) keeps its item; a later triage
+	// decision for it is superseded, never launched.
+	triaged := item("api-change|s3|Table|transient:Table|manual-review", "new-resource", ledger.Running)
+	triaged.Resource = "Table"
+	detector := newResource("Table", ledger.Detected)
+	route(ledgerOf(triaged, detector), "2026-11-12T09:00:00Z")
+	assert.Equal(t, ledger.Running, triaged.State)
+	assert.Equal(t, ledger.Superseded, detector.State)
 }
 
 func TestRouteBlocksUntilDependencyLands(t *testing.T) {

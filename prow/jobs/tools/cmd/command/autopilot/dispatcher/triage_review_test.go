@@ -135,7 +135,11 @@ func TestAcceptedResourceIsANewResourceDraft(t *testing.T) {
 	items := ledgerOf(item(bumpKey, "SDK-bump", ledger.Queued), w)
 	applyTriageCommands(items, cmds(reply(w, 1, "accept", "")), replyTS)
 	assert.Equal(t, []any{"new-resource", "draft", 6}, []any{w.ChangeClass, w.AutonomyLevel, w.PriorityBand})
-	assert.Equal(t, 1, route(items, replyTS)[HoldAwaitingWorkflow], "no plan-resource workflow in Phase 1")
+	// Plan 9: the new-resource lane (add-resource) takes it, with no plan
+	// gate, once the bump that brings its operations lands.
+	route(items, replyTS)
+	assert.Equal(t, ledger.Blocked, w.State)
+	assert.Contains(t, last(w).Reason, "DEPENDS_ON ")
 }
 
 func TestAnUndecidedProposalIsDecidedByAReject(t *testing.T) {
