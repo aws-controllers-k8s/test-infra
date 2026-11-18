@@ -13,8 +13,11 @@
 # every process of that uid is killed when the step exits.
 #
 # It must run as root, and it fails closed (exit 125, which dod records as
-# BUILD_SANDBOX_FAILED) when it is not root, when setpriv, pkill or pgrep is
-# missing, or when a sandbox process survives the kill.
+# BUILD_SANDBOX_FAILED) when it is not root, when setpriv is missing, or when
+# a sandbox process survives the kill. The dod image (Debian slim) has no
+# procps, so the kill scans /proc/<pid>/status for the real uid: unlike the
+# owner of /proc/<pid>, it does not change when a process clears its dumpable
+# flag, and the sandbox uid cannot change its own uid.
 #
 # Environment:
 #   AUTOPILOT_DOD_SANDBOX_DIR  root of the sandbox's HOME, GOPATH, GOMODCACHE,
@@ -28,9 +31,16 @@ fail() { echo "autopilot-dod-sandbox: $*" >&2; exit 125; }
 
 [ "$#" -gt 0 ] || fail "no command"
 [ "$(id -u)" = "0" ] || fail "must run as root"
-for tool in setpriv pkill pgrep; do
-  command -v "$tool" >/dev/null 2>&1 || fail "$tool is missing"
-done
+command -v setpriv >/dev/null 2>&1 || fail "setpriv is missing"
+
+# sandbox_pids prints the pids whose real uid is the sandbox uid.
+sandbox_pids() {
+  local p u
+  for p in /proc/[0-9]*; do
+    u="$(awk '/^Uid:/ {print $2; exit}' "$p/status" 2>/dev/null)" || continue
+    [ "$u" = "$SANDBOX_UID" ] && echo "${p#/proc/}"
+  done
+}
 
 # The sandbox root is root-owned (0755) so the sandbox uid cannot replace it
 # or its subdirectories (for example with a symlink root would then follow);
@@ -70,9 +80,11 @@ setpriv --reuid=65532 --regid=65532 --clear-groups --no-new-privs \
 code=$?
 
 # Whatever the command's status: no process of the sandbox uid outlives it.
-pkill -9 -U 65532
 for _ in $(seq 1 20); do
-  pgrep -U 65532 >/dev/null || exit "$code"
+  pids="$(sandbox_pids)"
+  [ -n "$pids" ] || exit "$code"
+  # shellcheck disable=SC2086 # one pid per word
+  kill -9 $pids 2>/dev/null
   sleep 0.1
 done
 fail "processes of uid $SANDBOX_UID survived the kill"

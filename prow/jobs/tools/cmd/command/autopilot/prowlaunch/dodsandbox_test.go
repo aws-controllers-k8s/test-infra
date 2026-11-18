@@ -44,10 +44,16 @@ func TestDodBuildSandboxScript(t *testing.T) {
 	require.NoError(t, err)
 	for _, want := range []string{
 		"setpriv --reuid=65532 --regid=65532 --clear-groups --no-new-privs",
-		"env -i", "pkill -9 -U 65532", "pgrep -U 65532", `chmod -R go+rX "$PWD"`,
+		"env -i", `chmod -R go+rX "$PWD"`,
 		"AUTOPILOT_DOD_SANDBOX_DIR:-/tmp/dod-sandbox", "Plan 9 review F1",
+		// The dod image (Debian slim) has no procps: the kill scans
+		// /proc/<pid>/status (the real uid survives PR_SET_DUMPABLE).
+		`/^Uid:/`, "kill -9",
 	} {
 		assert.True(t, strings.Contains(string(b), want), "the sandbox script has %q", want)
+	}
+	for _, unwanted := range []string{"pkill", "pgrep"} {
+		assert.False(t, strings.Contains(string(b), unwanted), "the dod image has no %s", unwanted)
 	}
 	if os.Geteuid() != 0 {
 		err := exec.Command(sb, "true").Run()
