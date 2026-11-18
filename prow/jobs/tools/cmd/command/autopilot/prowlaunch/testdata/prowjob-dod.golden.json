@@ -150,11 +150,27 @@
               "cpu": "4",
               "memory": "8Gi"
             }
-          }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/autopilot-dod-signing",
+              "name": "autopilot-dod-signing",
+              "readOnly": true
+            }
+          ]
         }
       ],
       "restartPolicy": "Never",
-      "serviceAccountName": "pre-submit-service-account"
+      "serviceAccountName": "pre-submit-service-account",
+      "volumes": [
+        {
+          "name": "autopilot-dod-signing",
+          "secret": {
+            "defaultMode": 256,
+            "secretName": "autopilot-dod-signing-key"
+          }
+        }
+      ]
     },
     "type": "periodic"
   },

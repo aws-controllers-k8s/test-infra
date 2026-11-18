@@ -229,6 +229,12 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
 			VolumeMount{Name: "github-token-censor", MountPath: "/etc/github-censor", ReadOnly: true})
 	}
+	if w.pod.SigningSecret != "" {
+		mode := int32(0o400)
+		pod.Volumes = append(pod.Volumes, Volume{Name: DodSigningVolume, Secret: &SecretVolumeSource{SecretName: w.pod.SigningSecret, DefaultMode: &mode}})
+		pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
+			VolumeMount{Name: DodSigningVolume, MountPath: w.pod.SigningMount, ReadOnly: true})
+	}
 	grace := 15 * time.Minute
 	if w.pod.GracePeriod > 0 {
 		grace = w.pod.GracePeriod

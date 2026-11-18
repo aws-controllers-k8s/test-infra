@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,14 +66,26 @@ func TestDodGolden(t *testing.T) {
 	assert.Equal(t, string(want), string(got))
 }
 
-func TestDodJobHoldsNoSecret(t *testing.T) {
+// TestDodJobHoldsOnlyItsSigningKey: the dod job's one volume is the verdict
+// signing key (Plan 9 review): a secret volume of mode 0400, mounted read
+// only. It has no other secret, no env valueFrom and no ServiceAccount token.
+func TestDodJobHoldsOnlyItsSigningKey(t *testing.T) {
 	var pj ProwJob
 	require.NoError(t, json.Unmarshal(buildJSON(t, goldenDod), &pj))
 	pod := pj.Spec.PodSpec
 	assert.Equal(t, "autopilot-dod", pj.Spec.Job)
 	assert.Equal(t, "default", pj.Spec.Cluster)
 	assert.Equal(t, "pre-submit-service-account", pod.ServiceAccountName)
-	assert.Empty(t, pod.Volumes, "no secrets volume, no CSI, no host path")
+	require.Len(t, pod.Volumes, 1, "no secrets volume, no CSI, no host path: only the signing key")
+	v := pod.Volumes[0]
+	assert.Equal(t, "autopilot-dod-signing", v.Name)
+	require.NotNil(t, v.Secret)
+	assert.Equal(t, "autopilot-dod-signing-key", v.Secret.SecretName)
+	require.NotNil(t, v.Secret.DefaultMode)
+	assert.Equal(t, int32(0o400), *v.Secret.DefaultMode)
+	assert.Nil(t, v.CSI)
+	assert.Nil(t, v.HostPath)
+	assert.Nil(t, v.EmptyDir)
 	// Plan 9 review F14: no ServiceAccount token in the pod either.
 	require.NotNil(t, pod.AutomountServiceAccountToken)
 	assert.False(t, *pod.AutomountServiceAccountToken)
@@ -80,12 +93,13 @@ func TestDodJobHoldsNoSecret(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buildJSON(t, goldenAddResource), &ar))
 	assert.Nil(t, ar.Spec.PodSpec.AutomountServiceAccountToken, "agent-plugin's pod shape is unchanged")
 	c := pod.Containers[0]
-	assert.Empty(t, c.VolumeMounts)
+	assert.Equal(t, []VolumeMount{{Name: "autopilot-dod-signing", MountPath: "/etc/autopilot-dod-signing", ReadOnly: true}}, c.VolumeMounts)
 	assert.Nil(t, c.SecurityContext, "unprivileged")
 	assert.Empty(t, c.Args, "args travel as environment variables")
 	env := map[string]string{}
 	for _, e := range c.Env {
 		assert.Nil(t, e.ValueFrom, e.Name)
+		assert.NotContains(t, strings.ToUpper(e.Name), "TOKEN", e.Name)
 		env[e.Name] = e.Value
 	}
 	assert.Equal(t, "1111111111111111111111111111111111111111", env["AUTOPILOT_DOD_HEAD_SHA"])

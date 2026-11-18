@@ -147,7 +147,8 @@ type Volume struct {
 }
 
 type SecretVolumeSource struct {
-	SecretName string `json:"secretName"`
+	SecretName  string `json:"secretName"`
+	DefaultMode *int32 `json:"defaultMode,omitempty"`
 }
 
 type EmptyDirSource struct{}

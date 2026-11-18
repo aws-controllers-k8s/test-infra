@@ -127,6 +127,10 @@ type podShape struct {
 	// NoServiceAccountToken sets automountServiceAccountToken: false: the
 	// pod gets no Kubernetes API token (the dod job; Plan 9 review F14).
 	NoServiceAccountToken bool
+	// SigningSecret, when set, is a Kubernetes secret mounted read-only at
+	// SigningMount with mode 0400 (root only): the key that signs the dod
+	// verdict, which the sandboxed build uid cannot read (Plan 9 review).
+	SigningSecret, SigningMount string
 }
 
 // agentPod is agent-plugin's pod (pkg/prowjob CreateWorkflowProwJob).
@@ -285,11 +289,19 @@ func SDKBump(image, org string) Workflow {
 	}
 }
 
+// The dod job's verdict signing key (Plan 9 review): the secret, its volume
+// and its mount. The secret's data key is "key".
+const (
+	DodSigningSecret = "autopilot-dod-signing-key"
+	DodSigningVolume = "autopilot-dod-signing"
+	DodSigningMount  = "/etc/autopilot-dod-signing"
+)
+
 // DOD is the Dispatcher's gate job (Plan 9): scripts/autopilot-dod.sh in
 // dispatched mode on one PR head, in the auto-generate-controllers image like
-// the <service>-autopilot-dod presubmit. It holds no secret and no AWS
-// identity, runs as the presubmits' ServiceAccount, and writes verdict.json
-// and gate-verdict.txt. The script fetches pull/<pr>/head into the
+// the <service>-autopilot-dod presubmit. It holds no secret but its verdict
+// signing key (root-only, 0400) and no AWS identity, runs as the presubmits'
+// ServiceAccount, and writes verdict.json, verdict.sig and gate-verdict.txt. The script fetches pull/<pr>/head into the
 // controller checkout and refuses any other head than head-sha.
 func DOD(image, org string) Workflow {
 	return Workflow{
@@ -315,6 +327,7 @@ func DOD(image, org string) Workflow {
 			},
 			GracePeriod: 10 * time.Minute, DoNotDisrupt: true, ControllerRef: true,
 			NoServiceAccountToken: true,
+			SigningSecret:         DodSigningSecret, SigningMount: DodSigningMount,
 		},
 	}
 }

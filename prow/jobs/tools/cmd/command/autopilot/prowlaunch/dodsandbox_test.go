@@ -64,7 +64,13 @@ func TestDodBuildSandboxScript(t *testing.T) {
 
 	d, err := os.ReadFile(filepath.Join(scriptsDir, "autopilot-dod.sh"))
 	require.NoError(t, err)
-	for _, want := range []string{`--build-sandbox "$DIR/autopilot-dod-sandbox.sh"`, `chmod 0755 "$ARTIFACTS"`, "mktemp -d"} {
+	for _, want := range []string{
+		`--build-sandbox "$DIR/autopilot-dod-sandbox.sh"`, `chmod 0755 "$ARTIFACTS"`, "mktemp -d",
+		// Plan 9 review: the dispatched verdict is signed with the mounted key.
+		"${AUTOPILOT_DOD_SIGNING_KEY:-/etc/autopilot-dod-signing/key}",
+		`--sign-key "$SIGN_KEY"`, `--signature-out "$OUT_DIR/verdict.sig"`,
+		"verdict.json gate-verdict.txt verdict.sig",
+	} {
 		assert.True(t, strings.Contains(string(d), want), "autopilot-dod.sh has %q", want)
 	}
 }
