@@ -439,3 +439,20 @@ func TestTrackParkedItemsPR(t *testing.T) {
 		})
 	}
 }
+
+// TestTrackIgnoresFutureCommitDates (Plan 9 review F12): the committer date
+// is the author's to set; one in the future does not keep a PR from STALE.
+func TestTrackIgnoresFutureCommitDates(t *testing.T) {
+	w := inReview(item(bumpKey, "SDK-bump", ledger.Queued), "ack-bot")
+	gh := newFakeGH()
+	gh.prs[7] = readyPR("ack-bot")
+	gh.commits[7] = []PRCommit{{SHA: head1, Author: "ack-bot", Date: "2030-01-01T00:00:00Z"}}
+	e := trackEnv(gh, &fakeLauncher{})
+	trackPRs(context.Background(), ledgerOf(w), e)
+	assert.Equal(t, "2026-11-12T08:00:00Z", w.Review.LastActivity)
+
+	e.now = now.Add(15 * 24 * time.Hour)
+	e.ts = e.now.Format(time.RFC3339)
+	trackPRs(context.Background(), ledgerOf(w), e)
+	assert.Contains(t, states(w), ledger.Stale)
+}

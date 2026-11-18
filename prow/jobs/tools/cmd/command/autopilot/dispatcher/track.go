@@ -180,7 +180,11 @@ func countCommits(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) error
 		if c.Author == "" || !slices.Contains(e.bots, c.Author) {
 			humans++
 		}
-		r.LastActivity = latest(r.LastActivity, c.Date)
+		// The committer date is the author's to set: one later than now (or
+		// not a time) is no activity (Plan 9 review F12).
+		if d, err := time.Parse(time.RFC3339, c.Date); err == nil && !d.After(e.now) {
+			r.LastActivity = latest(r.LastActivity, c.Date)
+		}
 	}
 	if humans > r.HumanCommits {
 		r.HumanCommits = humans
