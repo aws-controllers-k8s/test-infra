@@ -34,6 +34,11 @@ const dodWorkflow = "dod"
 // dodTimeout bounds an autopilot-dod job (Plan 5's job takes 30-90 minutes).
 const dodTimeout = 2 * time.Hour
 
+// GateTimeout bounds GATING and RETRY_ENV (design 5.4 timeout ladder: gates
+// 24h), measured from the last move into either; then the item escalates
+// GATE_STALLED (Plan 9 review F3).
+const GateTimeout = 24 * time.Hour
+
 // LabelBlockedServerDefault is sdk-bump's merge block (sdkbump
 // LabelBlockedServerDefault; a test keeps them equal): while it is on the PR
 // the Dispatcher leaves the PR draft.
@@ -77,6 +82,12 @@ func gate(ctx context.Context, items map[string]*ledger.WorkItem, e prEnv) []str
 	for _, k := range sortedKeys(items) {
 		w := items[k]
 		if w.State != ledger.Gating && w.State != ledger.RetryEnv {
+			continue
+		}
+		if gateStalled(w, e.now) {
+			// Even if the PR or the verdict cannot be read.
+			abortClaim(ctx, w, e)
+			finish(w, ledger.Escalated, e.ts, "GATE_STALLED", &ledger.Verdict{Outcome: OutcomeFailed, Reason: "GATE_STALLED"})
 			continue
 		}
 		if err := gateOne(ctx, w, e); err != nil {
@@ -184,6 +195,22 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		retry(w, "GATE_FAILED", e.ts)
 	}
 	return nil
+}
+
+// gateStalled reports whether the item has been in GATING or RETRY_ENV for
+// longer than GateTimeout, from the last history entry that moved it into
+// either. An item with no such entry (a hand-edited ledger) or an unparseable
+// time is stalled: it fails closed to a person.
+func gateStalled(w *ledger.WorkItem, now time.Time) bool {
+	for i := len(w.History) - 1; i >= 0; i-- {
+		h := w.History[i]
+		if h.To != ledger.Gating && h.To != ledger.RetryEnv {
+			continue
+		}
+		since, err := time.Parse(time.RFC3339, h.TS)
+		return err != nil || now.Sub(since) > GateTimeout
+	}
+	return true
 }
 
 // launchGate starts an autopilot-dod job on the PR head and moves the item to

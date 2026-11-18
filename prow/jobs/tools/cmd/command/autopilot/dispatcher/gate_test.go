@@ -15,7 +15,9 @@ package dispatcher
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -299,5 +301,38 @@ func TestGateLaunchesWaitWhilePaused(t *testing.T) {
 			assert.Empty(t, l.launched)
 			assert.Equal(t, ledger.Gating, w.State)
 		})
+	}
+}
+
+// erringVerdicts is a gateLauncher whose verdict read always fails.
+type erringVerdicts struct{ gateLauncher }
+
+func (erringVerdicts) Verdict(context.Context, string) ([]byte, error) {
+	return nil, errors.New("s3: throttled")
+}
+
+// TestGateStalledEscalates (Plan 9 review F3): an item that has been
+// GATING for longer than GateTimeout escalates GATE_STALLED, even while its
+// verdict or its PR cannot be read.
+func TestGateStalledEscalates(t *testing.T) {
+	for _, prDown := range []bool{false, true} {
+		w, gh, l := bumpGating(t, dod.StatusPass, "")
+		el := erringVerdicts{l}
+		e := testEnv(gh, el, true)
+		assert.NotEmpty(t, gate(context.Background(), ledgerOf(w), e), "the read error is a problem")
+		assert.Equal(t, ledger.Gating, w.State)
+
+		if prDown {
+			gh.err = errors.New("github: 502")
+		}
+		e.now = mustTime("2026-11-13T08:46:00Z")
+		e.ts = e.now.Format(time.RFC3339)
+		items := ledgerOf(w)
+		assert.Empty(t, gate(context.Background(), items, e))
+		assert.Equal(t, ledger.Escalated, w.State)
+		assert.Equal(t, "GATE_STALLED", last(w).Reason)
+		assert.Equal(t, &ledger.Verdict{Outcome: OutcomeFailed, Reason: "GATE_STALLED"}, w.Verdict)
+		assert.Nil(t, w.Claim)
+		assertLints(t, items)
 	}
 }

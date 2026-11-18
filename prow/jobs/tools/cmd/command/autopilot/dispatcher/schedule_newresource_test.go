@@ -83,3 +83,25 @@ func TestDraftPRsCountAgainstReviewBackpressure(t *testing.T) {
 	require.Len(t, waits, 1)
 	assert.Equal(t, CapReview, waits[0].cap)
 }
+
+// TestGatingHoldsNoLLMOrLaneSlot (Plan 9 review F3): a GATING add-resource
+// item runs no LLM, so it takes neither an LLM nor a lane slot, but its repo
+// is still busy.
+func TestGatingHoldsNoLLMOrLaneSlot(t *testing.T) {
+	p := withNewResource(testPolicy(t), true)
+	p.Budgets.MaxConcurrentLLMRuns = 1
+	g := item("api-change|iam|Widget|new-resource", "new-resource", ledger.Queued)
+	g.Resource, g.AutonomyLevel, g.PriorityBand = "Widget", "draft", 6
+	gating(running(g, "2026-11-10T08:30:00Z", 1, 3))
+	q := newResource("Table", ledger.Queued)
+	picks, waits := schedule(ledgerOf(g, q), p, now)
+	assert.Empty(t, waits)
+	require.Len(t, picks, 1)
+	assert.Equal(t, q, picks[0].item)
+
+	same := item("api-change|iam|Gadget|new-resource", "new-resource", ledger.Queued)
+	same.Resource, same.AutonomyLevel, same.PriorityBand = "Gadget", "draft", 6
+	_, waits = schedule(ledgerOf(g, same), p, now)
+	require.Len(t, waits, 1)
+	assert.Equal(t, CapRepoBusy, waits[0].cap, "GATING still makes its repo busy")
+}

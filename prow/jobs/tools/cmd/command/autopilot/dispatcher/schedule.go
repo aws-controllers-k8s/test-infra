@@ -105,7 +105,9 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time,
 	for _, w := range items {
 		if w.State.ActiveRun() {
 			l.runsPerRepo[w.Repo]++
-			if w.Claim != nil {
+			// Plan 9 review F3: only RUNNING holds an LLM or lane slot; a
+			// GATING or RETRY_ENV item waits on a dod job, which runs no LLM.
+			if w.State == ledger.Running && w.Claim != nil {
 				l.laneRuns[w.Claim.Workflow]++
 				if llmWorkflow(w.Claim.Workflow) {
 					l.llmRuns++
