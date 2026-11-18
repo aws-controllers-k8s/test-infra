@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"regexp"
@@ -64,6 +65,8 @@ type prEnv struct {
 	authors map[string]string
 	// bots are logins whose commits are not human.
 	bots []string
+	// dodKey verifies dod verdicts' signatures; nil trusts none.
+	dodKey ed25519.PublicKey
 	// sw holds gate launches like any launch: paused, abort_inflight, a
 	// paused repo or a service not enabled.
 	sw    policy.Switches
@@ -150,12 +153,26 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 			return nil // still gating
 		}
 	}
-	data, _, err := readVerdict(ctx, e.l, w.Claim.LaunchID)
+	data, sig, err := readVerdict(ctx, e.l, w.Claim.LaunchID)
 	switch {
 	case errors.Is(err, ErrNoVerdict):
 		return envRetry(ctx, w, pr, e, "GATE_NO_VERDICT")
 	case err != nil:
 		return err
+	}
+	if w.Claim.Workflow == dodWorkflow {
+		// Plan 9 review: presubmits running PR code can write the logs
+		// bucket, so a dod verdict counts only with a valid signature from
+		// autopilot-dod-signing-key. sdk-bump's is bound to the trailer.
+		if len(e.dodKey) == 0 {
+			return errors.New("no dod public key: dod verdicts cannot be trusted")
+		}
+		if err := dod.VerifySignature(e.dodKey, data, sig); err != nil {
+			// Tampering, not the environment: never retried.
+			abortClaim(ctx, w, e)
+			finish(w, ledger.Escalated, e.ts, "GATE_VERDICT_UNSIGNED", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "GATE_VERDICT_UNSIGNED"})
+			return nil
+		}
 	}
 	// sdk-bump's verdict is bound to the PR body's Gate-Verdict trailer; a
 	// dod job's is the Dispatcher's own, so its digest is the file's.

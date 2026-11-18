@@ -14,7 +14,9 @@
 package dispatcher
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"testing"
 	"time"
@@ -36,7 +38,7 @@ func bumpGating(t *testing.T, status dod.Status, reclassify string, reasons ...s
 	pr := openPR("ack-bot")
 	pr.Body = "card\n\nWork-Item: " + w.KeyHash + "\n" + dod.Trailer(v)
 	gh.prs[7] = pr
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{w.Claim.LaunchID: v}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{w.Claim.LaunchID: v}, sigs: map[string][]byte{}}
 	return w, gh, l
 }
 
@@ -138,6 +140,7 @@ func testGateEnvRetriesAreCapped(t *testing.T, reason string) {
 		id := w.Claim.LaunchID
 		l.statuses[id] = Status{Phase: PhaseFinished, Job: JobFailed}
 		l.verdicts[id] = l.verdicts[w.Links.ProwJobs[0]]
+		l.sigs[id] = signFor(t, l.verdicts[id])
 		gate(context.Background(), ledgerOf(w), e)
 	}
 	assert.Equal(t, ledger.Escalated, w.State)
@@ -149,7 +152,7 @@ func TestGateAddFieldLaunchesDodThenPasses(t *testing.T) {
 	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
 	gh := newFakeGH()
 	gh.prs[7] = openPR("ack-agent")
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	items := ledgerOf(w)
 	e := testEnv(gh, l, true)
 
@@ -168,6 +171,7 @@ func TestGateAddFieldLaunchesDodThenPasses(t *testing.T) {
 
 	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
 	l.verdicts[id] = verdictFor(t, w, dod.StatusPass, "")
+	l.sigs[id] = signFor(t, l.verdicts[id])
 	assert.Empty(t, gate(context.Background(), items, e))
 	assert.Equal(t, ledger.HumanReview, w.State)
 	assert.Equal(t, ledger.GatePass, w.Gate.Verdict)
@@ -182,12 +186,13 @@ func TestGateNewResourceStaysDraft(t *testing.T) {
 	w = gating(running(w, "2026-11-12T08:30:00Z", 1, 3))
 	gh := newFakeGH()
 	gh.prs[7] = openPR("ack-agent")
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	e := testEnv(gh, l, true)
 	gate(context.Background(), ledgerOf(w), e)
 	id := w.Claim.LaunchID
 	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
 	l.verdicts[id] = verdictFor(t, w, dod.StatusPass, "")
+	l.sigs[id] = signFor(t, l.verdicts[id])
 	gate(context.Background(), ledgerOf(w), e)
 	assert.Equal(t, ledger.HumanReview, w.State)
 	assert.Equal(t, "DRAFT_LEVEL", last(w).Reason)
@@ -271,12 +276,13 @@ func TestGateRegatesWhenTheHeadMovedDuringTheJob(t *testing.T) {
 	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
 	gh := newFakeGH()
 	gh.prs[7] = openPR("ack-agent")
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	e := testEnv(gh, l, true)
 	gate(context.Background(), ledgerOf(w), e)
 	d1 := w.Claim.LaunchID
 	l.statuses[d1] = Status{Phase: PhaseFinished, Job: JobSucceeded}
 	l.verdicts[d1] = verdictFor(t, w, dod.StatusPass, "")
+	l.sigs[d1] = signFor(t, l.verdicts[d1])
 	p := gh.prs[7]
 	p.HeadSHA = head2
 	gh.prs[7] = p
@@ -412,7 +418,7 @@ func TestGateHeadMovedBeforeTheVerdictChargesNoEnvRetry(t *testing.T) {
 	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
 	gh := newFakeGH()
 	gh.prs[7] = openPR("ack-agent")
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	e := testEnv(gh, l, true)
 	gate(context.Background(), ledgerOf(w), e)
 	d1 := w.Claim.LaunchID
@@ -429,4 +435,84 @@ func TestGateHeadMovedBeforeTheVerdictChargesNoEnvRetry(t *testing.T) {
 	assert.Zero(t, w.Gate.EnvRetries)
 	assert.NotContains(t, states(w), ledger.RetryEnv)
 	assertLints(t, items)
+}
+
+// dodGating is an add-field item whose dod job finished on head1 with a
+// passing verdict and no signature yet.
+func dodGating(t *testing.T) (*ledger.WorkItem, *fakeGH, gateLauncher, prEnv, string) {
+	t.Helper()
+	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
+	gh := newFakeGH()
+	gh.prs[7] = openPR("ack-agent")
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
+	e := testEnv(gh, l, true)
+	gate(context.Background(), ledgerOf(w), e)
+	id := w.Claim.LaunchID
+	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
+	l.verdicts[id] = verdictFor(t, w, dod.StatusPass, "")
+	return w, gh, l, e, id
+}
+
+// TestGateDodVerdictMustBeSigned (Plan 9 review): presubmits can write the
+// logs bucket, so a dod verdict without a valid signature from the dod key
+// is tampering: the item escalates GATE_VERDICT_UNSIGNED, never retried.
+func TestGateDodVerdictMustBeSigned(t *testing.T) {
+	for name, sig := range map[string]func(t *testing.T, v []byte) []byte{
+		"unsigned":                   func(*testing.T, []byte) []byte { return nil },
+		"empty":                      func(*testing.T, []byte) []byte { return []byte("\n") },
+		"signature over other bytes": func(t *testing.T, v []byte) []byte { return signFor(t, append([]byte(" "), v...)) },
+		"not base64":                 func(*testing.T, []byte) []byte { return []byte("not a signature!\n") },
+		"another key": func(_ *testing.T, v []byte) []byte {
+			other := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+			return dod.Sign(other, v)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, gh, l, e, id := dodGating(t)
+			if b := sig(t, l.verdicts[id]); b != nil {
+				l.sigs[id] = b
+			}
+			items := ledgerOf(w)
+			assert.Empty(t, gate(context.Background(), items, e))
+			assert.Equal(t, ledger.Escalated, w.State)
+			assert.Equal(t, "GATE_VERDICT_UNSIGNED", last(w).Reason)
+			assert.Equal(t, []string{id}, l.aborted, "abortClaim")
+			assert.Nil(t, w.Claim)
+			assert.Empty(t, gh.ready)
+			assert.Len(t, l.launched, 1, "never retried")
+			assertLints(t, items)
+		})
+	}
+}
+
+// TestGateDodWithoutAKeyWaits: with no dod public key no dod verdict can be
+// trusted; the item waits (a problem line) until GateTimeout escalates it.
+func TestGateDodWithoutAKeyWaits(t *testing.T) {
+	w, gh, l, e, id := dodGating(t)
+	l.sigs[id] = signFor(t, l.verdicts[id])
+	e.dodKey = nil
+	n := len(w.History)
+	problems := gate(context.Background(), ledgerOf(w), e)
+	require.Len(t, problems, 1)
+	assert.Contains(t, problems[0], "no dod public key: dod verdicts cannot be trusted")
+	assert.Equal(t, ledger.Gating, w.State)
+	assert.Len(t, w.History, n)
+	assert.Equal(t, id, w.Claim.LaunchID)
+	assert.Empty(t, gh.ready)
+
+	e.now = now.Add(GateTimeout + time.Hour)
+	gate(context.Background(), ledgerOf(w), e)
+	assert.Equal(t, ledger.Escalated, w.State)
+	assert.Equal(t, "GATE_STALLED", last(w).Reason)
+}
+
+// TestGateSDKBumpNeedsNoSignature: sdk-bump's verdict is bound to the PR
+// body's trailer; it passes with no signature and no dod key.
+func TestGateSDKBumpNeedsNoSignature(t *testing.T) {
+	w, gh, l := bumpGating(t, dod.StatusPass, "")
+	e := testEnv(gh, l, true)
+	e.dodKey = nil
+	assert.Empty(t, gate(context.Background(), ledgerOf(w), e))
+	assert.Equal(t, ledger.HumanReview, w.State)
+	assert.Equal(t, []int{7}, gh.ready)
 }

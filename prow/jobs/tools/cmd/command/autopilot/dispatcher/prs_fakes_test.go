@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"testing"
 	"time"
@@ -157,8 +158,21 @@ func gating(w *ledger.WorkItem) *ledger.WorkItem {
 	return w
 }
 
+// testDodKey signs the dod verdicts in these tests (Plan 9 review); testEnv
+// trusts its public half.
+var testDodKey = ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+
+func testDodPub() ed25519.PublicKey { return testDodKey.Public().(ed25519.PublicKey) }
+
+// signFor is the verdict.sig a dod job leaves for verdict v.
+func signFor(t *testing.T, v []byte) []byte {
+	t.Helper()
+	require.NotEmpty(t, v)
+	return dod.Sign(testDodKey, v)
+}
+
 func testEnv(gh *fakeGH, l Launcher, writes bool) prEnv {
-	e := prEnv{gh: gh, l: l, team: map[string]bool{"alice": true},
+	e := prEnv{gh: gh, l: l, team: map[string]bool{"alice": true}, dodKey: testDodPub(),
 		authors: map[string]string{"sdk-bump": "ack-bot", "add-field": "ack-agent", "add-resource": "ack-agent"},
 		bots:    []string{"ack-bot", "ack-agent"}, sw: policy.Switches{Launcher: policy.LauncherProw, Services: []string{"s3", "iam"}},
 		grace: 30 * time.Minute, now: now, ts: now.UTC().Format(time.RFC3339)}

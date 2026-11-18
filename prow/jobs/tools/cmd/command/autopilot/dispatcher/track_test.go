@@ -118,7 +118,7 @@ func TestTrackMergeWhileGatingAbortsTheDodJob(t *testing.T) {
 	w := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
 	gh := newFakeGH()
 	gh.prs[7] = openPR("ack-agent")
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	gate(context.Background(), ledgerOf(w), testEnv(gh, l, true))
 	dod := w.Claim.LaunchID
 	p := gh.prs[7]
@@ -168,7 +168,7 @@ func TestTrackHeadMoveRegates(t *testing.T) {
 		{SHA: head1, Author: "ack-agent", Date: "2026-11-12T07:30:00Z"},
 		{SHA: head2, Author: "alice", Date: "2026-11-12T08:40:00Z"},
 	}
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	items := ledgerOf(w)
 	trackPRs(context.Background(), items, trackEnv(gh, l))
 	assert.Equal(t, ledger.Gating, w.State)
@@ -279,7 +279,7 @@ func TestTrackMarksReadyAgainAfterANewGate(t *testing.T) {
 		{SHA: head1, Author: "ack-agent", Date: "2026-11-12T07:30:00Z"},
 		{SHA: head2, Author: "ack-agent", Date: "2026-11-12T08:40:00Z"},
 	}
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	e := trackEnv(gh, l)
 	items := ledgerOf(w)
 	trackPRs(context.Background(), items, e)
@@ -287,6 +287,7 @@ func TestTrackMarksReadyAgainAfterANewGate(t *testing.T) {
 	id := w.Claim.LaunchID
 	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
 	l.verdicts[id] = verdictFor(t, w, dod.StatusPass, "")
+	l.sigs[id] = signFor(t, l.verdicts[id])
 	assert.Empty(t, gate(context.Background(), items, e))
 	assert.Equal(t, ledger.HumanReview, w.State)
 	assert.Equal(t, "MARKED_READY", last(w).Reason)
@@ -336,7 +337,7 @@ func TestTrackHeadMoveTurnsAReadyPRBackToDraft(t *testing.T) {
 	p := readyPR("ack-agent")
 	p.HeadSHA = head2
 	gh.prs[7] = p
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l))
 	assert.Empty(t, gh.drafted)
 }
@@ -353,7 +354,7 @@ func TestTrackBotPushRegatesWithoutPinning(t *testing.T) {
 		{SHA: head1, Author: "ack-agent", Date: "2026-11-12T07:30:00Z"},
 		{SHA: head2, Author: "ack-bot", Date: "2026-11-12T08:40:00Z"},
 	}
-	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
 	items := ledgerOf(w)
 	trackPRs(context.Background(), items, trackEnv(gh, l))
 	assert.Equal(t, ledger.Gating, w.State)

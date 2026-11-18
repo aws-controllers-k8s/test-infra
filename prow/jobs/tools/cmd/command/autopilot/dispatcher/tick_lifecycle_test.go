@@ -108,3 +108,35 @@ func TestTickReportsDodLaunches(t *testing.T) {
 	require.Equal(t, ledger.Gating, field.State)
 	assert.Equal(t, []Launch{{Key: field.Key, KeyHash: field.KeyHash, Workflow: "dod", LaunchID: field.Claim.LaunchID}}, res.Launched)
 }
+
+// TestTickTrustsTheConfiguredDodKey (Plan 9 review): Config.DodPublicKey is
+// the key gate checks dod verdicts with; without it the item waits.
+func TestTickTrustsTheConfiguredDodKey(t *testing.T) {
+	p := testPolicy(t)
+	field := gating(running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3))
+	field.Resource, field.FieldPath = "Bucket", "Mode"
+	gh := newFakeGH()
+	gh.prs[7] = openPR("ack-agent")
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, sigs: map[string][]byte{}}
+	cfg := Config{Now: now, Policy: &p, Launcher: l, GitHub: gh, PRWriter: gh, Team: map[string]bool{"alice": true},
+		PRAuthors: map[string]string{"sdk-bump": "ack-bot", "add-field": "ack-agent"}, BotLogins: []string{"ack-bot", "ack-agent"}}
+	items := ledgerOf(field)
+	res := Tick(context.Background(), cfg, items)
+	assert.Empty(t, res.Problems)
+	require.Equal(t, dodWorkflow, field.Claim.Workflow)
+	id := field.Claim.LaunchID
+	l.statuses[id] = Status{Phase: PhaseFinished, Job: JobSucceeded}
+	l.verdicts[id] = verdictFor(t, field, dod.StatusPass, "")
+	l.sigs[id] = signFor(t, l.verdicts[id])
+
+	res = Tick(context.Background(), cfg, items)
+	require.Len(t, res.Problems, 1)
+	assert.Contains(t, res.Problems[0], "no dod public key")
+	assert.Equal(t, ledger.Gating, field.State)
+
+	cfg.DodPublicKey = testDodPub()
+	res = Tick(context.Background(), cfg, items)
+	assert.Empty(t, res.Problems)
+	assert.Equal(t, ledger.HumanReview, field.State)
+	assertLints(t, items)
+}

@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -57,6 +58,10 @@ type Config struct {
 	PRAuthors map[string]string
 	// BotLogins are the logins whose commits are not human.
 	BotLogins []string
+	// DodPublicKey verifies dod verdicts' signatures (Plan 9 review): the
+	// public half of autopilot-dod-signing-key. Nil trusts no dod verdict,
+	// and items that need one wait until GateTimeout escalates them.
+	DodPublicKey ed25519.PublicKey
 }
 
 // Launch is one launch the tick made (or, with a shadow launcher, would make).
@@ -111,7 +116,7 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 	res.Problems = reconcile(ctx, items, launcher, p.Budgets, cfg.Now)
 	var runtimeRelease map[string]bool
 	if cfg.GitHub != nil {
-		e := prEnv{gh: cfg.GitHub, l: launcher, team: cfg.Team, authors: cfg.PRAuthors, bots: cfg.BotLogins,
+		e := prEnv{gh: cfg.GitHub, l: launcher, team: cfg.Team, authors: cfg.PRAuthors, bots: cfg.BotLogins, dodKey: cfg.DodPublicKey,
 			sw: p.Switches, grace: p.Budgets.ReaperGrace(), now: cfg.Now, ts: ts, launched: &res.Launched}
 		if !cfg.DryRun {
 			e.pw = cfg.PRWriter
