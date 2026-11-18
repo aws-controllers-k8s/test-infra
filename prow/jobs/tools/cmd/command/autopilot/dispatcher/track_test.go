@@ -340,3 +340,25 @@ func TestTrackHeadMoveTurnsAReadyPRBackToDraft(t *testing.T) {
 	trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l))
 	assert.Empty(t, gh.drafted)
 }
+
+// TestTrackBotPushRegatesWithoutPinning (Plan 9 review F7): only human
+// commits or team reviews pin a PR; the bot's own push re-gates it as is.
+func TestTrackBotPushRegatesWithoutPinning(t *testing.T) {
+	w := inReview(item(fieldKey, "config-only", ledger.Queued), "ack-agent")
+	gh := newFakeGH()
+	p := readyPR("ack-agent")
+	p.HeadSHA = head2
+	gh.prs[7] = p
+	gh.commits[7] = []PRCommit{
+		{SHA: head1, Author: "ack-agent", Date: "2026-11-12T07:30:00Z"},
+		{SHA: head2, Author: "ack-bot", Date: "2026-11-12T08:40:00Z"},
+	}
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	items := ledgerOf(w)
+	trackPRs(context.Background(), items, trackEnv(gh, l))
+	assert.Equal(t, ledger.Gating, w.State)
+	require.Len(t, l.launched, 1)
+	assert.False(t, w.Review.PinnedHumanMerge)
+	assert.Equal(t, ledger.WouldMergeYes, w.Review.WouldMerge)
+	assertLints(t, items)
+}

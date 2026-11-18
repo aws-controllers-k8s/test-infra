@@ -96,7 +96,9 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		if err != nil {
 			return err
 		}
-		pin(r)
+		// Pinning comes only from countHumans (human commits, team
+		// reviews), not from the head move itself: the bot's own push
+		// does not pin the PR (Plan 9 review F7).
 		derr := unready(ctx, w, pr, e)
 		if active {
 			toFeedback(w, e.ts, "FEEDBACK_RUNNING")
