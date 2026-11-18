@@ -11,9 +11,11 @@ Environment variables:
   WORKFLOW_NAME:       Selected workflow name (add-resource, add-field or
                        address-feedback).
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
+                       Replaced by the token's own account (logged if it differs).
   GITHUB_TOKEN:        Personal Access Token for '$GITHUB_ACTOR'
   GITHUB_ORG:          Name of the GitHub organization.
-  GITHUB_EMAIL_PREFIX  Email prefix to use for GitHub commits.
+  GITHUB_EMAIL_PREFIX  Email prefix to use for GitHub commits. Replaced by the
+                       token account's user id (logged if it differs).
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
 
@@ -256,6 +258,17 @@ PR_SOURCE_BRANCH="$LOCAL_GIT_BRANCH"
 echo "$SCRIPT_NAME][INFO] Running $WORKFLOW_LABEL workflow for service: $SERVICE, resource: $RESOURCE${FIELD:+, field: $FIELD}"
 echo "$SCRIPT_NAME][INFO] Target repository: $GITHUB_ORG/$SERVICE-controller"
 
+# The fork, push, PR head and commit identity are the token's account
+# (utils/scripts/github-identity.sh), whatever GITHUB_ACTOR says.
+# shellcheck source=utils/scripts/github-identity.sh
+. "$WORKFLOW_DIR/utils/scripts/github-identity.sh"
+if ! resolve_github_identity; then
+  echo "$SCRIPT_NAME][ERROR] could not read the GitHub account of GITHUB_TOKEN" >&2
+  set_result failed IDENTITY_LOOKUP_FAILED
+  exit 1
+fi
+echo "$SCRIPT_NAME][INFO] GitHub account: $GITHUB_ACTOR"
+
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
 if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
     USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${USER_EMAIL}"
@@ -312,7 +325,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   fi
   # The job pushes to the PR's head branch, so the head repository must be
   # the PR author's fork and this job's token must belong to that author.
-  TOKEN_USER=$(gh api user --jq .login)
+  TOKEN_USER="$GITHUB_ACTOR"
   if [ "${HEAD_OWNER,,}" != "${PR_AUTHOR,,}" ] || [ "${TOKEN_USER,,}" != "${PR_AUTHOR,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository owner ($HEAD_OWNER), PR author ($PR_AUTHOR) and token user ($TOKEN_USER) must match" >&2
     set_result needs_human IDENTITY_MISMATCH "$PR_URL"

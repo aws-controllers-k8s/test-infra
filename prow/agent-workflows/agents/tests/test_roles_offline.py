@@ -1814,6 +1814,57 @@ def test_dispatched_runs_open_drafts():
     check("no other gh pr ready", script.count("gh pr ready"), 1)
 
 
+def _run_identity(gh_body, actor="", prefix=""):
+    """Sources utils/scripts/github-identity.sh with a fake gh on PATH and
+    prints the resolved identity."""
+    helper = _PKG_ROOT / "utils" / "scripts" / "github-identity.sh"
+    with tempfile.TemporaryDirectory() as d:
+        gh = Path(d) / "gh"
+        gh.write_text("#!/bin/sh\n" + gh_body + "\n")
+        gh.chmod(0o755)
+        env = {"PATH": f"{d}:{os.environ['PATH']}", "HOME": d,
+               "GITHUB_ACTOR": actor, "GITHUB_EMAIL_PREFIX": prefix}
+        script = (f'. "{helper}"; resolve_github_identity || exit 3; '
+                  'printf "%s %s" "$GITHUB_ACTOR" "$GITHUB_EMAIL_PREFIX"')
+        p = subprocess.run(["bash", "-c", script], env=env,
+                           capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+
+def test_github_identity_from_token():
+    """The fork, push, PR head and commit identity are the token's account,
+    not a configured GITHUB_ACTOR (staging's token is ack-test-agent while
+    agent-workflows.yaml says ack-agent: gh repo sync then got a 404)."""
+    print("github identity:")
+    # gh is called as: gh api user --jq <expr>; answer "<login> <id>".
+    staging = 'echo "ack-test-agent 219906516"'
+    code, out, err = _run_identity(staging, actor="ack-agent", prefix="327606448")
+    check("token's login and id win over the config", (code, out),
+          (0, "ack-test-agent 219906516"))
+    check("a config that names another account is logged",
+          "ack-agent" in err and "ack-test-agent" in err, True)
+    code, out, err = _run_identity(staging, actor="ACK-Test-Agent", prefix="219906516")
+    check("same account (any case): no warning", (code, out, err),
+          (0, "ack-test-agent 219906516", ""))
+    check("nothing configured", _run_identity(staging)[:2],
+          (0, "ack-test-agent 219906516"))
+    check("gh fails", _run_identity("exit 1", actor="ack-agent")[0], 3)
+    for bad in ('echo "x;y 1"', 'echo "ack-agent 12a"', 'echo "ack-agent"',
+                'echo ""', 'echo "-bad 1"'):
+        check(f"bad answer refused: {bad}", _run_identity(bad, actor="ack-agent")[0], 3)
+
+    script = (_PKG_ROOT / "prow-job.sh").read_text()
+    check("prow-job.sh sources the helper",
+          '"$WORKFLOW_DIR/utils/scripts/github-identity.sh"' in script, True)
+    resolve = script.find("if ! resolve_github_identity; then")
+    check("resolves before the commit identity is configured",
+          0 < resolve < script.find('USER_EMAIL="${GITHUB_ACTOR}@'), True)
+    check("fails closed with IDENTITY_LOOKUP_FAILED",
+          "set_result failed IDENTITY_LOOKUP_FAILED" in script[resolve:resolve + 400], True)
+    check("address-feedback reuses the resolved login",
+          "TOKEN_USER=$(gh api user" in script, False)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1848,7 +1899,8 @@ def main():
                test_triage_workflow_manifest,
                test_sdk_bump_result_fixture,
                test_detector_work,
-               test_dispatched_runs_open_drafts):
+               test_dispatched_runs_open_drafts,
+               test_github_identity_from_token):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 
