@@ -209,3 +209,89 @@ func TestAdmissionPolicyDodEnvIsBuilds(t *testing.T) {
 	assert.Contains(t, s, "has(variables.pod.automountServiceAccountToken) && variables.pod.automountServiceAccountToken == false")
 	assert.Contains(t, s, `e.value.matches('^[a-z0-9][a-z0-9-]{0,62}$')`)
 }
+
+// dodRule is the admission policy's autopilot-dod CREATE rule.
+func dodRule(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(deployDir, "admission-policy.yaml"))
+	require.NoError(t, err)
+	m := regexp.MustCompile(`(?s)request\.operation != 'CREATE' \|\| !variables\.dod \|\|(.*?)\n    message:`).FindStringSubmatch(string(b))
+	require.NotNil(t, m, "the policy has a dod rule")
+	return m[1]
+}
+
+// TestAdmissionPolicyDodVolumeIsTheSigningKey (Plan 9 review): the dod job's
+// only volume is its verdict signing key exactly as Build makes it (secret
+// autopilot-dod-signing-key, mode 0400, no items, owner or other source),
+// mounted read-only once at /etc/autopilot-dod-signing; and the general
+// volume rule allows that secret for autopilot-dod only.
+func TestAdmissionPolicyDodVolumeIsTheSigningKey(t *testing.T) {
+	rule := dodRule(t)
+	pj, err := testCatalog(t).Build(testConfig, goldenDod)
+	require.NoError(t, err)
+	require.Len(t, pj.Spec.PodSpec.Volumes, 1)
+	v := pj.Spec.PodSpec.Volumes[0]
+	vm := pj.Spec.PodSpec.Containers[0].VolumeMounts
+	require.Len(t, vm, 1)
+	for _, want := range []string{
+		"size(variables.pod.volumes) == 1", "size(variables.container.volumeMounts) == 1",
+		"variables.pod.volumes[0].name == '" + v.Name + "'",
+		"variables.pod.volumes[0].secret.secretName == '" + v.Secret.SecretName + "'",
+		"variables.pod.volumes[0].secret.defaultMode == 256",
+		"!has(variables.pod.volumes[0].secret.items)", "!has(variables.pod.volumes[0].secret.defaultUser)",
+		"variables.container.volumeMounts[0].name == '" + vm[0].Name + "'",
+		"variables.container.volumeMounts[0].mountPath == '" + vm[0].MountPath + "'",
+		"variables.container.volumeMounts[0].readOnly == true",
+		"!has(variables.container.volumeMounts[0].subPath)",
+	} {
+		assert.Contains(t, rule, want)
+	}
+	assert.Equal(t, int32(256), *v.Secret.DefaultMode)
+	assert.Contains(t, rule, "'autopilot-dod-signing-key'")
+	assert.NotContains(t, rule, "!has(variables.pod.volumes) && !has(variables.container.volumeMounts)")
+	assert.Contains(t, rule, "!has(variables.container.env) || variables.container.env.all(e, !has(e.valueFrom))", "still no env valueFrom")
+
+	// No other volume source: every source the ProwJob CRD knows but secret.
+	root := filepath.Join(deployDir, "..", "..", "..")
+	b, err := os.ReadFile(filepath.Join(root, "flux", "prow", "crds", "prowjob_customresourcedefinition.yaml"))
+	require.NoError(t, err)
+	var crd struct {
+		Spec struct {
+			Versions []struct {
+				Schema struct {
+					OpenAPIV3Schema struct {
+						Properties struct {
+							Spec struct {
+								Properties struct {
+									PodSpec struct {
+										Properties struct {
+											Volumes struct {
+												Items struct {
+													Properties map[string]any `yaml:"properties"`
+												} `yaml:"items"`
+											} `yaml:"volumes"`
+										} `yaml:"properties"`
+									} `yaml:"pod_spec"`
+								} `yaml:"properties"`
+							} `yaml:"spec"`
+						} `yaml:"properties"`
+					} `yaml:"openAPIV3Schema"`
+				} `yaml:"schema"`
+			} `yaml:"versions"`
+		} `yaml:"spec"`
+	}
+	require.NoError(t, yaml.Unmarshal(b, &crd))
+	require.NotEmpty(t, crd.Spec.Versions)
+	sources := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties.Spec.Properties.PodSpec.Properties.Volumes.Items.Properties
+	require.Contains(t, sources, "hostPath")
+	for src := range sources {
+		if src == "name" || src == "secret" {
+			continue
+		}
+		assert.Contains(t, rule, "!has(variables.pod.volumes[0]."+src+")", "the dod volume has no %s source", src)
+	}
+
+	pol, err := os.ReadFile(filepath.Join(deployDir, "admission-policy.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(pol), "(variables.dod && v.name == 'autopilot-dod-signing' && has(v.secret) &&\n         v.secret.secretName == 'autopilot-dod-signing-key')")
+}

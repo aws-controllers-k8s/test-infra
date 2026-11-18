@@ -5,7 +5,8 @@
 # applies only to that ServiceAccount's requests and allows:
 #   CREATE: the five allowlisted jobs (prowlaunch.Allowed), each with exactly
 #           the pod prowlaunch.Build makes for it (Plan 9 adds
-#           agent-workflow-add-resource and autopilot-dod);
+#           agent-workflow-add-resource and autopilot-dod; the Plan 9 review
+#           gives autopilot-dod one volume, its verdict signing key);
 #   UPDATE: an abort of a job it made (status.state=aborted), nothing else.
 # Apply (a human, after SECURITY-REVIEW.md) with the three values resolved:
 #   envsubst '${PROW_IMAGES_REPO_URI} ${TEST_INFRA_ORG} ${PROW_LOGS_BUCKET}' \
@@ -112,7 +113,35 @@ spec:
        variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:prow-auto-generate-controllers-') &&
        variables.container.command == ['/bin/bash', '-c', './scripts/autopilot-dod.sh'] &&
        !has(variables.container.args) && !has(variables.container.securityContext) &&
-       !has(variables.pod.volumes) && !has(variables.container.volumeMounts) &&
+       has(variables.pod.volumes) && size(variables.pod.volumes) == 1 &&
+       variables.pod.volumes[0].name == 'autopilot-dod-signing' &&
+       has(variables.pod.volumes[0].secret) &&
+       variables.pod.volumes[0].secret.secretName == 'autopilot-dod-signing-key' &&
+       has(variables.pod.volumes[0].secret.defaultMode) && variables.pod.volumes[0].secret.defaultMode == 256 &&
+       !has(variables.pod.volumes[0].secret.items) && !has(variables.pod.volumes[0].secret.defaultUser) &&
+       !has(variables.pod.volumes[0].secret.optional) &&
+       !has(variables.pod.volumes[0].awsElasticBlockStore) &&
+       !has(variables.pod.volumes[0].azureDisk) && !has(variables.pod.volumes[0].azureFile) &&
+       !has(variables.pod.volumes[0].cephfs) && !has(variables.pod.volumes[0].cinder) &&
+       !has(variables.pod.volumes[0].configMap) && !has(variables.pod.volumes[0].csi) &&
+       !has(variables.pod.volumes[0].downwardAPI) && !has(variables.pod.volumes[0].emptyDir) &&
+       !has(variables.pod.volumes[0].ephemeral) && !has(variables.pod.volumes[0].fc) &&
+       !has(variables.pod.volumes[0].flexVolume) && !has(variables.pod.volumes[0].flocker) &&
+       !has(variables.pod.volumes[0].gcePersistentDisk) && !has(variables.pod.volumes[0].gitRepo) &&
+       !has(variables.pod.volumes[0].glusterfs) && !has(variables.pod.volumes[0].hostPath) &&
+       !has(variables.pod.volumes[0].image) && !has(variables.pod.volumes[0].iscsi) &&
+       !has(variables.pod.volumes[0].nfs) && !has(variables.pod.volumes[0].persistentVolumeClaim) &&
+       !has(variables.pod.volumes[0].photonPersistentDisk) &&
+       !has(variables.pod.volumes[0].portworxVolume) && !has(variables.pod.volumes[0].projected) &&
+       !has(variables.pod.volumes[0].quobyte) && !has(variables.pod.volumes[0].rbd) &&
+       !has(variables.pod.volumes[0].scaleIO) && !has(variables.pod.volumes[0].storageos) &&
+       !has(variables.pod.volumes[0].vsphereVolume) &&
+       has(variables.container.volumeMounts) && size(variables.container.volumeMounts) == 1 &&
+       variables.container.volumeMounts[0].name == 'autopilot-dod-signing' &&
+       variables.container.volumeMounts[0].mountPath == '/etc/autopilot-dod-signing' &&
+       has(variables.container.volumeMounts[0].readOnly) && variables.container.volumeMounts[0].readOnly == true &&
+       !has(variables.container.volumeMounts[0].subPath) && !has(variables.container.volumeMounts[0].subPathExpr) &&
+       !has(variables.container.volumeMounts[0].mountPropagation) &&
        (!has(variables.container.env) || variables.container.env.all(e, !has(e.valueFrom))) &&
        has(variables.pod.automountServiceAccountToken) && variables.pod.automountServiceAccountToken == false &&
        has(variables.container.env) &&
@@ -121,7 +150,7 @@ spec:
        variables.container.env.all(e, e.name != 'SERVICE' ||
          (has(e.value) && e.value.matches('^[a-z0-9][a-z0-9-]{0,62}$'))) &&
        object.metadata.name.matches('-g[0-9]{1,4}-d[1-9][0-9]{0,2}$'))
-    message: "autopilot-dod runs scripts/autopilot-dod.sh from the auto-generate-controllers image, unprivileged, as pre-submit-service-account with no ServiceAccount token, with no volume or secret, only the environment variables prowlaunch.Build sets and a service alias for SERVICE, named by a dod launch id"
+    message: "autopilot-dod runs scripts/autopilot-dod.sh from the auto-generate-controllers image, unprivileged, as pre-submit-service-account with no ServiceAccount token, with one volume (the secret autopilot-dod-signing-key, mode 0400, mounted read-only at /etc/autopilot-dod-signing) and no other secret, only the environment variables prowlaunch.Build sets and a service alias for SERVICE, named by a dod launch id"
   - expression: >-
       request.operation != 'CREATE' || variables.dod ||
       !object.metadata.name.matches('-d[0-9]+$')
@@ -165,9 +194,11 @@ spec:
          v.csi.volumeAttributes['secretProviderClass'] == (variables.sdkBump ? 'prow-secrets' : 'agent-secrets')) ||
         (variables.sdkBump && v.name == 'github-token-censor' && has(v.secret) &&
          v.secret.secretName == 'prowjob-github-pat-token') ||
+        (variables.dod && v.name == 'autopilot-dod-signing' && has(v.secret) &&
+         v.secret.secretName == 'autopilot-dod-signing-key') ||
         (variables.agentJob && has(v.emptyDir)) ||
         (variables.agentJob && has(v.hostPath) && v.hostPath.path in ['/lib/modules', '/sys/fs/cgroup']))
-    message: "volumes: the workflow's SecretProviderClass; for sdk-bump the PAT secret the sidecar censors; for add-field and add-resource the kind-in-Docker emptyDirs and host paths"
+    message: "volumes: the workflow's SecretProviderClass; for sdk-bump the PAT secret the sidecar censors; for autopilot-dod its verdict signing key; for add-field and add-resource the kind-in-Docker emptyDirs and host paths"
   - expression: >-
       request.operation != 'CREATE' || !has(object.spec.extra_refs) ||
       object.spec.extra_refs.all(r, r.org in ['aws-controllers-k8s', '${TEST_INFRA_ORG}'] &&

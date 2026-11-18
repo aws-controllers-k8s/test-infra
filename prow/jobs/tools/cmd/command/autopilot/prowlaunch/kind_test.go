@@ -171,7 +171,8 @@ func TestKindAdmitsOnlyTheTriageJobBuildMakes(t *testing.T) {
 }
 
 // TestKindAdmitsThePlan9Jobs: add-resource has add-field's shape, and the dod
-// job holds no secret, no volume and no other repo (Plan 9).
+// job holds no secret but its signing key (read-only, 0400; Plan 9 review),
+// no other volume and no other repo (Plan 9).
 func TestKindAdmitsThePlan9Jobs(t *testing.T) {
 	ctx := context.Background()
 	k := kindKube(t, Namespace)
@@ -205,6 +206,34 @@ func TestKindAdmitsThePlan9Jobs(t *testing.T) {
 				"driver": "secrets-store.csi.k8s.io", "volumeAttributes": map[string]any{"secretProviderClass": "agent-secrets"}}}}
 			container(m)["volumeMounts"] = []any{map[string]any{"name": "agent-secrets", "mountPath": "/mnt/secrets-store"}}
 		},
+		// Plan 9 review: the signing key exactly as Build mounts it.
+		"another secret name": func(m map[string]any) {
+			podSpec(m)["volumes"].([]any)[0].(map[string]any)["secret"].(map[string]any)["secretName"] = "agent-github-pat-token"
+		},
+		"a writable mount": func(m map[string]any) {
+			container(m)["volumeMounts"].([]any)[0].(map[string]any)["readOnly"] = false
+		},
+		"defaultMode 0444": func(m map[string]any) {
+			podSpec(m)["volumes"].([]any)[0].(map[string]any)["secret"].(map[string]any)["defaultMode"] = 0o444
+		},
+		"a key item with its own mode": func(m map[string]any) {
+			podSpec(m)["volumes"].([]any)[0].(map[string]any)["secret"].(map[string]any)["items"] = []any{
+				map[string]any{"key": "key", "path": "key", "mode": 0o444}}
+		},
+		"the key owned by the sandbox uid": func(m map[string]any) {
+			podSpec(m)["volumes"].([]any)[0].(map[string]any)["secret"].(map[string]any)["defaultUser"] = 65532
+		},
+		"a second volume": func(m map[string]any) {
+			podSpec(m)["volumes"] = append(podSpec(m)["volumes"].([]any), map[string]any{"name": "scratch", "emptyDir": map[string]any{}})
+		},
+		"the key mounted elsewhere": func(m map[string]any) {
+			container(m)["volumeMounts"].([]any)[0].(map[string]any)["mountPath"] = "/workspace/key"
+		},
+		"no signing key": func(m map[string]any) {
+			delete(podSpec(m), "volumes")
+			delete(container(m), "volumeMounts")
+		},
+		"an fsGroup": func(m map[string]any) { podSpec(m)["securityContext"] = map[string]any{"fsGroup": 65532} },
 		"privileged": func(m map[string]any) { container(m)["securityContext"] = map[string]any{"privileged": true} },
 		"another SA": func(m map[string]any) { podSpec(m)["serviceAccountName"] = "periodic-service-account" },
 		"other command": func(m map[string]any) {
