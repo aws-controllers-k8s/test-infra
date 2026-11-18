@@ -105,3 +105,23 @@ func TestGatingHoldsNoLLMOrLaneSlot(t *testing.T) {
 	require.Len(t, waits, 1)
 	assert.Equal(t, CapRepoBusy, waits[0].cap, "GATING still makes its repo busy")
 }
+
+// TestNewResourceOpenPRCapCountsEveryOpenPR (Plan 9 review F10): an item
+// whose PR is still open counts against the repo's new-resource PR cap in any
+// state (here ESCALATED), but a QUEUED item is not blocked by its own PR.
+func TestNewResourceOpenPRCapCountsEveryOpenPR(t *testing.T) {
+	p := withNewResource(testPolicy(t), true)
+	esc := newResource("Index", ledger.Escalated)
+	esc.History = []ledger.Transition{{TS: "2026-11-01T00:00:00Z", To: ledger.Escalated, By: actor}}
+	esc.Links.PR = "https://github.com/aws-controllers-k8s/s3-controller/pull/9"
+	q := newResource("Table", ledger.Queued)
+	_, waits := schedule(ledgerOf(esc, q), p, now)
+	require.Len(t, waits, 1)
+	assert.Equal(t, CapNewResourceOpenPR, waits[0].cap)
+
+	own := newResource("Table", ledger.Queued)
+	own.Links.PR = s3PR
+	picks, waits := schedule(ledgerOf(own), p, now)
+	assert.Empty(t, waits)
+	assert.Len(t, picks, 1, "its own PR does not block it")
+}
