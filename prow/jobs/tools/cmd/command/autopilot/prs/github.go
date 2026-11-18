@@ -18,7 +18,9 @@ package prs
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -147,6 +149,10 @@ func (r *Reader) TreeSHA(ctx context.Context, repo, commit string) (string, erro
 		return "", err
 	}
 	c, _, err := r.Client.Git.GetCommit(ctx, owner, name, commit)
+	if unknownCommit(err) {
+		// Plan 9 review F4: a tree mismatch, so the gate env-retries.
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
@@ -161,11 +167,25 @@ func (r *Reader) IsAncestor(ctx context.Context, repo, base, commit string) (boo
 		return false, err
 	}
 	c, _, err := r.Client.Repositories.CompareCommits(ctx, owner, name, base, commit, &github.ListOptions{PerPage: 1})
+	if unknownCommit(err) {
+		// Plan 9 review F4: an unknown base or commit is not an ancestor.
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
 	s := c.GetStatus()
 	return s == "ahead" || s == "identical", nil
+}
+
+// unknownCommit reports whether GitHub answered 404 or 422: it does not know
+// the commit (or the two commits share no history).
+func unknownCommit(err error) bool {
+	var ge *github.ErrorResponse
+	if !errors.As(err, &ge) || ge.Response == nil {
+		return false
+	}
+	return ge.Response.StatusCode == http.StatusNotFound || ge.Response.StatusCode == http.StatusUnprocessableEntity
 }
 
 func (r *Reader) OpenPRs(ctx context.Context, repo string) ([]dispatcher.PR, error) {

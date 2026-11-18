@@ -194,6 +194,21 @@ func TestGateNewResourceStaysDraft(t *testing.T) {
 	assert.Empty(t, gh.ready, "new-resource PRs stay draft for their API review")
 }
 
+// setSubject replaces the item's verdict with one naming base and tree, and
+// points the PR body's trailer at it.
+func setSubject(t *testing.T, w *ledger.WorkItem, gh *fakeGH, l gateLauncher, base, tree string) {
+	t.Helper()
+	v, err := dod.ParseVerdict(l.verdicts[w.Claim.LaunchID])
+	require.NoError(t, err)
+	v.Subject.BaseSHA, v.Subject.HeadTree = base, tree
+	b, err := dod.Marshal(v)
+	require.NoError(t, err)
+	l.verdicts[w.Claim.LaunchID] = b
+	p := gh.prs[7]
+	p.Body = "card\n\n" + dod.Trailer(b)
+	gh.prs[7] = p
+}
+
 func TestGateRejectsWhatItCannotTrust(t *testing.T) {
 	for name, tc := range map[string]struct {
 		edit  func(w *ledger.WorkItem, gh *fakeGH, l gateLauncher)
@@ -221,6 +236,15 @@ func TestGateRejectsWhatItCannotTrust(t *testing.T) {
 		"no verdict": {func(w *ledger.WorkItem, _ *fakeGH, l gateLauncher) {
 			delete(l.verdicts, w.Claim.LaunchID)
 		}, ledger.Gating, "GATE_NO_VERDICT"},
+		// Plan 9 review F4: a subject that is not 40 lowercase hex.
+		"base is not a SHA": {func(w *ledger.WorkItem, gh *fakeGH, l gateLauncher) {
+			setSubject(t, w, gh, l, "main", tree1)
+		}, ledger.Gating, "GATE_VERDICT_INVALID"},
+		"head tree is not lowercase hex": {func(w *ledger.WorkItem, gh *fakeGH, l gateLauncher) {
+			upper := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+			gh.trees[head1] = upper
+			setSubject(t, w, gh, l, base1, upper)
+		}, ledger.Gating, "GATE_VERDICT_INVALID"},
 		"verdict for another item": {func(w *ledger.WorkItem, gh *fakeGH, l gateLauncher) {
 			other := item(fieldKey, "SDK-bump", ledger.Queued)
 			v := verdictFor(t, other, dod.StatusPass, "")

@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -164,6 +165,10 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 	if head != pr.HeadSHA {
 		// The head moved while the dod job ran: gate the new head.
 		return launchGate(ctx, w, pr, e, "GATE_HEAD_MOVED")
+	}
+	if pv, perr := dod.ParseVerdict(data); perr == nil && (!fullSHA(pv.Subject.BaseSHA) || !fullSHA(pv.Subject.HeadTree)) {
+		// Plan 9 review F4: a subject that names no exact commit and tree.
+		return envRetry(ctx, w, pr, e, "GATE_VERDICT_INVALID")
 	}
 	v, err := dod.VerifyWith(ctx, repoCommits{e.gh, w.Repo}, head, data, want)
 	switch {
@@ -385,6 +390,11 @@ func nextDodID(w *ledger.WorkItem) (string, bool) {
 func laneWorkflow(w *ledger.WorkItem) string {
 	return lanes[w.ChangeClass].Workflow
 }
+
+// fullSHA reports whether s is 40 lowercase hex.
+func fullSHA(s string) bool { return shaRE.MatchString(s) }
+
+var shaRE = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // latest returns the later of two RFC 3339 UTC timestamps.
 func latest(a, b string) string {

@@ -127,6 +127,37 @@ func TestReaderTreeAndAncestry(t *testing.T) {
 	}
 }
 
+// TestReaderUnknownCommitsAreAnswers (Plan 9 review F4): a base or commit
+// GitHub does not know (404, 422) is "not an ancestor" and "no tree", so the
+// gate env-retries instead of stalling; other errors stay errors.
+func TestReaderUnknownCommitsAreAnswers(t *testing.T) {
+	code := http.StatusNotFound
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/git/commits/h", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+		fmt.Fprint(w, `{"message":"No commit found"}`)
+	})
+	mux.HandleFunc("/repos/o/r/compare/b...h", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(code)
+		fmt.Fprint(w, `{"message":"No common ancestor"}`)
+	})
+	r := &Reader{Client: client(t, mux)}
+	for _, c := range []int{http.StatusNotFound, http.StatusUnprocessableEntity} {
+		code = c
+		tree, err := r.TreeSHA(context.Background(), "o/r", "h")
+		require.NoError(t, err, c)
+		assert.Empty(t, tree, c)
+		ok, err := r.IsAncestor(context.Background(), "o/r", "b", "h")
+		require.NoError(t, err, c)
+		assert.False(t, ok, c)
+	}
+	code = http.StatusBadGateway
+	_, err := r.TreeSHA(context.Background(), "o/r", "h")
+	assert.Error(t, err)
+	_, err = r.IsAncestor(context.Background(), "o/r", "b", "h")
+	assert.Error(t, err)
+}
+
 func TestReaderRejectsABadRepo(t *testing.T) {
 	_, err := (&Reader{Client: github.NewClient(nil)}).PR(context.Background(), "nope", 1)
 	assert.ErrorContains(t, err, "not <owner>/<name>")
