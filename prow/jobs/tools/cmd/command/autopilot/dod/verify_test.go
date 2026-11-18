@@ -65,3 +65,42 @@ func TestVerify(t *testing.T) {
 	_, err = Verify(ctx, r.Dir, head, data, "sha256:00")
 	assert.True(t, errors.Is(err, ErrDigestMismatch), "%v", err)
 }
+
+// fakeCommits answers Commits from maps.
+type fakeCommits struct {
+	trees     map[string]string
+	ancestors map[[2]string]bool
+	err       error
+}
+
+func (f fakeCommits) TreeSHA(_ context.Context, c string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.trees[c], nil
+}
+
+func (f fakeCommits) IsAncestor(_ context.Context, base, c string) (bool, error) {
+	return f.ancestors[[2]string{base, c}], nil
+}
+
+func TestVerifyWith(t *testing.T) {
+	v := &Verdict{Schema: Schema, Verdict: StatusPass, Subject: Subject{BaseSHA: "base", HeadTree: "tree1"}}
+	data, err := Marshal(v)
+	require.NoError(t, err)
+	want := Digest(data)
+	good := fakeCommits{trees: map[string]string{"head": "tree1"}, ancestors: map[[2]string]bool{{"base", "head"}: true}}
+
+	got, err := VerifyWith(context.Background(), good, "head", data, want)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPass, got.Verdict)
+
+	_, err = VerifyWith(context.Background(), good, "head", data, "sha256:other")
+	assert.ErrorIs(t, err, ErrDigestMismatch)
+	_, err = VerifyWith(context.Background(), fakeCommits{trees: map[string]string{"head": "tree2"}}, "head", data, want)
+	assert.ErrorIs(t, err, ErrTreeMismatch)
+	_, err = VerifyWith(context.Background(), fakeCommits{trees: map[string]string{"head": "tree1"}}, "head", data, want)
+	assert.ErrorIs(t, err, ErrBaseNotAncestor)
+	_, err = VerifyWith(context.Background(), fakeCommits{err: errors.New("API down")}, "head", data, want)
+	assert.ErrorContains(t, err, "API down")
+}
