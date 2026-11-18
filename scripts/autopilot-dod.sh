@@ -94,7 +94,8 @@ if [ -n "${AUTOPILOT_DOD_HEAD_SHA:-}" ]; then
   [[ "${AUTOPILOT_DOD_BASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || die "AUTOPILOT_DOD_BASE_SHA must be a full commit SHA"
   [[ "${AUTOPILOT_DOD_PR_AUTHOR:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || die "AUTOPILOT_DOD_PR_AUTHOR must be a GitHub login"
   [[ "$ORG" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || die "TEST_INFRA_ORG must be a GitHub org"
-  git -C "$TARGET_DIR" fetch --quiet --no-tags origin "pull/${AUTOPILOT_DOD_PR}/head" || die "could not fetch pull/${AUTOPILOT_DOD_PR}/head"
+  # clonerefs adds no remote to its checkouts: fetch from the repository URL.
+  git -C "$TARGET_DIR" fetch --quiet --no-tags "https://github.com/${ORG}/${SERVICE}-controller.git" "pull/${AUTOPILOT_DOD_PR}/head" || die "could not fetch pull/${AUTOPILOT_DOD_PR}/head"
   fetched="$(git -C "$TARGET_DIR" rev-parse FETCH_HEAD)"
   [ "$fetched" = "$AUTOPILOT_DOD_HEAD_SHA" ] || die "pull/${AUTOPILOT_DOD_PR}/head is $fetched, not $AUTOPILOT_DOD_HEAD_SHA: the head moved"
   git -C "$TARGET_DIR" cat-file -e "${AUTOPILOT_DOD_BASE_SHA}^{commit}" || die "base $AUTOPILOT_DOD_BASE_SHA is not in the controller checkout"

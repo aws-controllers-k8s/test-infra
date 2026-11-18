@@ -70,7 +70,11 @@ func TestDodBuildSandboxScript(t *testing.T) {
 		"${AUTOPILOT_DOD_SIGNING_KEY:-/etc/autopilot-dod-signing/key}",
 		`--sign-key "$SIGN_KEY"`, `--signature-out "$OUT_DIR/verdict.sig"`,
 		"verdict.json gate-verdict.txt verdict.sig",
+		// Staging e2e: clonerefs checkouts have no "origin" remote, so the
+		// PR head is fetched from the repository URL.
+		`fetch --quiet --no-tags "https://github.com/${ORG}/${SERVICE}-controller.git" "pull/${AUTOPILOT_DOD_PR}/head"`,
 	} {
 		assert.True(t, strings.Contains(string(d), want), "autopilot-dod.sh has %q", want)
 	}
+	assert.False(t, strings.Contains(string(d), `origin "pull/`), "no fetch from origin: clonerefs adds no remote")
 }
