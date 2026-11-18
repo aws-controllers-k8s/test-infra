@@ -28,6 +28,10 @@
 # AUTOPILOT_LAUNCHER_ENABLED=true (the periodic sets "false"), and creates
 # ProwJobs as the pod's ServiceAccount. A dry run never starts or aborts one.
 #
+# The tick reads the PRs its items link to (Plan 9) with GITHUB_TOKEN. It marks a
+# gated draft ready only with AUTOPILOT_PR_WRITE=true (the periodic sets "false")
+# and AUTOPILOT_PR_GITHUB_TOKEN; a dry run never does.
+#
 # POSIX sh only: the job image (golang alpine) has no bash.
 #
 # post-status runs after the push. If it fails, the job exits non-zero, but the

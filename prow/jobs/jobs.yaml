@@ -178,6 +178,12 @@ periodics:
           # applied, and serviceAccountName above set to autopilot-dispatcher.
           - name: AUTOPILOT_LAUNCHER_ENABLED
             value: "false"
+          # "true" lets the Dispatcher mark a gated draft PR ready for review
+          # (ACK Autopilot Plan 9), with AUTOPILOT_PR_GITHUB_TOKEN (a
+          # controller-repo token, mounted the same way as GITHUB_TOKEN). Off:
+          # gated drafts stay draft and a person marks them ready.
+          - name: AUTOPILOT_PR_WRITE
+            value: "false"
           # The prow launcher resolves agent-workflows.yaml's image repository
           # with it, as the agent-workflow-config chart does for agent-plugin.
           - name: PROW_IMAGES_REPO_URI
