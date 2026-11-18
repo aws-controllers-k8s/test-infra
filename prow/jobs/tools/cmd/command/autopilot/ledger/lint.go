@@ -108,6 +108,9 @@ func Lint(root string) []error {
 		for _, m := range lintTriage(w) {
 			fail("%s", m)
 		}
+		for _, m := range lintReview(w) {
+			fail("%s", m)
+		}
 		if other, dup := seen[w.Key]; dup {
 			fail("duplicate key %q (also in %s)", w.Key, other)
 		}

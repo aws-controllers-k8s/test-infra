@@ -30,10 +30,13 @@ const Schema = "ack.autopilot.workitem/v1"
 type State string
 
 const (
-	Detected    State = "DETECTED"
-	Triaged     State = "TRIAGED"
-	Queued      State = "QUEUED"
-	Blocked     State = "BLOCKED"
+	Detected State = "DETECTED"
+	Triaged  State = "TRIAGED"
+	Queued   State = "QUEUED"
+	Blocked  State = "BLOCKED"
+	// PlanPending is no longer entered (no plan gate since 2026-11-17); it
+	// stays so ledgers that hold it still load, and route moves such an item
+	// on to TRIAGED.
 	PlanPending State = "PLAN_PENDING"
 	Running     State = "RUNNING"
 	Gating      State = "GATING"
@@ -208,7 +211,11 @@ type WorkItem struct {
 	Claim        *Claim    `json:"claim,omitempty"`
 	Verdict      *Verdict  `json:"verdict"`
 	// Triage is the triage workflow's record (Plan 8); needs-config items only.
-	Triage  *Triage      `json:"triage,omitempty"`
+	Triage *Triage `json:"triage,omitempty"`
+	// Gate is the last GATING pass and Review the PR's human outcome
+	// (Plan 9). Only items with a PR have them.
+	Gate    *Gate        `json:"gate,omitempty"`
+	Review  *Review      `json:"review,omitempty"`
 	History []Transition `json:"history"`
 }
 
