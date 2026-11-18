@@ -31,6 +31,18 @@
 #   AUTOPILOT_DOD_PR_BODY_FILE the PR description to scan for leaks (default:
 #                              fetched anonymously from the GitHub API)
 #
+# Dispatched mode (ACK Autopilot Plan 9): the Dispatcher's autopilot-dod job is
+# a periodic with the controller at main as an extra ref, so Prow sets no
+# PULL_* variables. It passes the PR instead, all read from the GitHub API:
+#   AUTOPILOT_DOD_PR           PR number
+#   AUTOPILOT_DOD_HEAD_SHA     the PR head to gate (40 hex)
+#   AUTOPILOT_DOD_BASE_SHA     the PR's base commit (40 hex)
+#   AUTOPILOT_DOD_PR_AUTHOR    the PR author's login
+#   TEST_INFRA_ORG             the org of the controller repo (default
+#                              aws-controllers-k8s)
+# The script fetches pull/<pr>/head and gives no verdict (exit 2) unless it is
+# AUTOPILOT_DOD_HEAD_SHA: the head moved, and the Dispatcher gates the new one.
+#
 # dod needs no credentials, and this job mounts none.
 set -euo pipefail
 
@@ -42,23 +54,41 @@ RUNTIME_DIR="$WORKSPACE_DIR/runtime"
 # No verdict (exit 2) when an input is missing.
 die() { echo "autopilot-dod: $*" >&2; exit 2; }
 [ -n "${SERVICE:-}" ] || die "SERVICE must be set"
-[ -n "${PULL_BASE_SHA:-}" ] || die "PULL_BASE_SHA must be set"
+[ -n "${PULL_BASE_SHA:-}${AUTOPILOT_DOD_HEAD_SHA:-}" ] || die "PULL_BASE_SHA must be set"
 TARGET_DIR="$WORKSPACE_DIR/${SERVICE}-controller"
 ARTIFACTS="${ARTIFACTS:-/tmp/artifacts}"
 mkdir -p "$ARTIFACTS"
 
+ORG="${TEST_INFRA_ORG:-aws-controllers-k8s}"
+if [ -n "${AUTOPILOT_DOD_HEAD_SHA:-}" ]; then
+  [[ "${AUTOPILOT_DOD_PR:-}" =~ ^[1-9][0-9]{0,9}$ ]] || die "AUTOPILOT_DOD_PR must be a PR number"
+  [[ "$AUTOPILOT_DOD_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || die "AUTOPILOT_DOD_HEAD_SHA must be a full commit SHA"
+  [[ "${AUTOPILOT_DOD_BASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || die "AUTOPILOT_DOD_BASE_SHA must be a full commit SHA"
+  [[ "${AUTOPILOT_DOD_PR_AUTHOR:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || die "AUTOPILOT_DOD_PR_AUTHOR must be a GitHub login"
+  [[ "$ORG" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || die "TEST_INFRA_ORG must be a GitHub org"
+  git -C "$TARGET_DIR" fetch --quiet --no-tags origin "pull/${AUTOPILOT_DOD_PR}/head" || die "could not fetch pull/${AUTOPILOT_DOD_PR}/head"
+  fetched="$(git -C "$TARGET_DIR" rev-parse FETCH_HEAD)"
+  [ "$fetched" = "$AUTOPILOT_DOD_HEAD_SHA" ] || die "pull/${AUTOPILOT_DOD_PR}/head is $fetched, not $AUTOPILOT_DOD_HEAD_SHA: the head moved"
+  git -C "$TARGET_DIR" cat-file -e "${AUTOPILOT_DOD_BASE_SHA}^{commit}" || die "base $AUTOPILOT_DOD_BASE_SHA is not in the controller checkout"
+  PULL_PULL_SHA="$AUTOPILOT_DOD_HEAD_SHA"
+  PULL_BASE_SHA="$AUTOPILOT_DOD_BASE_SHA"
+  PR_AUTHOR="$AUTOPILOT_DOD_PR_AUTHOR"
+  PR_NUMBER="$AUTOPILOT_DOD_PR"
+fi
 [ -n "${PULL_PULL_SHA:-}" ] || die "PULL_PULL_SHA must be set"
 [ -n "${AUTOPILOT_DOD_CLASS:-}" ] || die "AUTOPILOT_DOD_CLASS must be set (from the ledger)"
 [ -n "${AUTOPILOT_DOD_WORK_ITEM:-}" ] || die "AUTOPILOT_DOD_WORK_ITEM must be set (from the ledger)"
-PR_AUTHOR="$(jq -r '.refs.pulls[0].author // empty' <<<"${JOB_SPEC:-}")" || die "JOB_SPEC is not JSON"
-[ -n "$PR_AUTHOR" ] || die "JOB_SPEC has no PR author"
-PR_NUMBER="$(jq -r '.refs.pulls[0].number // empty' <<<"${JOB_SPEC:-}")"
+if [ -z "${AUTOPILOT_DOD_HEAD_SHA:-}" ]; then
+  PR_AUTHOR="$(jq -r '.refs.pulls[0].author // empty' <<<"${JOB_SPEC:-}")" || die "JOB_SPEC is not JSON"
+  [ -n "$PR_AUTHOR" ] || die "JOB_SPEC has no PR author"
+  PR_NUMBER="$(jq -r '.refs.pulls[0].number // empty' <<<"${JOB_SPEC:-}")"
+fi
 
 PR_BODY="${AUTOPILOT_DOD_PR_BODY_FILE:-}"
 if [ -z "$PR_BODY" ]; then
   [ -n "$PR_NUMBER" ] || die "JOB_SPEC has no PR number"
   PR_BODY="$ARTIFACTS/pr-body.md"
-  curl -fsSL "https://api.github.com/repos/aws-controllers-k8s/${SERVICE}-controller/pulls/${PR_NUMBER}" \
+  curl -fsSL "https://api.github.com/repos/${ORG}/${SERVICE}-controller/pulls/${PR_NUMBER}" \
     | jq -r '.body // ""' > "$PR_BODY" || die "could not read the PR body"
 fi
 
@@ -66,7 +96,7 @@ fi
 make -C "$CODEGEN_DIR" build-ack-generate || die "could not build ack-generate"
 
 args=(autopilot dod
-  --repo-dir "$TARGET_DIR" --repo "aws-controllers-k8s/${SERVICE}-controller" --service "$SERVICE"
+  --repo-dir "$TARGET_DIR" --repo "${ORG}/${SERVICE}-controller" --service "$SERVICE"
   --base-ref "$PULL_BASE_SHA" --head-ref "$PULL_PULL_SHA" --change-class "$AUTOPILOT_DOD_CLASS"
   --work-item "$AUTOPILOT_DOD_WORK_ITEM"
   --pr-author "$PR_AUTHOR" --bot-login "${AUTOPILOT_DOD_BOT_LOGIN:-ack-bot}"
