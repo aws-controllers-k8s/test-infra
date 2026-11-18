@@ -86,12 +86,17 @@ func (f *fakeAPI) RoundTrip(r *http.Request) (*http.Response, error) {
 		f.jobs[n] = body
 		return reply(201, body), nil
 	case r.Method == http.MethodGet && name == "":
+		// Equality selectors, comma-separated, all of which must match.
 		sel := r.URL.Query().Get("labelSelector")
-		k, v, _ := strings.Cut(sel, "=")
 		var items []any
 		for _, j := range f.jobs {
 			labels, _ := j["metadata"].(map[string]any)["labels"].(map[string]any)
-			if labels[k] == v {
+			match := true
+			for _, term := range strings.Split(sel, ",") {
+				k, v, _ := strings.Cut(term, "=")
+				match = match && labels[k] == v
+			}
+			if match {
 				items = append(items, j)
 			}
 		}

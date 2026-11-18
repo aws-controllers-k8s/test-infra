@@ -33,7 +33,7 @@ func testCatalog(t *testing.T) *Catalog {
 	require.NoError(t, err)
 	image, err := LoadImage("testdata/images_config.yaml", SDKBumpImageKey, testVars)
 	require.NoError(t, err)
-	c, err := NewCatalog(aw, SDKBump(image, testVars.TestInfraOrg))
+	c, err := NewCatalog(aw, SDKBump(image, testVars.TestInfraOrg), DOD(image, testVars.TestInfraOrg))
 	require.NoError(t, err)
 	return c
 }
@@ -63,7 +63,7 @@ func TestVarsAreResolvedAndChecked(t *testing.T) {
 	_, err = LoadAgentWorkflows(path, testVars)
 	assert.ErrorContains(t, err, "privileged", "an unknown key that could shape the pod fails")
 
-	_, err = NewCatalog(map[string]Workflow{}, SDKBump("r:t", "o"))
+	_, err = NewCatalog(map[string]Workflow{}, SDKBump("r:t", "o"), DOD("r:t", "o"))
 	assert.ErrorContains(t, err, "no add-field")
 }
 

@@ -43,9 +43,15 @@ type Launcher struct {
 }
 
 var (
-	_ dispatcher.Launcher  = (*Launcher)(nil)
-	_ dispatcher.Inventory = (*Launcher)(nil)
+	_ dispatcher.Launcher      = (*Launcher)(nil)
+	_ dispatcher.Inventory     = (*Launcher)(nil)
+	_ dispatcher.VerdictReader = (*Launcher)(nil)
+	_ dispatcher.FeedbackJobs  = (*Launcher)(nil)
 )
+
+// verdictWorkflows are the workflows that leave a verdict.json the
+// Dispatcher reads (Plan 9): sdk-bump's in-process gate and the dod job.
+var verdictWorkflows = map[string]bool{"sdk-bump": true, "dod": true}
 
 // New is the launcher for cat's workflows.
 func New(cat *Catalog, cfg Config, jobs jobAPI, art Artifacts) (*Launcher, error) {
@@ -110,7 +116,12 @@ func (l *Launcher) Status(ctx context.Context, id string) (dispatcher.Status, er
 		return dispatcher.Status{Phase: dispatcher.PhaseUnknown}, nil
 	}
 	st := dispatcher.Status{Phase: dispatcher.PhaseFinished, Job: job}
-	key, ok := resultKey(pj)
+	if pj.Metadata.Labels[LabelWorkflow] == "dod" {
+		// A dod job writes a verdict, not an agent-result.json; gate reads
+		// it with Verdict.
+		return st, nil
+	}
+	key, ok := resultKey(pj, "agent-result.json")
 	if !ok {
 		st.Problem = "RESULT_UNLOCATABLE"
 		return st, nil
@@ -179,6 +190,61 @@ func (l *Launcher) Abort(ctx context.Context, id string) error {
 	return fmt.Errorf("abort %s: the job kept changing", id)
 }
 
+// Verdict reads the verdict.json of a finished sdk-bump or dod job the
+// Dispatcher made. A missing, unreadable or too large file is
+// dispatcher.ErrNoVerdict (an environment failure for gate).
+func (l *Launcher) Verdict(ctx context.Context, id string) ([]byte, error) {
+	pj, err := l.jobs.Get(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, dispatcher.ErrNoVerdict
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !managed(pj) || !verdictWorkflows[pj.Metadata.Labels[LabelWorkflow]] {
+		return nil, fmt.Errorf("ProwJob %s is not a Dispatcher sdk-bump or dod job", id)
+	}
+	if s := pj.Status.State; s != "success" && s != "failure" {
+		return nil, dispatcher.ErrNoVerdict
+	}
+	key, ok := resultKey(pj, "verdict.json")
+	if !ok {
+		return nil, dispatcher.ErrNoVerdict
+	}
+	data, err := l.art.Get(ctx, key, dispatcher.MaxVerdictBytes)
+	switch {
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrTooLarge):
+		return nil, dispatcher.ErrNoVerdict
+	case err != nil:
+		return nil, err
+	}
+	return data, nil
+}
+
+// FeedbackActive reports whether an agent-plugin address-feedback job for the
+// PR is not finished (design 5.5): its labels are agent-plugin's
+// (pkg/prowjob generator.go).
+func (l *Launcher) FeedbackActive(ctx context.Context, repo string, number int) (bool, error) {
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || !orgRE.MatchString(owner) || !repoNameRE.MatchString(name) || number < 1 {
+		return false, fmt.Errorf("repo %q PR %d is not a PR", repo, number)
+	}
+	sel := fmt.Sprintf("%s=address-feedback,prow.k8s.io/refs.org=%s,prow.k8s.io/refs.repo=%s,workflow-agent/issue-number=%d",
+		LabelWorkflow, owner, name, number)
+	jobs, err := l.jobs.List(ctx, sel)
+	if err != nil {
+		return false, err
+	}
+	for i := range jobs {
+		if !terminal(jobs[i].Status.State) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+var repoNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
+
 // Active lists the Dispatcher's jobs that have not finished.
 func (l *Launcher) Active(ctx context.Context) ([]dispatcher.ActiveJob, error) {
 	jobs, err := l.jobs.List(ctx, LabelManagedBy+"="+ManagedBy)
@@ -221,10 +287,10 @@ var buildIDRE = regexp.MustCompile(`^[0-9]{1,20}$`)
 // resultKey is where Prow's sidecar uploads a periodic's artifacts
 // (path_strategy explicit): logs/<job>/<build id>/artifacts/. The job name
 // must be the one the workflow runs as.
-func resultKey(pj *ProwJob) (string, bool) {
+func resultKey(pj *ProwJob, file string) (string, bool) {
 	job := Allowed[pj.Metadata.Labels[LabelWorkflow]]
 	if job == "" || pj.Spec.Job != job || !buildIDRE.MatchString(pj.Status.BuildID) {
 		return "", false
 	}
-	return "logs/" + job + "/" + pj.Status.BuildID + "/artifacts/agent-result.json", true
+	return "logs/" + job + "/" + pj.Status.BuildID + "/artifacts/" + file, true
 }

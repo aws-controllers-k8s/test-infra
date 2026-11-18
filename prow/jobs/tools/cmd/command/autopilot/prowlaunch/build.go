@@ -62,7 +62,7 @@ var utilityImages = UtilityImages{
 // launchIDRE is a dispatcher launch id: a run (r<n>), an sdk-bump refresh
 // (f<8 hex>) or a triage run (t<n>, Plan 8) of one item generation. It is
 // the job's name.
-var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2})$`)
+var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2}|d[1-9][0-9]{0,2})$`)
 
 var (
 	bucketURLRE = regexp.MustCompile(`^s3://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
@@ -120,6 +120,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 	if strings.HasPrefix(run, "f") && (req.Workflow != "sdk-bump" || req.Args["mode"] != ModeRefresh) {
 		return nil, fmt.Errorf("launch id %q names a refresh, which only sdk-bump --mode refresh is", req.LaunchID)
 	}
+	if strings.HasPrefix(run, "d") != (req.Workflow == "dod") {
+		return nil, fmt.Errorf("launch id %q: a d<n> id names a dod gate job, and a dod job needs one", req.LaunchID)
+	}
 	if strings.HasPrefix(run, "t") != (req.Workflow == "triage") {
 		return nil, fmt.Errorf("launch id %q: a t<n> id names a triage run, and a triage run needs one", req.LaunchID)
 	}
@@ -163,6 +166,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		env = append(env, EnvVar{Name: name, ValueFrom: &EnvVarSource{SecretKeyRef: &SecretKeySelector{Name: ref.Name, Key: ref.Key}}})
 	}
 	refs, refEnv := extraRefs(w.ExtraRefs)
+	if w.pod.ControllerRef {
+		refs = append(refs, Refs{Org: cfg.Org, Repo: repo, BaseRef: "main", PathAlias: "github.com/aws-controllers-k8s/" + repo})
+	}
 	env = append(env, refEnv...)
 	var args []string
 	var pairs []string

@@ -43,6 +43,11 @@ var validators = map[string]*regexp.Regexp{
 	"sdk-to":        regexp.MustCompile(`^service/[a-z0-9]{1,63}/v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$`),
 	"detector-work": regexp.MustCompile(`^(create-only|not-generated|server-default)$`),
 	"mode":          regexp.MustCompile(`^(` + ModeBump + `|` + ModeRefresh + `)$`),
+	// The dod job's (Plan 9): from the GitHub API, never from PR text.
+	"pr":        regexp.MustCompile(`^[1-9][0-9]{0,9}$`),
+	"head-sha":  regexp.MustCompile(`^[0-9a-f]{40}$`),
+	"base-sha":  regexp.MustCompile(`^[0-9a-f]{40}$`),
+	"pr-author": regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?(\[bot\])?$`),
 }
 
 // workflowValidators override validators for one workflow's args. Triage
@@ -50,6 +55,8 @@ var validators = map[string]*regexp.Regexp{
 // and its finding class; add-field and sdk-bump keep the shapes above.
 // dispatcher.triageArgs holds items to the same shapes.
 var workflowValidators = map[string]map[string]*regexp.Regexp{
+	"add-resource": {"change-class": regexp.MustCompile(`^new-resource$`)},
+	"dod":          {"change-class": regexp.MustCompile(`^(SDK-bump|config-only|new-resource)$`)},
 	"triage": {
 		"change-class":  regexp.MustCompile(`^(config-only|hand-written-code)$`),
 		"detector-work": regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
@@ -66,6 +73,9 @@ var classesOf = map[string][]string{
 	"add-field": {"config-only"},
 	"sdk-bump":  {"SDK-bump"},
 	"triage":    {"config-only", "hand-written-code"},
+	// Plan 9.
+	"add-resource": {"new-resource"},
+	"dod":          {"SDK-bump", "config-only", "new-resource"},
 }
 
 func quoteOr(ss []string) string {

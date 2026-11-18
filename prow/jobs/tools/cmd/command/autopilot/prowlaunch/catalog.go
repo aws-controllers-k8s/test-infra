@@ -58,6 +58,11 @@ var Allowed = map[string]string{
 	// Plan 8: tool-less, holds no GitHub token, writes only its
 	// agent-result.json. agent-plugin's name for the workflow.
 	"triage": "agent-workflow-triage",
+	// Plan 9: the new-resource lane, agent-plugin's add-resource job.
+	"add-resource": "agent-workflow-add-resource",
+	// Plan 9: ack-dod on a PR head, defined in this package (DOD): no
+	// secrets, so the authoring pod cannot forge its verdict.
+	"dod": "autopilot-dod",
 }
 
 // Workflow is one workflow the Dispatcher may start. The yaml fields are the
@@ -116,6 +121,9 @@ type podShape struct {
 	// /etc/github-censor only so that Prow's sidecar censors its value in the
 	// logs (the sidecar censors secret volumes, not a CSI mount).
 	CensorSecret string
+	// ControllerRef adds <org>/<service>-controller at main as an extra ref
+	// (the dod job checks the PR out of it).
+	ControllerRef bool
 }
 
 // agentPod is agent-plugin's pod (pkg/prowjob CreateWorkflowProwJob).
@@ -274,19 +282,61 @@ func SDKBump(image, org string) Workflow {
 	}
 }
 
+// DOD is the Dispatcher's gate job (Plan 9): scripts/autopilot-dod.sh in
+// dispatched mode on one PR head, in the auto-generate-controllers image like
+// the <service>-autopilot-dod presubmit. It holds no secret and no AWS
+// identity, runs as the presubmits' ServiceAccount, and writes verdict.json
+// and gate-verdict.txt. The script fetches pull/<pr>/head into the
+// controller checkout and refuses any other head than head-sha.
+func DOD(image, org string) Workflow {
+	return Workflow{
+		Description:  "ACK Autopilot ack-dod gate (Plan 9), started by the Dispatcher",
+		Image:        image,
+		Command:      []string{"/bin/bash", "-c", "./scripts/autopilot-dod.sh"},
+		RequiredArgs: []string{"service", "pr", "head-sha", "base-sha", "pr-author", "work-item", "change-class"},
+		Timeout:      "2h",
+		// The org of the controller repo and of the verdict's subject.
+		Environment: map[string]string{"TEST_INFRA_ORG": org},
+		Resources:   &Resources{CPU: "4", Memory: "8Gi"},
+		ExtraRefs: []ExtraRef{
+			{Org: org, Repo: "code-generator", BaseRef: "main", PathAlias: "github.com/aws-controllers-k8s/code-generator"},
+			{Org: org, Repo: "runtime", BaseRef: "main", PathAlias: "github.com/aws-controllers-k8s/runtime"},
+			{Org: org, Repo: "test-infra", BaseRef: "main", PathAlias: "github.com/aws-controllers-k8s/test-infra", WorkDir: true},
+		},
+		pod: podShape{
+			Cluster: "default", ServiceAccount: "pre-submit-service-account",
+			ArgEnv: map[string]string{
+				"service": "SERVICE", "pr": "AUTOPILOT_DOD_PR", "head-sha": "AUTOPILOT_DOD_HEAD_SHA",
+				"base-sha": "AUTOPILOT_DOD_BASE_SHA", "pr-author": "AUTOPILOT_DOD_PR_AUTHOR",
+				"work-item": "AUTOPILOT_DOD_WORK_ITEM", "change-class": "AUTOPILOT_DOD_CLASS",
+			},
+			GracePeriod: 10 * time.Minute, DoNotDisrupt: true, ControllerRef: true,
+		},
+	}
+}
+
 // Catalog holds the allowlisted workflows, ready to build jobs from.
 type Catalog struct {
 	workflows map[string]Workflow
 }
 
-// NewCatalog takes add-field (required) and triage (optional) from
-// agentWorkflows and adds sdkBump. Every other workflow in agentWorkflows is ignored: it is not on the allowlist.
-func NewCatalog(agentWorkflows map[string]Workflow, sdkBump Workflow) (*Catalog, error) {
+// NewCatalog takes add-field (required), triage and add-resource (optional)
+// from agentWorkflows and adds sdkBump and dod. Every other workflow in
+// agentWorkflows is ignored: it is not on the allowlist.
+func NewCatalog(agentWorkflows map[string]Workflow, sdkBump, dod Workflow) (*Catalog, error) {
 	af, ok := agentWorkflows["add-field"]
 	if !ok {
 		return nil, errors.New("agent-workflows.yaml has no add-field workflow")
 	}
-	c := &Catalog{workflows: map[string]Workflow{"add-field": af, "sdk-bump": sdkBump}}
+	c := &Catalog{workflows: map[string]Workflow{"add-field": af, "sdk-bump": sdkBump, "dod": dod}}
+	// Plan 9: add-resource has add-field's shape (agent-plugin's pod, e2e,
+	// the agent token); the admission policy pins it to that shape.
+	if ar, ok := agentWorkflows["add-resource"]; ok {
+		c.workflows["add-resource"] = ar
+	}
+	if len(dod.EnvironmentFromSecrets) > 0 || dod.E2E {
+		return nil, errors.New("workflow dod must have no environmentFromSecrets or e2e")
+	}
 	// Plan 8: triage comes from agent-workflows.yaml like add-field, when the
 	// file has it. It must hold no secret, run no e2e and clone nothing:
 	// Build then mounts no secrets volume, and the admission policy denies
@@ -338,5 +388,5 @@ func FromCheckout(root string, v Vars) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewCatalog(aw, SDKBump(image, v.TestInfraOrg))
+	return NewCatalog(aw, SDKBump(image, v.TestInfraOrg), DOD(image, v.TestInfraOrg))
 }

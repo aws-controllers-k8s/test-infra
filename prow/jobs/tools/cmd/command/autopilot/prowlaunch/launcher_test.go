@@ -92,7 +92,7 @@ func TestLaunchIsIdempotentAndAdoptsOnlyItsOwnJob(t *testing.T) {
 	assert.ErrorContains(t, l.Launch(ctx, goldenAddField), "not made from this request")
 
 	bad := goldenAddField
-	bad.Workflow = "add-resource"
+	bad.Workflow = "fix-bug"
 	assert.ErrorContains(t, l.Launch(ctx, bad), "allowlist")
 	assert.Len(t, api.jobs, 1, "nothing created for a refused request")
 }

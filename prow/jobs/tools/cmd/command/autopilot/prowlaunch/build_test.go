@@ -40,7 +40,7 @@ func TestBuildRefuses(t *testing.T) {
 		req  dispatcher.LaunchRequest
 		want string
 	}{
-		"workflow off the allowlist": {func() dispatcher.LaunchRequest { r := goldenAddField; r.Workflow = "add-resource"; return r }(), "not on the allowlist"},
+		"workflow off the allowlist": {func() dispatcher.LaunchRequest { r := goldenAddField; r.Workflow = "fix-bug"; return r }(), "not on the allowlist"},
 		"address-feedback":           {func() dispatcher.LaunchRequest { r := goldenAddField; r.Workflow = "address-feedback"; return r }(), "not on the allowlist"},
 		"not a launch id": {func() dispatcher.LaunchRequest {
 			r := goldenAddField
