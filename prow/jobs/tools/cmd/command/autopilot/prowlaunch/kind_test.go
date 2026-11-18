@@ -169,3 +169,59 @@ func TestKindAdmitsOnlyTheTriageJobBuildMakes(t *testing.T) {
 		assert.Error(t, rawCreate(t, k, pj, next(), edit), name)
 	}
 }
+
+// TestKindAdmitsThePlan9Jobs: add-resource has add-field's shape, and the dod
+// job holds no secret, no volume and no other repo (Plan 9).
+func TestKindAdmitsThePlan9Jobs(t *testing.T) {
+	ctx := context.Background()
+	k := kindKube(t, Namespace)
+	cat := testCatalog(t)
+	l, err := New(cat, testConfig, k, &fakeArtifacts{})
+	require.NoError(t, err)
+	require.NoError(t, l.Launch(ctx, goldenAddResource))
+	require.NoError(t, l.Launch(ctx, goldenDod))
+	require.NoError(t, l.Abort(ctx, goldenAddResource.LaunchID))
+	require.NoError(t, l.Abort(ctx, goldenDod.LaunchID))
+
+	podSpec := func(m map[string]any) map[string]any {
+		return m["spec"].(map[string]any)["pod_spec"].(map[string]any)
+	}
+	container := func(m map[string]any) map[string]any { return podSpec(m)["containers"].([]any)[0].(map[string]any) }
+	dod, err := cat.Build(testConfig, goldenDod)
+	require.NoError(t, err)
+	n := 200
+	nextDod := func() string { n++; return fmt.Sprintf("autopilot-%016x-g1-d1", n) }
+	for name, edit := range map[string]func(map[string]any){
+		"a token": func(m map[string]any) {
+			container(m)["env"] = append(container(m)["env"].([]any), map[string]any{"name": "GITHUB_TOKEN",
+				"valueFrom": map[string]any{"secretKeyRef": map[string]any{"name": "agent-github-pat-token", "key": "token"}}})
+		},
+		"secrets volume": func(m map[string]any) {
+			podSpec(m)["volumes"] = []any{map[string]any{"name": "agent-secrets", "csi": map[string]any{
+				"driver": "secrets-store.csi.k8s.io", "volumeAttributes": map[string]any{"secretProviderClass": "agent-secrets"}}}}
+			container(m)["volumeMounts"] = []any{map[string]any{"name": "agent-secrets", "mountPath": "/mnt/secrets-store"}}
+		},
+		"privileged": func(m map[string]any) { container(m)["securityContext"] = map[string]any{"privileged": true} },
+		"another SA": func(m map[string]any) { podSpec(m)["serviceAccountName"] = "periodic-service-account" },
+		"other command": func(m map[string]any) {
+			container(m)["command"] = []any{"/bin/bash", "-c", "./scripts/autopilot-sdk-bump.sh"}
+		},
+		"build cluster": func(m map[string]any) { m["spec"].(map[string]any)["cluster"] = "build" },
+		"another controller": func(m map[string]any) {
+			refs := m["spec"].(map[string]any)["extra_refs"].([]any)
+			refs[len(refs)-1].(map[string]any)["repo"] = "iam-controller"
+		},
+		"a pinned PR ref": func(m map[string]any) {
+			refs := m["spec"].(map[string]any)["extra_refs"].([]any)
+			refs[len(refs)-1].(map[string]any)["pulls"] = []any{map[string]any{"number": 7, "sha": "1111111111111111111111111111111111111111", "author": "x"}}
+		},
+	} {
+		assert.Error(t, rawCreate(t, k, dod, nextDod(), edit), name)
+	}
+	ar, err := cat.Build(testConfig, goldenAddResource)
+	require.NoError(t, err)
+	assert.Error(t, rawCreate(t, k, ar, "autopilot-00000000000000ff-g1-d1", func(map[string]any) {}), "a dod id on an add-resource job")
+	assert.Error(t, rawCreate(t, k, ar, "autopilot-00000000000000fe-g1-r1", func(m map[string]any) {
+		container(m)["image"] = "docker.io/evil/image:latest"
+	}), "add-resource with another image")
+}

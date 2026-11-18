@@ -90,6 +90,7 @@ func TestAdmissionPolicyCoversTheAllowlist(t *testing.T) {
 		"autopilot-0123456789abcdef-g1-r1", "autopilot-0123456789abcdef-g12-f0123abcd",
 		"autopilot-0123456789abcdef-g1-t1", "autopilot-0123456789abcdef-g1-t0",
 		"autopilot-0123456789abcdef-g1-r0", "periodic-agent-add-field-1", "autopilot-0123456789abcdef-g1-r1x",
+		"autopilot-0123456789abcdef-g1-d1", "autopilot-0123456789abcdef-g1-d0",
 	} {
 		assert.Equal(t, launchIDRE.MatchString(id), nameRule.MatchString(id), "the policy's name rule is the launcher's: %s", id)
 	}
@@ -118,9 +119,20 @@ func TestPodIdentityIsNarrow(t *testing.T) {
 	assert.NotContains(t, s, `"Action": "*"`)
 	assert.NotContains(t, s, "s3:*")
 	assert.NotContains(t, s, "secret:ack/prow/*")
-	for _, job := range Allowed {
-		assert.Contains(t, s, "/logs/"+job+"/*/artifacts/agent-result.json")
+	// Exactly the files the launcher reads (Status, Verdict).
+	files := map[string][]string{
+		"add-field": {"agent-result.json"}, "sdk-bump": {"agent-result.json", "verdict.json"},
+		"triage": {"agent-result.json"}, "add-resource": {"agent-result.json"}, "dod": {"verdict.json"},
 	}
+	require.Len(t, files, len(Allowed))
+	want := 0
+	for wf, job := range Allowed {
+		for _, f := range files[wf] {
+			assert.Contains(t, s, "/logs/"+job+"/*/artifacts/"+f)
+			want++
+		}
+	}
+	assert.Equal(t, want, strings.Count(s, "/artifacts/"), "no other artifact is readable")
 }
 
 // TestNothingDeploysThisDirectory: the manifests are applied by a human, so
@@ -152,7 +164,9 @@ func TestAdmissionPolicyAllowsWhatBuildMakes(t *testing.T) {
 		allowed[strings.Trim(strings.TrimSpace(k), "'")] = true
 	}
 	c := testCatalog(t)
-	for name, req := range map[string]dispatcher.LaunchRequest{"add-field": goldenAddField, "sdk-bump": goldenSDKBump} {
+	for name, req := range map[string]dispatcher.LaunchRequest{
+		"add-field": goldenAddField, "sdk-bump": goldenSDKBump, "add-resource": goldenAddResource, "dod": goldenDod,
+	} {
 		pj, err := c.Build(testConfig, req)
 		require.NoError(t, err)
 		for k := range pj.Metadata.Annotations {
@@ -166,5 +180,5 @@ func TestAdmissionPolicyAllowsWhatBuildMakes(t *testing.T) {
 		}
 	}
 	assert.True(t, allowed[AnnotationDoNotDisrupt])
-	assert.Contains(t, s, "variables.sdkBump && object.metadata.annotations['"+AnnotationDoNotDisrupt+"'] == 'true'")
+	assert.Contains(t, s, "(variables.sdkBump || variables.dod) && object.metadata.annotations['"+AnnotationDoNotDisrupt+"'] == 'true'")
 }

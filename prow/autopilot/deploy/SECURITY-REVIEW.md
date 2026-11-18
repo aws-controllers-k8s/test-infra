@@ -1,4 +1,4 @@
-# ACK Autopilot Dispatcher: builder-security review checklist (Plan 7)
+# ACK Autopilot Dispatcher: builder-security review checklist (Plans 7-9)
 
 The real launcher lets the `autopilot-dispatch` periodic create ProwJobs. This
 is the checklist the builder-security review signs off before it goes live
@@ -15,10 +15,12 @@ Nothing in this directory is deployed by Argo CD or Flux
 
 | Before (Plan 2) | After (Plan 7, live) |
 |---|---|
-| The Dispatcher logs the runs it would start (shadow launcher) | It creates ProwJobs in `prow`: `agent-workflow-add-field` (config-only lane, at most 2 at once), `autopilot-sdk-bump` (SDK-bump lane and `--mode refresh`) and `agent-workflow-triage` (triage lane, Plan 8) |
+| The Dispatcher logs the runs it would start (shadow launcher) | It creates ProwJobs in `prow`: `agent-workflow-add-field` (config-only lane, at most 2 at once), `autopilot-sdk-bump` (SDK-bump lane and `--mode refresh`), `agent-workflow-triage` (triage lane, Plan 8), `agent-workflow-add-resource` (new-resource lane, at most 1 at once and 1 a day, Plan 9) and `autopilot-dod` (its own gate job on a PR head, Plan 9) |
 | Runs as `periodic-service-account` | Runs as `autopilot-dispatcher` (test-pods) with the Role in `rbac.yaml` and the AWS role in `pod-identity.yaml` |
 | No cluster API calls | `create`, `get`, `list`, `patch` on `prowjobs` in `prow` |
-| No result reads | One S3 GET per finished run: `logs/<job>/<build id>/artifacts/agent-result.json`, at most 64 KiB |
+| No result reads | One S3 GET per finished run: `logs/<job>/<build id>/artifacts/agent-result.json`, at most 64 KiB; and, for GATING (Plan 9), `verdict.json` of a finished `autopilot-sdk-bump` or `autopilot-dod` job, at most 1 MiB |
+| No PR reads or writes (Plan 2-8) | Plan 9: reads, with `GITHUB_TOKEN`, only the PRs the ledger's `links.pr` names (pull, commits, reviews, commit tree, compare) and each queued repo's open PRs (runtime-release back-off). Its one write, marking a gated draft ready for review, needs `AUTOPILOT_PR_WRITE=true` and a separate `AUTOPILOT_PR_GITHUB_TOKEN`; both are off/absent in the periodic |
+| No other ProwJob reads | Plan 9: `list` of agent-plugin's `address-feedback` jobs for one PR (label selector), to wait while one runs; read only, never adopted, aborted or reconciled |
 
 No listener is opened anywhere: the Dispatcher is a client of the Kubernetes
 API (pod ServiceAccount token, cluster CA, no proxy) and of S3 (SigV4 with the
@@ -92,7 +94,21 @@ namespace; no ClusterRole.
   uses) and `sdk-bump` -> `autopilot-sdk-bump` (defined in code, kept out of
   `agent-workflows.yaml` so no `/agent` comment can start it with ack-bot's
   token), and `triage` -> `agent-workflow-triage` (from `agent-workflows.yaml`;
-  Plan 8). `add-resource` and `address-feedback` are refused.
+  Plan 8). Plan 9 adds `add-resource` -> `agent-workflow-add-resource` (from
+  `agent-workflows.yaml`, add-field's pod shape: the admission policy's
+  `agentJob` rules) and `dod` -> `autopilot-dod` (defined in code: no secret,
+  no volume, no privilege, `pre-submit-service-account` on the default cluster,
+  the controller repo at `main` as its only extra ref beyond add-field's).
+  `address-feedback` is refused.
+- **Why a separate dod job** (Plan 9 decision 1): the authoring pod
+  (add-field, add-resource) runs an LLM with a GitHub token and can write any
+  file in its artifacts, including a passing `verdict.json` for its real head
+  tree (the Plan 3 finding). The Dispatcher therefore never reads a
+  `verdict.json` from an agent job (`Launcher.Verdict` refuses any workflow but
+  `sdk-bump` and `dod`), and gates agent PRs with its own job. sdk-bump's
+  in-process verdict is trusted because that pod runs no LLM; it is still bound
+  to the PR body's `Gate-Verdict` trailer and checked against the head with
+  `dod.VerifyWith` (tree and ancestry through the GitHub API).
 - **Args**: every arg must be in the workflow's `required_args`/`optional_args`
   and match a fixed shape (`prowlaunch` `validators`); `work-item` must be the
   launch id's key hash; `change-class` must be the workflow's class. Triage has
@@ -101,11 +117,15 @@ namespace; no ClusterRole.
   `hand-written-code`). Args reach the pod as container args or environment
   variables, never through a shell.
 - **Names**: the job name is the launch id
-  (`autopilot-<16 hex>-g<gen>-(r<run>|f<8 hex>|t<run>)`), so Launch is
+  (`autopilot-<16 hex>-g<gen>-(r<run>|f<8 hex>|t<run>|d<run>)`), so Launch is
   idempotent and adopts a job only when its `ack-autopilot/request` digest
-  matches. A `t` id names only a triage run, and a triage run only a `t` id.
+  matches. A `t` id names only a triage run, and a triage run only a `t` id; a
+  `d` id names only a dod job, and a dod job only a `d` id (Plan 9).
+  add-field and add-resource jobs must have an `r` id.
 - **Golden tests**: `prowlaunch.TestAddFieldMatchesAgentPlugin` and agent-plugin's
   `TestAutopilotGolden` pin the add-field job to what agent-plugin builds.
+  The same pair pins add-resource (`TestAddResourceMatchesAgentPlugin`,
+  `TestAutopilotGolden/add-resource`); `TestDodGolden` pins the dod job.
   `prowlaunch.TestTriageGolden` pins the triage job, which has **no** secrets
   volume, secret env, extra ref or privilege (`NewCatalog` refuses a triage
   entry with any of them, and the admission policy denies such a pod).
@@ -185,6 +205,9 @@ apart, so the time to stop everything is one tick after the switch merges.
 | config-only (add-field) | 2 | bounded by caps and `max_runs_per_item` | 5 h privileged e2e pod on the build cluster; push to the ack-agent fork; open a PR (human-merge); real-AWS e2e in the agent test account |
 | SDK-bump | 1 per repo | 5 (`max_sdk_bump_launches_per_day`) | 3 h on 8 CPU / 8 Gi, not evicted by Karpenter (`do-not-disrupt`); push `autopilot/<svc>/sdk-bump` with ack-bot's token; open a draft PR |
 | sdk-bump refresh | one per change of a bump's dependents | small | edit the bump PR's body, labels, status and draft state |
+| new-resource (add-resource, Plan 9) | 1 (lane `MaxRunning`) | 1 (`policy/new-resource.yaml`, ceiling 1); off unless that file says `enabled: true`; 1 open PR per repo | as add-field: 5 h privileged e2e pod; push to the ack-agent fork; open a **draft** PR that stays draft (draft level) |
+| dod gate (Plan 9) | 1 per item in GATING; holds the repo like a run | at most `ledger.MaxEnvRetries` (2) env retries per head, plus one per head move | 2 h unprivileged pod, no credentials; reads public GitHub and the controller at `main`; writes only `verdict.json` and `gate-verdict.txt` |
+| PR ready (Plan 9) | one GraphQL call per gated PR | once per gate pass | `markPullRequestReadyForReview` on a PR `links.pr` names, by the bot the lane names, after a passing verdict for its current head; never while `autopilot/blocked-server-default` is on; never in a dry run |
 | triage | 1 (max_concurrent_triage_runs) | 10 (max_triage_launches_per_day) | 30-min unprivileged pod on the build cluster as workflow-runner; no GitHub token or secrets volume; reads public GitHub; one tool-less Bedrock Converse call through workflow-runner's Pod Identity (which can do more than that: Plan 8 carry-over); writes only agent-result.json |
 
 All PRs stay human-merge (Phases 1-4); Plan P's rulesets make that a control.
@@ -200,6 +223,8 @@ All PRs stay human-merge (Phases 1-4); Plan P's rulesets make that a control.
 - [ ] test-infra PR: `serviceAccountName: autopilot-dispatcher` and `AUTOPILOT_LAUNCHER_ENABLED: "true"` in `autopilot-dispatch.tpl`; `make prow-gen`.
 - [ ] Watch one dry tick on the new ServiceAccount (`AUTOPILOT_LEDGER_WRITE` unchanged): no `problem inventory:` line, Status reads work.
 - [ ] ack-private PR: `launcher: prow`, `services:` reduced to one low-risk service first.
+- [ ] Plan 9, before any lane gates for real: verify the `autopilot-dod` rule too (a dod job with a secret env, a volume or another controller repo is denied), and that `pre-submit-service-account` in `test-pods` carries no AWS identity (Plan 5 Open risk 7).
+- [ ] Plan 9, to mark drafts ready: a test-infra PR adds `AUTOPILOT_PR_GITHUB_TOKEN` (a controller-repo token with Pull requests: write; ack-bot's PAT in Phase 1) to `autopilot-dispatch.tpl` and sets `AUTOPILOT_PR_WRITE: "true"`. Until then every gated draft stays draft and a person marks it ready.
 - [ ] After the first runs: check the Dispatcher's own logs upload (`OwnLogs` in `pod-identity.yaml` is the minimum Prow needs; widen only inside `logs/autopilot-dispatch/`).
 
 ## Rollback

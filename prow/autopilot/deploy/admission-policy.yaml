@@ -3,8 +3,9 @@
 # is a pod spec Prow runs as its own identity: without this policy the
 # ServiceAccount could run any image with any secret in test-pods. This policy
 # applies only to that ServiceAccount's requests and allows:
-#   CREATE: the three allowlisted jobs (prowlaunch.Allowed), each with exactly
-#           the pod prowlaunch.Build makes for it;
+#   CREATE: the five allowlisted jobs (prowlaunch.Allowed), each with exactly
+#           the pod prowlaunch.Build makes for it (Plan 9 adds
+#           agent-workflow-add-resource and autopilot-dod);
 #   UPDATE: an abort of a job it made (status.state=aborted), nothing else.
 # Apply (a human, after SECURITY-REVIEW.md) with the three values resolved:
 #   envsubst '${PROW_IMAGES_REPO_URI} ${TEST_INFRA_ORG} ${PROW_LOGS_BUCKET}' \
@@ -46,6 +47,13 @@ spec:
     expression: "variables.job == 'autopilot-sdk-bump'"
   - name: triage
     expression: "variables.job == 'agent-workflow-triage'"
+  - name: addResource
+    expression: "variables.job == 'agent-workflow-add-resource'"
+  - name: dod
+    expression: "variables.job == 'autopilot-dod'"
+  # add-field and add-resource have agent-plugin's agent pod (Plan 9).
+  - name: agentJob
+    expression: "variables.addField || variables.addResource"
   - name: pod
     expression: "object.spec.pod_spec"
   - name: container
@@ -58,22 +66,22 @@ spec:
       request.operation != 'CREATE' ||
       ('ack-autopilot/managed-by' in variables.labels &&
        variables.labels['ack-autopilot/managed-by'] == 'autopilot-dispatcher' &&
-       object.metadata.name.matches('^autopilot-[0-9a-f]{16}-g[0-9]{1,4}-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2})$'))
+       object.metadata.name.matches('^autopilot-[0-9a-f]{16}-g[0-9]{1,4}-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2}|d[1-9][0-9]{0,2})$'))
     message: "a Dispatcher ProwJob is named by a launch id and labelled ack-autopilot/managed-by=autopilot-dispatcher"
   - expression: >-
       request.operation != 'CREATE' ||
       (variables.annotations.all(k, k in variables.annotationKeys) &&
        (!('karpenter.sh/do-not-disrupt' in variables.annotations) ||
-        (variables.sdkBump && object.metadata.annotations['karpenter.sh/do-not-disrupt'] == 'true')))
-    message: "only the annotations prowlaunch.Build sets; karpenter.sh/do-not-disrupt only as \"true\" on autopilot-sdk-bump"
+        ((variables.sdkBump || variables.dod) && object.metadata.annotations['karpenter.sh/do-not-disrupt'] == 'true')))
+    message: "only the annotations prowlaunch.Build sets; karpenter.sh/do-not-disrupt only as \"true\" on autopilot-sdk-bump and autopilot-dod"
   - expression: >-
       request.operation != 'CREATE' ||
       (object.spec.type == 'periodic' && object.spec.agent == 'kubernetes' &&
-       (variables.addField || variables.sdkBump || variables.triage) &&
+       (variables.addField || variables.sdkBump || variables.triage || variables.addResource || variables.dod) &&
        !has(object.spec.refs) && !has(object.spec.namespace) &&
        !has(object.spec.jenkins_spec) && !has(object.spec.pipeline_run_spec) &&
        !has(object.spec.tekton_pipeline_run_spec))
-    message: "only the periodic kubernetes jobs agent-workflow-add-field, autopilot-sdk-bump and agent-workflow-triage, with no refs, namespace or other agent"
+    message: "only the periodic kubernetes jobs agent-workflow-add-field, agent-workflow-add-resource, autopilot-sdk-bump, autopilot-dod and agent-workflow-triage, with no refs, namespace or other agent"
   - expression: >-
       request.operation != 'CREATE' ||
       (has(object.spec.pod_spec) && size(variables.pod.containers) == 1 &&
@@ -85,12 +93,28 @@ spec:
        !has(variables.container.envFrom) && !has(variables.container.volumeDevices))
     message: "one container, no init or ephemeral containers, no host namespaces, no envFrom"
   - expression: >-
-      request.operation != 'CREATE' || !variables.addField ||
+      request.operation != 'CREATE' || !variables.agentJob ||
       (object.spec.cluster == 'build' &&
        variables.pod.serviceAccountName == 'workflow-runner' &&
        variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:add-resource-') &&
-       variables.container.command == ['/app/prow-job.sh'])
-    message: "agent-workflow-add-field runs prow-job.sh from the add-resource image on the build cluster as workflow-runner"
+       variables.container.command == ['/app/prow-job.sh'] &&
+       object.metadata.name.matches('-g[0-9]{1,4}-r[1-9][0-9]{0,2}$'))
+    message: "agent-workflow-add-field and agent-workflow-add-resource run prow-job.sh from the add-resource image on the build cluster as workflow-runner, named by a run launch id"
+  - expression: >-
+      request.operation != 'CREATE' || !variables.dod ||
+      ((!has(object.spec.cluster) || object.spec.cluster == 'default') &&
+       variables.pod.serviceAccountName == 'pre-submit-service-account' &&
+       variables.container.image.startsWith('${PROW_IMAGES_REPO_URI}:prow-auto-generate-controllers-') &&
+       variables.container.command == ['/bin/bash', '-c', './scripts/autopilot-dod.sh'] &&
+       !has(variables.container.args) && !has(variables.container.securityContext) &&
+       !has(variables.pod.volumes) && !has(variables.container.volumeMounts) &&
+       (!has(variables.container.env) || variables.container.env.all(e, !has(e.valueFrom))) &&
+       object.metadata.name.matches('-g[0-9]{1,4}-d[1-9][0-9]{0,2}$'))
+    message: "autopilot-dod runs scripts/autopilot-dod.sh from the auto-generate-controllers image, unprivileged, as pre-submit-service-account, with no volume or secret, named by a dod launch id"
+  - expression: >-
+      request.operation != 'CREATE' || variables.dod ||
+      !object.metadata.name.matches('-d[0-9]+$')
+    message: "a dod launch id names only an autopilot-dod job"
   - expression: >-
       request.operation != 'CREATE' || !variables.sdkBump ||
       ((!has(object.spec.cluster) || object.spec.cluster == 'default') &&
@@ -130,15 +154,18 @@ spec:
          v.csi.volumeAttributes['secretProviderClass'] == (variables.sdkBump ? 'prow-secrets' : 'agent-secrets')) ||
         (variables.sdkBump && v.name == 'github-token-censor' && has(v.secret) &&
          v.secret.secretName == 'prowjob-github-pat-token') ||
-        (variables.addField && has(v.emptyDir)) ||
-        (variables.addField && has(v.hostPath) && v.hostPath.path in ['/lib/modules', '/sys/fs/cgroup']))
-    message: "volumes: the workflow's SecretProviderClass; for sdk-bump the PAT secret the sidecar censors; for add-field the kind-in-Docker emptyDirs and host paths"
+        (variables.agentJob && has(v.emptyDir)) ||
+        (variables.agentJob && has(v.hostPath) && v.hostPath.path in ['/lib/modules', '/sys/fs/cgroup']))
+    message: "volumes: the workflow's SecretProviderClass; for sdk-bump the PAT secret the sidecar censors; for add-field and add-resource the kind-in-Docker emptyDirs and host paths"
   - expression: >-
       request.operation != 'CREATE' || !has(object.spec.extra_refs) ||
       object.spec.extra_refs.all(r, r.org in ['aws-controllers-k8s', '${TEST_INFRA_ORG}'] &&
-        r.repo in ['code-generator', 'runtime', 'ack-dev-skills', 'test-infra'] &&
-        has(r.base_ref) && r.base_ref == 'main' && !has(r.clone_uri))
-    message: "extra_refs: main of code-generator, runtime, ack-dev-skills or test-infra"
+        (r.repo in ['code-generator', 'runtime', 'ack-dev-skills', 'test-infra'] ||
+         (variables.dod && 'ack-autopilot/service' in variables.labels &&
+          r.repo == variables.labels['ack-autopilot/service'] + '-controller')) &&
+        has(r.base_ref) && r.base_ref == 'main' && !has(r.clone_uri) &&
+        !has(r.pulls) && !has(r.base_sha))
+    message: "extra_refs: main of code-generator, runtime, ack-dev-skills or test-infra, and for autopilot-dod its service's controller; no pulls or pinned SHA"
   - expression: >-
       request.operation != 'CREATE' ||
       (has(object.spec.decoration_config) && has(variables.dc.gcs_configuration) &&
