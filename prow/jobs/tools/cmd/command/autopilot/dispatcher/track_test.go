@@ -383,3 +383,59 @@ func TestTrackReviewDuringGatingIsCountedInReview(t *testing.T) {
 	assert.Equal(t, 1, w.Review.ReviewRounds)
 	assertLints(t, items)
 }
+
+// TestTrackParkedItemsPR (Plan 9 review F11): the PR of a QUEUED or BLOCKED
+// item that already had a tracked PR (a retry or a STALE requeue) is still
+// followed, but only for a merge or a close.
+func TestTrackParkedItemsPR(t *testing.T) {
+	for _, st := range []ledger.State{ledger.Queued, ledger.Blocked} {
+		parked := func() *ledger.WorkItem {
+			w := inReview(item(fieldKey, "config-only", ledger.Queued), "ack-agent")
+			w.State = st
+			w.History = append(w.History, ledger.Transition{TS: "2026-11-12T08:30:00Z", To: st, By: actor, Reason: "RETRY STALE_REQUEUE"})
+			return w
+		}
+		t.Run(string(st), func(t *testing.T) {
+			w := parked()
+			gh := newFakeGH()
+			p := readyPR("ack-agent")
+			p.State, p.Merged, p.MergedAt, p.MergeSHA = "closed", true, "2026-11-12T08:50:00Z", head2
+			gh.prs[7] = p
+			items := ledgerOf(w)
+			assert.Empty(t, trackPRs(context.Background(), items, trackEnv(gh, &fakeLauncher{})))
+			assert.Equal(t, ledger.Done, w.State)
+			assert.Equal(t, "2026-11-12T08:50:00Z", w.Review.MergedAt)
+			assertLints(t, items)
+
+			w = parked()
+			p.Merged, p.MergedAt, p.MergeSHA, p.ClosedAt = false, "", "", "2026-11-12T08:55:00Z"
+			gh.prs[7] = p
+			items = ledgerOf(w)
+			assert.Empty(t, trackPRs(context.Background(), items, trackEnv(gh, &fakeLauncher{})))
+			assert.Equal(t, ledger.Escalated, w.State)
+			assert.Equal(t, &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "PR_CLOSED_UNMERGED"}, w.Verdict)
+			assertLints(t, items)
+
+			// Open, with a new head and a change request: nothing else.
+			w = parked()
+			p = readyPR("ack-agent")
+			p.HeadSHA = head2
+			gh.prs[7] = p
+			gh.reviews[7] = []PRReview{{ID: 9, Author: "alice", State: "CHANGES_REQUESTED", SubmittedAt: "2026-11-12T08:50:00Z"}}
+			l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}}
+			before := *w.Review
+			assert.Empty(t, trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l)))
+			assert.Equal(t, st, w.State)
+			assert.Empty(t, l.launched)
+			assert.Equal(t, before, *w.Review)
+
+			// No Review: never tracked.
+			w = parked()
+			w.Review = nil
+			p.State = "closed"
+			gh.prs[7] = p
+			trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l))
+			assert.Equal(t, st, w.State)
+		})
+	}
+}

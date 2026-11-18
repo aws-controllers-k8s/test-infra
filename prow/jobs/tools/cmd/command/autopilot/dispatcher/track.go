@@ -37,15 +37,23 @@ func trackPRs(ctx context.Context, items map[string]*ledger.WorkItem, e prEnv) [
 	var problems []string
 	for _, k := range sortedKeys(items) {
 		w := items[k]
-		switch w.State {
-		case ledger.Gating, ledger.RetryEnv, ledger.PRReady, ledger.HumanReview, ledger.Feedback, ledger.Stale:
-		default:
-			continue
-		}
 		if w.Links.PR == "" {
 			continue
 		}
-		if err := trackOne(ctx, w, e); err != nil {
+		track := trackOne
+		switch w.State {
+		case ledger.Gating, ledger.RetryEnv, ledger.PRReady, ledger.HumanReview, ledger.Feedback, ledger.Stale:
+		case ledger.Queued, ledger.Blocked:
+			// Requeued (a retry or STALE) with its PR still open (Plan 9
+			// review F11): only items that already had a tracked PR.
+			if w.Review == nil {
+				continue
+			}
+			track = trackParked
+		default:
+			continue
+		}
+		if err := track(ctx, w, e); err != nil {
 			problems = append(problems, fmt.Sprintf("track %s: %v", w.Links.PR, err))
 		}
 	}
@@ -130,6 +138,30 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 	if w.State == ledger.HumanReview {
 		_, err := ensureReady(ctx, w, pr, e)
 		return err
+	}
+	return nil
+}
+
+// trackParked follows the PR of a QUEUED or BLOCKED item for a merge (MERGED
+// -> DONE) or a close (ESCALATED PR_CLOSED_UNMERGED) only; its next run, or
+// route, owns everything else.
+func trackParked(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
+	n, ok := prNumber(w)
+	if !ok {
+		return nil // its next run reports the link
+	}
+	pr, err := e.gh.PR(ctx, w.Repo, n)
+	if err != nil {
+		return err
+	}
+	switch {
+	case pr.Merged:
+		w.Review.MergedAt, w.Review.MergeSHA = pr.MergedAt, pr.MergeSHA
+		finish(w, ledger.Merged, e.ts, "PR_MERGED", nil)
+		transition(w, ledger.Done, e.ts, "NO_RELEASE_TRACKING")
+	case pr.State != "open":
+		w.Review.ClosedAt = pr.ClosedAt
+		finish(w, ledger.Escalated, e.ts, "PR_CLOSED_UNMERGED", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "PR_CLOSED_UNMERGED"})
 	}
 	return nil
 }
