@@ -49,6 +49,9 @@ func TestDodBuildSandboxScript(t *testing.T) {
 		// The dod image (Debian slim) has no procps: the kill scans
 		// /proc/<pid>/status (the real uid survives PR_SET_DUMPABLE).
 		`/^Uid:/`, "kill -9",
+		// Staging e2e: VCS stamping fails for uid 65532 in the root-owned
+		// checkout (exit 128), and is irrelevant to the checks.
+		"-buildvcs=false",
 	} {
 		assert.True(t, strings.Contains(string(b), want), "the sandbox script has %q", want)
 	}

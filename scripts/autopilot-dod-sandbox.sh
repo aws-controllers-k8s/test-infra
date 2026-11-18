@@ -22,7 +22,8 @@
 # Environment:
 #   AUTOPILOT_DOD_SANDBOX_DIR  root of the sandbox's HOME, GOPATH, GOMODCACHE,
 #                              GOCACHE and TMPDIR (default /tmp/dod-sandbox)
-#   GOFLAGS, GOPROXY, GONOSUMDB, GOPRIVATE  passed only if set
+#   GOFLAGS                    appended to -buildvcs=false
+#   GOPROXY, GONOSUMDB, GOPRIVATE  passed only if set
 #   CGO_ENABLED                passed (default 0)
 set -uo pipefail
 
@@ -71,7 +72,11 @@ envs=(PATH="$PATH"
   HOME="$SB/home" GOPATH="$SB/gopath" GOMODCACHE="$SB/gomodcache"
   GOCACHE="$SB/gocache" TMPDIR="$SB/tmp"
   CGO_ENABLED="${CGO_ENABLED:-0}")
-for v in GOFLAGS GOPROXY GONOSUMDB GOPRIVATE; do
+# VCS stamping runs git as the sandbox uid in a root-owned checkout, which git
+# refuses (exit 128: "error obtaining VCS status", seen in the staging e2e). The
+# checks never need the stamp, so it is always off; the caller's GOFLAGS follow.
+envs+=("GOFLAGS=-buildvcs=false${GOFLAGS:+ $GOFLAGS}")
+for v in GOPROXY GONOSUMDB GOPRIVATE; do
   if [ -n "${!v+x}" ]; then envs+=("$v=${!v}"); fi
 done
 
