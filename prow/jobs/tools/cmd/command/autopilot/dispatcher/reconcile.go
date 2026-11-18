@@ -30,7 +30,7 @@ import (
 // a PR for the next state.
 const (
 	OutcomePROpened   = "pr_opened"
-	OutcomePRUpdated  = "pr_updated" // address-feedback's; reconcile does not apply it
+	OutcomePRUpdated  = "pr_updated" // address-feedback's, or a run that refreshed its open PR
 	OutcomeNoChange   = "completed_no_change"
 	OutcomeNeedsHuman = "needs_human"
 	OutcomeFailed     = "failed"
@@ -51,7 +51,8 @@ func reconcile(ctx context.Context, items map[string]*ledger.WorkItem, l Launche
 	var problems []string
 	for _, k := range sortedKeys(items) {
 		w := items[k]
-		if !w.State.ActiveRun() || w.Claim == nil {
+		// GATING and RETRY_ENV belong to gate (Plan 9).
+		if w.State != ledger.Running || w.Claim == nil {
 			continue
 		}
 		st, err := l.Status(ctx, w.Claim.LaunchID)
@@ -98,14 +99,18 @@ func apply(w *ledger.WorkItem, r RunResult, ts string) {
 	// token, e.g. COMPLETED_NO_CHANGE or WONT_FIX_NOT_REAL.
 	outcomeToken := strings.ToUpper(strings.ReplaceAll(r.Outcome, ":", "_"))
 	switch {
-	case r.Outcome == OutcomePROpened:
-		if !ledger.PRInRepo(w.Repo, r.PR) {
+	case r.Outcome == OutcomePROpened || r.Outcome == OutcomePRUpdated ||
+		(r.Outcome == OutcomeFailed && r.Reason == "GATE_ENV" && r.PR != ""):
+		// RUNNING -> GATING (design 5.4; Plan 9): gate reads the verdict for
+		// the PR head. sdk-bump's GATE_ENV is a PR whose in-process gate
+		// hit an environment failure: gate retries it with a dod job.
+		if !ledger.PRInRepo(w.Repo, r.PR) || (w.Links.PR != "" && w.Links.PR != r.PR) {
 			finish(w, ledger.Escalated, ts, "INVALID_PR_LINK", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "INVALID_PR_LINK"})
 			return
 		}
 		w.Links.PR = r.PR
 		w.Verdict = nil
-		finish(w, ledger.HumanReview, ts, "PR_OPENED", nil)
+		transition(w, ledger.Gating, ts, strings.ToUpper(r.Outcome))
 	case r.Outcome == OutcomeNoChange:
 		reason := cleanReason(r.Reason, outcomeToken)
 		finish(w, ledger.Done, ts, reason, &ledger.Verdict{Outcome: r.Outcome, Reason: reason})
