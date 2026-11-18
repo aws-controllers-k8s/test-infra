@@ -40,8 +40,11 @@ const dodTimeout = 2 * time.Hour
 const LabelBlockedServerDefault = "autopilot/blocked-server-default"
 
 // envSignatures are dod reasons that say the environment failed, not the
-// change (Plan 5 carry-over; sdkbump envReasons).
-var envSignatures = map[string]bool{"REGEN_FAILED": true, "REGEN_SETUP_FAILED": true, "CRD_COMPAT_RUN_FAILED": true}
+// change (Plan 5 carry-over; sdkbump envReasons). BUILD_SANDBOX_FAILED is a
+// dod pod that could not sandbox the build (Plan 9 review F1): it retries,
+// then escalates, and never passes.
+var envSignatures = map[string]bool{"REGEN_FAILED": true, "REGEN_SETUP_FAILED": true, "CRD_COMPAT_RUN_FAILED": true,
+	"BUILD_SANDBOX_FAILED": true}
 
 // prEnv is what the PR steps (gate, trackPRs) share in one tick.
 type prEnv struct {

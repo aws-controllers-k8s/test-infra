@@ -84,7 +84,9 @@ func TestGateOutcomes(t *testing.T) {
 	}{
 		"reclassify escalates": {dod.StatusFail, "hand-written-code", []string{"path-allowlist:PATH_NOT_ALLOWED"}, ledger.Escalated, "GATE_RECLASSIFY_HAND_WRITTEN_CODE"},
 		"env retries":          {dod.StatusFail, "", []string{"regen-clean:REGEN_FAILED"}, ledger.Gating, ""},
-		"product fail retries": {dod.StatusFail, "", []string{"build:BUILD_FAILED"}, ledger.Queued, "RETRY GATE_FAILED"},
+		// Plan 9 review F1: a pod that cannot sandbox the build never passes.
+		"no sandbox env retries": {dod.StatusFail, "", []string{"build:BUILD_SANDBOX_FAILED"}, ledger.Gating, ""},
+		"product fail retries":   {dod.StatusFail, "", []string{"build:BUILD_FAILED"}, ledger.Queued, "RETRY GATE_FAILED"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w, gh, l := bumpGating(t, tc.status, tc.reclassify, tc.reasons...)
@@ -121,7 +123,13 @@ func TestGateEnvFailureLaunchesADodJob(t *testing.T) {
 }
 
 func TestGateEnvRetriesAreCapped(t *testing.T) {
-	w, gh, l := bumpGating(t, dod.StatusFail, "", "regen-clean:REGEN_FAILED")
+	for _, reason := range []string{"regen-clean:REGEN_FAILED", "build:BUILD_SANDBOX_FAILED"} {
+		t.Run(reason, func(t *testing.T) { testGateEnvRetriesAreCapped(t, reason) })
+	}
+}
+
+func testGateEnvRetriesAreCapped(t *testing.T, reason string) {
+	w, gh, l := bumpGating(t, dod.StatusFail, "", reason)
 	e := testEnv(gh, l, true)
 	gate(context.Background(), ledgerOf(w), e) // d1, retry 1
 	for i := 0; i < 2; i++ {

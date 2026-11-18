@@ -137,3 +137,31 @@ func TestVerifyVerdictExitCodes(t *testing.T) {
 	require.NoError(t, os.WriteFile(forged, []byte(fake), 0o644))
 	assert.Equal(t, 2, exitCodeOf(t, verify(forged, "HEAD", dod.Digest(fb), false)), "edited verdict")
 }
+
+// TestRunDodBuildSandbox (Plan 9 review F1): --build-sandbox runs every go
+// step through one executable; one that cannot run fails the build closed.
+func TestRunDodBuildSandbox(t *testing.T) {
+	require.NotNil(t, dodCmd.Flags().Lookup("build-sandbox"))
+	r, base := mechanicalRepo(t)
+	dir := t.TempDir()
+	log := filepath.Join(dir, "calls")
+	ok := filepath.Join(dir, "ok.sh")
+	require.NoError(t, os.WriteFile(ok, []byte("#!/bin/sh\necho \"$*\" >> "+log+"\nexec \"$@\"\n"), 0o755))
+	bad := filepath.Join(dir, "bad.sh")
+	require.NoError(t, os.WriteFile(bad, []byte("#!/bin/sh\nexit 125\n"), 0o755))
+
+	f := dodFlags{repoDir: r.Dir, service: "c", baseRef: base, headRef: "HEAD", changeClass: "mechanical", output: "json",
+		buildSandbox: ok}
+	var out bytes.Buffer
+	require.NoError(t, runDod(context.Background(), f, strings.NewReader(""), &out, io.Discard))
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(calls), "true\ngo build ./...\n"), "%s", calls)
+
+	f.buildSandbox = bad
+	out.Reset()
+	assert.Equal(t, 1, exitCodeOf(t, runDod(context.Background(), f, strings.NewReader(""), &out, io.Discard)))
+	v, err := dod.ParseVerdict(out.Bytes())
+	require.NoError(t, err)
+	assert.Contains(t, v.Reasons, "build:BUILD_SANDBOX_FAILED")
+}

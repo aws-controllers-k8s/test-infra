@@ -42,6 +42,10 @@
 #                              aws-controllers-k8s)
 # The script fetches pull/<pr>/head and gives no verdict (exit 2) unless it is
 # AUTOPILOT_DOD_HEAD_SHA: the head moved, and the Dispatcher gates the new one.
+# In dispatched mode the build check runs the PR's code as an unprivileged uid
+# (autopilot-dod-sandbox.sh; Plan 9 review F1), $ARTIFACTS must be owned by
+# this (root) uid and is made 0755, and the verdict and trailer are written to
+# a private directory first and copied into $ARTIFACTS after dod exits.
 #
 # dod needs no credentials, and this job mounts none.
 set -euo pipefail
@@ -60,7 +64,15 @@ ARTIFACTS="${ARTIFACTS:-/tmp/artifacts}"
 mkdir -p "$ARTIFACTS"
 
 ORG="${TEST_INFRA_ORG:-aws-controllers-k8s}"
+OUT_DIR="$ARTIFACTS"
+sandbox_args=()
 if [ -n "${AUTOPILOT_DOD_HEAD_SHA:-}" ]; then
+  # Plan 9 review F1: the sandboxed build must not be able to write here.
+  [ "$(stat -c %u "$ARTIFACTS")" = "$(id -u)" ] || die "$ARTIFACTS is not owned by uid $(id -u)"
+  chmod 0755 "$ARTIFACTS" || die "could not chmod $ARTIFACTS"
+  OUT_DIR="$(mktemp -d)" || die "could not create a private verdict directory"
+  chmod 0700 "$OUT_DIR"
+  sandbox_args=(--build-sandbox "$DIR/autopilot-dod-sandbox.sh")
   [[ "${AUTOPILOT_DOD_PR:-}" =~ ^[1-9][0-9]{0,9}$ ]] || die "AUTOPILOT_DOD_PR must be a PR number"
   [[ "$AUTOPILOT_DOD_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || die "AUTOPILOT_DOD_HEAD_SHA must be a full commit SHA"
   [[ "${AUTOPILOT_DOD_BASE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || die "AUTOPILOT_DOD_BASE_SHA must be a full commit SHA"
@@ -105,11 +117,19 @@ args=(autopilot dod
   --pr-body-file "$PR_BODY"
   --codegen-dir "$CODEGEN_DIR" --runtime-dir "$RUNTIME_DIR"
   --ack-generate "$CODEGEN_DIR/bin/ack-generate"
-  --verdict-out "$ARTIFACTS/verdict.json" --trailer-out "$ARTIFACTS/gate-verdict.txt")
+  --verdict-out "$OUT_DIR/verdict.json" --trailer-out "$OUT_DIR/gate-verdict.txt"
+  ${sandbox_args[@]+"${sandbox_args[@]}"})
 
 set +e
 /tmp/ack-build-tools "${args[@]}"
 code=$?
 set -e
+if [ "$OUT_DIR" != "$ARTIFACTS" ]; then
+  for f in verdict.json gate-verdict.txt; do
+    if [ -f "$OUT_DIR/$f" ]; then
+      cp "$OUT_DIR/$f" "$ARTIFACTS/$f" || die "could not copy $f into $ARTIFACTS"
+    fi
+  done
+fi
 echo "ack-dod exit code $code (0 pass, 1 fail, 2 no verdict)"
 exit "$code"

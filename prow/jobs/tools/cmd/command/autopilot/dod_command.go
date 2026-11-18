@@ -44,6 +44,7 @@ type dodFlags struct {
 	botEmails, botLogins, skip                                      []string
 	codegenDir, runtimeDir, ackGenerate, crdCompat, sdkModel        string
 	cacheDir, prBody, output, verdictOut, trailerOut                string
+	buildSandbox                                                    string
 	timeout                                                         time.Duration
 }
 
@@ -122,6 +123,7 @@ func init() {
 	f.StringVar(&dodOpts.output, "output", "text", "text or json")
 	f.StringVar(&dodOpts.verdictOut, "verdict-out", "", "write the verdict document here")
 	f.StringVar(&dodOpts.trailerOut, "trailer-out", "", "write the Gate-Verdict trailer line here")
+	f.StringVar(&dodOpts.buildSandbox, "build-sandbox", "", "run every build step as <path> go <args> (an unprivileged sandbox); a sandbox that cannot run fails the build check")
 	f.DurationVar(&dodOpts.timeout, "timeout", 90*time.Minute, "give up (exit 2) after this long")
 	for _, name := range []string{"service", "base-ref", "change-class"} {
 		_ = dodCmd.MarkFlagRequired(name)
@@ -161,6 +163,9 @@ func runDod(ctx context.Context, f dodFlags, stdin io.Reader, out, errw io.Write
 		CodegenDir: f.codegenDir, RuntimeDir: f.runtimeDir, ACKGenerate: f.ackGenerate,
 		SDKModelPath: f.sdkModel, CacheDir: f.cacheDir, Skip: f.skip,
 		ToolRevision: dod.BuildRevision(), Log: errw,
+	}
+	if f.buildSandbox != "" {
+		o.BuildSandbox = []string{f.buildSandbox}
 	}
 	var err error
 	if f.crdCompat != "" {

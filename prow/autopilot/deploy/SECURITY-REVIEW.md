@@ -109,6 +109,19 @@ namespace; no ClusterRole.
   in-process verdict is trusted because that pod runs no LLM; it is still bound
   to the PR body's `Gate-Verdict` trailer and checked against the head with
   `dod.VerifyWith` (tree and ancestry through the GitHub API).
+  The dod job itself runs the PR's code in its `build` check (go build, vet,
+  test, mod tidy). So that this code cannot forge the verdict (Plan 9 review
+  F1), dispatched mode runs every build step through
+  `scripts/autopilot-dod-sandbox.sh` (`--build-sandbox`): as uid/gid 65532
+  (`setpriv --clear-groups --no-new-privs`), with a clean environment and its
+  own HOME, Go caches and TMPDIR, and every process of that uid is killed
+  (`pkill -9 -U 65532`) after each step; a survivor fails the step.
+  `verdict.json` and `gate-verdict.txt` are written only by root: first into a
+  private `mktemp -d` directory, then copied into `$ARTIFACTS`, which must be
+  root-owned and is made 0755. It fails closed: if the pod cannot `setpriv`
+  (not root, no `setpriv`/`pkill`/`pgrep`), the build check records
+  `BUILD_SANDBOX_FAILED`, nothing runs unsandboxed, and the Dispatcher counts
+  it as an environment failure (RETRY_ENV, then ESCALATED); it never passes.
 - **Args**: every arg must be in the workflow's `required_args`/`optional_args`
   and match a fixed shape (`prowlaunch` `validators`); `work-item` must be the
   launch id's key hash; `change-class` must be the workflow's class. Triage has
@@ -224,6 +237,7 @@ All PRs stay human-merge (Phases 1-4); Plan P's rulesets make that a control.
 - [ ] Watch one dry tick on the new ServiceAccount (`AUTOPILOT_LEDGER_WRITE` unchanged): no `problem inventory:` line, Status reads work.
 - [ ] ack-private PR: `launcher: prow`, `services:` reduced to one low-risk service first.
 - [ ] Plan 9, before any lane gates for real: verify the `autopilot-dod` rule too (a dod job with a secret env, a volume or another controller repo is denied), and that `pre-submit-service-account` in `test-pods` carries no AWS identity (Plan 5 Open risk 7).
+- [ ] Plan 9, before any lane gates for real: one staging `autopilot-dod` run shows the `build` check passing under the sandbox (its log has no `build sandbox probe` failure and the verdict has no `build:BUILD_SANDBOX_FAILED`), so the pod can `setpriv` to uid 65532.
 - [ ] Plan 9, to mark drafts ready: a test-infra PR adds `AUTOPILOT_PR_GITHUB_TOKEN` (a controller-repo token with Pull requests: write; ack-bot's PAT in Phase 1) to `autopilot-dispatch.tpl` and sets `AUTOPILOT_PR_WRITE: "true"`. Until then every gated draft stays draft and a person marks it ready.
 - [ ] After the first runs: check the Dispatcher's own logs upload (`OwnLogs` in `pod-identity.yaml` is the minimum Prow needs; widen only inside `logs/autopilot-dispatch/`).
 

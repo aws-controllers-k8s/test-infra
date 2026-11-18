@@ -53,8 +53,12 @@ type Options struct {
 	PRBody                 []byte
 	Skip                   []string
 	ToolRevision           string
-	Run                    Runner
-	Log                    io.Writer
+	// BuildSandbox is a command prefix the build check runs every go step
+	// through (Plan 9 review F1: PR code must not be able to write the
+	// verdict). Empty runs go directly.
+	BuildSandbox []string
+	Run          Runner
+	Log          io.Writer
 }
 
 var (
@@ -389,7 +393,7 @@ func Run(ctx context.Context, o Options) (*Verdict, error) {
 			if err := scratchAtHead(ctx, scratch, head); err != nil {
 				return nil, fmt.Errorf("build: %w", err)
 			}
-			c = checkBuild(ctx, o.ChangeClass, scratch, o.Run, o.Log)
+			c = checkBuild(ctx, o.ChangeClass, scratch, o.Run, o.Log, o.BuildSandbox)
 		case CheckCRDDiff:
 			if p, bad := crdDocProblem(id, compat, compatErr, runFailed); bad {
 				c = p
