@@ -70,6 +70,8 @@ type prEnv struct {
 	grace time.Duration
 	now   time.Time
 	ts    string
+	// launched, when set, collects the dod launches (Plan 9 review F13).
+	launched *[]Launch
 }
 
 // gate runs GATING (design 5.4) for every item in GATING or RETRY_ENV:
@@ -242,6 +244,9 @@ func launchGate(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv, reason 
 	}}
 	if err := e.l.Launch(ctx, req); err != nil {
 		return err
+	}
+	if e.launched != nil {
+		*e.launched = append(*e.launched, Launch{Key: w.Key, KeyHash: w.KeyHash, Workflow: dodWorkflow, LaunchID: id, Shadow: e.l.Shadow()})
 	}
 	if e.l.Shadow() {
 		return nil

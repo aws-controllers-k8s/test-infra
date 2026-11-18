@@ -112,7 +112,7 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 	var runtimeRelease map[string]bool
 	if cfg.GitHub != nil {
 		e := prEnv{gh: cfg.GitHub, l: launcher, team: cfg.Team, authors: cfg.PRAuthors, bots: cfg.BotLogins,
-			sw: p.Switches, grace: p.Budgets.ReaperGrace(), now: cfg.Now, ts: ts}
+			sw: p.Switches, grace: p.Budgets.ReaperGrace(), now: cfg.Now, ts: ts, launched: &res.Launched}
 		if !cfg.DryRun {
 			e.pw = cfg.PRWriter
 		}

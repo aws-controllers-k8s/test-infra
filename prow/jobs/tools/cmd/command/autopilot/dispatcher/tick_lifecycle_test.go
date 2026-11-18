@@ -88,3 +88,23 @@ func TestTickDryRunMarksNothingReady(t *testing.T) {
 	assert.Equal(t, ledger.HumanReview, bump.State, "a dry run reads the verdict through the real launcher")
 	assert.Empty(t, gh.ready, "a dry run never writes to a PR")
 }
+
+// TestTickReportsDodLaunches (Plan 9 review F13): a tick that gates an
+// add-field PR reports its dod launch like any other.
+func TestTickReportsDodLaunches(t *testing.T) {
+	p := testPolicy(t)
+	field := running(item(fieldKey, "config-only", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	field.Resource, field.FieldPath = "Bucket", "Mode"
+	gh := newFakeGH()
+	gh.prs[7] = openPR("ack-agent")
+	run := field.Claim.LaunchID
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{
+		run: *finishedAs(JobSucceeded, "pr_opened", "", s3PR),
+	}}, verdicts: map[string][]byte{}}
+	cfg := Config{Now: now, Policy: &p, Launcher: l, GitHub: gh, Team: map[string]bool{"alice": true},
+		PRAuthors: map[string]string{"sdk-bump": "ack-bot", "add-field": "ack-agent"}, BotLogins: []string{"ack-bot", "ack-agent"}}
+	res := Tick(context.Background(), cfg, ledgerOf(field))
+	assert.Empty(t, res.Problems)
+	require.Equal(t, ledger.Gating, field.State)
+	assert.Equal(t, []Launch{{Key: field.Key, KeyHash: field.KeyHash, Workflow: "dod", LaunchID: field.Claim.LaunchID}}, res.Launched)
+}
