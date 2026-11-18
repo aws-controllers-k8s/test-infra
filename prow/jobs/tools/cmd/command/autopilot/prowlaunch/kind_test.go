@@ -211,6 +211,18 @@ func TestKindAdmitsThePlan9Jobs(t *testing.T) {
 			refs := m["spec"].(map[string]any)["extra_refs"].([]any)
 			refs[len(refs)-1].(map[string]any)["repo"] = "iam-controller"
 		},
+		// Plan 9 review F14.
+		"a BASH_ENV env var": func(m map[string]any) {
+			container(m)["env"] = append(container(m)["env"].([]any), map[string]any{"name": "BASH_ENV", "value": "/tmp/x"})
+		},
+		"a ServiceAccount token": func(m map[string]any) { podSpec(m)["automountServiceAccountToken"] = true },
+		"a SERVICE path": func(m map[string]any) {
+			for _, e := range container(m)["env"].([]any) {
+				if e.(map[string]any)["name"] == "SERVICE" {
+					e.(map[string]any)["value"] = "../x"
+				}
+			}
+		},
 		"a pinned PR ref": func(m map[string]any) {
 			refs := m["spec"].(map[string]any)["extra_refs"].([]any)
 			refs[len(refs)-1].(map[string]any)["pulls"] = []any{map[string]any{"number": 7, "sha": "1111111111111111111111111111111111111111", "author": "x"}}

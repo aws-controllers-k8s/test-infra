@@ -91,7 +91,10 @@ type PodSpec struct {
 	Containers         []Container `json:"containers"`
 	RestartPolicy      string      `json:"restartPolicy,omitempty"`
 	ServiceAccountName string      `json:"serviceAccountName,omitempty"`
-	Volumes            []Volume    `json:"volumes,omitempty"`
+	// AutomountServiceAccountToken false keeps the ServiceAccount token out
+	// of the pod (the dod job; Plan 9 review F14).
+	AutomountServiceAccountToken *bool    `json:"automountServiceAccountToken,omitempty"`
+	Volumes                      []Volume `json:"volumes,omitempty"`
 }
 
 type Container struct {

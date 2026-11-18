@@ -124,6 +124,9 @@ type podShape struct {
 	// ControllerRef adds <org>/<service>-controller at main as an extra ref
 	// (the dod job checks the PR out of it).
 	ControllerRef bool
+	// NoServiceAccountToken sets automountServiceAccountToken: false: the
+	// pod gets no Kubernetes API token (the dod job; Plan 9 review F14).
+	NoServiceAccountToken bool
 }
 
 // agentPod is agent-plugin's pod (pkg/prowjob CreateWorkflowProwJob).
@@ -311,6 +314,7 @@ func DOD(image, org string) Workflow {
 				"work-item": "AUTOPILOT_DOD_WORK_ITEM", "change-class": "AUTOPILOT_DOD_CLASS",
 			},
 			GracePeriod: 10 * time.Minute, DoNotDisrupt: true, ControllerRef: true,
+			NoServiceAccountToken: true,
 		},
 	}
 }

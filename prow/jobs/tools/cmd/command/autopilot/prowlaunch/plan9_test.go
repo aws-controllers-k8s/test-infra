@@ -73,6 +73,12 @@ func TestDodJobHoldsNoSecret(t *testing.T) {
 	assert.Equal(t, "default", pj.Spec.Cluster)
 	assert.Equal(t, "pre-submit-service-account", pod.ServiceAccountName)
 	assert.Empty(t, pod.Volumes, "no secrets volume, no CSI, no host path")
+	// Plan 9 review F14: no ServiceAccount token in the pod either.
+	require.NotNil(t, pod.AutomountServiceAccountToken)
+	assert.False(t, *pod.AutomountServiceAccountToken)
+	var ar ProwJob
+	require.NoError(t, json.Unmarshal(buildJSON(t, goldenAddResource), &ar))
+	assert.Nil(t, ar.Spec.PodSpec.AutomountServiceAccountToken, "agent-plugin's pod shape is unchanged")
 	c := pod.Containers[0]
 	assert.Empty(t, c.VolumeMounts)
 	assert.Nil(t, c.SecurityContext, "unprivileged")

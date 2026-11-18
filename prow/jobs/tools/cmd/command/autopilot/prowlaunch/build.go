@@ -218,6 +218,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		RestartPolicy: "Never", ServiceAccountName: w.pod.ServiceAccount,
 		Containers: []Container{container}, Volumes: volumes,
 	}
+	if w.pod.NoServiceAccountToken {
+		pod.AutomountServiceAccountToken = boolPtr(false)
+	}
 	if w.E2E {
 		applyE2E(pod)
 	}

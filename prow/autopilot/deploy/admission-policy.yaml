@@ -54,6 +54,11 @@ spec:
   # add-field and add-resource have agent-plugin's agent pod (Plan 9).
   - name: agentJob
     expression: "variables.addField || variables.addResource"
+  # The only environment variables the dod job may have: exactly what
+  # prowlaunch.Build gives it (Plan 9 review F14; deploy_test.go checks it).
+  # Nothing else, so no BASH_ENV, GOFLAGS or the like reaches its script.
+  - name: dodEnv
+    expression: "['WORKFLOW_NAME', 'ISSUE_NUMBER', 'REPO_OWNER', 'REPO_NAME', 'ISSUE_AUTHOR', 'TEST_INFRA_ORG', 'SERVICE', 'AUTOPILOT_DOD_PR', 'AUTOPILOT_DOD_HEAD_SHA', 'AUTOPILOT_DOD_BASE_SHA', 'AUTOPILOT_DOD_PR_AUTHOR', 'AUTOPILOT_DOD_WORK_ITEM', 'AUTOPILOT_DOD_CLASS']"
   - name: pod
     expression: "object.spec.pod_spec"
   - name: container
@@ -109,8 +114,14 @@ spec:
        !has(variables.container.args) && !has(variables.container.securityContext) &&
        !has(variables.pod.volumes) && !has(variables.container.volumeMounts) &&
        (!has(variables.container.env) || variables.container.env.all(e, !has(e.valueFrom))) &&
+       has(variables.pod.automountServiceAccountToken) && variables.pod.automountServiceAccountToken == false &&
+       has(variables.container.env) &&
+       variables.container.env.all(e, e.name in variables.dodEnv) &&
+       variables.container.env.exists(e, e.name == 'SERVICE') &&
+       variables.container.env.all(e, e.name != 'SERVICE' ||
+         (has(e.value) && e.value.matches('^[a-z0-9][a-z0-9-]{0,62}$'))) &&
        object.metadata.name.matches('-g[0-9]{1,4}-d[1-9][0-9]{0,2}$'))
-    message: "autopilot-dod runs scripts/autopilot-dod.sh from the auto-generate-controllers image, unprivileged, as pre-submit-service-account, with no volume or secret, named by a dod launch id"
+    message: "autopilot-dod runs scripts/autopilot-dod.sh from the auto-generate-controllers image, unprivileged, as pre-submit-service-account with no ServiceAccount token, with no volume or secret, only the environment variables prowlaunch.Build sets and a service alias for SERVICE, named by a dod launch id"
   - expression: >-
       request.operation != 'CREATE' || variables.dod ||
       !object.metadata.name.matches('-d[0-9]+$')

@@ -182,3 +182,30 @@ func TestAdmissionPolicyAllowsWhatBuildMakes(t *testing.T) {
 	assert.True(t, allowed[AnnotationDoNotDisrupt])
 	assert.Contains(t, s, "(variables.sdkBump || variables.dod) && object.metadata.annotations['"+AnnotationDoNotDisrupt+"'] == 'true'")
 }
+
+// TestAdmissionPolicyDodEnvIsBuilds (Plan 9 review F14): the policy's dod
+// rule lists exactly the environment variables Build gives the dod job, and
+// requires no ServiceAccount token and a service alias for SERVICE.
+func TestAdmissionPolicyDodEnvIsBuilds(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(deployDir, "admission-policy.yaml"))
+	require.NoError(t, err)
+	s := string(b)
+	m := regexp.MustCompile(`(?s)name: dodEnv\n\s+expression: "\[([^\]]*)\]"`).FindStringSubmatch(s)
+	require.NotNil(t, m, "the policy has a dodEnv variable")
+	var allowed []string
+	for _, k := range strings.Split(m[1], ",") {
+		allowed = append(allowed, strings.Trim(strings.TrimSpace(k), "'"))
+	}
+	sort.Strings(allowed)
+	pj, err := testCatalog(t).Build(testConfig, goldenDod)
+	require.NoError(t, err)
+	var got []string
+	for _, e := range pj.Spec.PodSpec.Containers[0].Env {
+		got = append(got, e.Name)
+	}
+	sort.Strings(got)
+	assert.Equal(t, got, allowed, "every env name Build gives the dod job, and no other")
+	assert.Contains(t, s, "variables.container.env.all(e, e.name in variables.dodEnv)")
+	assert.Contains(t, s, "has(variables.pod.automountServiceAccountToken) && variables.pod.automountServiceAccountToken == false")
+	assert.Contains(t, s, `e.value.matches('^[a-z0-9][a-z0-9-]{0,62}$')`)
+}
