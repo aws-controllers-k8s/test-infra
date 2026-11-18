@@ -1804,6 +1804,16 @@ def test_detector_work():
     check("add-resource ignores it", ADD_RESOURCE.optional_context_env, ())
 
 
+def test_dispatched_runs_open_drafts():
+    """Plan 9: an ACK Autopilot run (WORK_ITEM set) opens a draft, and a
+    reused PR goes back to draft; the Dispatcher's GATING marks it ready."""
+    script = (_PKG_ROOT / "prow-job.sh").read_text()
+    check("drafts only for dispatched runs", '[ -n "$WORK_ITEM" ] && DRAFT_ARGS=(--draft)' in script, True)
+    check("gh pr create passes the draft args", '"$GITHUB_ACTOR:$PR_SOURCE_BRANCH" "${DRAFT_ARGS[@]}"' in script, True)
+    check("a reused PR goes back to draft", 'gh pr ready "$PR_URL" -R "$ORG_REPO" --undo' in script, True)
+    check("no other gh pr ready", script.count("gh pr ready"), 1)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1837,7 +1847,8 @@ def main():
                test_triage_cli_offline,
                test_triage_workflow_manifest,
                test_sdk_bump_result_fixture,
-               test_detector_work):
+               test_detector_work,
+               test_dispatched_runs_open_drafts):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

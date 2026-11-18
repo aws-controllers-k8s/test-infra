@@ -618,16 +618,27 @@ fi
 # pull request does exist) rather than killing the job after the push.
 PR_URL=$(gh pr list -R "$ORG_REPO" --head "$PR_SOURCE_BRANCH" --base "$PR_TARGET_BRANCH" \
   --author "$GITHUB_ACTOR" --state open --json url --jq '.[0].url // ""') || PR_URL=""
+# A run ACK Autopilot started opens a draft: the Dispatcher's GATING pass marks
+# it ready once its own ack-dod job passes on this head (Plan 9). A /agent run
+# keeps today's ready PR.
+DRAFT_ARGS=()
+[ -n "$WORK_ITEM" ] && DRAFT_ARGS=(--draft)
 if [ -n "$PR_URL" ]; then
   echo "$SCRIPT_NAME][INFO] Reusing the open pull request $PR_URL"
   # The reused PR keeps the body from the run that opened it; refresh it so
   # the squash merge carries this run's description and trailers.
   gh pr edit "$PR_URL" -R "$ORG_REPO" -F "$PR_BODY_FILE" >/dev/null \
     || echo "$SCRIPT_NAME][WARN] could not refresh the body of $PR_URL" >&2
+  # The new head has no verdict yet: back to draft until GATING passes. It
+  # fails harmlessly when the PR is a draft already.
+  if [ -n "$WORK_ITEM" ]; then
+    gh pr ready "$PR_URL" -R "$ORG_REPO" --undo >/dev/null 2>&1 \
+      || echo "$SCRIPT_NAME][INFO] $PR_URL is a draft already (or could not be made one)"
+  fi
 else
   echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch... "
   if ! PR_URL=$(gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" -F "$PR_BODY_FILE" \
-       -B "$PR_TARGET_BRANCH" --head "$GITHUB_ACTOR:$PR_SOURCE_BRANCH"); then
+       -B "$PR_TARGET_BRANCH" --head "$GITHUB_ACTOR:$PR_SOURCE_BRANCH" "${DRAFT_ARGS[@]}"); then
     echo ""
     echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
     set_result failed PR_CREATE_FAILED
