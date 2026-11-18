@@ -187,7 +187,7 @@ func gateOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 	recordGate(w, pr, v, want, e.ts)
 	switch {
 	case v.Verdict == dod.StatusPass:
-		passGate(ctx, w, pr, e)
+		return passGate(ctx, w, pr, e)
 	case v.ReclassifyTo != "":
 		reason := "GATE_RECLASSIFY_" + strings.ToUpper(strings.ReplaceAll(v.ReclassifyTo, "-", "_"))
 		finish(w, ledger.Escalated, e.ts, cleanReason(reason, "GATE_RECLASSIFY"), &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: cleanReason(reason, "GATE_RECLASSIFY")})
@@ -287,8 +287,9 @@ func envRetry(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv, reason st
 
 // passGate is GATING -> PR_READY -> HUMAN_REVIEW: a human-merge draft is
 // marked ready (when PR writes are on and nothing blocks it); a draft-level
-// item (new-resource) stays draft for its API review.
-func passGate(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) {
+// item (new-resource) stays draft for its API review. A write error is
+// returned; the item moves anyway.
+func passGate(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) error {
 	if w.Review == nil {
 		w.Review = &ledger.Review{Number: pr.Number, Author: pr.Author}
 	}
@@ -299,33 +300,63 @@ func passGate(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) {
 	finish(w, ledger.PRReady, e.ts, "GATE_PASSED", nil)
 	w.Verdict = nil
 	reason := "READY_PENDING"
-	if ensureReady(ctx, w, pr, e) {
+	ready, err := ensureReady(ctx, w, pr, e)
+	switch {
+	case ready && pr.Draft:
 		reason = "MARKED_READY"
-	} else if w.AutonomyLevel != "human-merge" {
+	case ready:
+		reason = "ALREADY_READY"
+	case err == nil && w.AutonomyLevel != "human-merge":
 		reason = "DRAFT_LEVEL"
 	}
 	transition(w, ledger.HumanReview, e.ts, reason)
+	return err
 }
 
-// ensureReady marks a gated human-merge draft ready for review once, and
-// reports whether the PR is ready now. It leaves the PR draft while sdk-bump's
-// merge block is on, while PR writes are off, or when the gate did not pass
-// for the current head.
-func ensureReady(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) bool {
+// ensureReady marks a gated human-merge draft ready for review once per gate
+// pass, and reports whether the PR is ready now. It leaves the PR draft while
+// sdk-bump's merge block is on, while PR writes are off, or when the gate did
+// not pass for the current head. If the head moved by the time MarkReady
+// landed (or the PR cannot be re-read), it turns the PR back into a draft
+// and reports not ready (Plan 9 review F6).
+func ensureReady(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) (bool, error) {
 	if w.AutonomyLevel != "human-merge" || w.Gate == nil || w.Gate.Verdict != ledger.GatePass || w.Gate.HeadSHA != pr.HeadSHA {
-		return false
+		return false, nil
 	}
 	if !pr.Draft {
-		return true
+		return true, nil
 	}
 	if e.pw == nil || slices.Contains(pr.Labels, LabelBlockedServerDefault) || (w.Review != nil && w.Review.ReadyAt != "") {
-		return false
+		return false, nil
 	}
 	if err := e.pw.MarkReady(ctx, w.Repo, pr.Number); err != nil {
-		return false
+		return false, fmt.Errorf("mark ready: %w", err)
 	}
 	w.Review.ReadyAt = e.ts
-	return true
+	now, err := e.gh.PR(ctx, w.Repo, pr.Number)
+	if err == nil && now.HeadSHA == w.Gate.HeadSHA {
+		return true, nil
+	}
+	// A push raced the write: the new head has no verdict yet.
+	w.Review.ReadyAt = ""
+	if derr := e.pw.MarkDraft(ctx, w.Repo, pr.Number); derr != nil {
+		err = errors.Join(err, fmt.Errorf("mark draft: %w", derr))
+	}
+	return false, err
+}
+
+// unready turns a PR the Dispatcher marked ready back into a draft before
+// its new head re-gates (Plan 9 review F6). A PR a person marked ready
+// (no ReadyAt), or one with writes off, is left alone.
+func unready(ctx context.Context, w *ledger.WorkItem, pr PR, e prEnv) error {
+	if e.pw == nil || pr.Draft || w.Review == nil || w.Review.ReadyAt == "" {
+		return nil
+	}
+	w.Review.ReadyAt = ""
+	if err := e.pw.MarkDraft(ctx, w.Repo, pr.Number); err != nil {
+		return fmt.Errorf("mark draft: %w", err)
+	}
+	return nil
 }
 
 func recordGate(w *ledger.WorkItem, pr PR, v *dod.Verdict, digest, ts string) {

@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -96,13 +97,14 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 			return err
 		}
 		pin(r)
+		derr := unready(ctx, w, pr, e)
 		if active {
 			toFeedback(w, e.ts, "FEEDBACK_RUNNING")
-			return nil
+			return derr
 		}
 		// Someone pushed: the feedback agent for a reviewer, or a person.
 		// The new head needs its own verdict (design 5.5 rule 4).
-		return launchGate(ctx, w, pr, e, "HEAD_MOVED")
+		return errors.Join(derr, launchGate(ctx, w, pr, e, "HEAD_MOVED"))
 	}
 	if rounds > 0 {
 		toFeedback(w, e.ts, "CHANGES_REQUESTED")
@@ -113,7 +115,8 @@ func trackOne(ctx context.Context, w *ledger.WorkItem, e prEnv) error {
 		return nil
 	}
 	if w.State == ledger.HumanReview {
-		ensureReady(ctx, w, pr, e)
+		_, err := ensureReady(ctx, w, pr, e)
+		return err
 	}
 	return nil
 }

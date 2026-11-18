@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -291,4 +292,51 @@ func TestTrackMarksReadyAgainAfterANewGate(t *testing.T) {
 	assert.Equal(t, "MARKED_READY", last(w).Reason)
 	assert.Equal(t, []int{7}, gh.ready)
 	assertLints(t, items)
+}
+
+// TestTrackHeadMoveTurnsAReadyPRBackToDraft (Plan 9 review F6): a PR the
+// Dispatcher marked ready goes back to draft while its new head re-gates, on
+// both head-move paths; a MarkDraft error is a problem, and the item moves
+// anyway.
+func TestTrackHeadMoveTurnsAReadyPRBackToDraft(t *testing.T) {
+	for name, tc := range map[string]struct {
+		feedback bool
+		draftErr error
+		state    ledger.State
+	}{
+		"re-gate":          {false, nil, ledger.Gating},
+		"feedback running": {true, nil, ledger.Feedback},
+		"draft fails":      {false, errors.New("graphql: forbidden"), ledger.Gating},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := inReview(item(fieldKey, "config-only", ledger.Queued), "ack-agent")
+			gh := newFakeGH()
+			gh.draftErr = tc.draftErr
+			p := readyPR("ack-agent")
+			p.HeadSHA = head2
+			gh.prs[7] = p
+			l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}, feedback: tc.feedback}
+			problems := trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l))
+			assert.Equal(t, tc.state, w.State)
+			assert.Empty(t, w.Review.ReadyAt)
+			if tc.draftErr != nil {
+				require.Len(t, problems, 1)
+				assert.Contains(t, problems[0], "forbidden")
+				return
+			}
+			assert.Empty(t, problems)
+			assert.Equal(t, []int{7}, gh.drafted)
+		})
+	}
+
+	// Writes off, or a PR a person marked ready (no ReadyAt): left alone.
+	w := inReview(item(fieldKey, "config-only", ledger.Queued), "ack-agent")
+	w.Review.ReadyAt = ""
+	gh := newFakeGH()
+	p := readyPR("ack-agent")
+	p.HeadSHA = head2
+	gh.prs[7] = p
+	l := gateLauncher{fakeLauncher: &fakeLauncher{statuses: map[string]Status{}}, verdicts: map[string][]byte{}}
+	trackPRs(context.Background(), ledgerOf(w), trackEnv(gh, l))
+	assert.Empty(t, gh.drafted)
 }

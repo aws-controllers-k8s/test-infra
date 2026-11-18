@@ -360,3 +360,47 @@ func TestGateStalledEscalates(t *testing.T) {
 		assertLints(t, items)
 	}
 }
+
+// TestGateMarkReadyRacesAPush (Plan 9 review F6): if the head moved by the
+// time MarkReady landed, the PR goes back to draft and is not ready.
+func TestGateMarkReadyRacesAPush(t *testing.T) {
+	w, gh, l := bumpGating(t, dod.StatusPass, "")
+	gh.afterReady = func(f *fakeGH, n int) {
+		p := f.prs[n]
+		p.HeadSHA = head2
+		f.prs[n] = p
+	}
+	items := ledgerOf(w)
+	assert.Empty(t, gate(context.Background(), items, testEnv(gh, l, true)))
+	assert.Equal(t, ledger.HumanReview, w.State)
+	assert.Equal(t, "READY_PENDING", last(w).Reason)
+	assert.Equal(t, []int{7}, gh.drafted)
+	assert.Empty(t, w.Review.ReadyAt)
+	assertLints(t, items)
+}
+
+// TestGateMarkReadyErrorIsAProblem (Plan 9 review F6): the item still
+// reaches HUMAN_REVIEW (READY_PENDING), and the error is reported.
+func TestGateMarkReadyErrorIsAProblem(t *testing.T) {
+	w, gh, l := bumpGating(t, dod.StatusPass, "")
+	gh.readyErr = errors.New("graphql: forbidden")
+	problems := gate(context.Background(), ledgerOf(w), testEnv(gh, l, true))
+	require.Len(t, problems, 1)
+	assert.Contains(t, problems[0], "forbidden")
+	assert.Equal(t, ledger.HumanReview, w.State)
+	assert.Equal(t, "READY_PENDING", last(w).Reason)
+	assert.Empty(t, w.Review.ReadyAt)
+}
+
+// TestGatePassOnAReadyPRSaysAlreadyReady (Plan 9 review F6): MARKED_READY
+// only when the Dispatcher called MarkReady.
+func TestGatePassOnAReadyPRSaysAlreadyReady(t *testing.T) {
+	w, gh, l := bumpGating(t, dod.StatusPass, "")
+	p := gh.prs[7]
+	p.Draft = false
+	gh.prs[7] = p
+	gate(context.Background(), ledgerOf(w), testEnv(gh, l, true))
+	assert.Equal(t, ledger.HumanReview, w.State)
+	assert.Equal(t, "ALREADY_READY", last(w).Reason)
+	assert.Empty(t, gh.ready)
+}

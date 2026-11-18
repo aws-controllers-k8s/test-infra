@@ -19,7 +19,7 @@ Nothing in this directory is deployed by Argo CD or Flux
 | Runs as `periodic-service-account` | Runs as `autopilot-dispatcher` (test-pods) with the Role in `rbac.yaml` and the AWS role in `pod-identity.yaml` |
 | No cluster API calls | `create`, `get`, `list`, `patch` on `prowjobs` in `prow` |
 | No result reads | One S3 GET per finished run: `logs/<job>/<build id>/artifacts/agent-result.json`, at most 64 KiB; and, for GATING (Plan 9), `verdict.json` of a finished `autopilot-sdk-bump` or `autopilot-dod` job, at most 1 MiB |
-| No PR reads or writes (Plan 2-8) | Plan 9: reads, with `GITHUB_TOKEN`, only the PRs the ledger's `links.pr` names (pull, commits, reviews, commit tree, compare) and each queued repo's open PRs (runtime-release back-off). Its one write, marking a gated draft ready for review, needs `AUTOPILOT_PR_WRITE=true` and a separate `AUTOPILOT_PR_GITHUB_TOKEN`; both are off/absent in the periodic |
+| No PR reads or writes (Plan 2-8) | Plan 9: reads, with `GITHUB_TOKEN`, only the PRs the ledger's `links.pr` names (pull, commits, reviews, commit tree, compare) and each queued repo's open PRs (runtime-release back-off). Its writes, marking a gated draft ready for review and turning a PR it marked ready back into a draft while a new head re-gates (Plan 9 review F6), need `AUTOPILOT_PR_WRITE=true` and a separate `AUTOPILOT_PR_GITHUB_TOKEN`; both are off/absent in the periodic |
 | No other ProwJob reads | Plan 9: `list` of agent-plugin's `address-feedback` jobs for one PR (label selector), to wait while one runs; read only, never adopted, aborted or reconciled |
 
 No listener is opened anywhere: the Dispatcher is a client of the Kubernetes

@@ -79,10 +79,12 @@ type PRClient interface {
 }
 
 // PRWriter is the Dispatcher's only write to controller repos: marking a
-// gated draft ready for review (Plan 9 decision 4). It is nil unless the
-// job sets AUTOPILOT_PR_WRITE=true.
+// gated draft ready for review (Plan 9 decision 4), and turning a PR it
+// marked ready back into a draft while a new head re-gates (Plan 9 review
+// F6). It is nil unless the job sets AUTOPILOT_PR_WRITE=true.
 type PRWriter interface {
 	MarkReady(ctx context.Context, repo string, number int) error
+	MarkDraft(ctx context.Context, repo string, number int) error
 }
 
 // ErrNoVerdict: the run left no verdict.json.

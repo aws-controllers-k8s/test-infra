@@ -178,3 +178,19 @@ func TestWriterMarksReady(t *testing.T) {
 	require.NoError(t, w.MarkReady(context.Background(), "o/r", 3))
 	assert.Contains(t, query, "markPullRequestReadyForReview")
 }
+
+func TestWriterMarksDraft(t *testing.T) {
+	var query string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/pulls/3", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"number":3,"node_id":"PR_x"}`)
+	})
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		query = string(b)
+		fmt.Fprint(w, `{"data":{}}`)
+	})
+	w := &Writer{Forge: &sdkbump.GitHubForge{Client: client(t, mux)}}
+	require.NoError(t, w.MarkDraft(context.Background(), "o/r", 3))
+	assert.Contains(t, query, "convertPullRequestToDraft")
+}

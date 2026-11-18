@@ -44,6 +44,12 @@ type fakeGH struct {
 	open    map[string][]PR
 	err     error
 	ready   []int
+	drafted []int
+	// readyErr fails MarkReady; afterReady runs after a successful one (a
+	// push racing the write).
+	readyErr   error
+	afterReady func(f *fakeGH, n int)
+	draftErr   error
 }
 
 func newFakeGH() *fakeGH {
@@ -79,9 +85,26 @@ func (f *fakeGH) IsAncestor(_ context.Context, _, base, _ string) (bool, error) 
 func (f *fakeGH) OpenPRs(_ context.Context, repo string) ([]PR, error) { return f.open[repo], nil }
 
 func (f *fakeGH) MarkReady(_ context.Context, _ string, n int) error {
+	if f.readyErr != nil {
+		return f.readyErr
+	}
 	f.ready = append(f.ready, n)
 	p := f.prs[n]
 	p.Draft = false
+	f.prs[n] = p
+	if f.afterReady != nil {
+		f.afterReady(f, n)
+	}
+	return nil
+}
+
+func (f *fakeGH) MarkDraft(_ context.Context, _ string, n int) error {
+	if f.draftErr != nil {
+		return f.draftErr
+	}
+	f.drafted = append(f.drafted, n)
+	p := f.prs[n]
+	p.Draft = true
 	f.prs[n] = p
 	return nil
 }

@@ -211,8 +211,8 @@ func (r *Reader) OpenPRs(ctx context.Context, repo string) ([]dispatcher.PR, err
 	return nil, fmt.Errorf("%s has more than %d open PRs", repo, maxPages*perPage)
 }
 
-// Writer is the dispatcher.PRWriter: the Dispatcher's only write to a
-// controller repo. It uses sdkbump's GraphQL ready mutation.
+// Writer is the dispatcher.PRWriter: the Dispatcher's only writes to a
+// controller repo. It uses sdkbump's GraphQL ready and draft mutations.
 type Writer struct {
 	Forge *sdkbump.GitHubForge
 }
@@ -221,4 +221,10 @@ var _ dispatcher.PRWriter = (*Writer)(nil)
 
 func (w *Writer) MarkReady(ctx context.Context, repo string, number int) error {
 	return w.Forge.SetDraft(ctx, repo, number, false)
+}
+
+// MarkDraft turns a PR the Dispatcher marked ready back into a draft while a
+// new head re-gates (Plan 9 review F6).
+func (w *Writer) MarkDraft(ctx context.Context, repo string, number int) error {
+	return w.Forge.SetDraft(ctx, repo, number, true)
 }
