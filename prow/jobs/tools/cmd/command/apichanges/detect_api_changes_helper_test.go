@@ -19,6 +19,8 @@ import (
 	"github.com/google/go-github/v63/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
 )
 
 func TestTagPrefixFor(t *testing.T) {
@@ -1220,6 +1222,10 @@ func TestRenderIssueBody(t *testing.T) {
 		"### Unclassified operations\n" +
 		"- `ResetWidget`\n" +
 		"\n" +
+		"<!-- ack-api-change-findings v1 service=\"demo\" from=\"v1.41.5\" to=\"v1.44.0\" count=2 omitted=0\n" +
+		"\"new-resource\"|\"Gizmo\"|\"Gizmo\"|\"new-resource\"|\"\"\n" +
+		"\"spec-field\"|\"Widget\"|\"Description\"|\"regen\"|\"\"\n" +
+		"-->\n" +
 		"---\n" +
 		"Compared aws-sdk-go-v2 v1.41.5 -> v1.44.0 with code-generator " + codeGeneratorVersion + "\n" +
 		"<!-- ack-api-change-fingerprint: 03b60f4f7efc4e51e585d73b1e52f70ada4e24ab62be85f278db34e53975de49 -->\n" +
@@ -2161,11 +2167,11 @@ func TestRenderIssueBodyListsDroppedOperations(t *testing.T) {
 		append(sampleFindings(), droppedFindings()...))
 
 	// Collapsed, sorted, one line per operation with its reason, just above the
-	// footer so it never displaces a finding.
+	// findings block and footer so it never displaces a finding.
 	assert.Contains(t, body, "\n<details>\n<summary>2 new operations not reported, each with the reason</summary>\n\n"+
 		"- `SearchVectors` — "+dropQuery+"\n"+
 		"- `StartFlowCapture` — "+dropAction+"\n"+
-		"\n</details>\n\n---\nCompared aws-sdk-go-v2")
+		"\n</details>\n\n"+findingsblock.Begin)
 	// Shown, never counted: the body is otherwise identical and the fingerprint
 	// does not move, so a newly dropped operation cannot trigger a refresh.
 	assert.Equal(t, plain, strings.Replace(body, droppedBlock(droppedFindings(), math.MaxInt), "", 1))
@@ -3322,7 +3328,9 @@ func TestReconcileIssueRefreshTruncatesToFitTextOutsideTheRegion(t *testing.T) {
 	}
 	full, _ := renderIssueBody("demo", "v1.41.5", "v1.44.0", findings)
 	stale := staleIssueBody()
-	note := "\n" + strings.Repeat("x", githubMaxIssueBody-len(full)+2000) + "\n"
+	// The shortfall is half the report: a small one is absorbed by the findings
+	// block, which shrinks to a quarter of the region before the visible list.
+	note := "\n" + strings.Repeat("x", githubMaxIssueBody-len(full)+len(full)/2) + "\n"
 	require.Greater(t, len(note)+len(full), githubMaxIssueBody, "the untruncated report must not fit")
 
 	var patchedBody string
@@ -3345,6 +3353,10 @@ func TestReconcileIssueRefreshTruncatesToFitTextOutsideTheRegion(t *testing.T) {
 	assert.Contains(t, patchedBody, note, "the maintainer text is kept whole")
 	assert.Contains(t, patchedBody, "omitted to keep this issue body within GitHub's size limit")
 	assert.Equal(t, fingerprintFindings("demo", actionable(findings)), parseFingerprint(patchedBody))
+	block, found, err := findingsblock.Parse(patchedBody)
+	require.NoError(t, err)
+	require.True(t, found, "the findings block survives truncation")
+	assert.Equal(t, 300, block.Count+block.Omitted)
 }
 
 func TestReconcileServicesSkipsTheRefetchForAStaleIssue(t *testing.T) {
@@ -3363,4 +3375,31 @@ func TestReconcileServicesSkipsTheRefetchForAStaleIssue(t *testing.T) {
 		[]string{"svc1"}, existing, nil, 10, 1, analyze, false, "")
 	require.NoError(t, err)
 	assert.Empty(t, writeFailures)
+}
+
+func TestRenderIssueBodyKeepsFindingsBlockWhenTruncated(t *testing.T) {
+	var findings []Finding
+	for i := 0; i < 20000; i++ {
+		findings = append(findings, Finding{
+			Kind: fmt.Sprintf("Kind%d", i), Class: ClassSpecField,
+			Subject: fmt.Sprintf("Field%d", i), NewSincePin: true,
+		})
+	}
+	body, fingerprint := renderIssueBody("demo", "v1.41.5", "v1.44.0", findings)
+	assert.Less(t, len(body), githubMaxIssueBody)
+
+	b, found, err := findingsblock.Parse(body)
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.Positive(t, b.Count)
+	assert.Positive(t, b.Omitted)
+	assert.Equal(t, 20000, b.Count+b.Omitted)
+	assert.Equal(t, findingsblock.Header{Service: "demo", From: "v1.41.5", To: "v1.44.0"}, b.Header)
+
+	// The block is inside the generated region and does not move the fingerprint.
+	start, end, shape := generatedRegion(body)
+	require.Equal(t, regionUnique, shape)
+	at := strings.Index(body, findingsblock.Begin)
+	assert.True(t, at > start && at < end)
+	assert.Equal(t, fingerprint, parseFingerprint(body))
 }
