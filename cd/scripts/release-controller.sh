@@ -137,7 +137,9 @@ if ! buildah bud \
 fi
 
 # Build arm64 controller image (default variant is v8 (https://go.dev/wiki/GoArm))
-# NOTE(a-hilaly): We're using amd64 as the base image for arm64 builds
+# The image is built for arm64 so its base layers and OCI config match the
+# linux/arm64 manifest entry. The Dockerfile pins the builder stage to
+# $BUILDPLATFORM, so Go still cross-compiles natively on the build host.
 if ! buildah bud \
   --quiet="$QUIET" \
   -t "$AWS_SERVICE_DOCKER_IMG"-arm64 \
@@ -149,7 +151,7 @@ if ! buildah bud \
   --build-arg golang_version="$GOLANG_VERSION" \
   --build-arg eks_distro_version="$BASE_IMAGE_VERSION" \
   --build-arg target_arch="arm64" \
-  --arch "amd64" \
+  --arch "arm64" \
   "$DOCKER_BUILD_CONTEXT"; then
   exit 2
 fi
