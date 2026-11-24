@@ -81,8 +81,24 @@ run_chainsaw_tests() {
         config_args=(--config "$CHAINSAW_TEST_PATH/.chainsaw.yaml")
     fi
 
+    # Chainsaw reports each step, under a name Prow's JUnit lens doesn't read
+    # (it reads junit*.xml). chainsaw_junit.py turns that into junit_chainsaw.xml,
+    # one row per test that names the step a failed test failed at, and the step
+    # report stays in the artifacts
+    local report_dir="${ARTIFACTS:-/tmp}"
     chainsaw test --test-dir "$CHAINSAW_TEST_PATH" "${config_args[@]}" \
-        --report-format JUNIT-TEST --report-path "${ARTIFACTS:-/tmp}" --report-name junit_chainsaw
+        --report-format JUNIT-STEP --report-path "$report_dir" --report-name chainsaw_steps
+    local test_exit_code=$?
+
+    if [[ -f "$report_dir/chainsaw_steps.xml" ]]; then
+        python3 "$SCRIPTS_DIR/lib/chainsaw_junit.py" "$report_dir/chainsaw_steps.xml" \
+            "$CHAINSAW_TEST_PATH" "$report_dir/junit_chainsaw.xml" || {
+            # Better the steps without their tests' names than nothing
+            error_msg "Couldn't summarize the Chainsaw report per test, so the job page shows its steps"
+            cp "$report_dir/chainsaw_steps.xml" "$report_dir/junit_chainsaw.xml"
+        }
+    fi
+    return $test_exit_code
 }
 
 run_chainsaw() {
@@ -151,6 +167,7 @@ ensure_binaries() {
         check_is_installed "aws"
         check_is_installed "jq"
         check_is_installed "kubectl"
+        check_is_installed "python3"
         return
     fi
     check_is_installed "python"
