@@ -11,6 +11,10 @@
 # force-pushes, and commits only changes under autopilot/.
 # AUTOPILOT_COMMENT=true posts the status comments (only with ledger writes on);
 # anything else prints the planned comment edits.
+# AUTOPILOT_METRICS_NAMESPACE and AUTOPILOT_METRICS_REGION (the periodic sets
+# ACK/Autopilot, us-west-2) publish the tick's CloudWatch metrics (Plan 10), dry
+# run or not; unset publishes nothing. A rejected push re-runs the tick, so its
+# counts publish again for that attempt (rare: the job is the only writer).
 #
 # Optional overrides, for running against a sandbox repo (unset = production):
 #   AUTOPILOT_ISSUES_REPO   repo with the issues and the ledger (default ack-private)
@@ -73,6 +77,8 @@ GIT_NAME="${AUTOPILOT_GIT_NAME:-ack-bot}"
 GIT_EMAIL="${AUTOPILOT_GIT_EMAIL:-ack-bot@users.noreply.github.com}"
 WRITE="${AUTOPILOT_LEDGER_WRITE:-false}"
 COMMENT="${AUTOPILOT_COMMENT:-false}"
+METRICS_NAMESPACE="${AUTOPILOT_METRICS_NAMESPACE:-}"
+METRICS_REGION="${AUTOPILOT_METRICS_REGION:-}"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 
 fail() { echo "autopilot-dispatch: $*" >&2; exit 1; }
@@ -113,7 +119,8 @@ dispatch() {
   "$BIN" autopilot dispatch \
     --issues-owner "$OWNER" --issues-repo "$ISSUES_REPO" \
     --bot-login "$BOT_LOGIN" --team-owner "$TEAM_OWNER" --team-slug "$TEAM_SLUG" \
-    --ledger-dir "$LEDGER_DIR" --test-infra-dir "$TEST_INFRA_DIR" "$@"
+    --ledger-dir "$LEDGER_DIR" --test-infra-dir "$TEST_INFRA_DIR" \
+    --metrics-namespace "$METRICS_NAMESPACE" --metrics-region "$METRICS_REGION" "$@"
 }
 
 post_status() {

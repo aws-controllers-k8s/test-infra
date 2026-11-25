@@ -66,6 +66,16 @@
           # wait until they escalate GATE_STALLED.
           - name: AUTOPILOT_DOD_PUBLIC_KEY
             value: ""
+          # The tick publishes RunSucceeded (Job=autopilot-dispatch),
+          # WorkItemsReapedToday, GateFirstPass, GateFirstFail, RunsCompleted,
+          # RunsFailed and ItemsEscalated here, once per tick, dry run or not
+          # (ACK Autopilot Plan 10); the periodic role's
+          # CloudWatchAutopilotMetrics allows this namespace only. Empty
+          # publishes nothing.
+          - name: AUTOPILOT_METRICS_NAMESPACE
+            value: "ACK/Autopilot"
+          - name: AUTOPILOT_METRICS_REGION
+            value: "us-west-2"
           # The prow launcher resolves agent-workflows.yaml's image repository
           # with it, as the agent-workflow-config chart does for agent-plugin.
           - name: PROW_IMAGES_REPO_URI

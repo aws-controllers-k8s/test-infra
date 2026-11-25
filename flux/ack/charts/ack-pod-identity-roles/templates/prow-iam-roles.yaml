@@ -365,6 +365,23 @@ spec:
           }
         ]
       }
+    # The autopilot-dispatch periodic publishes its tick metrics (ACK Autopilot Plan 10).
+    # Scoped like the one above; moves to autopilot-dispatcher-role when the Dispatcher
+    # gets its own ServiceAccount (prow/autopilot/deploy/pod-identity.yaml).
+    CloudWatchAutopilotMetrics: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": ["cloudwatch:PutMetricData"],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {"cloudwatch:namespace": "ACK/Autopilot"}
+            }
+          }
+        ]
+      }
 ---
 # Workflow Runner Role - used by agent workflow job pods in test-pods
 # to mount the SecretProviderClass via the Secrets Store CSI driver.
