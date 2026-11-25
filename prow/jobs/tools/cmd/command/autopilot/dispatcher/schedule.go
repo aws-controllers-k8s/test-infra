@@ -48,7 +48,22 @@ const (
 	CapNoLane = "no-lane"
 	// CapObserve: a QUEUED item at autonomy level "observe" never launches.
 	CapObserve = "observe"
+	// CapNewResourceOff: policy/new-resource.yaml is missing or not enabled.
+	CapNewResourceOff = "new-resource-off"
+	// CapNewResourceDaily and CapNewResourceOpenPR are policy/new-resource.yaml
+	// max_launches_per_day (org-wide) and max_open_prs_per_repo.
+	CapNewResourceDaily  = "new-resource max_launches_per_day"
+	CapNewResourceOpenPR = "new-resource max_open_prs_per_repo"
+	// CapRuntimeRelease: an ack-bot runtime-release PR (head ack-bot/rt-*)
+	// opened in the last RuntimeReleaseBackoff is open in the repo (design
+	// 5.1 conflict avoidance).
+	CapRuntimeRelease = "runtime-release-open"
 )
+
+// RuntimeReleaseBackoff bounds the runtime-release back-off: a runtime PR
+// older than this no longer holds the repo, so a repo whose runtime PR stays
+// open for weeks is not starved (design Appendix A [medium]).
+const RuntimeReleaseBackoff = 7 * 24 * time.Hour
 
 // candidate is a QUEUED item schedule picked, with its lane.
 type candidate struct {
@@ -71,6 +86,20 @@ type load struct {
 	awaitingReview int
 	launchesToday  map[string]int // class
 	expensiveToday map[string]int // service
+	// newResourcePRs are new-resource items whose PR is still open but that
+	// openPRs does not count (ESCALATED, QUEUED or BLOCKED with a PR), by
+	// repo and item key (Plan 9 review F10).
+	newResourcePRs map[string]map[string]bool
+}
+
+// newResourceOpenPRs counts the repo's open new-resource PRs, except the
+// candidate's own.
+func (l *load) newResourceOpenPRs(w *ledger.WorkItem) int {
+	n := l.openPRs[w.Repo+"|new-resource"] + len(l.newResourcePRs[w.Repo])
+	if l.newResourcePRs[w.Repo][w.Key] {
+		n--
+	}
+	return n
 }
 
 // newLoad counts the ledger's load, plus orphans: runs the launcher sees in
@@ -78,7 +107,8 @@ type load struct {
 // keeps its service busy.
 func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time, orphans []ActiveJob) *load {
 	l := &load{runsPerRepo: map[string]int{}, openPRs: map[string]int{}, launchesToday: map[string]int{},
-		expensiveToday: map[string]int{}, laneRuns: map[string]int{}, busyServices: map[string]bool{}}
+		expensiveToday: map[string]int{}, laneRuns: map[string]int{}, busyServices: map[string]bool{},
+		newResourcePRs: map[string]map[string]bool{}}
 	for _, o := range orphans {
 		l.laneRuns[o.Workflow]++
 		if llmWorkflow(o.Workflow) {
@@ -90,7 +120,9 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time,
 	for _, w := range items {
 		if w.State.ActiveRun() {
 			l.runsPerRepo[w.Repo]++
-			if w.Claim != nil {
+			// Plan 9 review F3: only RUNNING holds an LLM or lane slot; a
+			// GATING or RETRY_ENV item waits on a dod job, which runs no LLM.
+			if w.State == ledger.Running && w.Claim != nil {
 				l.laneRuns[w.Claim.Workflow]++
 				if llmWorkflow(w.Claim.Workflow) {
 					l.llmRuns++
@@ -102,9 +134,16 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time,
 		if w.State.OpenPR() {
 			l.openPRs[w.Repo+"|"+w.ChangeClass]++
 		}
-		// A run of a human-merge item will open a PR that needs a human, so
-		// active runs count against review backpressure too.
-		if w.AutonomyLevel == "human-merge" && (w.State.ActiveRun() || (w.State.OpenPR() && w.State != ledger.MergeSoak)) {
+		if w.ChangeClass == "new-resource" && w.Links.PR != "" && !w.State.Landed() && !w.State.Terminal() &&
+			!w.State.OpenPR() && !w.State.ActiveRun() {
+			if l.newResourcePRs[w.Repo] == nil {
+				l.newResourcePRs[w.Repo] = map[string]bool{}
+			}
+			l.newResourcePRs[w.Repo][w.Key] = true
+		}
+		// A run of a human-merge or draft item will open a PR that needs a
+		// human, so active runs count against review backpressure too.
+		if needsReview(w) && (w.State.ActiveRun() || (w.State.OpenPR() && w.State != ledger.MergeSoak)) {
 			l.awaitingReview++
 		}
 		for _, h := range w.History {
@@ -125,6 +164,8 @@ func newLoad(items map[string]*ledger.WorkItem, b policy.Budgets, now time.Time,
 }
 
 func (l *load) add(w *ledger.WorkItem, ln lane, b policy.Budgets) {
+	// Its PR now counts through openPRs.
+	delete(l.newResourcePRs[w.Repo], w.Key)
 	l.runsPerRepo[w.Repo]++
 	l.laneRuns[ln.Workflow]++
 	if ln.LLM {
@@ -135,9 +176,15 @@ func (l *load) add(w *ledger.WorkItem, ln lane, b policy.Budgets) {
 	if b.Expensive(w.Service) {
 		l.expensiveToday[w.Service]++
 	}
-	if w.AutonomyLevel == "human-merge" {
+	if needsReview(w) {
 		l.awaitingReview++
 	}
+}
+
+// needsReview reports whether the item's PR waits for a person: human-merge,
+// and draft (new-resource PRs get their API review on the draft).
+func needsReview(w *ledger.WorkItem) bool {
+	return w.AutonomyLevel == "human-merge" || w.AutonomyLevel == "draft"
 }
 
 // schedule picks the QUEUED items to launch this tick, in launch order, and
@@ -153,6 +200,12 @@ func schedule(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time)
 // adopts the running job, so picking it starts nothing, and its run must be
 // counted before anything else is weighed.
 func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time, orphans []ActiveJob, adopt map[string]bool) ([]candidate, []capped) {
+	return scheduleHeld(items, p, now, orphans, adopt, nil)
+}
+
+// scheduleHeld is scheduleWith plus the repos where a runtime-release PR is
+// open (CapRuntimeRelease).
+func scheduleHeld(items map[string]*ledger.WorkItem, p policy.Policy, now time.Time, orphans []ActiveJob, adopt map[string]bool, runtimeRelease map[string]bool) ([]candidate, []capped) {
 	sw, b := p.Switches, p.Budgets
 	lastVisit := map[string]string{}
 	var queue []*ledger.WorkItem
@@ -230,10 +283,19 @@ func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.T
 			cap = CapServiceNotEnabled
 		case runs >= maxRuns:
 			cap = CapRuns
+		case w.ChangeClass == "new-resource" && !p.NewResourceEnabled():
+			cap = CapNewResourceOff
 		case adopt[nextLaunchID(w)]:
 			// Already running: no load cap applies.
 		case l.runsPerRepo[w.Repo] >= b.MaxConcurrentRunsPerRepo || l.busyServices[w.Service]:
 			cap = CapRepoBusy
+		case runtimeRelease[w.Repo]:
+			cap = CapRuntimeRelease
+		// The owner's new-resource caps hold in every band.
+		case w.ChangeClass == "new-resource" && l.launchesToday["new-resource"] >= p.NewResource.MaxLaunchesPerDay:
+			cap = CapNewResourceDaily
+		case w.ChangeClass == "new-resource" && l.newResourceOpenPRs(w) >= p.NewResource.MaxOpenPRsPerRepo:
+			cap = CapNewResourceOpenPR
 		case ln.LLM && l.llmRuns >= b.MaxConcurrentLLMRuns:
 			cap = CapLLM
 		case ln.MaxRunning > 0 && l.laneRuns[ln.Workflow] >= ln.MaxRunning:
@@ -244,7 +306,7 @@ func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.T
 			cap = CapOpenPRs
 		case perClass && w.ChangeClass == "SDK-bump" && l.launchesToday["SDK-bump"] >= b.MaxSDKBumpLaunchesPerDay:
 			cap = CapSDKBumpDaily
-		case w.AutonomyLevel == "human-merge" && l.awaitingReview >= b.MaxPRsAwaitingReview:
+		case needsReview(w) && l.awaitingReview >= b.MaxPRsAwaitingReview:
 			cap = CapReview
 		case w.ChangeClass == "SDK-bump" && w.AutonomyLevel == "human-merge" && reserve > 0 &&
 			l.awaitingReview >= b.MaxPRsAwaitingReview-reserve:

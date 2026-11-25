@@ -65,9 +65,11 @@ func last(w *ledger.WorkItem) ledger.Transition { return w.History[len(w.History
 func TestReconcilePROpened(t *testing.T) {
 	w, problems := runWith(t, 1, 3, finished("pr_opened", "", "https://github.com/aws-controllers-k8s/s3-controller/pull/240"))
 	assert.Empty(t, problems)
-	assert.Equal(t, ledger.HumanReview, w.State)
+	// Plan 9: RUNNING -> GATING. The claim stays until gate reads the
+	// verdict; gate, not reconcile, moves the item on.
+	assert.Equal(t, ledger.Gating, w.State)
 	assert.Equal(t, "https://github.com/aws-controllers-k8s/s3-controller/pull/240", w.Links.PR)
-	assert.Nil(t, w.Claim)
+	require.NotNil(t, w.Claim)
 	assert.Nil(t, w.Verdict)
 	assert.Equal(t, "PR_OPENED", last(w).Reason)
 }
@@ -110,10 +112,28 @@ func TestReconcileUnknownOutcomeKeptVerbatim(t *testing.T) {
 
 // pr_updated is a valid run outcome (address-feedback) but not a work-item
 // verdict, so the Dispatcher escalates it verbatim rather than accept it.
-func TestReconcilePRUpdatedEscalates(t *testing.T) {
+func TestReconcilePRUpdatedGates(t *testing.T) {
+	// Plan 9: a run that updated its open PR is gated like a new one.
 	w, _ := runWith(t, 1, 3, finished("pr_updated", "", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"))
+	assert.Equal(t, ledger.Gating, w.State)
+	assert.Equal(t, "PR_UPDATED", last(w).Reason)
+}
+
+func TestReconcileSDKBumpGateEnvGates(t *testing.T) {
+	// sdk-bump's in-process gate hit an environment failure after opening
+	// its PR: gate retries it with a dod job, no attempt charged.
+	w, _ := runWith(t, 1, 3, finishedAs(JobFailed, "failed", "GATE_ENV", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"))
+	assert.Equal(t, ledger.Gating, w.State)
+	assert.Equal(t, 1, w.Attempts.Runs)
+}
+
+func TestReconcileRefusesAnotherPR(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	w.Links.PR = "https://github.com/aws-controllers-k8s/s3-controller/pull/1"
+	f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: *finished("pr_opened", "", "https://github.com/aws-controllers-k8s/s3-controller/pull/2")}}
+	reconcile(context.Background(), ledgerOf(w), f, testPolicy(t).Budgets, now)
 	assert.Equal(t, ledger.Escalated, w.State)
-	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: `UNKNOWN_VERDICT "pr_updated"`}, w.Verdict)
+	assert.Equal(t, "INVALID_PR_LINK", w.Verdict.Reason)
 }
 
 func TestReconcileFailedRequeuesThenEscalates(t *testing.T) {
@@ -229,14 +249,18 @@ func TestReconcileEmptyRepoRejectsPR(t *testing.T) {
 	assert.Equal(t, "INVALID_PR_LINK", w.Verdict.Reason)
 }
 
-func TestReconcileOtherActiveStates(t *testing.T) {
+func TestReconcileLeavesGatingToGate(t *testing.T) {
+	// Plan 9: GATING and RETRY_ENV claims are gate's; reconcile never reads
+	// them, even when the claimed job finished or is overdue.
 	for _, s := range []ledger.State{ledger.Gating, ledger.RetryEnv} {
-		w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+		w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T00:30:00Z", 1, 3)
 		w.State = s
+		w.History = append(w.History, ledger.Transition{TS: t0, To: s, By: actor})
 		f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: *finished("completed_no_change", "", "")}}
 		items := ledgerOf(w)
-		reconcile(context.Background(), items, f, testPolicy(t).Budgets, now)
-		assert.Equal(t, ledger.Done, w.State, s)
+		reconcile(context.Background(), items, f, testPolicy(t).Budgets, now.Add(24*time.Hour))
+		assert.Equal(t, s, w.State)
+		assert.NotNil(t, w.Claim)
 		assertLints(t, items)
 	}
 }
@@ -287,7 +311,7 @@ func TestReconcileNoUsageLeavesFieldUnset(t *testing.T) {
 
 func TestApplySDKBumpOutcomes(t *testing.T) {
 	for outcome, want := range map[string]ledger.State{
-		"pr_opened":           ledger.HumanReview,
+		"pr_opened":           ledger.Gating,
 		"completed_no_change": ledger.Done,
 		"needs_human":         ledger.Escalated,
 	} {
@@ -314,7 +338,7 @@ func TestReconcileCrossChecksTheJobState(t *testing.T) {
 		state  ledger.State
 		reason string
 	}{
-		"succeeded, pr_opened":       {finishedAs(JobSucceeded, "pr_opened", "", pr), ledger.HumanReview, "PR_OPENED"},
+		"succeeded, pr_opened":       {finishedAs(JobSucceeded, "pr_opened", "", pr), ledger.Gating, "PR_OPENED"},
 		"succeeded, no change":       {finishedAs(JobSucceeded, "completed_no_change", "NO_DIFF", ""), ledger.Done, "NO_DIFF"},
 		"failed, failed":             {finishedAs(JobFailed, "failed", "BUILD_FAILED", ""), ledger.Queued, "RETRY BUILD_FAILED"},
 		"failed, needs_human":        {finishedAs(JobFailed, "needs_human", "GATE_FAILED", ""), ledger.Escalated, "GATE_FAILED"},
@@ -333,7 +357,11 @@ func TestReconcileCrossChecksTheJobState(t *testing.T) {
 			assert.Empty(t, problems)
 			assert.Equal(t, tc.state, w.State)
 			assert.Equal(t, tc.reason, last(w).Reason)
-			assert.Nil(t, w.Claim)
+			if tc.state == ledger.Gating {
+				assert.NotNil(t, w.Claim, "gate reads the verdict of the claimed run")
+			} else {
+				assert.Nil(t, w.Claim)
+			}
 			if tc.reason == "RETRY RESULT_STATE_MISMATCH" {
 				assert.Empty(t, w.Links.PR, "a mismatched file never reaches the ledger")
 				assert.Nil(t, w.Usage)

@@ -11,9 +11,11 @@ Environment variables:
   WORKFLOW_NAME:       Selected workflow name (add-resource, add-field or
                        address-feedback).
   GITHUB_ACTOR:        Name of the GitHub account creating the issues & PR.
+                       Replaced by the token's own account (logged if it differs).
   GITHUB_TOKEN:        Personal Access Token for '$GITHUB_ACTOR'
   GITHUB_ORG:          Name of the GitHub organization.
-  GITHUB_EMAIL_PREFIX  Email prefix to use for GitHub commits.
+  GITHUB_EMAIL_PREFIX  Email prefix to use for GitHub commits. Replaced by the
+                       token account's user id (logged if it differs).
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
 
@@ -256,6 +258,17 @@ PR_SOURCE_BRANCH="$LOCAL_GIT_BRANCH"
 echo "$SCRIPT_NAME][INFO] Running $WORKFLOW_LABEL workflow for service: $SERVICE, resource: $RESOURCE${FIELD:+, field: $FIELD}"
 echo "$SCRIPT_NAME][INFO] Target repository: $GITHUB_ORG/$SERVICE-controller"
 
+# The fork, push, PR head and commit identity are the token's account
+# (utils/scripts/github-identity.sh), whatever GITHUB_ACTOR says.
+# shellcheck source=utils/scripts/github-identity.sh
+. "$WORKFLOW_DIR/utils/scripts/github-identity.sh"
+if ! resolve_github_identity; then
+  echo "$SCRIPT_NAME][ERROR] could not read the GitHub account of GITHUB_TOKEN" >&2
+  set_result failed IDENTITY_LOOKUP_FAILED
+  exit 1
+fi
+echo "$SCRIPT_NAME][INFO] GitHub account: $GITHUB_ACTOR"
+
 USER_EMAIL="${GITHUB_ACTOR}@users.noreply.${GITHUB_DOMAIN:-"github.com"}"
 if [ -n "${GITHUB_EMAIL_PREFIX}" ]; then
     USER_EMAIL="${GITHUB_EMAIL_PREFIX}+${USER_EMAIL}"
@@ -312,7 +325,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   fi
   # The job pushes to the PR's head branch, so the head repository must be
   # the PR author's fork and this job's token must belong to that author.
-  TOKEN_USER=$(gh api user --jq .login)
+  TOKEN_USER="$GITHUB_ACTOR"
   if [ "${HEAD_OWNER,,}" != "${PR_AUTHOR,,}" ] || [ "${TOKEN_USER,,}" != "${PR_AUTHOR,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository owner ($HEAD_OWNER), PR author ($PR_AUTHOR) and token user ($TOKEN_USER) must match" >&2
     set_result needs_human IDENTITY_MISMATCH "$PR_URL"
@@ -388,6 +401,27 @@ else
   gh repo sync "$GITHUB_ACTOR/$SERVICE_REPO" --branch main --force >/dev/null
   git fetch origin main >/dev/null
   git reset --hard origin/main >/dev/null
+  # What the PR will merge into; the preflight diffs the agent's commit from it.
+  PREFLIGHT_BASE_SHA=$(git rev-parse HEAD)
+fi
+
+# Pre-push preflight for runs ACK Autopilot started: ack-dod's git-only checks
+# (path-allowlist, code-scan, leak-inventory, sdk-pin) on the agent's commit
+# before it reaches the fork, which is public. Built here, before the agent
+# runs, so a build failure costs no tokens. It is advisory: it shares the pod
+# with the agent, so it can only stop a push; the separate, signed ack-dod
+# job still gates the PR.
+PREFLIGHT_BIN=""
+if [ -n "$WORK_ITEM" ] && [ "$WORKFLOW_NAME" != "address-feedback" ]; then
+  PREFLIGHT_SRC="${TEST_INFRA_DIR:-$REPO_ROOT/test-infra}"
+  PREFLIGHT_BIN="/tmp/ack-preflight/ack-build-tools"
+  echo "$SCRIPT_NAME][INFO] Building the pre-push preflight from $PREFLIGHT_SRC..."
+  mkdir -p "$(dirname "$PREFLIGHT_BIN")"
+  if ! (cd "$PREFLIGHT_SRC" && go build -mod=mod -o "$PREFLIGHT_BIN" ./prow/jobs/tools/cmd); then
+    echo "$SCRIPT_NAME][ERROR] could not build the pre-push preflight" >&2
+    set_result failed PREFLIGHT_UNAVAILABLE
+    exit 1
+  fi
 fi
 
 cd "$WORKFLOW_DIR"
@@ -583,6 +617,33 @@ COMMIT_ARGS=(-m "$COMMIT_MSG")
 [ -n "$TRAILERS" ] && COMMIT_ARGS+=(-m "$TRAILERS")
 git commit "${COMMIT_ARGS[@]}" >/dev/null
 
+# Nothing is pushed unless the preflight passes. Exit 1 is a failing check, 2
+# is no decision; both are a failed run, which the Dispatcher retries.
+if [ -n "$PREFLIGHT_BIN" ]; then
+  echo "$SCRIPT_NAME][INFO] Running the pre-push preflight..."
+  PREFLIGHT_ARGS=(autopilot preflight --repo-dir "$SERVICE_REPO_DIR"
+    --base-ref "$PREFLIGHT_BASE_SHA" --head-ref HEAD --change-class "$CHANGE_CLASS"
+    --report-out "${ARTIFACTS:-/tmp/ack-test-logs}/preflight.txt")
+  [ -s "$PR_BODY_FILE" ] && PREFLIGHT_ARGS+=(--pr-body-file "$PR_BODY_FILE")
+  set +e
+  "$PREFLIGHT_BIN" "${PREFLIGHT_ARGS[@]}"
+  PREFLIGHT_CODE=$?
+  set -e
+  case "$PREFLIGHT_CODE" in
+    0) ;;
+    1)
+      echo "$SCRIPT_NAME][ERROR] the pre-push preflight blocked this commit; not pushing" >&2
+      set_result failed PREFLIGHT_FAILED
+      exit 1
+      ;;
+    *)
+      echo "$SCRIPT_NAME][ERROR] the pre-push preflight could not decide (exit $PREFLIGHT_CODE); not pushing" >&2
+      set_result failed PREFLIGHT_UNAVAILABLE
+      exit 1
+      ;;
+  esac
+fi
+
 # Push changes to the forked repository
 echo "$SCRIPT_NAME][INFO] Pushing changes to the forked repository..."
 if ! git push --force "https://github.com/$GITHUB_ACTOR/$SERVICE_REPO.git" \
@@ -618,16 +679,27 @@ fi
 # pull request does exist) rather than killing the job after the push.
 PR_URL=$(gh pr list -R "$ORG_REPO" --head "$PR_SOURCE_BRANCH" --base "$PR_TARGET_BRANCH" \
   --author "$GITHUB_ACTOR" --state open --json url --jq '.[0].url // ""') || PR_URL=""
+# A run ACK Autopilot started opens a draft: the Dispatcher's GATING pass marks
+# it ready once its own ack-dod job passes on this head (Plan 9). A /agent run
+# keeps today's ready PR.
+DRAFT_ARGS=()
+[ -n "$WORK_ITEM" ] && DRAFT_ARGS=(--draft)
 if [ -n "$PR_URL" ]; then
   echo "$SCRIPT_NAME][INFO] Reusing the open pull request $PR_URL"
   # The reused PR keeps the body from the run that opened it; refresh it so
   # the squash merge carries this run's description and trailers.
   gh pr edit "$PR_URL" -R "$ORG_REPO" -F "$PR_BODY_FILE" >/dev/null \
     || echo "$SCRIPT_NAME][WARN] could not refresh the body of $PR_URL" >&2
+  # The new head has no verdict yet: back to draft until GATING passes. It
+  # fails harmlessly when the PR is a draft already.
+  if [ -n "$WORK_ITEM" ]; then
+    gh pr ready "$PR_URL" -R "$ORG_REPO" --undo >/dev/null 2>&1 \
+      || echo "$SCRIPT_NAME][INFO] $PR_URL is a draft already (or could not be made one)"
+  fi
 else
   echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch... "
   if ! PR_URL=$(gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" -F "$PR_BODY_FILE" \
-       -B "$PR_TARGET_BRANCH" --head "$GITHUB_ACTOR:$PR_SOURCE_BRANCH"); then
+       -B "$PR_TARGET_BRANCH" --head "$GITHUB_ACTOR:$PR_SOURCE_BRANCH" "${DRAFT_ARGS[@]}"); then
     echo ""
     echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
     set_result failed PR_CREATE_FAILED

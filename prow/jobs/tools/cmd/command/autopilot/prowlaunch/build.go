@@ -62,7 +62,7 @@ var utilityImages = UtilityImages{
 // launchIDRE is a dispatcher launch id: a run (r<n>), an sdk-bump refresh
 // (f<8 hex>) or a triage run (t<n>, Plan 8) of one item generation. It is
 // the job's name.
-var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2})$`)
+var launchIDRE = regexp.MustCompile(`^autopilot-([0-9a-f]{16})-g([0-9]{1,4})-(r[1-9][0-9]{0,2}|f[0-9a-f]{8}|t[1-9][0-9]{0,2}|d[1-9][0-9]{0,2})$`)
 
 var (
 	bucketURLRE = regexp.MustCompile(`^s3://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
@@ -120,6 +120,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 	if strings.HasPrefix(run, "f") && (req.Workflow != "sdk-bump" || req.Args["mode"] != ModeRefresh) {
 		return nil, fmt.Errorf("launch id %q names a refresh, which only sdk-bump --mode refresh is", req.LaunchID)
 	}
+	if strings.HasPrefix(run, "d") != (req.Workflow == "dod") {
+		return nil, fmt.Errorf("launch id %q: a d<n> id names a dod gate job, and a dod job needs one", req.LaunchID)
+	}
 	if strings.HasPrefix(run, "t") != (req.Workflow == "triage") {
 		return nil, fmt.Errorf("launch id %q: a t<n> id names a triage run, and a triage run needs one", req.LaunchID)
 	}
@@ -163,6 +166,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		env = append(env, EnvVar{Name: name, ValueFrom: &EnvVarSource{SecretKeyRef: &SecretKeySelector{Name: ref.Name, Key: ref.Key}}})
 	}
 	refs, refEnv := extraRefs(w.ExtraRefs)
+	if w.pod.ControllerRef {
+		refs = append(refs, Refs{Org: cfg.Org, Repo: repo, BaseRef: "main", PathAlias: "github.com/aws-controllers-k8s/" + repo})
+	}
 	env = append(env, refEnv...)
 	var args []string
 	var pairs []string
@@ -212,6 +218,9 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		RestartPolicy: "Never", ServiceAccountName: w.pod.ServiceAccount,
 		Containers: []Container{container}, Volumes: volumes,
 	}
+	if w.pod.NoServiceAccountToken {
+		pod.AutomountServiceAccountToken = boolPtr(false)
+	}
 	if w.E2E {
 		applyE2E(pod)
 	}
@@ -219,6 +228,12 @@ func (c *Catalog) Build(cfg Config, req dispatcher.LaunchRequest) (*ProwJob, err
 		pod.Volumes = append(pod.Volumes, Volume{Name: "github-token-censor", Secret: &SecretVolumeSource{SecretName: w.pod.CensorSecret}})
 		pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
 			VolumeMount{Name: "github-token-censor", MountPath: "/etc/github-censor", ReadOnly: true})
+	}
+	if w.pod.SigningSecret != "" {
+		mode := int32(0o400)
+		pod.Volumes = append(pod.Volumes, Volume{Name: DodSigningVolume, Secret: &SecretVolumeSource{SecretName: w.pod.SigningSecret, DefaultMode: &mode}})
+		pod.Containers[0].VolumeMounts = append(pod.Containers[0].VolumeMounts,
+			VolumeMount{Name: DodSigningVolume, MountPath: w.pod.SigningMount, ReadOnly: true})
 	}
 	grace := 15 * time.Minute
 	if w.pod.GracePeriod > 0 {

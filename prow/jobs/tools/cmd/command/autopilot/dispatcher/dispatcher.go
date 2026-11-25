@@ -15,6 +15,7 @@ package dispatcher
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -43,6 +44,24 @@ type Config struct {
 	// TriageCommands are maintainers' /autopilot triage replies
 	// (issuefinder.TriageCommands), oldest first.
 	TriageCommands []issuefinder.TriageCommand
+	// GitHub reads the PRs items link to (Plan 9). Nil skips PR tracking,
+	// gating and the runtime-release back-off; the dispatch command always
+	// sets it.
+	GitHub PRClient
+	// PRWriter marks gated drafts ready; nil leaves them draft (PR writes
+	// off). A dry run never uses it.
+	PRWriter PRWriter
+	// Team are the logins whose PR reviews count as feedback.
+	Team map[string]bool
+	// PRAuthors maps a lane's workflow (sdk-bump, add-field, add-resource)
+	// to the login its PRs must be opened by.
+	PRAuthors map[string]string
+	// BotLogins are the logins whose commits are not human.
+	BotLogins []string
+	// DodPublicKey verifies dod verdicts' signatures (Plan 9 review): the
+	// public half of autopilot-dod-signing-key. Nil trusts no dod verdict,
+	// and items that need one wait until GateTimeout escalates them.
+	DodPublicKey ed25519.PublicKey
 }
 
 // Launch is one launch the tick made (or, with a shadow launcher, would make).
@@ -70,6 +89,8 @@ type Result struct {
 	TriageOff bool
 	// TriageStats are the TriageAcceptRate inputs (design 10), for Plan 10.
 	TriageStats []TriageStat
+	// Reaped is ReapedToday after the tick (design 10 WorkItemsReaped).
+	Reaped int
 }
 
 // Tick runs one Dispatcher pass over items, in place: reconcile, route,
@@ -93,6 +114,16 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 		launcher = &dryRun{real: cfg.Launcher}
 	}
 	res.Problems = reconcile(ctx, items, launcher, p.Budgets, cfg.Now)
+	var runtimeRelease map[string]bool
+	if cfg.GitHub != nil {
+		e := prEnv{gh: cfg.GitHub, l: launcher, team: cfg.Team, authors: cfg.PRAuthors, bots: cfg.BotLogins, dodKey: cfg.DodPublicKey,
+			sw: p.Switches, grace: p.Budgets.ReaperGrace(), now: cfg.Now, ts: ts, launched: &res.Launched}
+		if !cfg.DryRun {
+			e.pw = cfg.PRWriter
+		}
+		res.Problems = append(res.Problems, trackPRs(ctx, items, e)...)
+		res.Problems = append(res.Problems, gate(ctx, items, e)...)
+	}
 	res.Problems = append(res.Problems, reconcileTriage(ctx, items, launcher, p, cfg.Now)...)
 	if p.Switches.AbortInflight {
 		res.Problems = append(res.Problems, abortInflight(ctx, items, launcher, ts)...)
@@ -100,6 +131,12 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 	}
 	res.Skipped = applyTriageCommands(items, cfg.TriageCommands, ts)
 	res.Held = route(items, ts)
+	if cfg.GitHub != nil {
+		var problems []string
+		runtimeRelease, problems = runtimeReleaseRepos(ctx, cfg.GitHub, items, cfg.Now)
+		res.Problems = append(res.Problems, problems...)
+	}
+	res.Reaped = ReapedToday(items, cfg.Now)
 	// Set before the inventory read, whose failure returns early.
 	res.TriageOff = !triageEnabled(p)
 	res.TriageStats = TriageStats(items)
@@ -128,7 +165,7 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 		}
 		wfOrphans = append(wfOrphans, o)
 	}
-	picks, waits := scheduleWith(items, p, cfg.Now, wfOrphans, adopt)
+	picks, waits := scheduleHeld(items, p, cfg.Now, wfOrphans, adopt, runtimeRelease)
 	for _, c := range waits {
 		res.Waiting = append(res.Waiting, Wait{Key: c.item.Key, KeyHash: c.item.KeyHash, Cap: c.cap})
 	}

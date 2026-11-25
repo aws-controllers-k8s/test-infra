@@ -283,8 +283,12 @@ names: "shadow" starts nothing; "prow" creates ProwJobs, and only when
 AUTOPILOT_LAUNCHER_ENABLED=true and --test-infra-dir is given. --dry-run never
 starts or aborts a run. It also launches triage runs for needs-config items
 (policy/triage.yaml) and applies maintainers' /autopilot triage replies; nothing
-a triage run proposes applies without a reply. Saves and lints the ledger unless
---dry-run. The GitHub token is read from GITHUB_TOKEN.`,
+a triage run proposes applies without a reply. It follows the PR each item's
+links.pr names (Plan 9): GATING reads the verdict for the PR head (sdk-bump's own,
+or an autopilot-dod job's), merged PRs move to DONE, closed ones are escalated,
+reviews and human commits are recorded. It marks a gated draft ready only when
+AUTOPILOT_PR_WRITE=true, with AUTOPILOT_PR_GITHUB_TOKEN. Saves and lints the
+ledger unless --dry-run. The GitHub token is read from GITHUB_TOKEN.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := githubClient()
 		if err != nil {
@@ -321,10 +325,21 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	if err := o.validate(); err != nil {
 		return err
 	}
+	if err := prOpts.validate(); err != nil {
+		return err
+	}
 	if !o.DryRun {
 		if err := requireDir(o.LedgerDir); err != nil {
 			return err
 		}
+	}
+	pw, err := prWriterFor(getenv)
+	if err != nil {
+		return err
+	}
+	dodKey, err := dodPublicKeyFor(getenv)
+	if err != nil {
+		return err
 	}
 	team, err := issuefinder.FetchTeam(ctx, client, o.teamOwner(), o.TeamSlug)
 	if err != nil {
@@ -338,7 +353,8 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	if err != nil {
 		return err
 	}
-	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun}
+	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun, GitHub: prReader(client), PRWriter: pw, Team: team,
+		PRAuthors: prOpts.prAuthors(), BotLogins: prOpts.bots(), DodPublicKey: dodKey}
 	if pol, perr := policy.Load(o.LedgerDir); perr != nil {
 		cfg.PolicyErr = perr
 	} else if l, lerr := launcherFor(ctx, pol, o.TestInfraDir, getenv); lerr != nil {
@@ -397,6 +413,13 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	}
 	for _, p := range tick.Problems {
 		fmt.Fprintf(out, "problem %s\n", p)
+	}
+	fmt.Fprintf(out, "reaped %d in 24h\n", tick.Reaped)
+	if tick.Reaped > dispatcher.ReapedAlarmThreshold {
+		fmt.Fprintf(out, "alarm WorkItemsReaped %d > %d in 24h (design 10)\n", tick.Reaped, dispatcher.ReapedAlarmThreshold)
+	}
+	if pw == nil {
+		fmt.Fprintln(out, "pr writes off: gated drafts stay draft ("+prWriteEnv+" is not \"true\")")
 	}
 	if tick.TriageOff {
 		fmt.Fprintln(out, "triage off: no policy/triage.yaml, or it lists no mode")

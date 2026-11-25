@@ -77,12 +77,17 @@ func TestS3ReadsOnlyResultKeys(t *testing.T) {
 		"logs/agent-workflow-add-field/1234/artifacts/../../secret",
 		"logs/agent-workflow-add-field/1234/finished.json",
 		"pr-logs/x/1/artifacts/agent-result.json",
+		"logs/autopilot-dod/1/artifacts/verdict.sig.json",
+		"logs/autopilot-dod/1/artifacts/agent-result.sig",
 	} {
 		_, err := s.Get(context.Background(), key, 64)
 		assert.ErrorContains(t, err, "refusing", key)
 	}
 	assert.Empty(t, seen)
-	_, err := newS3Artifacts("s3://a.b.c", "us-west-2", testCreds, http.DefaultClient)
+	_, err := s.Get(context.Background(), "logs/autopilot-dod/1/artifacts/verdict.sig", 64)
+	assert.NoError(t, err, "a dod verdict's signature is readable (Plan 9 review)")
+	require.Len(t, seen, 1)
+	_, err = newS3Artifacts("s3://a.b.c", "us-west-2", testCreds, http.DefaultClient)
 	assert.Error(t, err)
 	_, err = newS3Artifacts("s3://example-prow-logs", "evil.example.com/", testCreds, http.DefaultClient)
 	assert.Error(t, err)

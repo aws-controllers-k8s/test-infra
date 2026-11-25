@@ -179,7 +179,17 @@ func (d *dryRun) Status(ctx context.Context, id string) (Status, error) {
 	return d.real.Status(ctx, id)
 }
 func (d *dryRun) Abort(ctx context.Context, id string) error { return d.shadow.Abort(ctx, id) }
-func (d *dryRun) Shadow() bool                               { return true }
+
+// Verdict and FeedbackActive are reads: a dry run makes them through the
+// real launcher, like Status.
+func (d *dryRun) Verdict(ctx context.Context, id string) (verdict, signature []byte, err error) {
+	return readVerdict(ctx, d.real, id)
+}
+
+func (d *dryRun) FeedbackActive(ctx context.Context, repo string, n int) (bool, error) {
+	return feedbackActive(ctx, d.real, repo, n)
+}
+func (d *dryRun) Shadow() bool { return true }
 
 // NewLauncher returns the launcher the policy names.
 func NewLauncher(p policy.Policy) (Launcher, error) {

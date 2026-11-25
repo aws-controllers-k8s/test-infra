@@ -105,6 +105,9 @@ type Policy struct {
 	Budgets  Budgets
 	// Triage is nil when policy/triage.yaml does not exist: no triage lane.
 	Triage *Triage
+	// NewResource is nil when policy/new-resource.yaml does not exist: no
+	// new-resource lane (Plan 9).
+	NewResource *NewResource
 }
 
 func (s Switches) ServiceEnabled(svc string) bool { return slices.Contains(s.Services, svc) }
@@ -149,20 +152,40 @@ func load(root string) (Policy, []error) {
 	if err := decodeFile(filepath.Join(root, BudgetsFile), &p.Budgets); err != nil {
 		return Policy{}, []error{err}
 	}
-	tp := filepath.Join(root, TriageFile)
-	if _, err := os.Lstat(tp); err == nil {
-		var tr Triage
-		if err := decodeFile(tp, &tr); err != nil {
-			return Policy{}, []error{err}
-		}
-		p.Triage = &tr
-	} else if !errors.Is(err, os.ErrNotExist) {
+	var tr Triage
+	if ok, err := decodeOptional(filepath.Join(root, TriageFile), &tr); err != nil {
 		return Policy{}, []error{err}
+	} else if ok {
+		p.Triage = &tr
+	}
+	var nr NewResource
+	if ok, err := decodeOptional(filepath.Join(root, NewResourceFile), &nr); err != nil {
+		return Policy{}, []error{err}
+	} else if ok {
+		p.NewResource = &nr
 	}
 	if errs := p.validate(); len(errs) > 0 {
 		return Policy{}, errs
 	}
 	return p, nil
+}
+
+// decodeOptional decodes an optional policy file; ok is false when it does
+// not exist.
+func decodeOptional(path string, v any) (ok bool, err error) {
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	if err := decodeFile(path, v); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func errorf(file, format string, args ...any) error {
+	return fmt.Errorf("%s: %s", file, fmt.Sprintf(format, args...))
 }
 
 func decodeFile(path string, v any) error {
@@ -291,6 +314,9 @@ func (p Policy) validate() []error {
 		if t.ReservedReviewSlotsTriaged < 0 || t.ReservedReviewSlotsTriaged > b.MaxPRsAwaitingReview {
 			bad(TriageFile, "reserved_review_slots_triaged must be 0..max_prs_awaiting_review (%d)", b.MaxPRsAwaitingReview)
 		}
+	}
+	if n := p.NewResource; n != nil {
+		errs = append(errs, n.validate()...)
 	}
 	return errs
 }

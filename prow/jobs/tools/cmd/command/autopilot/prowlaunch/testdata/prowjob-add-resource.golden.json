@@ -1,0 +1,240 @@
+{
+  "apiVersion": "prow.k8s.io/v1",
+  "kind": "ProwJob",
+  "metadata": {
+    "annotations": {
+      "prow.k8s.io/job": "agent-workflow-add-resource",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.pull": "0",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "workflow-agent/command-args": "change-class=new-resource,resource=Widget,service=s3,work-item=sha256:0123456789abcdef",
+      "workflow-agent/issue-number": "0",
+      "workflow-agent/workflow-name": "add-resource"
+    },
+    "labels": {
+      "app.kubernetes.io/name": "agent-workflow-add-resource",
+      "created-by-prow": "true",
+      "prow.k8s.io/job": "agent-workflow-add-resource",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "prow.k8s.io/type": "periodic",
+      "triggered-by": "workflow-agent",
+      "workflow-agent/issue-number": "0",
+      "workflow-type": "add-resource"
+    },
+    "namespace": "prow"
+  },
+  "spec": {
+    "agent": "kubernetes",
+    "cluster": "build",
+    "decoration_config": {
+      "censor_secrets": true,
+      "censoring_options": {
+        "include_directories": [
+          "/etc/github"
+        ]
+      },
+      "gcs_configuration": {
+        "bucket": "s3://example-prow-logs",
+        "path_strategy": "explicit"
+      },
+      "grace_period": "15m0s",
+      "timeout": "5h0m0s",
+      "utility_images": {
+        "clonerefs": "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
+        "entrypoint": "public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6",
+        "initupload": "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
+        "sidecar": "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6"
+      }
+    },
+    "extra_refs": [
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/code-generator",
+        "repo": "code-generator"
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/runtime",
+        "repo": "runtime"
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/ack-dev-skills",
+        "repo": "ack-dev-skills"
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/test-infra",
+        "repo": "test-infra"
+      }
+    ],
+    "job": "agent-workflow-add-resource",
+    "pod_spec": {
+      "containers": [
+        {
+          "args": [
+            "--change-class",
+            "new-resource",
+            "--resource",
+            "Widget",
+            "--service",
+            "s3",
+            "--work-item",
+            "sha256:0123456789abcdef"
+          ],
+          "command": [
+            "/app/prow-job.sh"
+          ],
+          "env": [
+            {
+              "name": "ACK_DEV_SKILLS_DIR",
+              "value": "/home/prow/go/src/github.com/aws-controllers-k8s/ack-dev-skills"
+            },
+            {
+              "name": "CODEGEN_DIR",
+              "value": "/home/prow/go/src/github.com/aws-controllers-k8s/code-generator"
+            },
+            {
+              "name": "DOCKER_IN_DOCKER_ENABLED",
+              "value": "true"
+            },
+            {
+              "name": "GITHUB_ACTOR",
+              "value": "ack-agent"
+            },
+            {
+              "name": "GITHUB_EMAIL_PREFIX",
+              "value": "327606448"
+            },
+            {
+              "name": "GITHUB_ORG",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "GITHUB_TOKEN",
+              "valueFrom": {
+                "secretKeyRef": {
+                  "key": "token",
+                  "name": "agent-github-pat-token"
+                }
+              }
+            },
+            {
+              "name": "ISSUE_AUTHOR",
+              "value": "ack-autopilot"
+            },
+            {
+              "name": "ISSUE_NUMBER",
+              "value": "0"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "s3-controller"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "RUN_E2E",
+              "value": "true"
+            },
+            {
+              "name": "TEST_INFRA_DIR",
+              "value": "/home/prow/go/src/github.com/aws-controllers-k8s/test-infra"
+            },
+            {
+              "name": "WORKFLOW_NAME",
+              "value": "add-resource"
+            }
+          ],
+          "image": "registry.example/prow:add-resource-0.0.32",
+          "name": "workflow-runner",
+          "resources": {
+            "limits": {
+              "cpu": "6",
+              "memory": "10Gi"
+            },
+            "requests": {
+              "cpu": "6",
+              "memory": "10Gi"
+            }
+          },
+          "securityContext": {
+            "privileged": true
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/mnt/secrets-store",
+              "name": "agent-secrets",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/docker-graph",
+              "name": "docker-graph"
+            },
+            {
+              "mountPath": "/var/lib/docker",
+              "name": "docker-root"
+            },
+            {
+              "mountPath": "/lib/modules",
+              "name": "modules",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/sys/fs/cgroup",
+              "name": "cgroup"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "workflow-runner",
+      "volumes": [
+        {
+          "csi": {
+            "driver": "secrets-store.csi.k8s.io",
+            "readOnly": true,
+            "volumeAttributes": {
+              "secretProviderClass": "agent-secrets"
+            }
+          },
+          "name": "agent-secrets"
+        },
+        {
+          "emptyDir": {},
+          "name": "docker-graph"
+        },
+        {
+          "emptyDir": {},
+          "name": "docker-root"
+        },
+        {
+          "hostPath": {
+            "path": "/lib/modules",
+            "type": "Directory"
+          },
+          "name": "modules"
+        },
+        {
+          "hostPath": {
+            "path": "/sys/fs/cgroup",
+            "type": "Directory"
+          },
+          "name": "cgroup"
+        }
+      ]
+    },
+    "type": "periodic"
+  },
+  "status": {
+    "description": "Job triggered by workflow-agent",
+    "state": "triggered"
+  }
+}

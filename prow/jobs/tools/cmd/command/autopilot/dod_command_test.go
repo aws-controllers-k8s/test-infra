@@ -137,3 +137,74 @@ func TestVerifyVerdictExitCodes(t *testing.T) {
 	require.NoError(t, os.WriteFile(forged, []byte(fake), 0o644))
 	assert.Equal(t, 2, exitCodeOf(t, verify(forged, "HEAD", dod.Digest(fb), false)), "edited verdict")
 }
+
+// TestRunDodBuildSandbox (Plan 9 review F1): --build-sandbox runs every go
+// step through one executable; one that cannot run fails the build closed.
+func TestRunDodBuildSandbox(t *testing.T) {
+	require.NotNil(t, dodCmd.Flags().Lookup("build-sandbox"))
+	r, base := mechanicalRepo(t)
+	dir := t.TempDir()
+	log := filepath.Join(dir, "calls")
+	ok := filepath.Join(dir, "ok.sh")
+	require.NoError(t, os.WriteFile(ok, []byte("#!/bin/sh\necho \"$*\" >> "+log+"\nexec \"$@\"\n"), 0o755))
+	bad := filepath.Join(dir, "bad.sh")
+	require.NoError(t, os.WriteFile(bad, []byte("#!/bin/sh\nexit 125\n"), 0o755))
+
+	f := dodFlags{repoDir: r.Dir, service: "c", baseRef: base, headRef: "HEAD", changeClass: "mechanical", output: "json",
+		buildSandbox: ok}
+	var out bytes.Buffer
+	require.NoError(t, runDod(context.Background(), f, strings.NewReader(""), &out, io.Discard))
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(calls), "true\ngo build ./...\n"), "%s", calls)
+
+	f.buildSandbox = bad
+	out.Reset()
+	assert.Equal(t, 1, exitCodeOf(t, runDod(context.Background(), f, strings.NewReader(""), &out, io.Discard)))
+	v, err := dod.ParseVerdict(out.Bytes())
+	require.NoError(t, err)
+	assert.Contains(t, v.Reasons, "build:BUILD_SANDBOX_FAILED")
+}
+
+func TestRunDodSignsTheVerdictBytes(t *testing.T) {
+	r, base := mechanicalRepo(t)
+	dir := t.TempDir()
+	seed, pubB64, err := dod.GenerateKey()
+	require.NoError(t, err)
+	key := filepath.Join(dir, "key")
+	require.NoError(t, os.WriteFile(key, []byte(seed+"\n"), 0o600))
+	f := dodFlags{repoDir: r.Dir, service: "c", baseRef: base, headRef: "HEAD", changeClass: "mechanical", output: "json",
+		verdictOut: filepath.Join(dir, "verdict.json"), signKey: key, signatureOut: filepath.Join(dir, "verdict.sig")}
+	require.NoError(t, runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard))
+	b, err := os.ReadFile(f.verdictOut)
+	require.NoError(t, err)
+	sig, err := os.ReadFile(f.signatureOut)
+	require.NoError(t, err)
+	pub, err := dod.ParsePublicKey(pubB64)
+	require.NoError(t, err)
+	require.NoError(t, dod.VerifySignature(pub, b, sig))
+}
+
+func TestRunDodSigningFlagErrors(t *testing.T) {
+	r, base := mechanicalRepo(t)
+	dir := t.TempDir()
+	seed, _, err := dod.GenerateKey()
+	require.NoError(t, err)
+	key := filepath.Join(dir, "key")
+	require.NoError(t, os.WriteFile(key, []byte(seed), 0o644))
+	f := dodFlags{repoDir: r.Dir, service: "c", baseRef: base, headRef: "HEAD", changeClass: "mechanical", output: "text"}
+
+	f.signKey = key
+	err = runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard)
+	assert.Equal(t, 2, exitCodeOf(t, err))
+	assert.ErrorContains(t, err, "--sign-key and --signature-out")
+	f.signKey, f.signatureOut = "", filepath.Join(dir, "verdict.sig")
+	assert.Equal(t, 2, exitCodeOf(t, runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard)))
+
+	f.signKey = key // mode 0644: refused, no verdict and no signature
+	f.verdictOut = filepath.Join(dir, "verdict.json")
+	err = runDod(context.Background(), f, strings.NewReader(""), io.Discard, io.Discard)
+	assert.Equal(t, 2, exitCodeOf(t, err))
+	assert.NoFileExists(t, f.verdictOut)
+	assert.NoFileExists(t, f.signatureOut)
+}

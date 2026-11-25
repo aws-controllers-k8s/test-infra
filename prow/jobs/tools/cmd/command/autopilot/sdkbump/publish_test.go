@@ -16,11 +16,13 @@ package sdkbump
 import (
 	"context"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dod"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
 )
@@ -101,8 +103,10 @@ func TestApplyMergeBlock(t *testing.T) {
 	assert.Equal(t, "success", f.Statuses[key].State)
 	assert.NotContains(t, got.Labels, LabelBlockedServerDefault)
 	assert.Contains(t, got.Labels, dod.LabelSensitivePath, "the block never removes other labels")
-	assert.False(t, got.Draft, "gate passed and nothing blocks: ready for review")
+	assert.True(t, got.Draft, "gate passed and nothing blocks: still draft, the Dispatcher marks it ready (Plan 9)")
+	assert.NotContains(t, strings.Join(f.Calls, "\n"), "SetDraft")
 
+	got.Draft = false // the Dispatcher marked it ready
 	require.NoError(t, applyMergeBlock(ctx, o, *got, sha, false, resolved, nil))
 	assert.True(t, got.Draft, "a failed gate goes back to draft")
 
@@ -143,4 +147,10 @@ func TestLoadDependentsFailsClosed(t *testing.T) {
 	assert.Equal(t, 1, d.Unresolved())
 	o.WorkItem = "sha256:ffffffffffffffff"
 	assert.False(t, loadDependents(o, nil).Known, "the ledger's bump is another item")
+}
+
+// TestBlockLabelIsTheDispatchers: the Dispatcher leaves a PR draft while this
+// label is on it (Plan 9).
+func TestBlockLabelIsTheDispatchers(t *testing.T) {
+	assert.Equal(t, dispatcher.LabelBlockedServerDefault, LabelBlockedServerDefault)
 }

@@ -90,34 +90,50 @@ func autopilotNormalize(t *testing.T, b []byte) []byte {
 	return append(out, '\n')
 }
 
-func TestAutopilotGolden(t *testing.T) {
-	gen := NewGenerator(NewWorkflowConfigLoader(filepath.Join(autopilotTestdata, "agent-workflows.yaml")))
-	args := map[string]string{
+// autopilotCases are the agent-plugin workflows the Dispatcher builds jobs for
+// itself: add-field (Plan 7) and add-resource (Plan 9).
+var autopilotCases = []struct {
+	workflow, golden string
+	args             map[string]string
+}{
+	{"add-field", "prowjob-add-field.golden.json", map[string]string{
 		"service": "s3", "resource": "Bucket", "field": "accelerateConfiguration.status",
 		"work-item": "sha256:0123456789abcdef", "change-class": "config-only", "detector-work": "server-default",
-	}
+	}},
+	{"add-resource", "prowjob-add-resource.golden.json", map[string]string{
+		"service": "s3", "resource": "Widget",
+		"work-item": "sha256:0123456789abcdef", "change-class": "new-resource",
+	}},
+}
+
+func TestAutopilotGolden(t *testing.T) {
+	gen := NewGenerator(NewWorkflowConfigLoader(filepath.Join(autopilotTestdata, "agent-workflows.yaml")))
 	issue := github.Issue{Number: 0, User: github.User{Login: "ack-autopilot"}}
 	repo := github.Repo{Owner: github.User{Login: "aws-controllers-k8s"}, Name: "s3-controller"}
-	pj, err := gen.CreateWorkflowProwJob("add-field", args, nil, issue, repo, "5h", "prow", "s3://example-prow-logs")
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := json.Marshal(pj)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := autopilotNormalize(t, b)
-	path := filepath.Join(autopilotTestdata, "prowjob-add-field.golden.json")
-	if os.Getenv("AUTOPILOT_GOLDEN_UPDATE") == "1" {
-		if err := os.WriteFile(path, got, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("agent-plugin's add-field job differs from %s:\n%s", path, got)
+	for _, c := range autopilotCases {
+		t.Run(c.workflow, func(t *testing.T) {
+			pj, err := gen.CreateWorkflowProwJob(c.workflow, c.args, nil, issue, repo, "5h", "prow", "s3://example-prow-logs")
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := json.Marshal(pj)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := autopilotNormalize(t, b)
+			path := filepath.Join(autopilotTestdata, c.golden)
+			if os.Getenv("AUTOPILOT_GOLDEN_UPDATE") == "1" {
+				if err := os.WriteFile(path, got, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("agent-plugin's %s job differs from %s:\n%s", c.workflow, path, got)
+			}
+		})
 	}
 }

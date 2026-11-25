@@ -23,12 +23,10 @@ import (
 
 // Hold reasons: why route left an item where it is.
 const (
-	HoldObserve              = "observe"
-	HoldAwaitingTriage       = "awaiting-triage"
-	HoldAwaitingPlanWorkflow = "awaiting-plan-workflow"
-	HoldAwaitingPlanApproval = "awaiting-plan-approval"
-	HoldAwaitingWorkflow     = "awaiting-workflow"
-	HoldBlockedOther         = "blocked-other"
+	HoldObserve          = "observe"
+	HoldAwaitingTriage   = "awaiting-triage"
+	HoldAwaitingWorkflow = "awaiting-workflow"
+	HoldBlockedOther     = "blocked-other"
 	// HoldBlockedMissingDependency: a depends_on key is not in the ledger.
 	HoldBlockedMissingDependency = "blocked-missing-dependency"
 )
@@ -41,6 +39,7 @@ const (
 // when an item's state changes.
 func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 	held := map[string]int{}
+	dedupeNewResources(items, ts)
 	for _, k := range sortedKeys(items) {
 		w := items[k]
 		if !w.State.PreDispatch() {
@@ -51,8 +50,9 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 			held[HoldObserve]++
 			continue
 		case w.State == ledger.PlanPending:
-			held[HoldAwaitingPlanApproval]++
-			continue
+			// No plan gate since 2026-11-17 (option A); an item an older
+			// Dispatcher left here goes on as triaged.
+			transition(w, ledger.Triaged, ts, "PLAN_GATE_REMOVED")
 		case isTriageItem(w):
 			// Mode-api triage (Plan 8): held until a maintainer's reply
 			// decides; a decided item moves on below.
@@ -60,9 +60,6 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 				held[hold]++
 				continue
 			}
-		case w.State == ledger.Detected && w.ChangeClass == "new-resource":
-			held[HoldAwaitingPlanWorkflow]++
-			continue
 		case w.State == ledger.Detected && !skipsTriage[w.ChangeClass]:
 			held[HoldAwaitingTriage]++
 			continue
@@ -137,6 +134,45 @@ func unmetDependency(w *ledger.WorkItem, items map[string]*ledger.WorkItem) (why
 		}
 	}
 	return "", false, false
+}
+
+// dedupeNewResources keeps one new-resource item per (service, resource): one
+// a workflow has picked up or that has a PR, else the detector's own (key
+// api-change|<svc>|<Kind>|new-resource), else the first by key. Every other pre-dispatch new-resource item for the
+// same Kind, such as a triage "resource" decision, is SUPERSEDED by it, so one
+// Kind never gets two add-resource runs.
+func dedupeNewResources(items map[string]*ledger.WorkItem, ts string) {
+	keep := map[string]*ledger.WorkItem{}
+	rank := func(w *ledger.WorkItem) int {
+		switch {
+		case w.EverDispatched() || w.Links.PR != "":
+			// Plan 9 review F2: an item with a PR (say requeued after a
+			// retry) is kept, never superseded.
+			return 0
+		case w.Key == "api-change|"+w.Service+"|"+w.Resource+"|new-resource":
+			return 1
+		}
+		return 2
+	}
+	for _, k := range sortedKeys(items) {
+		w := items[k]
+		if w.ChangeClass != "new-resource" || w.Resource == "" || w.State == ledger.Superseded || w.State == ledger.WontFix {
+			continue
+		}
+		id := w.Service + "|" + w.Resource
+		if cur, ok := keep[id]; !ok || rank(w) < rank(cur) {
+			keep[id] = w
+		}
+	}
+	for _, k := range sortedKeys(items) {
+		w := items[k]
+		if w.ChangeClass != "new-resource" || !w.State.PreDispatch() || w.State == ledger.Superseded || w.Links.PR != "" {
+			continue
+		}
+		if kept := keep[w.Service+"|"+w.Resource]; kept != nil && kept != w {
+			transition(w, ledger.Superseded, ts, "DUPLICATE_OF "+kept.KeyHash)
+		}
+	}
 }
 
 func transition(w *ledger.WorkItem, to ledger.State, ts, reason string) {

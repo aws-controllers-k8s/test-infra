@@ -38,7 +38,7 @@ func triageCatalog(t *testing.T) *Catalog {
 	aw["triage"] = tr["triage"]
 	image, err := LoadImage("testdata/images_config.yaml", SDKBumpImageKey, testVars)
 	require.NoError(t, err)
-	c, err := NewCatalog(aw, SDKBump(image, testVars.TestInfraOrg))
+	c, err := NewCatalog(aw, SDKBump(image, testVars.TestInfraOrg), DOD(image, testVars.TestInfraOrg))
 	require.NoError(t, err)
 	return c
 }
@@ -156,7 +156,7 @@ func TestNewCatalogRefusesATriageWithSecretsE2EOrRefs(t *testing.T) {
 		w := tr["triage"]
 		edit(&w)
 		aw["triage"] = w
-		_, err := NewCatalog(aw, SDKBump("r:t", "o"))
+		_, err := NewCatalog(aw, SDKBump("r:t", "o"), DOD("r:t", "o"))
 		assert.ErrorContains(t, err, "workflow triage must have no", name)
 	}
 }

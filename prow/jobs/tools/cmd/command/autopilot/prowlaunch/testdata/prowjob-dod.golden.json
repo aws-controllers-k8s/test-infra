@@ -1,0 +1,181 @@
+{
+  "apiVersion": "prow.k8s.io/v1",
+  "kind": "ProwJob",
+  "metadata": {
+    "annotations": {
+      "karpenter.sh/do-not-disrupt": "true",
+      "prow.k8s.io/job": "autopilot-dod",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.pull": "0",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "workflow-agent/command-args": "base-sha=2222222222222222222222222222222222222222,change-class=config-only,head-sha=1111111111111111111111111111111111111111,pr-author=ack-agent,pr=7,service=s3,work-item=sha256:0123456789abcdef",
+      "workflow-agent/issue-number": "0",
+      "workflow-agent/workflow-name": "dod"
+    },
+    "labels": {
+      "app.kubernetes.io/name": "autopilot-dod",
+      "created-by-prow": "true",
+      "prow.k8s.io/job": "autopilot-dod",
+      "prow.k8s.io/refs.org": "aws-controllers-k8s",
+      "prow.k8s.io/refs.repo": "s3-controller",
+      "prow.k8s.io/type": "periodic",
+      "triggered-by": "workflow-agent",
+      "workflow-agent/issue-number": "0",
+      "workflow-type": "dod"
+    },
+    "namespace": "prow"
+  },
+  "spec": {
+    "agent": "kubernetes",
+    "cluster": "default",
+    "decoration_config": {
+      "censor_secrets": true,
+      "censoring_options": {
+        "include_directories": [
+          "/etc/github"
+        ]
+      },
+      "gcs_configuration": {
+        "bucket": "s3://example-prow-logs",
+        "path_strategy": "explicit"
+      },
+      "grace_period": "10m0s",
+      "timeout": "2h0m0s",
+      "utility_images": {
+        "clonerefs": "public.ecr.aws/eks-distro-build-tooling/prow-clonerefs:v20260316-26fa34da6",
+        "entrypoint": "public.ecr.aws/eks-distro-build-tooling/prow-entrypoint:v20260316-26fa34da6",
+        "initupload": "public.ecr.aws/eks-distro-build-tooling/prow-initupload:v20260316-26fa34da6",
+        "sidecar": "public.ecr.aws/eks-distro-build-tooling/prow-sidecar:v20260316-26fa34da6"
+      }
+    },
+    "extra_refs": [
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/code-generator",
+        "repo": "code-generator"
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/runtime",
+        "repo": "runtime"
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/test-infra",
+        "repo": "test-infra",
+        "workdir": true
+      },
+      {
+        "base_ref": "main",
+        "org": "aws-controllers-k8s",
+        "path_alias": "github.com/aws-controllers-k8s/s3-controller",
+        "repo": "s3-controller"
+      }
+    ],
+    "job": "autopilot-dod",
+    "pod_spec": {
+      "automountServiceAccountToken": false,
+      "containers": [
+        {
+          "command": [
+            "/bin/bash",
+            "-c",
+            "./scripts/autopilot-dod.sh"
+          ],
+          "env": [
+            {
+              "name": "AUTOPILOT_DOD_BASE_SHA",
+              "value": "2222222222222222222222222222222222222222"
+            },
+            {
+              "name": "AUTOPILOT_DOD_CLASS",
+              "value": "config-only"
+            },
+            {
+              "name": "AUTOPILOT_DOD_HEAD_SHA",
+              "value": "1111111111111111111111111111111111111111"
+            },
+            {
+              "name": "AUTOPILOT_DOD_PR",
+              "value": "7"
+            },
+            {
+              "name": "AUTOPILOT_DOD_PR_AUTHOR",
+              "value": "ack-agent"
+            },
+            {
+              "name": "AUTOPILOT_DOD_WORK_ITEM",
+              "value": "sha256:0123456789abcdef"
+            },
+            {
+              "name": "ISSUE_AUTHOR",
+              "value": "ack-autopilot"
+            },
+            {
+              "name": "ISSUE_NUMBER",
+              "value": "0"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "s3-controller"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "SERVICE",
+              "value": "s3"
+            },
+            {
+              "name": "TEST_INFRA_ORG",
+              "value": "aws-controllers-k8s"
+            },
+            {
+              "name": "WORKFLOW_NAME",
+              "value": "dod"
+            }
+          ],
+          "image": "registry.example/prow:prow-auto-generate-controllers-0.0.48",
+          "name": "workflow-runner",
+          "resources": {
+            "limits": {
+              "cpu": "4",
+              "memory": "8Gi"
+            },
+            "requests": {
+              "cpu": "4",
+              "memory": "8Gi"
+            }
+          },
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/autopilot-dod-signing",
+              "name": "autopilot-dod-signing",
+              "readOnly": true
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "pre-submit-service-account",
+      "volumes": [
+        {
+          "name": "autopilot-dod-signing",
+          "secret": {
+            "defaultMode": 256,
+            "secretName": "autopilot-dod-signing-key"
+          }
+        }
+      ]
+    },
+    "type": "periodic"
+  },
+  "status": {
+    "description": "Job triggered by workflow-agent",
+    "state": "triggered"
+  }
+}
