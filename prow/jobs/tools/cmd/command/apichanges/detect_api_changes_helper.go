@@ -447,6 +447,11 @@ const (
 	// workNotGenerated: code-generator does not add it on regeneration; see
 	// reconcileWithCodegen.
 	workNotGenerated
+	// workServerDefault: a Spec field a read the controller calls returns. If
+	// the service fills it in when it is unset, every existing resource (nil
+	// in Spec) shows a delta after the upgrade, so it needs a late_initialize,
+	// compare.is_ignored or "no server default" decision.
+	workServerDefault
 )
 
 // lifecycleReason is the work every request-only field needs.

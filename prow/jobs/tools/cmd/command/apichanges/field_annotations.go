@@ -31,6 +31,9 @@ import (
 //   - A Status `W.X` reading back Spec field X is folded into X.
 //
 // Last, each field's operations are split into those that set and return it.
+//
+// The server-default check runs later, in markServerDefaults, after
+// reconcileWithCodegen.
 func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Finding) []Finding {
 	findings = foldReadBacks(latest, findings)
 
@@ -124,8 +127,68 @@ func annotateFields(latest *SmithyModel, in *ControllerInputs, findings []Findin
 		}
 		f.SetBy, f.ReadBy, f.ReturnedBy = newEvidence(setBy), newEvidence(readBy), newEvidence(returnedBy)
 	}
+
 	return findings
 }
+
+// markServerDefaults flags new Spec fields a read the controller calls returns
+// (see workServerDefault). It runs after reconcileWithCodegen, because a field
+// codegen does not add (workNotGenerated) is not in the CRD and so cannot show
+// a delta. A field that already needs other work keeps it, with the hazard
+// added to its Detail: a server-defaulted is_immutable field fails every
+// existing resource.
+func markServerDefaults(in *ControllerInputs, findings []Finding) []Finding {
+	for i := range findings {
+		f := &findings[i]
+		if f.Class != ClassSpecField || !f.NewSincePin || f.Work == workNotGenerated || !serverDefaultRead(in, *f) {
+			continue
+		}
+		if f.Work == workNone {
+			f.Work = workServerDefault
+		}
+		if f.Detail == "" {
+			f.Detail = serverDefaultDetail
+		} else {
+			f.Detail += "; " + serverDefaultDetail
+		}
+	}
+	return findings
+}
+
+// serverDefaultRead reports whether a ReadBy operation is one the resource's
+// package calls. When the package's calls are unknown, or include no read
+// (scanUsedOps can miss reads made through helpers), any read counts, so
+// missing data cannot route a field to regeneration.
+func serverDefaultRead(in *ControllerInputs, f Finding) bool {
+	if f.ReadBy == "" {
+		return false
+	}
+	called := in.UsedOps[kindToResourceDir(f.Kind)]
+	declared := []string{}
+	if in.Config != nil {
+		declared = in.Config.ResourceNames()
+	}
+	known := false
+	for op := range called {
+		if opTypes, _ := in.ClassifyOpWithOverrides(op, declared); isReadOp(opTypes, op) {
+			known = true
+			break
+		}
+	}
+	for _, entry := range strings.Split(f.ReadBy, ",") {
+		op, _, _ := strings.Cut(entry, "=")
+		if !known || called[op] {
+			return true
+		}
+	}
+	return false
+}
+
+// serverDefaultDetail explains workServerDefault for the issue. The rendered
+// bullet already names the read.
+const serverDefaultDetail = "read back by the controller: if the service fills it in when it is unset, " +
+	"every existing resource shows a Spec delta after the upgrade; decide `late_initialize`, " +
+	"`compare.is_ignored`, or that it has no server default"
 
 // roleIndex answers where an operation's request or response carries a field,
 // caching each shape walk since every field is checked against every used operation.

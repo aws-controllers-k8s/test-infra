@@ -39,6 +39,8 @@ func (w fieldWork) name() string {
 		return "create-only"
 	case workNotGenerated:
 		return "not-generated"
+	case workServerDefault:
+		return "server-default"
 	}
 	return ""
 }

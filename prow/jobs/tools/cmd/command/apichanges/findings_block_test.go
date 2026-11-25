@@ -84,10 +84,11 @@ func TestFieldWorkNames(t *testing.T) {
 		workSecondaryRead:   "secondary-read",
 		workCreateOnly:      "create-only",
 		workNotGenerated:    "not-generated",
+		workServerDefault:   "server-default",
 	}
 	assert.Equal(t, "", workNone.name())
 	seen := map[string]fieldWork{}
-	for w := workNone + 1; w <= workNotGenerated; w++ {
+	for w := workNone + 1; w <= workServerDefault; w++ {
 		name := w.name()
 		assert.NotEmpty(t, name, "fieldWork %d", int(w))
 		if prev, dup := seen[name]; dup {
@@ -99,5 +100,5 @@ func TestFieldWorkNames(t *testing.T) {
 	assert.Len(t, seen, len(want))
 	// A value past the last constant has no name, so the loop bound above must
 	// move when a constant is added.
-	assert.Equal(t, "", (workNotGenerated + 1).name())
+	assert.Equal(t, "", (workServerDefault + 1).name())
 }
