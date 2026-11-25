@@ -1358,6 +1358,27 @@ def test_autopilot_arg_validation():
     check("bad class", len(problems(work_item="sha256:0123456789abcdef", change_class="C2")), 1)
 
 
+def test_sdk_bump_result_fixture():
+    """The Go sdk-bump workflow's agent-result.json passes result.py, byte for byte."""
+    print("sdk-bump result fixture:")
+    import json
+
+    from workflows import result
+    from workflows.validation import CHANGE_CLASSES
+
+    path = (_PKG_ROOT.parents[1]
+            / "jobs/tools/cmd/command/autopilot/sdkbump/testdata/agent-result-sdk-bump-v1.json")
+    text = path.read_text()
+    doc = json.loads(text)
+    check("sdk-bump is a result workflow", "sdk-bump" in result.WORKFLOWS, True)
+    check("Go fixture validates", result.validate(doc), [])
+    check("Go bytes equal result.write bytes", json.dumps(doc, indent=2, sort_keys=True) + "\n", text)
+    check("new() for sdk-bump validates",
+          result.validate(result.new("sdk-bump", "sha256:0123456789abcdef")), [])
+    # The lane passes change-class SDK-bump (Plan 6); validation.py knows it.
+    check("SDK-bump is a change class", "SDK-bump" in CHANGE_CLASSES, True)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1381,7 +1402,8 @@ def main():
                test_result_contract, test_result_cli,
                test_token_accounting, test_harness_result_fields,
                test_record_result,
-               test_autopilot_arg_validation):
+               test_autopilot_arg_validation,
+               test_sdk_bump_result_fixture):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

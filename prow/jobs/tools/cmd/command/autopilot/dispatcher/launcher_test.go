@@ -52,8 +52,10 @@ func TestLaunchIDIsStablePerRun(t *testing.T) {
 
 func TestLaneArgs(t *testing.T) {
 	bump := item("sdk-bump|s3|*|service/s3/v1.2.0", "SDK-bump", ledger.Queued)
-	assert.Equal(t, map[string]string{"service": "s3", "sdk-to": "service/s3/v1.2.0", "work-item": bump.KeyHash},
-		lanes["SDK-bump"].args(bump))
+	assert.Equal(t, map[string]string{
+		"service": "s3", "sdk-to": "service/s3/v1.2.0",
+		"work-item": bump.KeyHash, "change-class": "SDK-bump",
+	}, lanes["SDK-bump"].args(bump))
 	field := item("api-change|s3|Bucket|spec:Mode|needs-config", "config-only", ledger.Queued)
 	field.Resource, field.FieldPath = "Bucket", "Mode"
 	assert.Equal(t, map[string]string{

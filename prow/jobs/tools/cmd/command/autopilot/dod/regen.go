@@ -182,7 +182,9 @@ func checkRegen(ctx context.Context, scratch gitRepo, head string, o regenOption
 		"ACK_GENERATE_BIN_PATH=" + filepath.Join(o.CodegenDir, "bin", "ack-generate"),
 		"TEMPLATES_DIR=" + filepath.Join(o.CodegenDir, "templates")}
 	if o.RuntimeDir != "" {
-		env = append(env, "RUNTIME_CRD_DIR="+filepath.Join(o.RuntimeDir, "config"))
+		// build-controller-release.sh runs controller-gen in RUNTIME_DIR
+		// (default: next to the code-generator checkout).
+		env = append(env, "RUNTIME_CRD_DIR="+filepath.Join(o.RuntimeDir, "config"), "RUNTIME_DIR="+o.RuntimeDir)
 	}
 	if o.CacheDir != "" {
 		env = append(env, "ACK_GENERATE_CACHE_DIR="+o.CacheDir)

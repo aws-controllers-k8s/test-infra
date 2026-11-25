@@ -114,6 +114,10 @@ const (
 	reasonSep  = `key segment contains "|"`
 )
 
+// BumpKey is the ledger key of the SDK-bump item for svc at SDK version to.
+// The sdk-bump workflow (Plan 6) uses it to find the bump's dependents.
+func BumpKey(svc, to string) string { return fmt.Sprintf("sdk-bump|%s|*|%s", svc, to) }
+
 // Classify returns the work items one issue's block asks for, and a reason for
 // each line (or item) it skipped because its key cannot be built.
 //
@@ -159,7 +163,7 @@ func Classify(b findingsblock.Block, issueURL string) (items []*ledger.WorkItem,
 	})
 
 	// The bump key comes from the header alone.
-	bumpKey := fmt.Sprintf("sdk-bump|%s|*|%s", svc, b.To)
+	bumpKey := BumpKey(svc, b.To)
 	bumpOK := validSegment(svc, b.To)
 
 	seen := map[string]bool{}

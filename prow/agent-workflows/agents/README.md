@@ -38,6 +38,12 @@ trailers record what the run was given, not where it came from: a team
 member's `/agent` comment can pass the same arguments, so the ledger's link
 to the pull request is the authoritative record.
 
+The sdk-bump workflow (no LLM; `ack-build-tools autopilot sdk-bump`, Plan 6)
+writes the same file from Go, with the same bytes `result.py` would write
+(`autopilot/sdkbump/testdata/agent-result-sdk-bump-v1.json` is checked by
+both test suites). It does not run `prow-job.sh` or `validation.py`; the Go
+command validates its own inputs with the same rules.
+
 ## Running locally
 
 Prerequisites: Python 3.10+ (the job image uses 3.12), [uv](https://github.com/astral-sh/uv), AWS

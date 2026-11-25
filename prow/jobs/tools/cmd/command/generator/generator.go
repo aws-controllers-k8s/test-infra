@@ -40,7 +40,8 @@ type JobsConfig struct {
 	IRSTestServices               []string `yaml:"irs_test_services"`
 	IgnoreFieldDriftTestServices  []string `yaml:"ignore_field_drift_test_services"`
 	ChainsawTestServices          []string `yaml:"chainsaw_test_services"`
-	AutopilotDodServices          []string `yaml:"autopilot_dod_services"` // optional, manual <service>-autopilot-dod presubmit (ACK Autopilot Plan 5); empty in Phase 1
+	AutopilotDodServices          []string `yaml:"autopilot_dod_services"`      // optional, manual <service>-autopilot-dod presubmit (ACK Autopilot Plan 5); empty in Phase 1
+	AutopilotSDKBumpServices      []string `yaml:"autopilot_sdk_bump_services"` // autopilot-sdk-bump-<service> periodic (ACK Autopilot Plan 6), a dry run unless its write flag is flipped; empty in Phase 1
 	SoakTestOnReleaseServiceNames []string `yaml:"soak_test_on_release_service_names"`
 	CodegenPresubmitServices      []string `yaml:"code_gen_presubmit_services"`
 	RuntimePresubmitServices      []string `yaml:"runtime_presubmit_services"`

@@ -28,10 +28,14 @@ type lane struct {
 // as "awaiting-workflow" in TRIAGED: hand-written-code waits for fix-bug
 // (Phase 2), new-resource for the plan gate.
 var lanes = map[string]lane{
-	// The sdk-bump workflow is not built yet; with the shadow launcher this
-	// name only appears in launch lines.
+	// The sdk-bump workflow (ack-build-tools autopilot sdk-bump, Plan 6).
+	// With the shadow launcher these args only appear in launch lines.
+	// change-class travels with work-item, as for add-field (Plan 3).
 	"SDK-bump": {Workflow: "sdk-bump", args: func(w *ledger.WorkItem) map[string]string {
-		return map[string]string{"service": w.Service, "sdk-to": w.Evidence.SDKTo, "work-item": w.KeyHash}
+		return map[string]string{
+			"service": w.Service, "sdk-to": w.Evidence.SDKTo,
+			"work-item": w.KeyHash, "change-class": w.ChangeClass,
+		}
 	}},
 	// add-field's required_args, plus the provenance optional_args in
 	// prow/agent-workflows/templates/add-field.tpl.

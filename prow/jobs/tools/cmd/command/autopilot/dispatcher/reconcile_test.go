@@ -284,3 +284,19 @@ func TestReconcileNoUsageLeavesFieldUnset(t *testing.T) {
 	w, _ := runWith(t, 1, 3, finished("completed_no_change", "", ""))
 	assert.Nil(t, w.Usage)
 }
+
+func TestApplySDKBumpOutcomes(t *testing.T) {
+	for outcome, want := range map[string]ledger.State{
+		"pr_opened":           ledger.HumanReview,
+		"completed_no_change": ledger.Done,
+		"needs_human":         ledger.Escalated,
+	} {
+		w := running(item("sdk-bump|s3|*|service/s3/v1.97.3", "SDK-bump", ledger.Queued), t0, 1, 3)
+		r := RunResult{Outcome: outcome, Reason: "GATE_FAILED"}
+		if outcome == "pr_opened" {
+			r = RunResult{Outcome: outcome, PR: "https://github.com/aws-controllers-k8s/s3-controller/pull/1"}
+		}
+		apply(w, r, "2026-11-16T00:00:00Z")
+		assert.Equal(t, want, w.State, outcome)
+	}
+}

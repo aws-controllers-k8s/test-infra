@@ -96,12 +96,23 @@ func comparePin(file, name, from, to string) []Finding {
 
 // checkSDKPin fails when any pin goes down, disappears, stops being semver, or
 // moves between the core and the per-service regime (Appendix A [medium]).
-func checkSDKPin(base, head sdkPins) Check {
+// One move is allowed: an SDK-bump may go from the core pin alone to the
+// per-service pin (Plan 6 decision 3; ack-generate then drops
+// aws_sdk_go_version). The go.mod modules are still checked, so the core SDK
+// module can never go down with it.
+func checkSDKPin(class string, base, head sdkPins) Check {
 	var findings []Finding
-	if rb, rh := regime(base), regime(head); rb != "" && rh != "" && rb != rh {
+	rb, rh := regime(base), regime(head)
+	movedToService := class == ClassSDKBump && rb == "core" && rh == "service" && base.Service == ""
+	switch {
+	case movedToService:
+		findings = append(findings, Finding{Signature: "SDK_PIN_REGIME_MOVED", File: metadataPath, Detail: "core " + base.Core + " -> service " + head.Service})
+	case rb != "" && rh != "" && rb != rh:
 		findings = append(findings, Finding{Signature: "SDK_PIN_REGIME_CHANGED", File: metadataPath, Detail: rb + " -> " + rh, Fails: true})
 	}
-	findings = append(findings, comparePin(metadataPath, "aws_sdk_go_version", base.Core, head.Core)...)
+	if !movedToService || head.Core != "" {
+		findings = append(findings, comparePin(metadataPath, "aws_sdk_go_version", base.Core, head.Core)...)
+	}
 	findings = append(findings, comparePin(metadataPath, "aws_service_sdk_version", base.Service, head.Service)...)
 	for _, mod := range sortedKeys(base.Modules) {
 		findings = append(findings, comparePin("go.mod", mod, base.Modules[mod], head.Modules[mod])...)
