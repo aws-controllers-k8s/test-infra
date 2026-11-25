@@ -1865,6 +1865,29 @@ def test_github_identity_from_token():
           "TOKEN_USER=$(gh api user" in script, False)
 
 
+def test_preflight_before_push():
+    """An ACK Autopilot run checks its commit with ack-dod's git-only checks
+    before pushing to the (public) fork, and pushes nothing unless they pass."""
+    script = (_PKG_ROOT / "prow-job.sh").read_text()
+    build = script.find('go build -mod=mod -o "$PREFLIGHT_BIN" ./prow/jobs/tools/cmd')
+    run = script.find('"$PREFLIGHT_BIN" "${PREFLIGHT_ARGS[@]}"')
+    workflow = script.find('python -m workflows "${WORKFLOW_ARGS[@]}"\necho')
+    push = script.find('git push --force "https://github.com/$GITHUB_ACTOR/$SERVICE_REPO.git"')
+    check("built before the agent runs", 0 < build < workflow, True)
+    check("run after the commit, before the push",
+          script.find('git commit "${COMMIT_ARGS[@]}"') < run < push, True)
+    check("only for dispatched add runs",
+          '[ -n "$WORK_ITEM" ] && [ "$WORKFLOW_NAME" != "address-feedback" ]' in script, True)
+    check("a failed build fails closed",
+          "set_result failed PREFLIGHT_UNAVAILABLE" in script[build:build + 300], True)
+    block = script[run:push]
+    check("a blocked commit is not pushed", "set_result failed PREFLIGHT_FAILED" in block, True)
+    check("no decision is not pushed", block.count("exit 1"), 2)
+    check("base is the synced fork main", 'PREFLIGHT_BASE_SHA=$(git rev-parse HEAD)' in script, True)
+    check("the PR body is scanned", '--pr-body-file "$PR_BODY_FILE"' in script, True)
+    check("the report is an artifact", "preflight.txt" in script, True)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1898,6 +1921,7 @@ def main():
                test_triage_cli_offline,
                test_triage_workflow_manifest,
                test_sdk_bump_result_fixture,
+               test_preflight_before_push,
                test_detector_work,
                test_dispatched_runs_open_drafts,
                test_github_identity_from_token):

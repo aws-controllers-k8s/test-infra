@@ -401,6 +401,27 @@ else
   gh repo sync "$GITHUB_ACTOR/$SERVICE_REPO" --branch main --force >/dev/null
   git fetch origin main >/dev/null
   git reset --hard origin/main >/dev/null
+  # What the PR will merge into; the preflight diffs the agent's commit from it.
+  PREFLIGHT_BASE_SHA=$(git rev-parse HEAD)
+fi
+
+# Pre-push preflight for runs ACK Autopilot started: ack-dod's git-only checks
+# (path-allowlist, code-scan, leak-inventory, sdk-pin) on the agent's commit
+# before it reaches the fork, which is public. Built here, before the agent
+# runs, so a build failure costs no tokens. It is advisory: it shares the pod
+# with the agent, so it can only stop a push; the separate, signed ack-dod
+# job still gates the PR.
+PREFLIGHT_BIN=""
+if [ -n "$WORK_ITEM" ] && [ "$WORKFLOW_NAME" != "address-feedback" ]; then
+  PREFLIGHT_SRC="${TEST_INFRA_DIR:-$REPO_ROOT/test-infra}"
+  PREFLIGHT_BIN="/tmp/ack-preflight/ack-build-tools"
+  echo "$SCRIPT_NAME][INFO] Building the pre-push preflight from $PREFLIGHT_SRC..."
+  mkdir -p "$(dirname "$PREFLIGHT_BIN")"
+  if ! (cd "$PREFLIGHT_SRC" && go build -mod=mod -o "$PREFLIGHT_BIN" ./prow/jobs/tools/cmd); then
+    echo "$SCRIPT_NAME][ERROR] could not build the pre-push preflight" >&2
+    set_result failed PREFLIGHT_UNAVAILABLE
+    exit 1
+  fi
 fi
 
 cd "$WORKFLOW_DIR"
@@ -595,6 +616,33 @@ git add -A >/dev/null
 COMMIT_ARGS=(-m "$COMMIT_MSG")
 [ -n "$TRAILERS" ] && COMMIT_ARGS+=(-m "$TRAILERS")
 git commit "${COMMIT_ARGS[@]}" >/dev/null
+
+# Nothing is pushed unless the preflight passes. Exit 1 is a failing check, 2
+# is no decision; both are a failed run, which the Dispatcher retries.
+if [ -n "$PREFLIGHT_BIN" ]; then
+  echo "$SCRIPT_NAME][INFO] Running the pre-push preflight..."
+  PREFLIGHT_ARGS=(autopilot preflight --repo-dir "$SERVICE_REPO_DIR"
+    --base-ref "$PREFLIGHT_BASE_SHA" --head-ref HEAD --change-class "$CHANGE_CLASS"
+    --report-out "${ARTIFACTS:-/tmp/ack-test-logs}/preflight.txt")
+  [ -s "$PR_BODY_FILE" ] && PREFLIGHT_ARGS+=(--pr-body-file "$PR_BODY_FILE")
+  set +e
+  "$PREFLIGHT_BIN" "${PREFLIGHT_ARGS[@]}"
+  PREFLIGHT_CODE=$?
+  set -e
+  case "$PREFLIGHT_CODE" in
+    0) ;;
+    1)
+      echo "$SCRIPT_NAME][ERROR] the pre-push preflight blocked this commit; not pushing" >&2
+      set_result failed PREFLIGHT_FAILED
+      exit 1
+      ;;
+    *)
+      echo "$SCRIPT_NAME][ERROR] the pre-push preflight could not decide (exit $PREFLIGHT_CODE); not pushing" >&2
+      set_result failed PREFLIGHT_UNAVAILABLE
+      exit 1
+      ;;
+  esac
+fi
 
 # Push changes to the forked repository
 echo "$SCRIPT_NAME][INFO] Pushing changes to the forked repository..."
