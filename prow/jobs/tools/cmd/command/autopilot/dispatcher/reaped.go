@@ -26,24 +26,35 @@ const ReapedAlarmThreshold = 2
 // ReapedToday counts runs reaped with no verdict (INFRA_NO_VERDICT, design
 // 5.4 reaper) in the 24 hours before now: retried ones (history reason
 // "RETRY INFRA_NO_VERDICT") and the ones that exhausted the item's attempts.
-// The dispatch command prints an alarm line above ReapedAlarmThreshold; Plan
-// 10 publishes the count as WorkItemsReaped.
+// The dispatch command prints an alarm line above ReapedAlarmThreshold and
+// publishes the count as WorkItemsReapedToday (Plan 10).
 func ReapedToday(items map[string]*ledger.WorkItem, now time.Time) int {
-	dayAgo := now.Add(-24 * time.Hour)
-	n := 0
-	for _, w := range items {
+	return len(ReapedBetween(items, now.Add(-24*time.Hour), now))
+}
+
+// Reap is one reaped run: items[Key].History[Index] recorded it.
+type Reap struct {
+	Key   string
+	Index int
+}
+
+// ReapedBetween lists the runs ReapedToday counts, reaped after from and at
+// or before to, in no particular order.
+func ReapedBetween(items map[string]*ledger.WorkItem, from, to time.Time) []Reap {
+	var out []Reap
+	for k, w := range items {
 		for i, h := range w.History {
 			ts, err := time.Parse(time.RFC3339, h.TS)
-			if err != nil || !ts.After(dayAgo) || ts.After(now) {
+			if err != nil || !ts.After(from) || ts.After(to) {
 				continue
 			}
 			switch {
 			case h.Reason == "RETRY INFRA_NO_VERDICT":
-				n++
+				out = append(out, Reap{Key: k, Index: i})
 			case h.Reason == "ATTEMPTS_EXHAUSTED" && i == len(w.History)-1 && w.Verdict != nil && w.Verdict.Reason == "INFRA_NO_VERDICT":
-				n++
+				out = append(out, Reap{Key: k, Index: i})
 			}
 		}
 	}
-	return n
+	return out
 }

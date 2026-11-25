@@ -15,6 +15,7 @@ package prowlaunch
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -115,7 +116,9 @@ func TestPodIdentityIsNarrow(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(deployDir, "pod-identity.yaml"))
 	require.NoError(t, err)
 	s := string(b)
-	assert.NotContains(t, s, `"Resource": "*"`)
+	// The one "Resource": "*" is PutMetricData (Plan 10), which has no
+	// resource-level permissions: TestPodIdentityMetricsAreScoped.
+	assert.Equal(t, 1, strings.Count(s, `"Resource": "*"`))
 	assert.NotContains(t, s, `"Action": "*"`)
 	assert.NotContains(t, s, "s3:*")
 	assert.NotContains(t, s, "secret:ack/prow/*")
@@ -133,6 +136,36 @@ func TestPodIdentityIsNarrow(t *testing.T) {
 		}
 	}
 	assert.Equal(t, want, strings.Count(s, "/artifacts/"), "no other artifact is readable")
+}
+
+// TestPodIdentityMetricsAreScoped (Plan 10): every statement on all resources
+// is cloudwatch:PutMetricData limited to namespace ACK/Autopilot.
+func TestPodIdentityMetricsAreScoped(t *testing.T) {
+	type statement struct {
+		Effect    string
+		Action    []string
+		Resource  any
+		Condition map[string]map[string]string
+	}
+	found := 0
+	for _, d := range docs(t, "pod-identity.yaml") {
+		spec, _ := d["spec"].(map[string]any)
+		policies, _ := spec["inlinePolicies"].(map[string]any)
+		for name, doc := range policies {
+			var p struct{ Statement []statement }
+			require.NoError(t, json.Unmarshal([]byte(doc.(string)), &p), name)
+			for _, st := range p.Statement {
+				if st.Resource != "*" {
+					continue
+				}
+				found++
+				assert.Equal(t, "Allow", st.Effect, name)
+				assert.Equal(t, []string{"cloudwatch:PutMetricData"}, st.Action, name)
+				assert.Equal(t, map[string]map[string]string{"StringEquals": {"cloudwatch:namespace": "ACK/Autopilot"}}, st.Condition, name)
+			}
+		}
+	}
+	assert.Equal(t, 1, found)
 }
 
 // TestNothingDeploysThisDirectory: the manifests are applied by a human, so

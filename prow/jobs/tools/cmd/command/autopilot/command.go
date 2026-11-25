@@ -163,6 +163,10 @@ func init() {
 	Command.AddCommand(ingestCmd, lintCmd)
 
 	bindIngestFlags(dispatchCmd.Flags(), &dispatchOpts, "report the tick without writing the ledger or starting any run")
+	dispatchCmd.Flags().StringVar(&dispatchMetrics.Namespace, "metrics-namespace", "",
+		"CloudWatch namespace for the tick's metrics (ACK/Autopilot); empty publishes nothing")
+	dispatchCmd.Flags().StringVar(&dispatchMetrics.Region, "metrics-region", "",
+		"AWS region for the tick's metrics; required with --metrics-namespace")
 	for _, name := range []string{"bot-login", "team-slug", "ledger-dir"} {
 		_ = dispatchCmd.MarkFlagRequired(name)
 	}
@@ -261,8 +265,9 @@ func (o statusOptions) validate() error {
 }
 
 var (
-	dispatchOpts ingestOptions
-	statusOpts   statusOptions
+	dispatchOpts    ingestOptions
+	dispatchMetrics metricsOptions
+	statusOpts      statusOptions
 )
 
 func githubClient() (*github.Client, error) {
@@ -288,15 +293,25 @@ links.pr names (Plan 9): GATING reads the verdict for the PR head (sdk-bump's ow
 or an autopilot-dod job's), merged PRs move to DONE, closed ones are escalated,
 reviews and human commits are recorded. It marks a gated draft ready only when
 AUTOPILOT_PR_WRITE=true, with AUTOPILOT_PR_GITHUB_TOKEN. Saves and lints the
-ledger unless --dry-run. The GitHub token is read from GITHUB_TOKEN.`,
+ledger unless --dry-run. The GitHub token is read from GITHUB_TOKEN.
+With --metrics-namespace and --metrics-region it publishes the tick's metrics
+(RunSucceeded, WorkItemsReapedToday, GateFirstPass, GateFirstFail,
+RunsCompleted, RunsFailed, ItemsEscalated) to CloudWatch, dry run or not; it
+always prints them on a "metrics" line.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := githubClient()
 		if err != nil {
 			return err
 		}
+		if err := dispatchMetrics.validate(); err != nil {
+			return err
+		}
 		ctx, cancel := context.WithTimeout(cmd.Context(), githubTimeout)
 		defer cancel()
-		return dispatch(ctx, client, dispatchOpts, time.Now().UTC(), cmd.OutOrStdout())
+		now := time.Now().UTC()
+		res, err := runDispatch(ctx, client, dispatchOpts, now, cmd.OutOrStdout())
+		publishTickMetrics(dispatchMetrics, res, err, now, cmd.OutOrStdout(), newMetricPutter)
+		return err
 	},
 }
 
@@ -322,36 +337,43 @@ body or anyone else's comment. --dry-run prints the planned edits. The GitHub to
 // dispatch is one Dispatcher tick: read GitHub, ingest, Tick, then (unless
 // o.DryRun) save and lint the ledger and its policy.
 func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now time.Time, out io.Writer) error {
+	_, err := runDispatch(ctx, client, o, now, out)
+	return err
+}
+
+// runDispatch is dispatch, also returning the tick's result once Tick ran
+// (nil before), for the metrics.
+func runDispatch(ctx context.Context, client *github.Client, o ingestOptions, now time.Time, out io.Writer) (*dispatcher.Result, error) {
 	if err := o.validate(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := prOpts.validate(); err != nil {
-		return err
+		return nil, err
 	}
 	if !o.DryRun {
 		if err := requireDir(o.LedgerDir); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	pw, err := prWriterFor(getenv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	dodKey, err := dodPublicKeyFor(getenv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	team, err := issuefinder.FetchTeam(ctx, client, o.teamOwner(), o.TeamSlug)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	issues, err := issuefinder.FetchIssues(ctx, client, o.Owner, o.Repo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	items, err := ledger.Load(o.LedgerDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun, GitHub: prReader(client), PRWriter: pw, Team: team,
 		PRAuthors: prOpts.prAuthors(), BotLogins: prOpts.bots(), DodPublicKey: dodKey}
@@ -365,7 +387,7 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 
 	before, err := snapshot(items)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ts := now.UTC().Format(time.RFC3339)
 	icfg := issuefinder.Config{BotLogin: o.BotLogin, Team: team, Now: ts}
@@ -375,6 +397,7 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	cmds, cmdSkipped := issuefinder.TriageCommands(icfg, issues)
 	cfg.TriageCommands = cmds
 	tick := dispatcher.Tick(ctx, cfg, items)
+	res := &tick
 
 	skipped := append(append(append([]string{}, ing.Skipped...), cmdSkipped...), tick.Skipped...)
 	for _, s := range skipped {
@@ -382,7 +405,7 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	}
 	changed, err := changedKeys(before, items)
 	if err != nil {
-		return err
+		return res, err
 	}
 	for _, k := range changed {
 		kind := "new"
@@ -433,18 +456,18 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 		len(issues), len(skipped), len(changed), len(tick.Launched), len(tick.Waiting), held, len(tick.Problems))
 	if o.DryRun {
 		fmt.Fprintln(out, "dry run: ledger not written")
-		return nil
+		return res, nil
 	}
 	if cfg.PolicyErr != nil {
-		return fmt.Errorf("policy: %w; ledger not written", cfg.PolicyErr)
+		return res, fmt.Errorf("policy: %w; ledger not written", cfg.PolicyErr)
 	}
 	if err := ledger.Save(o.LedgerDir, items); err != nil {
-		return err
+		return res, err
 	}
 	if errs := append(ledger.Lint(o.LedgerDir), policy.Lint(o.LedgerDir)...); len(errs) > 0 {
-		return fmt.Errorf("ledger written but does not lint clean: %w", errors.Join(errs...))
+		return res, fmt.Errorf("ledger written but does not lint clean: %w", errors.Join(errs...))
 	}
-	return nil
+	return res, nil
 }
 
 // postStatus keeps the status comment on every open issue that some item

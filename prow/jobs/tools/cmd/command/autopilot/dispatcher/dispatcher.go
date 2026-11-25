@@ -91,12 +91,22 @@ type Result struct {
 	TriageStats []TriageStat
 	// Reaped is ReapedToday after the tick (design 10 WorkItemsReaped).
 	Reaped int
+	// Counts is what the tick did, for the Plan 10 metrics. A dry run
+	// counts too: it changes the items in memory like any tick.
+	Counts Counts
 }
 
 // Tick runs one Dispatcher pass over items, in place: reconcile, route,
 // schedule, launch. The caller has already run the issue finder, and saves
 // and lints the ledger afterwards.
 func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Result {
+	before := historyLens(items)
+	res := tick(ctx, cfg, items)
+	res.Counts = countTick(before, items)
+	return res
+}
+
+func tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Result {
 	ts := cfg.Now.UTC().Format(time.RFC3339)
 	var res Result
 	if cfg.Policy == nil || cfg.Launcher == nil {

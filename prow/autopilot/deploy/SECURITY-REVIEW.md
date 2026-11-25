@@ -21,10 +21,11 @@ Nothing in this directory is deployed by Argo CD or Flux
 | No result reads | One S3 GET per finished run: `logs/<job>/<build id>/artifacts/agent-result.json`, at most 64 KiB; and, for GATING (Plan 9), `verdict.json` of a finished `autopilot-sdk-bump` or `autopilot-dod` job, at most 1 MiB, and the `autopilot-dod` job's `verdict.sig`, at most 1 KiB (Plan 9 review) |
 | No PR reads or writes (Plan 2-8) | Plan 9: reads, with `GITHUB_TOKEN`, only the PRs the ledger's `links.pr` names (pull, commits, reviews, commit tree, compare) and each queued repo's open PRs (runtime-release back-off). Its writes, marking a gated draft ready for review and turning a PR it marked ready back into a draft while a new head re-gates (Plan 9 review F6), need `AUTOPILOT_PR_WRITE=true` and a separate `AUTOPILOT_PR_GITHUB_TOKEN`; both are off/absent in the periodic |
 | No other ProwJob reads | Plan 9: `list` of agent-plugin's `address-feedback` jobs for one PR (label selector), to wait while one runs; read only, never adopted, aborted or reconciled |
+| No metrics | Plan 10: one `cloudwatch:PutMetricData` per tick, in namespace `ACK/Autopilot` only (`RunSucceeded` with `Job=autopilot-dispatch`, `WorkItemsReapedToday`, `GateFirstPass`, `GateFirstFail`, `RunsCompleted`, `RunsFailed`, `ItemsEscalated`), only when `AUTOPILOT_METRICS_NAMESPACE` is set in `autopilot-dispatch.tpl`. Until the dedicated role is applied it runs as `periodic-service-account`, whose role has the same statement (`CloudWatchAutopilotMetrics` in `flux/ack/charts/ack-pod-identity-roles/templates/prow-iam-roles.yaml`) |
 
 No listener is opened anywhere: the Dispatcher is a client of the Kubernetes
-API (pod ServiceAccount token, cluster CA, no proxy) and of S3 (SigV4 with the
-pod's Pod Identity credentials). There is no new endpoint, port, Service or
+API (pod ServiceAccount token, cluster CA, no proxy), of S3 and of CloudWatch
+(SigV4 with the pod's Pod Identity credentials). There is no new endpoint, port, Service or
 Ingress, and no new public storage.
 
 ## Identities and credentials
@@ -32,7 +33,7 @@ Ingress, and no new public storage.
 | Credential | Where it lives | Who can read it | Lifetime |
 |---|---|---|---|
 | `autopilot-dispatcher` ServiceAccount token | projected into every container of the Dispatcher pod (test container, clonerefs, initupload, sidecar) | code running in that pod | bound token, rotated by the kubelet (about 1 h); the client re-reads it on every request |
-| Pod Identity credentials of `<stack>-autopilot-dispatcher-role` | EKS Pod Identity agent, per pod | code running in that pod | short-lived STS credentials |
+| Pod Identity credentials of `<stack>-autopilot-dispatcher-role` | EKS Pod Identity agent, per pod | code running in that pod | short-lived STS credentials; can read the ack-bot token, read the run result files, write `logs/autopilot-dispatch/*`, and `cloudwatch:PutMetricData` in namespace `ACK/Autopilot` only (Plan 10). PutMetricData has no resource-level permissions, so that statement is `"Resource": "*"` scoped by the `cloudwatch:namespace` condition; the worst a stolen credential does with it is write misleading Autopilot metrics (false or silenced alarms), nothing else |
 | ack-bot PAT (`ack/prow/github-pat-token`) | `prow-secrets` CSI mount, as today through `preset-github-secrets` | code running in that pod | long-lived (Plan 1's `ack-autopilot` App replaces it before the Dispatcher writes the ledger) |
 
 Code in the Dispatcher pod is test-infra `main`, built in the pod at every tick

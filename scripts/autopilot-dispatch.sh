@@ -11,6 +11,10 @@
 # force-pushes, and commits only changes under autopilot/.
 # AUTOPILOT_COMMENT=true posts the status comments (only with ledger writes on);
 # anything else prints the planned comment edits.
+# AUTOPILOT_METRICS_NAMESPACE and AUTOPILOT_METRICS_REGION (the periodic sets
+# ACK/Autopilot, us-west-2) publish the tick's CloudWatch metrics (Plan 10), dry
+# run or not; unset publishes nothing. A rejected push re-runs the tick, so its
+# counts publish again for that attempt (rare: the job is the only writer).
 #
 # Optional overrides, for running against a sandbox repo (unset = production):
 #   AUTOPILOT_ISSUES_REPO   repo with the issues and the ledger (default ack-private)
@@ -33,6 +37,15 @@
 # and AUTOPILOT_PR_GITHUB_TOKEN; a dry run never does. It trusts a dod verdict
 # only with a valid signature from AUTOPILOT_DOD_PUBLIC_KEY (base64, the public
 # half of autopilot-dod-signing-key; empty trusts none, invalid stops the tick).
+#
+# The daily health report (ACK Autopilot Plan 10, design 10; oncall reads it
+# daily, design 12): the first tick of a UTC day that finds no
+# autopilot/reports/<yesterday>.md writes the report for the previous full UTC
+# day there (ack-build-tools autopilot health-report --once), so each file is
+# complete and written once. It is committed and pushed with the tick's ledger
+# changes, only with AUTOPILOT_LEDGER_WRITE=true; a dry run writes it to a temp
+# file and prints its path and summary. A report error is printed and never
+# fails or blocks the tick.
 #
 # POSIX sh only: the job image (golang alpine) has no bash.
 #
@@ -73,6 +86,8 @@ GIT_NAME="${AUTOPILOT_GIT_NAME:-ack-bot}"
 GIT_EMAIL="${AUTOPILOT_GIT_EMAIL:-ack-bot@users.noreply.github.com}"
 WRITE="${AUTOPILOT_LEDGER_WRITE:-false}"
 COMMENT="${AUTOPILOT_COMMENT:-false}"
+METRICS_NAMESPACE="${AUTOPILOT_METRICS_NAMESPACE:-}"
+METRICS_REGION="${AUTOPILOT_METRICS_REGION:-}"
 : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
 
 fail() { echo "autopilot-dispatch: $*" >&2; exit 1; }
@@ -89,7 +104,8 @@ fi
 # The token never appears in a URL, on a command line or in a file: the askpass
 # helper reads it from the environment when git asks for the password.
 askdir="$(mktemp -d)"
-trap 'rm -rf "$askdir"' EXIT
+reportdir="$(mktemp -d)"
+trap 'rm -rf "$askdir" "$reportdir"' EXIT
 askpass="$askdir/askpass.sh"
 # The single quotes are deliberate: $GITHUB_TOKEN must expand when git runs the
 # helper, not here.
@@ -113,7 +129,21 @@ dispatch() {
   "$BIN" autopilot dispatch \
     --issues-owner "$OWNER" --issues-repo "$ISSUES_REPO" \
     --bot-login "$BOT_LOGIN" --team-owner "$TEAM_OWNER" --team-slug "$TEAM_SLUG" \
-    --ledger-dir "$LEDGER_DIR" --test-infra-dir "$TEST_INFRA_DIR" "$@"
+    --ledger-dir "$LEDGER_DIR" --test-infra-dir "$TEST_INFRA_DIR" \
+    --metrics-namespace "$METRICS_NAMESPACE" --metrics-region "$METRICS_REGION" "$@"
+}
+
+health_report() {
+  if [ "$WRITE" = "true" ]; then
+    "$BIN" autopilot health-report --ledger-dir "$LEDGER_DIR" --once \
+      || echo "autopilot-dispatch: health report failed; the tick goes on" >&2
+  elif [ -d "$LEDGER_DIR" ]; then
+    "$BIN" autopilot health-report --ledger-dir "$LEDGER_DIR" --once \
+      --out "$reportdir/health-report.md" \
+      || echo "autopilot-dispatch: health report failed; the tick goes on" >&2
+  else
+    echo "no $LEDGER_DIR yet: no health report"
+  fi
 }
 
 post_status() {
@@ -130,6 +160,7 @@ if [ "$WRITE" != "true" ]; then
   echo "dry run (AUTOPILOT_LEDGER_WRITE is not \"true\")"
   # The CLI accepts a missing ledger dir in a dry run (before the bootstrap).
   dispatch --dry-run
+  health_report
   post_status
   exit 0
 fi
@@ -142,6 +173,7 @@ for attempt in 1 2 3; do
   [ -d "$LEDGER_DIR" ] \
     || fail "$LEDGER_DIR does not exist on ${OWNER}/${ISSUES_REPO} ${BRANCH}; bootstrap the ledger before enabling writes"
   dispatch
+  health_report
   # Assign first so that a failing git status stops the script under set -e.
   changes="$(git status --porcelain -- autopilot)"
   if [ -z "$changes" ]; then
