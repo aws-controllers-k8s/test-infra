@@ -30,6 +30,7 @@ import (
 // a PR for the next state.
 const (
 	OutcomePROpened   = "pr_opened"
+	OutcomePRUpdated  = "pr_updated" // address-feedback's; reconcile does not apply it
 	OutcomeNoChange   = "completed_no_change"
 	OutcomeNeedsHuman = "needs_human"
 	OutcomeFailed     = "failed"
@@ -59,13 +60,30 @@ func reconcile(ctx context.Context, items map[string]*ledger.WorkItem, l Launche
 			continue
 		}
 		switch {
+		case st.Phase == PhaseFinished && st.Job == JobAborted:
+			// Someone stopped the job (Deck, a newer run): a person decides
+			// what happens next, so it is not retried.
+			finish(w, ledger.Escalated, ts, "RUN_ABORTED", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "RUN_ABORTED"})
+		case st.Phase == PhaseFinished && st.Job == JobErrored:
+			retry(w, "INFRA_JOB_ERROR", ts)
+		case st.Phase == PhaseFinished && st.Result != nil && !consistent(st.Job, st.Result.Outcome):
+			// The file and the exit code disagree: an agent may have written
+			// the file. Nothing it reports reaches the ledger.
+			retry(w, "RESULT_STATE_MISMATCH", ts)
 		case st.Phase == PhaseFinished && st.Result != nil:
 			apply(w, *st.Result, ts)
 		case st.Phase == PhaseFinished:
-			retry(w, "INFRA_NO_VERDICT", ts)
+			retry(w, cleanReason(st.Problem, "INFRA_NO_VERDICT"), ts)
 		case overdue(w.Claim, b.ReaperGrace(), now) && (st.Phase == PhasePending || st.Phase == PhaseRunning):
-			// The run is still live and Launcher has no Abort. Requeueing
-			// could open a second PR while the first run is going.
+			// Requeueing a live run could open a second PR while the first
+			// is going, so stop it first, then escalate. A shadow (or
+			// dry-run) launcher stops nothing.
+			if !l.Shadow() {
+				if err := l.Abort(ctx, w.Claim.LaunchID); err != nil {
+					problems = append(problems, fmt.Sprintf("abort overdue %s for %s: %v", w.Claim.LaunchID, w.Key, err))
+					continue
+				}
+			}
 			finish(w, ledger.Escalated, ts, "RUN_OVERDUE", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "RUN_OVERDUE"})
 		case overdue(w.Claim, b.ReaperGrace(), now):
 			retry(w, "INFRA_NO_VERDICT", ts)
@@ -107,6 +125,23 @@ func apply(w *ledger.WorkItem, r RunResult, ts string) {
 		}
 		finish(w, ledger.Escalated, ts, "UNKNOWN_VERDICT", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: reason})
 	}
+}
+
+// consistent reports whether a run's reported outcome fits how its job ended
+// (Plan 3 carry-over). prow-job.sh and sdk-bump exit 0 exactly when they
+// record pr_opened, pr_updated or completed_no_change, and non-zero for failed
+// and needs_human. An empty JobState (a launcher that cannot tell) skips the
+// check.
+func consistent(job JobState, outcome string) bool {
+	switch job {
+	case "":
+		return true
+	case JobSucceeded:
+		return outcome == OutcomePROpened || outcome == OutcomePRUpdated || outcome == OutcomeNoChange
+	case JobFailed:
+		return outcome == OutcomeFailed || outcome == OutcomeNeedsHuman
+	}
+	return false
 }
 
 // retry requeues a failed run while it has attempts left, else escalates.

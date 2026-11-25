@@ -1,0 +1,4 @@
+image_repo: ${PROW_IMAGES_REPO_URI}
+images:
+    auto-generate-controllers: prow-auto-generate-controllers-0.0.48
+    detect-api-changes: prow-detect-api-changes-0.0.2

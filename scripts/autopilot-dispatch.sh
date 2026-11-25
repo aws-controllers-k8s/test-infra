@@ -22,7 +22,11 @@
 #   AUTOPILOT_GIT_EMAIL     commit author email (default ack-bot@users.noreply.github.com)
 #
 # Requires GITHUB_TOKEN and an ack-build-tools binary at AUTOPILOT_BIN
-# (default /tmp/ack-build-tools).
+# (default /tmp/ack-build-tools). Run it from the test-infra checkout.
+#
+# The launcher is policy/autopilot.yaml's; "prow" also needs
+# AUTOPILOT_LAUNCHER_ENABLED=true (the periodic sets "false"), and creates
+# ProwJobs as the pod's ServiceAccount. A dry run never starts or aborts one.
 #
 # POSIX sh only: the job image (golang alpine) has no bash.
 #
@@ -47,6 +51,9 @@ unset GIT_TRACE GIT_TRACE_CURL GIT_CURL_VERBOSE GIT_TRACE_PACKET \
   GIT_TRACE_SETUP GIT_TRACE2 GIT_TRACE2_EVENT GIT_TRACE2_PERF
 
 OWNER="${1:?usage: $0 <org>}"
+# The job starts in the test-infra checkout; the prow launcher reads
+# agent-workflows.yaml and images_config.yaml from it (the script cds away).
+TEST_INFRA_DIR="$(pwd)"
 BIN="${AUTOPILOT_BIN:-/tmp/ack-build-tools}"
 LEDGER_REPO="${AUTOPILOT_LEDGER_REPO:-/tmp/ack-private}"
 LEDGER_DIR="$LEDGER_REPO/autopilot"
@@ -100,7 +107,7 @@ dispatch() {
   "$BIN" autopilot dispatch \
     --issues-owner "$OWNER" --issues-repo "$ISSUES_REPO" \
     --bot-login "$BOT_LOGIN" --team-owner "$TEAM_OWNER" --team-slug "$TEAM_SLUG" \
-    --ledger-dir "$LEDGER_DIR" "$@"
+    --ledger-dir "$LEDGER_DIR" --test-infra-dir "$TEST_INFRA_DIR" "$@"
 }
 
 post_status() {

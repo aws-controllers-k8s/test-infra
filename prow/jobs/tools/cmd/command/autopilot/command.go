@@ -52,6 +52,9 @@ type ingestOptions struct {
 	// TeamOwner is the org that owns TeamSlug. Empty means Owner.
 	TeamOwner string
 	DryRun    bool
+	// TestInfraDir is the test-infra checkout the prow launcher reads
+	// (dispatch only).
+	TestInfraDir string
 }
 
 // teamOwner is the org to ask for the team's members: --team-owner, or
@@ -276,8 +279,10 @@ var dispatchCmd = &cobra.Command{
 	Long: `Ingests detect-api-changes issues (read-only, as ingest-issues does), then
 reconciles finished runs, routes items through the state machine, applies the
 caps in policy/budgets.yaml and launches with the launcher policy/autopilot.yaml
-names (only "shadow", which starts nothing). Saves and lints the ledger unless
---dry-run. The GitHub token is read from GITHUB_TOKEN.`,
+names: "shadow" starts nothing; "prow" creates ProwJobs, and only when
+AUTOPILOT_LAUNCHER_ENABLED=true and --test-infra-dir is given. --dry-run never
+starts or aborts a run. Saves and lints the ledger unless --dry-run. The GitHub
+token is read from GITHUB_TOKEN.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		client, err := githubClient()
 		if err != nil {
@@ -333,7 +338,7 @@ func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now t
 	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun}
 	if pol, perr := policy.Load(o.LedgerDir); perr != nil {
 		cfg.PolicyErr = perr
-	} else if l, lerr := dispatcher.NewLauncher(pol); lerr != nil {
+	} else if l, lerr := launcherFor(ctx, pol, o.TestInfraDir, getenv); lerr != nil {
 		cfg.PolicyErr = lerr
 	} else {
 		cfg.Policy, cfg.Launcher = &pol, l

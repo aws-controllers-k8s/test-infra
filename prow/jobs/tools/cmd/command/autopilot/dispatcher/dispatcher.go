@@ -15,7 +15,12 @@ package dispatcher
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
@@ -30,9 +35,9 @@ type Config struct {
 	Policy    *policy.Policy
 	PolicyErr error
 	Launcher  Launcher
-	// DryRun makes the launch step use a fresh ShadowLauncher whatever Launcher
-	// is, so a dry run can never start anything. Reconcile still reads run
-	// status through Launcher.
+	// DryRun makes the tick launch and abort through a ShadowLauncher whatever
+	// Launcher is, so a dry run can never start or stop anything. Reconcile
+	// still reads run status, and the inventory, through Launcher.
 	DryRun bool
 }
 
@@ -73,13 +78,30 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 		return res
 	}
 	p := *cfg.Policy
-	res.Problems = reconcile(ctx, items, cfg.Launcher, p.Budgets, cfg.Now)
-	res.Held = route(items, ts)
 	launcher := cfg.Launcher
 	if cfg.DryRun {
-		launcher = &ShadowLauncher{}
+		launcher = &dryRun{real: cfg.Launcher}
 	}
-	picks, waits := schedule(items, p, cfg.Now)
+	res.Problems = reconcile(ctx, items, launcher, p.Budgets, cfg.Now)
+	if p.Switches.AbortInflight {
+		res.Problems = append(res.Problems, abortInflight(ctx, items, launcher, ts)...)
+	}
+	res.Held = route(items, ts)
+	orphans, adopt, err := findOrphans(ctx, cfg.Launcher, items)
+	if err != nil {
+		// Without the inventory the caps cannot be trusted: launch nothing.
+		res.Problems = append(res.Problems, fmt.Sprintf("inventory: %v; nothing launched", err))
+		return res
+	}
+	for _, o := range orphans {
+		res.Problems = append(res.Problems, fmt.Sprintf("orphan run %s (%s) is in flight and no item claims it; it counts against the caps", o.LaunchID, o.Workflow))
+		if p.Switches.AbortInflight && !launcher.Shadow() {
+			if err := launcher.Abort(ctx, o.LaunchID); err != nil {
+				res.Problems = append(res.Problems, fmt.Sprintf("abort orphan %s: %v", o.LaunchID, err))
+			}
+		}
+	}
+	picks, waits := scheduleWith(items, p, cfg.Now, orphans, adopt)
 	for _, c := range waits {
 		res.Waiting = append(res.Waiting, Wait{Key: c.item.Key, KeyHash: c.item.KeyHash, Cap: c.cap})
 	}
@@ -99,7 +121,146 @@ func Tick(ctx context.Context, cfg Config, items map[string]*ledger.WorkItem) Re
 			claim(w, req, p.Budgets, cfg.Now)
 		}
 	}
+	res.Problems = append(res.Problems, refreshBumps(ctx, items, launcher, p.Switches, &res)...)
 	return res
+}
+
+// NextLaunch is the request Tick would make for a QUEUED item of a class with
+// a lane, ignoring caps. autopilot launch-preview prints the job it builds.
+func NextLaunch(w *ledger.WorkItem, b policy.Budgets) (LaunchRequest, bool) {
+	ln, ok := lanes[w.ChangeClass]
+	if !ok || w.State != ledger.Queued {
+		return LaunchRequest{}, false
+	}
+	return LaunchRequest{LaunchID: nextLaunchID(w), Workflow: ln.Workflow, Args: ln.args(w), Timeout: b.JobTimeout()}, true
+}
+
+// findOrphans sorts the runs the launcher sees in flight: a run that is the
+// next run of a QUEUED item goes to adopt (that item's next Launch adopts it);
+// a run no item claims is an orphan. Refresh runs are neither. A shadow
+// launcher, or one without an inventory, sees none.
+func findOrphans(ctx context.Context, l Launcher, items map[string]*ledger.WorkItem) ([]ActiveJob, map[string]bool, error) {
+	inv, ok := l.(Inventory)
+	if !ok || l.Shadow() {
+		return nil, nil, nil
+	}
+	active, err := inv.Active(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	claimed, next := map[string]bool{}, map[string]bool{}
+	for _, w := range items {
+		if w.Claim != nil {
+			claimed[w.Claim.LaunchID] = true
+		}
+		if w.State == ledger.Queued {
+			next[nextLaunchID(w)] = true
+		}
+	}
+	var orphans []ActiveJob
+	adopt := map[string]bool{}
+	for _, a := range active {
+		switch {
+		case a.Refresh, claimed[a.LaunchID]:
+		case next[a.LaunchID]:
+			adopt[a.LaunchID] = true
+		default:
+			orphans = append(orphans, a)
+		}
+	}
+	sort.Slice(orphans, func(i, j int) bool { return orphans[i].LaunchID < orphans[j].LaunchID })
+	return orphans, adopt, nil
+}
+
+// abortInflight stops every run in flight (policy abort_inflight) and
+// escalates its item. A shadow or dry-run launcher stops nothing, so the items
+// stay as they are and one problem line says how many would be stopped.
+func abortInflight(ctx context.Context, items map[string]*ledger.WorkItem, l Launcher, ts string) []string {
+	var active []*ledger.WorkItem
+	for _, k := range sortedKeys(items) {
+		if w := items[k]; w.State.ActiveRun() && w.Claim != nil {
+			active = append(active, w)
+		}
+	}
+	if len(active) == 0 {
+		return nil
+	}
+	if l.Shadow() {
+		for _, w := range active {
+			_ = l.Abort(ctx, w.Claim.LaunchID)
+		}
+		return []string{fmt.Sprintf("abort_inflight: %d run(s) in flight; this launcher aborts nothing", len(active))}
+	}
+	var problems []string
+	for _, w := range active {
+		if err := l.Abort(ctx, w.Claim.LaunchID); err != nil {
+			problems = append(problems, fmt.Sprintf("abort %s for %s: %v", w.Claim.LaunchID, w.Key, err))
+			continue
+		}
+		finish(w, ledger.Escalated, ts, "ABORTED_BY_POLICY", &ledger.Verdict{Outcome: OutcomeNeedsHuman, Reason: "ABORTED_BY_POLICY"})
+	}
+	return problems
+}
+
+// refreshTimeout bounds an sdk-bump --mode refresh run (no regeneration).
+const refreshTimeout = 30 * time.Minute
+
+// refreshBumps starts an sdk-bump --mode refresh run (Plan 6) for every
+// SDK-bump item with an open PR whose server-default dependents (items that
+// depend on it with detector_work server-default) are in states no refresh
+// has seen yet. The launch id is derived from those states, so each set of
+// states gets one refresh, recorded in the bump's links.prowjobs. Refresh
+// runs take no claim, charge no attempt, and are not reconciled. The first
+// refresh after the PR opens repeats what the bump run already did; that is
+// harmless.
+func refreshBumps(ctx context.Context, items map[string]*ledger.WorkItem, l Launcher, sw policy.Switches, res *Result) []string {
+	deps := map[string][]*ledger.WorkItem{}
+	for _, w := range items {
+		if w.DetectorWork != "server-default" {
+			continue
+		}
+		for _, d := range w.DependsOn {
+			deps[d] = append(deps[d], w)
+		}
+	}
+	var problems []string
+	for _, k := range sortedKeys(items) {
+		b := items[k]
+		if b.ChangeClass != "SDK-bump" || !b.State.OpenPR() || b.Links.PR == "" || len(deps[b.Key]) == 0 {
+			continue
+		}
+		if sw.Paused || sw.AbortInflight || sw.RepoPaused(b.Repo) || !sw.ServiceEnabled(b.Service) {
+			continue
+		}
+		id := refreshID(b, deps[b.Key])
+		if slices.Contains(b.Links.ProwJobs, id) {
+			continue
+		}
+		args := lanes["SDK-bump"].args(b)
+		args["mode"] = "refresh"
+		req := LaunchRequest{LaunchID: id, Workflow: "sdk-bump", Args: args, Timeout: refreshTimeout}
+		if err := l.Launch(ctx, req); err != nil {
+			problems = append(problems, fmt.Sprintf("launch refresh %s for %s: %v", id, b.Key, err))
+			continue
+		}
+		res.Launched = append(res.Launched, Launch{Key: b.Key, KeyHash: b.KeyHash, Workflow: "sdk-bump", LaunchID: id, Shadow: l.Shadow()})
+		if !l.Shadow() {
+			b.Links.ProwJobs = append(b.Links.ProwJobs, id)
+		}
+	}
+	return problems
+}
+
+// refreshID names the refresh of bump b for its dependents' current states:
+// autopilot-<key hash>-g<generation>-f<8 hex of the states>.
+func refreshID(b *ledger.WorkItem, deps []*ledger.WorkItem) string {
+	lines := make([]string, 0, len(deps))
+	for _, d := range deps {
+		lines = append(lines, ledger.KeyHash(d.Key)+"="+string(d.State))
+	}
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
+	return fmt.Sprintf("autopilot-%s-g%d-f%s", strings.TrimPrefix(ledger.KeyHash(b.Key), "sha256:"), b.Generation, hex.EncodeToString(sum[:])[:8])
 }
 
 // claim records a started run on the item: QUEUED -> RUNNING.

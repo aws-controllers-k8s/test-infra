@@ -90,6 +90,26 @@ type fakeLauncher struct {
 	statusErr map[string]error
 	launchErr error
 	launched  []LaunchRequest
+	abortErr  error
+	aborted   []string
+	// active, when set, makes the fake an Inventory.
+	active    []ActiveJob
+	activeErr error
+}
+
+func (f *fakeLauncher) Abort(_ context.Context, id string) error {
+	if f.abortErr != nil {
+		return f.abortErr
+	}
+	f.aborted = append(f.aborted, id)
+	return nil
+}
+
+// inventoryLauncher is a fakeLauncher that also lists its active runs.
+type inventoryLauncher struct{ *fakeLauncher }
+
+func (f inventoryLauncher) Active(context.Context) ([]ActiveJob, error) {
+	return f.active, f.activeErr
 }
 
 func (f *fakeLauncher) Launch(_ context.Context, r LaunchRequest) error {

@@ -35,9 +35,12 @@ import (
 const (
 	SwitchesFile = "policy/autopilot.yaml"
 	BudgetsFile  = "policy/budgets.yaml"
-	// LauncherShadow records launches and starts nothing. It is the only
-	// launcher this version accepts.
+	// LauncherShadow records launches and starts nothing.
 	LauncherShadow = "shadow"
+	// LauncherProw creates ProwJobs (Plan 7). The dispatch command also
+	// requires AUTOPILOT_LAUNCHER_ENABLED=true in the job's environment, so
+	// the ledger's policy alone cannot start real runs.
+	LauncherProw = "prow"
 	// maxJobTimeoutMinutes is Prow's hard limit for an agent job (design 5.4).
 	maxJobTimeoutMinutes  = 360
 	minReaperGraceMinutes = 30
@@ -51,6 +54,10 @@ type Switches struct {
 	Launcher    string   `yaml:"launcher"`
 	// Services is the allowlist of services whose items may be launched.
 	Services []string `yaml:"services"`
+	// AbortInflight aborts every run in flight on each tick, escalates its
+	// item (ABORTED_BY_POLICY) and launches nothing. Only the prow launcher
+	// aborts; the shadow launcher reports what it would abort.
+	AbortInflight bool `yaml:"abort_inflight"`
 }
 
 type Budgets struct {
@@ -185,8 +192,8 @@ func (p Policy) validate() []error {
 		errs = append(errs, fmt.Errorf("%s: %s", file, fmt.Sprintf(format, args...)))
 	}
 	s, b := p.Switches, p.Budgets
-	if s.Launcher != LauncherShadow {
-		bad(SwitchesFile, "launcher %q is not supported (only %q)", s.Launcher, LauncherShadow)
+	if s.Launcher != LauncherShadow && s.Launcher != LauncherProw {
+		bad(SwitchesFile, "launcher %q is not supported (%q or %q)", s.Launcher, LauncherShadow, LauncherProw)
 	}
 	for _, svc := range s.Services {
 		if svc == "" || strings.ContainsAny(svc, "|/ \t") {

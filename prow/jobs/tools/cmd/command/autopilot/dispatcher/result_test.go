@@ -33,10 +33,12 @@ func TestParseResultFixture(t *testing.T) {
 	r, err := ParseResult(fixture(t), "sha256:0123456789abcdef")
 	require.NoError(t, err)
 	assert.Equal(t, RunResult{
-		Outcome: "pr_opened",
-		PR:      "https://github.com/aws-controllers-k8s/s3-controller/pull/240",
-		Tokens:  1280000,
-		E2ERuns: 1,
+		Outcome:   "pr_opened",
+		PR:        "https://github.com/aws-controllers-k8s/s3-controller/pull/240",
+		Workflow:  "add-field",
+		ProwJobID: "autopilot-0123456789abcdef-g1-r1",
+		Tokens:    1280000,
+		E2ERuns:   1,
 	}, r)
 }
 
@@ -53,7 +55,7 @@ func TestParseResultRejects(t *testing.T) {
 		"negative e2e":     {strings.Replace(good, `"attempts": 1`, `"attempts": -1`, 1), "", "negative"},
 		"negative impl":    {strings.Replace(good, `"impl": 2`, `"impl": -1`, 1), "", "negative"},
 		"negative replan":  {strings.Replace(good, `"replan": 0`, `"replan": -1`, 1), "", "negative"},
-		"too large":        {good + strings.Repeat(" ", maxResultBytes), "", "larger"},
+		"too large":        {good + strings.Repeat(" ", MaxResultBytes), "", "larger"},
 		"trailing garbage": {good + "{}", "", "decode"},
 		"trailing brace":   {good + "}", "", "data after the object"},
 		"trailing bracket": {good + "]", "", "data after the object"},

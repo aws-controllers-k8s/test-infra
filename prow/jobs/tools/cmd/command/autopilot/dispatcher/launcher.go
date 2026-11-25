@@ -52,15 +52,40 @@ type RunResult struct {
 	Outcome string
 	Reason  string
 	PR      string
+	// Workflow and ProwJobID say which run wrote the file. A real launcher
+	// checks them against the job it read the file from.
+	Workflow  string
+	ProwJobID string
 	// Tokens and E2ERuns are what the run spent; reconcile adds them to the
 	// item's usage.
 	Tokens  int64
 	E2ERuns int
 }
 
+// JobState is how a finished run's job ended, as the launcher saw it.
+type JobState string
+
+const (
+	JobSucceeded JobState = "succeeded"
+	JobFailed    JobState = "failed"
+	// JobAborted: someone or something stopped the job (Deck, a newer run).
+	JobAborted JobState = "aborted"
+	// JobErrored: Prow could not run the job (pod never started, bad spec).
+	JobErrored JobState = "errored"
+)
+
 type Status struct {
 	Phase  Phase
 	Result *RunResult
+	// Job is how a finished run's job ended. A real launcher sets it for every
+	// finished run, and reconcile checks Result against it: the agents share
+	// the pod and can write the result file, but not the job's exit code.
+	// Empty skips the check (test fakes).
+	Job JobState
+	// Problem is why a finished run has no Result, as a SCREAMING_SNAKE
+	// token (RESULT_MISSING, RESULT_INVALID, ...). Empty means
+	// INFRA_NO_VERDICT.
+	Problem string
 }
 
 type LaunchRequest struct {
@@ -77,19 +102,44 @@ type Launcher interface {
 	// tick that launched but lost its ledger push is safe to repeat. That holds
 	// only if the rerun picks the same items; the real launcher must adopt or
 	// reap orphaned runs by id prefix. The same
-	// LaunchID with a different Workflow or Args is an error. A real launcher
-	// must remember the ids it has started even after Prow deletes the job,
-	// so that a relaunch never starts a second run.
+	// LaunchID with a different Workflow or Args is an error. A launcher
+	// need not remember ids whose job Prow has deleted: Status then reports
+	// PhaseUnknown, and Launch with that id would start a new job. The
+	// Dispatcher never asks for that: an id is consumed once the ledger
+	// records it (the claim and links.prowjobs; Attempts.Runs picks the next
+	// run's id), a claimed run with no job is reaped after its deadline plus
+	// grace, and the next run gets a new id (TestTickNeverRelaunchesAGoneJob).
+	// The one gap is a tick whose ledger push is lost: the next tick repeats
+	// the id, and is adopted only while the job still exists.
 	Launch(ctx context.Context, r LaunchRequest) error
 	Status(ctx context.Context, launchID string) (Status, error)
+	// Abort stops a run. It must be idempotent: aborting a run that is
+	// finished, already aborted or unknown succeeds and changes nothing.
+	Abort(ctx context.Context, launchID string) error
 	// Shadow reports that Launch only records requests. The Dispatcher then
 	// changes no item for a launch.
 	Shadow() bool
 }
 
-// ShadowLauncher records launch requests and starts nothing.
+// ActiveJob is a run a launcher sees as not finished.
+type ActiveJob struct {
+	LaunchID, Workflow, Service string
+	// Refresh marks an sdk-bump --mode refresh run, which no item claims.
+	Refresh bool
+}
+
+// Inventory is implemented by launchers that can list their own unfinished
+// runs. Tick counts the runs no item claims (a launch whose ledger push was
+// lost) against the caps, so a lost push never lets more runs start than the
+// caps allow.
+type Inventory interface {
+	Active(ctx context.Context) ([]ActiveJob, error)
+}
+
+// ShadowLauncher records launch and abort requests and starts nothing.
 type ShadowLauncher struct {
 	Requests []LaunchRequest
+	Aborts   []string
 }
 
 func (s *ShadowLauncher) Launch(_ context.Context, r LaunchRequest) error {
@@ -104,13 +154,35 @@ func (s *ShadowLauncher) Status(context.Context, string) (Status, error) {
 	return Status{Phase: PhaseUnknown}, nil
 }
 
+// Abort records the request and stops nothing.
+func (s *ShadowLauncher) Abort(_ context.Context, launchID string) error {
+	s.Aborts = append(s.Aborts, launchID)
+	return nil
+}
+
 func (s *ShadowLauncher) Shadow() bool { return true }
+
+// dryRun reads run status through a real launcher but launches and aborts
+// nothing: a dry-run tick can never start or stop a run.
+type dryRun struct {
+	real   Launcher
+	shadow ShadowLauncher
+}
+
+func (d *dryRun) Launch(ctx context.Context, r LaunchRequest) error { return d.shadow.Launch(ctx, r) }
+func (d *dryRun) Status(ctx context.Context, id string) (Status, error) {
+	return d.real.Status(ctx, id)
+}
+func (d *dryRun) Abort(ctx context.Context, id string) error { return d.shadow.Abort(ctx, id) }
+func (d *dryRun) Shadow() bool                               { return true }
 
 // NewLauncher returns the launcher the policy names.
 func NewLauncher(p policy.Policy) (Launcher, error) {
 	switch p.Switches.Launcher {
 	case policy.LauncherShadow:
 		return &ShadowLauncher{}, nil
+	case policy.LauncherProw:
+		return nil, fmt.Errorf("launcher %q is built by the dispatch command (it needs the cluster and the test-infra checkout)", p.Switches.Launcher)
 	}
 	return nil, fmt.Errorf("launcher %q is not supported", p.Switches.Launcher)
 }

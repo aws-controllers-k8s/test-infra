@@ -26,8 +26,9 @@ import (
 // testdata/agent-result-v1.json.
 const ResultSchema = "ack.autopilot.result/v1"
 
-// maxResultBytes bounds what is read from a run's artifacts.
-const maxResultBytes = 64 << 10
+// MaxResultBytes bounds what is read from a run's artifacts. A launcher reads
+// at most MaxResultBytes+1 bytes, so a larger file fails ParseResult.
+const MaxResultBytes = 64 << 10
 
 // Upper bounds on a single run's counts. Real runs are far below them; they
 // keep a bad or hostile file from pushing the ledger's running totals past
@@ -66,8 +67,8 @@ type resultFile struct {
 // outcome, reason and PR link. Unknown fields are ignored, so a newer writer
 // with extra fields still parses.
 func ParseResult(data []byte, workItem string) (RunResult, error) {
-	if len(data) > maxResultBytes {
-		return RunResult{}, fmt.Errorf("agent-result.json is larger than %d bytes", maxResultBytes)
+	if len(data) > MaxResultBytes {
+		return RunResult{}, fmt.Errorf("agent-result.json is larger than %d bytes", MaxResultBytes)
 	}
 	// encoding/json matches keys case-insensitively ("Work_Item" fills
 	// WorkItem). That is fine: the work-item check guards against launcher
@@ -96,5 +97,8 @@ func ParseResult(data []byte, workItem string) (RunResult, error) {
 	if f.E2E.Attempts > maxResultCount || f.Iterations.Impl > maxResultCount || f.Iterations.Replan > maxResultCount {
 		return RunResult{}, fmt.Errorf("agent-result.json iterations or e2e.attempts out of range (max %d)", maxResultCount)
 	}
-	return RunResult{Outcome: f.Outcome, Reason: f.Reason, PR: f.PR, Tokens: f.Tokens.Total, E2ERuns: f.E2E.Attempts}, nil
+	return RunResult{
+		Outcome: f.Outcome, Reason: f.Reason, PR: f.PR, Workflow: f.Workflow, ProwJobID: f.ProwJobID,
+		Tokens: f.Tokens.Total, E2ERuns: f.E2E.Attempts,
+	}, nil
 }

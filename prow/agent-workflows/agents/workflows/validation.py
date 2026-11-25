@@ -28,6 +28,9 @@ _WORK_ITEM_RE = re.compile(r"^sha256:[0-9a-f]{16}$")
 # Ledger change classes (autopilot/issuefinder/classify.go) a workflow can be
 # started for.
 CHANGE_CLASSES = ("SDK-bump", "config-only", "hand-written-code", "new-resource")
+# Detector work names of config-only items (autopilot/issuefinder classify.go
+# configOnlyWork) the Dispatcher passes to add-field as --detector-work.
+DETECTOR_WORKS = ("create-only", "not-generated", "server-default")
 
 
 def validate_inputs(
@@ -39,6 +42,7 @@ def validate_inputs(
     require_field: bool = False,
     work_item: str | None = None,
     change_class: str | None = None,
+    detector_work: str | None = None,
 ) -> list[str]:
     """Return validation problems for one workflow invocation.
 
@@ -66,6 +70,8 @@ def validate_inputs(
         problems.append("work-item must be sha256: and 16 hex digits")
     if change_class is not None and change_class not in CHANGE_CLASSES:
         problems.append("change-class must be one of " + ", ".join(CHANGE_CLASSES))
+    if detector_work is not None and detector_work not in DETECTOR_WORKS:
+        problems.append("detector-work must be one of " + ", ".join(DETECTOR_WORKS))
     return problems
 
 
@@ -78,6 +84,7 @@ def main() -> int:
     parser.add_argument("--require-field", action="store_true")
     parser.add_argument("--work-item")
     parser.add_argument("--change-class")
+    parser.add_argument("--detector-work")
     args = parser.parse_args()
 
     problems = validate_inputs(
@@ -88,6 +95,7 @@ def main() -> int:
         require_field=args.require_field,
         work_item=args.work_item,
         change_class=args.change_class,
+        detector_work=args.detector_work,
     )
     if problems:
         parser.error("; ".join(problems))
