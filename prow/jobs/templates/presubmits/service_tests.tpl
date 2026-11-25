@@ -388,4 +388,52 @@
         - "/bin/bash"
         - "-c"
         - "./cd/scripts/check-crd-compatibility.sh"
+{{ if contains $.Config.AutopilotDodServices $service }}
+  - name: {{ $service }}-autopilot-dod
+{{- if $.Config.PresubmitCluster }}
+    cluster: {{ $.Config.PresubmitCluster }}
+{{- end }}
+    decorate: true
+    # ACK Autopilot Plan 5. Optional and manual (/test {{ $service }}-autopilot-dod);
+    # never required. No secrets or AWS presets: ack-dod needs no credentials.
+    optional: true
+    always_run: false
+    path_alias: github.com/aws-controllers-k8s/{{ $service }}-controller
+    annotations:
+      karpenter.sh/do-not-disrupt: "true"
+    extra_refs:
+    - org: ${TEST_INFRA_ORG}
+      repo: code-generator
+      base_ref: main
+      workdir: false
+      path_alias: github.com/aws-controllers-k8s/code-generator
+    - org: ${TEST_INFRA_ORG}
+      repo: runtime
+      base_ref: main
+      workdir: false
+      path_alias: github.com/aws-controllers-k8s/runtime
+    - org: ${TEST_INFRA_ORG}
+      repo: ${TEST_INFRA_REPO}
+      base_ref: ${TEST_INFRA_BRANCH}
+      workdir: true
+      path_alias: github.com/aws-controllers-k8s/test-infra
+    spec:
+      serviceAccountName: pre-submit-service-account
+      containers:
+      - image: {{printf "%s:%s" $.ImageContext.ImageRepo (index $.ImageContext.Images "auto-generate-controllers") }}
+        resources:
+          limits:
+            cpu: 4
+            memory: "8192Mi"
+          requests:
+            cpu: 4
+            memory: "8192Mi"
+        env:
+        - name: SERVICE
+          value: "{{ $service }}"
+        command:
+        - "/bin/bash"
+        - "-c"
+        - "./scripts/autopilot-dod.sh"
+{{ end }}
 {{ end }}

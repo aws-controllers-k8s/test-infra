@@ -14,6 +14,7 @@
 package command
 
 import (
+	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -89,6 +90,10 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		var ec interface{ ExitCode() int }
+		if errors.As(err, &ec) {
+			os.Exit(ec.ExitCode())
+		}
 		os.Exit(1)
 	}
 }
