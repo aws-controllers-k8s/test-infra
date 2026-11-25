@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 // ModeBump and ModeRefresh are sdk-bump's modes (Plan 6 sdkbump.ModeBump,
@@ -43,11 +45,36 @@ var validators = map[string]*regexp.Regexp{
 	"mode":          regexp.MustCompile(`^(` + ModeBump + `|` + ModeRefresh + `)$`),
 }
 
+// workflowValidators override validators for one workflow's args. Triage
+// (Plan 8) passes the item's detector class and any detector work name,
+// and its finding class; add-field and sdk-bump keep the shapes above.
+// dispatcher.triageArgs holds items to the same shapes.
+var workflowValidators = map[string]map[string]*regexp.Regexp{
+	"triage": {
+		"change-class":  regexp.MustCompile(`^(config-only|hand-written-code)$`),
+		"detector-work": regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`),
+		"finding-class": regexp.MustCompile(`^(spec-field|status-field|lifecycle-field)$`),
+	},
+}
+
 // maxArgLen bounds every arg value.
 const maxArgLen = 256
 
-// classOf is the only change class each workflow is started for.
-var classOf = map[string]string{"add-field": "config-only", "sdk-bump": "SDK-bump"}
+// classesOf is the change classes each workflow is started for. A triage
+// run (Plan 8) carries the item's detector class.
+var classesOf = map[string][]string{
+	"add-field": {"config-only"},
+	"sdk-bump":  {"SDK-bump"},
+	"triage":    {"config-only", "hand-written-code"},
+}
+
+func quoteOr(ss []string) string {
+	q := make([]string, len(ss))
+	for i, s := range ss {
+		q[i] = strconv.Quote(s)
+	}
+	return strings.Join(q, " or ")
+}
 
 // checkArgs checks args against the workflow's required_args and
 // optional_args (as agent-plugin's ValidateRequiredArgs and ValidateArgs do
@@ -68,7 +95,10 @@ func checkArgs(name string, w Workflow, args map[string]string, workItem string)
 		if !slices.Contains(w.RequiredArgs, k) && !slices.Contains(w.OptionalArgs, k) {
 			return fmt.Errorf("arg %q is not in the workflow's required_args or optional_args", k)
 		}
-		re, ok := validators[k]
+		re, ok := workflowValidators[name][k]
+		if !ok {
+			re, ok = validators[k]
+		}
 		if !ok {
 			return fmt.Errorf("arg %q is not one the Dispatcher may pass", k)
 		}
@@ -79,8 +109,8 @@ func checkArgs(name string, w Workflow, args map[string]string, workItem string)
 	if args["work-item"] != workItem {
 		return fmt.Errorf("arg work-item must be the launch id's key hash %s", workItem)
 	}
-	if args["change-class"] != classOf[name] {
-		return fmt.Errorf("arg change-class must be %q for %s", classOf[name], name)
+	if !slices.Contains(classesOf[name], args["change-class"]) {
+		return fmt.Errorf("arg change-class must be %s for %s", quoteOr(classesOf[name]), name)
 	}
 	return nil
 }

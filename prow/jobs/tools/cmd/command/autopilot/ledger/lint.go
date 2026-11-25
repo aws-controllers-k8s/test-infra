@@ -105,6 +105,9 @@ func Lint(root string) []error {
 		if u := w.Usage; u != nil && (u.Tokens < 0 || u.E2ERuns < 0) {
 			fail("usage tokens=%d e2e_runs=%d is negative", u.Tokens, u.E2ERuns)
 		}
+		for _, m := range lintTriage(w) {
+			fail("%s", m)
+		}
 		if other, dup := seen[w.Key]; dup {
 			fail("duplicate key %q (also in %s)", w.Key, other)
 		}

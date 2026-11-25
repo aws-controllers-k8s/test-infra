@@ -34,7 +34,8 @@ const (
 )
 
 // route moves pre-dispatch items along DETECTED -> TRIAGED -> QUEUED or
-// BLOCKED (design 5.4). Items of a class no workflow handles are held as
+// BLOCKED (design 5.4). Needs-config items wait in DETECTED for a triage run
+// and in TRIAGED for a maintainer's decision (triageHold). Items of a class no workflow handles are held as
 // "awaiting-workflow" in TRIAGED; route escalates only items whose dependency
 // is dead. It returns how many items it held, by reason. It writes a history entry only
 // when an item's state changes.
@@ -52,6 +53,13 @@ func route(items map[string]*ledger.WorkItem, ts string) map[string]int {
 		case w.State == ledger.PlanPending:
 			held[HoldAwaitingPlanApproval]++
 			continue
+		case isTriageItem(w):
+			// Mode-api triage (Plan 8): held until a maintainer's reply
+			// decides; a decided item moves on below.
+			if hold := triageHold(w, ts); hold != "" {
+				held[hold]++
+				continue
+			}
 		case w.State == ledger.Detected && w.ChangeClass == "new-resource":
 			held[HoldAwaitingPlanWorkflow]++
 			continue

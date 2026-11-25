@@ -1,0 +1,18 @@
+# ACK Autopilot Plan 8 fixture: prow/agent-workflows/agent-workflows.yaml's
+# triage entry with its placeholders resolved (images repo
+# registry.example/prow, org aws-controllers-k8s). Only prowlaunch reads it;
+# agent-plugin builds triage jobs with an agent-secrets volume, so there is
+# no agent-plugin golden for it.
+workflows:
+    triage:
+        description: "ACK Autopilot triage, mode api: one needs-config work item to one closed-enum decision (no tools, no GitHub token)"
+        image: registry.example/prow:add-resource-0.0.33
+        command: ["/app/triage-job.sh"]
+        required_args: ["service", "resource", "field", "finding-class", "detector-work", "change-class", "sdk-to", "work-item"]
+        optional_args: ["model"]
+        environment:
+            GITHUB_ORG: aws-controllers-k8s
+        timeout: "30m"
+        resources:
+            cpu: "1"
+            memory: "2Gi"

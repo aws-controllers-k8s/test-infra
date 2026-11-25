@@ -118,3 +118,42 @@ def create_enhanced_agent(
         tools=tools,
         system_prompt=system_prompt,
     ) 
+
+def converse_text(
+    system: str,
+    user: str,
+    *,
+    model_id: str = DEFAULT_MODEL_ID,
+    region_name: str = DEFAULT_REGION,
+    max_tokens: int = 1024,
+    client=None,
+) -> tuple[str, dict]:
+    """One Bedrock Converse request with no tools.
+
+    No toolConfig is sent, so the model has nothing to call and can only
+    answer with text: ACK Autopilot's triage workflow (Plan 8) relies on this
+    for the untrusted-input firewall (design 5.2). Returns the reply text and
+    the token counts as {"input", "output", "total"}. A reply that stops for
+    tool use is an error.
+    """
+    if client is None:
+        import boto3
+
+        client = boto3.client("bedrock-runtime", region_name=region_name, config=create_enhanced_boto_config())
+    resp = client.converse(
+        modelId=model_id,
+        system=[{"text": system}],
+        messages=[{"role": "user", "content": [{"text": user}]}],
+        inferenceConfig={"maxTokens": max_tokens},
+    )
+    if resp.get("stopReason") == "tool_use":
+        raise RuntimeError("the model asked for a tool, and none is offered")
+    content = ((resp.get("output") or {}).get("message") or {}).get("content") or []
+    text = "".join(p["text"] for p in content if isinstance(p, dict) and isinstance(p.get("text"), str))
+    usage = resp.get("usage") or {}
+
+    def count(key: str) -> int:
+        value = usage.get(key)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+    return text, {"input": count("inputTokens"), "output": count("outputTokens"), "total": count("totalTokens")}

@@ -55,6 +55,9 @@ type Action struct {
 	// oldest first, excluding the one Update or Unchanged names. Nothing
 	// deletes them; the caller reports them.
 	Duplicates []int64
+	// LaunchID names the triage proposal a triage comment is for; empty for
+	// the status comment.
+	LaunchID string
 }
 
 // Render lists items (those whose view issue this is), sorted by key. It uses
@@ -72,6 +75,18 @@ func Render(items []*ledger.WorkItem) string {
 		line := fmt.Sprintf("- `%s` **`%s`** `%s`: `%s`", code(w.KeyHash), code(string(w.State)), code(w.ChangeClass), code(w.Key))
 		if ledger.PRInRepo(w.Repo, w.Links.PR) {
 			line += " " + w.Links.PR
+		}
+		if t := w.Triage; t != nil {
+			switch {
+			case t.Claim != nil:
+				line += " triage `running`"
+			case t.Proposal != nil && t.Review == nil:
+				line += fmt.Sprintf(" triage `%s` `pending`", code(t.Proposal.Decision))
+			case t.Proposal != nil:
+				line += fmt.Sprintf(" triage `%s` `%s`", code(t.Proposal.Decision), code(t.Review.Outcome))
+			case t.Failed != "":
+				line += fmt.Sprintf(" triage `failed` `%s`", code(t.Failed))
+			}
 		}
 		if v := w.Verdict; v != nil {
 			line += fmt.Sprintf(" (`%s` `%s`)", code(v.Outcome), code(v.Reason))

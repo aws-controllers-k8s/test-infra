@@ -29,7 +29,7 @@ import (
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
 )
 
-var update = flag.Bool("update", false, "rewrite testdata/prowjob-sdk-bump.golden.json")
+var update = flag.Bool("update", false, "rewrite the Dispatcher-only goldens (prowjob-sdk-bump, prowjob-triage)")
 
 var testConfig = Config{
 	Bucket: "s3://example-prow-logs", Org: "aws-controllers-k8s",

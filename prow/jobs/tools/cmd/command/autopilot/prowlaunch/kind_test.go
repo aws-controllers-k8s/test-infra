@@ -131,3 +131,41 @@ func TestKindRBACAndAdmissionPolicy(t *testing.T) {
 	_, _, err = k.do(ctx, http.MethodGet, secrets, nil, "")
 	assert.ErrorContains(t, err, "403")
 }
+
+func TestKindAdmitsOnlyTheTriageJobBuildMakes(t *testing.T) {
+	ctx := context.Background()
+	k := kindKube(t, Namespace)
+	cat := triageCatalog(t)
+	l, err := New(cat, testConfig, k, &fakeArtifacts{})
+	require.NoError(t, err)
+	require.NoError(t, l.Launch(ctx, goldenTriage))
+	require.NoError(t, l.Abort(ctx, goldenTriage.LaunchID))
+
+	pj, err := cat.Build(testConfig, goldenTriage)
+	require.NoError(t, err)
+	n := 100
+	next := func() string { n++; return fmt.Sprintf("autopilot-%016x-g1-t1", n) }
+	podSpec := func(m map[string]any) map[string]any {
+		return m["spec"].(map[string]any)["pod_spec"].(map[string]any)
+	}
+	container := func(m map[string]any) map[string]any { return podSpec(m)["containers"].([]any)[0].(map[string]any) }
+	for name, edit := range map[string]func(map[string]any){
+		"secrets volume": func(m map[string]any) {
+			podSpec(m)["volumes"] = []any{map[string]any{"name": "agent-secrets", "csi": map[string]any{
+				"driver": "secrets-store.csi.k8s.io", "volumeAttributes": map[string]any{"secretProviderClass": "agent-secrets"}}}}
+			container(m)["volumeMounts"] = []any{map[string]any{"name": "agent-secrets", "mountPath": "/mnt/secrets-store"}}
+		},
+		"a token": func(m map[string]any) {
+			container(m)["env"] = append(container(m)["env"].([]any), map[string]any{"name": "GITHUB_TOKEN",
+				"valueFrom": map[string]any{"secretKeyRef": map[string]any{"name": "agent-github-pat-token", "key": "token"}}})
+		},
+		"privileged":    func(m map[string]any) { container(m)["securityContext"] = map[string]any{"privileged": true} },
+		"other command": func(m map[string]any) { container(m)["command"] = []any{"/app/prow-job.sh"} },
+		"extra refs": func(m map[string]any) {
+			m["spec"].(map[string]any)["extra_refs"] = []any{map[string]any{"org": "aws-controllers-k8s", "repo": "test-infra", "base_ref": "main"}}
+		},
+		"run id": func(m map[string]any) { m["metadata"].(map[string]any)["name"] = "autopilot-00000000000000ff-g1-r1" },
+	} {
+		assert.Error(t, rawCreate(t, k, pj, next(), edit), name)
+	}
+}

@@ -1,0 +1,40 @@
+{
+  "e2e": {
+    "attempts": 0,
+    "status": "NOT_RUN"
+  },
+  "iterations": {
+    "impl": 0,
+    "replan": 0
+  },
+  "outcome": "completed_no_change",
+  "pr": "",
+  "prow_job_id": "autopilot-0123456789abcdef-g1-t1",
+  "reason": "TRIAGE_VERDICT",
+  "schema": "ack.autopilot.result/v1",
+  "tokens": {
+    "input": 5200,
+    "output": 180,
+    "total": 5380
+  },
+  "triage": {
+    "items": [
+      {
+        "class": "hand-written-code",
+        "decision": "field-hook",
+        "evidence_refs": [
+          "crd:spec.objectLockConfiguration.rule.defaultRetention",
+          "field:ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold",
+          "op:PutObjectLockConfiguration"
+        ],
+        "invalid": [],
+        "item_key": "sha256:0123456789abcdef",
+        "reason": "DefaultEventHold rides on PutObjectLockConfiguration, which the Bucket's custom update hook sends; the hook must copy the new member."
+      }
+    ],
+    "mode": "api",
+    "schema": "ack.autopilot.triage/v1"
+  },
+  "work_item": "sha256:0123456789abcdef",
+  "workflow": "triage"
+}

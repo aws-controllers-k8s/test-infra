@@ -63,6 +63,7 @@ var lanes = map[string]lane{
 }
 
 // skipsTriage holds the change classes that go from DETECTED straight to
-// TRIAGED. Every other class waits in DETECTED for the triage workflow (design
-// 5.1), which is not built yet.
+// TRIAGED. Every other class waits in DETECTED for triage (design 5.1):
+// needs-config items for the mode-api triage lane (Plan 8, triageHold), other
+// classes as awaiting-triage.
 var skipsTriage = map[string]bool{"SDK-bump": true}

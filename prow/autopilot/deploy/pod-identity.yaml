@@ -3,7 +3,7 @@
 # flux/ack/charts/ack-pod-identity-roles and ack-pod-identities). It can:
 #   - read the ack-bot token the prow-secrets SecretProviderClass mounts for
 #     preset-github-secrets (the ledger and issue reads; Plan 1's App replaces it);
-#   - read one file per run: agent-result.json of the two allowlisted jobs;
+#   - read one file per run: agent-result.json of the three allowlisted jobs;
 #   - write its own Prow logs (Prow's initupload and sidecar use the pod's
 #     credentials).
 # Nothing else: no other secret, no other bucket prefix, no AWS test account.
@@ -53,7 +53,8 @@ spec:
             "Action": ["s3:GetObject"],
             "Resource": [
               "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/agent-workflow-add-field/*/artifacts/agent-result.json",
-              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/autopilot-sdk-bump/*/artifacts/agent-result.json"
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/autopilot-sdk-bump/*/artifacts/agent-result.json",
+              "arn:aws:s3:::${STACK_NAME}-prow-logs-${ACCOUNT_ID}/logs/agent-workflow-triage/*/artifacts/agent-result.json"
             ]
           }
         ]

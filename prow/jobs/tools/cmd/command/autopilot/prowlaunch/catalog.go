@@ -48,13 +48,16 @@ const (
 )
 
 // Allowed is the allowlist: the only workflows the Dispatcher can start, and
-// the Prow job name each runs as. add-field's name is agent-plugin's
-// ("agent-workflow-<workflow>"). sdk-bump is defined in this package, not in
+// the Prow job name each runs as. add-field's and triage's names are
+// agent-plugin's ("agent-workflow-<workflow>"). sdk-bump is defined in this package, not in
 // agent-workflows.yaml, where any /agent comment could start it with ack-bot's
 // token (Plan 6 decision 12).
 var Allowed = map[string]string{
 	"add-field": "agent-workflow-add-field",
 	"sdk-bump":  "autopilot-sdk-bump",
+	// Plan 8: tool-less, holds no GitHub token, writes only its
+	// agent-result.json. agent-plugin's name for the workflow.
+	"triage": "agent-workflow-triage",
 }
 
 // Workflow is one workflow the Dispatcher may start. The yaml fields are the
@@ -276,14 +279,24 @@ type Catalog struct {
 	workflows map[string]Workflow
 }
 
-// NewCatalog takes add-field from agentWorkflows and adds sdkBump. Every
-// other workflow in agentWorkflows is ignored: it is not on the allowlist.
+// NewCatalog takes add-field (required) and triage (optional) from
+// agentWorkflows and adds sdkBump. Every other workflow in agentWorkflows is ignored: it is not on the allowlist.
 func NewCatalog(agentWorkflows map[string]Workflow, sdkBump Workflow) (*Catalog, error) {
 	af, ok := agentWorkflows["add-field"]
 	if !ok {
 		return nil, errors.New("agent-workflows.yaml has no add-field workflow")
 	}
 	c := &Catalog{workflows: map[string]Workflow{"add-field": af, "sdk-bump": sdkBump}}
+	// Plan 8: triage comes from agent-workflows.yaml like add-field, when the
+	// file has it. It must hold no secret, run no e2e and clone nothing:
+	// Build then mounts no secrets volume, and the admission policy denies
+	// any other triage pod.
+	if tr, ok := agentWorkflows["triage"]; ok {
+		if len(tr.EnvironmentFromSecrets) > 0 || tr.E2E || len(tr.ExtraRefs) > 0 {
+			return nil, errors.New("workflow triage must have no environmentFromSecrets, e2e or extra_refs")
+		}
+		c.workflows["triage"] = tr
+	}
 	for name, w := range c.workflows {
 		if err := w.validate(); err != nil {
 			return nil, fmt.Errorf("workflow %s: %w", name, err)

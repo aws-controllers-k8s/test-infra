@@ -34,6 +34,10 @@ const (
 	CapOpenPRs           = "max_open_prs_per_repo_class"
 	CapSDKBumpDaily      = "max_sdk_bump_launches_per_day"
 	CapReview            = "max_prs_awaiting_review"
+	// CapReviewReserved: an SDK bump left a review slot for a triaged item
+	// (policy/triage.yaml reserved_review_slots_triaged; README open
+	// decision 8).
+	CapReviewReserved = "reserved_review_slots_triaged"
 	// CapLane: the lane's own MaxRunning (config-only: 2).
 	CapLane = "lane-max-running"
 	// CapAborting: policy abort_inflight is set, so nothing launches.
@@ -182,6 +186,17 @@ func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.T
 	sort.SliceStable(queue, func(i, j int) bool { return adopt[nextLaunchID(queue[i])] && !adopt[nextLaunchID(queue[j])] })
 
 	l := newLoad(items, b, now, orphans)
+	// While a triaged item with a lane waits, SDK bumps (band 3) leave the
+	// reserved review slots to it (band 4).
+	reserve := 0
+	if p.Triage != nil {
+		for _, w := range queue {
+			if _, ok := lanes[w.ChangeClass]; ok && isTriageItem(w) {
+				reserve = p.Triage.ReservedReviewSlotsTriaged
+				break
+			}
+		}
+	}
 	var picks []candidate
 	var waits []capped
 	for _, w := range queue {
@@ -231,6 +246,9 @@ func scheduleWith(items map[string]*ledger.WorkItem, p policy.Policy, now time.T
 			cap = CapSDKBumpDaily
 		case w.AutonomyLevel == "human-merge" && l.awaitingReview >= b.MaxPRsAwaitingReview:
 			cap = CapReview
+		case w.ChangeClass == "SDK-bump" && w.AutonomyLevel == "human-merge" && reserve > 0 &&
+			l.awaitingReview >= b.MaxPRsAwaitingReview-reserve:
+			cap = CapReviewReserved
 		}
 		if cap != "" {
 			waits = append(waits, capped{w, cap})

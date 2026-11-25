@@ -1,0 +1,14 @@
+# ACK Autopilot triage lane (design 5.1; Plan 8). Change by pull request.
+# Without this file no triage run starts; nothing else changes.
+# Triage modes that may run. Phase 1: api only.
+modes: [api]
+# Triage runs are tool-less model calls of a few minutes. They have their own
+# caps and do not count against max_concurrent_llm_runs.
+max_concurrent_triage_runs: 1
+max_triage_launches_per_day: 10
+# Runs per item and detector classification; then the item waits for a person.
+max_triage_runs_per_item: 2
+job_timeout_minutes: 30
+# Review slots (max_prs_awaiting_review) SDK-bump launches leave free while a
+# triaged item is QUEUED (README open decision 8).
+reserved_review_slots_triaged: 2

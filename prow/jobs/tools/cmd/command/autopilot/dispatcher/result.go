@@ -59,6 +59,8 @@ type resultFile struct {
 		Status   string `json:"status"`
 		Attempts int    `json:"attempts"`
 	} `json:"e2e"`
+	// Triage is kept raw; ParseTriage checks it strictly.
+	Triage json.RawMessage `json:"triage"`
 }
 
 // ParseResult decodes a run's agent-result.json. workItem, when not empty,
@@ -99,6 +101,6 @@ func ParseResult(data []byte, workItem string) (RunResult, error) {
 	}
 	return RunResult{
 		Outcome: f.Outcome, Reason: f.Reason, PR: f.PR, Workflow: f.Workflow, ProwJobID: f.ProwJobID,
-		Tokens: f.Tokens.Total, E2ERuns: f.E2E.Attempts,
+		Tokens: f.Tokens.Total, E2ERuns: f.E2E.Attempts, Triage: f.Triage,
 	}, nil
 }

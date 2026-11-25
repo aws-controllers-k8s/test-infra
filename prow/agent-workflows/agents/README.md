@@ -11,8 +11,9 @@ or locally from this directory.
 | add-resource | `resource-addition` | Adds a new resource to an existing service controller |
 | add-field | `field-addition` | Adds one field (identifier or dotted path) to an existing resource |
 | address-feedback | `address-feedback` | Addresses team members' review feedback on an agent pull request (started by the agent-plugin from a review, never by `/agent`) |
+| triage | `triage-job.sh` (not `python -m workflows`) | ACK Autopilot triage, mode `api`: one needs-config ledger item to one closed-enum decision. Started by the Dispatcher only |
 
-All three run one Strands graph (`roles/`):
+The first three run one Strands graph (`roles/`):
 
 1. **Planner** writes a plan from the AWS API model and the ack-dev-skills SOPs.
 2. **Plan reviewer** approves it or asks for a revision (at most 1 re-plan).
@@ -43,6 +44,32 @@ writes the same file from Go, with the same bytes `result.py` would write
 (`autopilot/sdkbump/testdata/agent-result-sdk-bump-v1.json` is checked by
 both test suites). It does not run `prow-job.sh` or `validation.py`; the Go
 command validates its own inputs with the same rules.
+
+## Triage (ACK Autopilot Plan 8)
+
+`triage-job.sh` triages one "Needs config or code" ledger item. It is not a
+Strands graph: it builds an evidence pack by code (`workflows/triage_evidence.py`:
+the SDK model at `--sdk-to`, the controller's CRDs and `generator.yaml`), makes
+one Bedrock Converse call with no tools (`utils/bedrock.converse_text`), and
+checks the answer (`workflows/triage.py`): a closed-enum decision
+(`resource`, `field-config`, `field-hook`, `not-worth-modelling`,
+`undecided`) whose evidence references must exist in the model or the CRD.
+Anything else becomes `undecided`. The verdict goes into `agent-result.json`
+under `triage` (`ack.autopilot.triage/v1`). The job reads only public data and
+gets no GitHub token. The Dispatcher turns the verdict into a proposal that a
+maintainer accepts or rejects on the api-change issue; nothing is applied
+without that reply.
+
+Offline run (no network, no Bedrock):
+
+    TRIAGE_CONTROLLER_DIR=tests/fixtures/triage/controller \
+    TRIAGE_SDK_MODEL=tests/fixtures/triage/model.json \
+    TRIAGE_MODEL_RESPONSE_FILE=tests/fixtures/triage/answer-field-hook.json \
+    ARTIFACTS=/tmp/triage ./triage-job.sh --service s3 --resource Bucket \
+      --field ObjectLockConfiguration.Rule.DefaultRetention.DefaultEventHold \
+      --finding-class spec-field --detector-work from-sibling \
+      --change-class hand-written-code --sdk-to service/s3/v1.114.10 \
+      --work-item sha256:0123456789abcdef
 
 ## Running locally
 
