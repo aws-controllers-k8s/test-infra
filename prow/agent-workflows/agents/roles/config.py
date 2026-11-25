@@ -87,8 +87,8 @@ class Config:
     shell_timeout_s: int = DEFAULT_SHELL_TIMEOUT_S
     # AWS SDK Go v2 *module* version used by `make build-controller`.
     aws_sdk_go_version: str | None = None
-    # Phase toggles — Phase 3 (E2E) needs a kind cluster + AWS creds and is a
-    # fast-follow; the build-cluster ProwJob currently runs with run_e2e=False.
+    # Phase 3 (E2E) needs a kind cluster and AWS credentials. prow-job.sh
+    # turns it on from RUN_E2E, which agent-plugin sets on every e2e job.
     run_e2e: bool = False
     # Loop bounds from workflows/add-resource.md.
     max_impl_iterations: int = DEFAULT_MAX_IMPL_ITERATIONS

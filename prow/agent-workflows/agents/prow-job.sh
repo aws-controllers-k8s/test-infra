@@ -17,6 +17,12 @@ Environment variables:
   PR_TARGET_BRANCH:    Name of the GitHub branch where the PR should merge the
                        code. Defaults to 'main'
 
+add-resource and add-field, when started by ACK Autopilot's Dispatcher:
+  --work-item:         Ledger key hash (sha256:<16 hex>); adds provenance trailers.
+  --change-class:      Ledger change class of the item (given with --work-item).
+
+Every run writes agent-result.json (workflows/result.py) to \$ARTIFACTS.
+
 address-feedback only (set by the agent-plugin from the review event):
   ISSUE_NUMBER:        Number of the pull request that was reviewed.
   REPO_OWNER:          Owner of the pull request's repository.
@@ -37,6 +43,8 @@ TEAM_MEMBERS=""
 # own defaults (DEFAULT_MODEL_ID, auto-detected SDK version) still apply otherwise.
 MODEL=""
 AWS_SDK_VERSION=""
+WORK_ITEM=""
+CHANGE_CLASS=""
 SCRIPT_NAME="prow-job.sh"
 
 
@@ -77,6 +85,14 @@ while [[ $# -gt 0 ]]; do
       TEAM_MEMBERS="$2"
       shift 2
       ;;
+    --work-item)
+      WORK_ITEM="$2"
+      shift 2
+      ;;
+    --change-class)
+      CHANGE_CLASS="$2"
+      shift 2
+      ;;
     *)
       # Unknown option
       shift
@@ -87,12 +103,49 @@ done
 # Resolve the workflow package dir from this script's own location. Dispatch from
 # the workflow selected by the plugin instead of inferring it from optional data.
 WORKFLOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# agent-result.json is the run result ACK Autopilot's Dispatcher reads from the
+# job artifacts (workflows/result.py). It is created as soon as the workflow
+# directory is known, before any input check or other step that can exit, so a
+# job that dies early still reports failed/JOB_INCOMPLETE, and each exit path
+# below records its own outcome. An unknown WORKFLOW_NAME cannot be recorded
+# (result.py rejects it), so that run leaves no file.
+export AGENT_RESULT_FILE="${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json"
+python "$WORKFLOW_DIR/workflows/result.py" init --workflow "${WORKFLOW_NAME:-}" \
+  || echo "$SCRIPT_NAME][WARN] could not create $AGENT_RESULT_FILE" >&2
+
+# set_result records the run's outcome, reason and PR. If the write fails
+# (the agent in the pod can leave a file result.py refuses, which would make
+# its own verdict stick), the file is rebuilt and the write retried. A failed
+# write is logged and never fails the job: the Dispatcher then sees no verdict.
+VALIDATED=false
+set_result() {
+  local result_py="$WORKFLOW_DIR/workflows/result.py"
+  local set_args=(set --outcome "$1" --reason "${2:-}" --pr "${3:-}")
+  python "$result_py" "${set_args[@]}" && return 0
+  echo "$SCRIPT_NAME][WARN] could not record the run result: $1 ${2:-}; rebuilding $AGENT_RESULT_FILE" >&2
+  if ! python "$result_py" init --workflow "${WORKFLOW_NAME:-}"; then
+    echo "$SCRIPT_NAME][WARN] could not rebuild $AGENT_RESULT_FILE" >&2
+    return 0
+  fi
+  # The work item is recorded only once it has passed validation.
+  if [ "$VALIDATED" = true ] && [ -n "$WORK_ITEM" ]; then
+    python "$result_py" set --work-item "$WORK_ITEM" \
+      || echo "$SCRIPT_NAME][WARN] could not record the work item" >&2
+  fi
+  python "$result_py" "${set_args[@]}" \
+    || echo "$SCRIPT_NAME][WARN] could not record the run result after a rebuild: $1 ${2:-}" >&2
+  return 0
+}
+
 VALIDATION_ARGS=(--service "$SERVICE" --resource "$RESOURCE")
 [ -n "$AWS_SDK_VERSION" ] && VALIDATION_ARGS+=(--aws-sdk-version "$AWS_SDK_VERSION")
+[ -n "$WORK_ITEM" ] && VALIDATION_ARGS+=(--work-item "$WORK_ITEM")
+[ -n "$CHANGE_CLASS" ] && VALIDATION_ARGS+=(--change-class "$CHANGE_CLASS")
 case "${WORKFLOW_NAME:-}" in
   add-resource)
     if [ -n "$FIELD" ]; then
       echo "$SCRIPT_NAME][ERROR] --field is not supported by add-resource" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     WORKFLOW_COMMAND="resource-addition"
@@ -103,6 +156,7 @@ case "${WORKFLOW_NAME:-}" in
   add-field)
     if [ -z "$FIELD" ]; then
       echo "$SCRIPT_NAME][ERROR] --field is required by add-field" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     VALIDATION_ARGS+=(--field "$FIELD" --require-field)
@@ -117,18 +171,22 @@ case "${WORKFLOW_NAME:-}" in
     [ -n "$FIELD" ] && VALIDATION_ARGS+=(--field "$FIELD")
     if ! [[ "${ISSUE_NUMBER:-}" =~ ^[0-9]+$ && "$REVIEW_ID" =~ ^[0-9]+$ ]]; then
       echo "$SCRIPT_NAME][ERROR] ISSUE_NUMBER and --review-id must be numbers" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if ! [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]; then
       echo "$SCRIPT_NAME][ERROR] --review-sha must be a full commit SHA" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if ! [[ "${REPO_OWNER:-}" =~ ^[A-Za-z0-9-]+$ && "${REPO_NAME:-}" == "$SERVICE-controller" ]]; then
       echo "$SCRIPT_NAME][ERROR] REPO_OWNER/REPO_NAME must name the $SERVICE-controller repository" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     if [ -z "$TEAM_MEMBERS" ]; then
       echo "$SCRIPT_NAME][ERROR] --team-members is required by address-feedback" >&2
+      set_result needs_human INVALID_INPUT
       exit 2
     fi
     WORKFLOW_COMMAND="address-feedback"
@@ -145,7 +203,27 @@ esac
 # Validate invocation values before using them in repository paths or Git
 # commands. This keeps one structural-validation implementation for the shell
 # wrapper and workflow adapters.
-python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"
+if ! python "$WORKFLOW_DIR/workflows/validation.py" "${VALIDATION_ARGS[@]}"; then
+  set_result needs_human INVALID_INPUT
+  exit 2
+fi
+VALIDATED=true
+if [ -n "$WORK_ITEM" ]; then
+  python "$WORKFLOW_DIR/workflows/result.py" set --work-item "$WORK_ITEM" \
+    || echo "$SCRIPT_NAME][WARN] could not record the work item" >&2
+fi
+
+# Provenance trailers (design 4.4) for runs ACK Autopilot started. They go on
+# the commit and at the end of the PR body. The PR body is what reaches main:
+# Tide squash-merges with a merge_commit_template whose body is the PR body
+# (prow/config/templates/config-ConfigMap.yaml), so a reused PR's body is
+# refreshed below to keep the trailers.
+TRAILERS=""
+if [ -n "$WORK_ITEM" ]; then
+  TRAILERS="Producer: autopilot/$WORKFLOW_NAME
+Work-Item: $WORK_ITEM
+Change-Class: $CHANGE_CLASS"
+fi
 
 DEFAULT_PR_TARGET_BRANCH="main"
 PR_TARGET_BRANCH=${PR_TARGET_BRANCH:-$DEFAULT_PR_TARGET_BRANCH}
@@ -215,6 +293,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
 
   if [ "$PR_STATE" != "OPEN" ]; then
     echo "$SCRIPT_NAME][INFO] $PR_URL is $PR_STATE; nothing to do"
+    set_result completed_no_change PR_NOT_OPEN "$PR_URL"
     exit 0
   fi
   # The job pushes to the PR's head branch, so the head repository must be
@@ -222,18 +301,22 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   TOKEN_USER=$(gh api user --jq .login)
   if [ "${HEAD_OWNER,,}" != "${PR_AUTHOR,,}" ] || [ "${TOKEN_USER,,}" != "${PR_AUTHOR,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository owner ($HEAD_OWNER), PR author ($PR_AUTHOR) and token user ($TOKEN_USER) must match" >&2
+    set_result needs_human IDENTITY_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "${HEAD_REPO,,}" != "${REPO_NAME,,}" ]; then
     echo "$SCRIPT_NAME][ERROR] head repository $HEAD_REPO does not match $REPO_NAME" >&2
+    set_result needs_human IDENTITY_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "$HEAD_REF" != "$LOCAL_GIT_BRANCH" ]; then
     echo "$SCRIPT_NAME][ERROR] head branch $HEAD_REF does not match $LOCAL_GIT_BRANCH" >&2
+    set_result needs_human BRANCH_MISMATCH "$PR_URL"
     exit 1
   fi
   if [ "$HEAD_SHA" != "$REVIEW_SHA" ]; then
     echo "$SCRIPT_NAME][INFO] PR head moved from $REVIEW_SHA to $HEAD_SHA after the review; not addressing it"
+    set_result completed_no_change HEAD_MOVED "$PR_URL"
     pr_comment -b "This pull request changed after the review (reviewed \`${REVIEW_SHA:0:7}\`, head is now \`${HEAD_SHA:0:7}\`), so the agent did not address it. Submit a new review on the latest commit to have the feedback addressed."
     exit 0
   fi
@@ -243,6 +326,7 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
   cd "$SERVICE_REPO_DIR"
   if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
     echo "$SCRIPT_NAME][ERROR] cloned $HEAD_REF is not at $HEAD_SHA" >&2
+    set_result failed CLONE_MISMATCH "$PR_URL"
     exit 1
   fi
   # The merge base with the PR's base branch, so `git diff PR_BASE_SHA..HEAD`
@@ -260,12 +344,14 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
       --review-id "$REVIEW_ID" --team-members "$TEAM_MEMBERS" \
       --pr-author "$PR_AUTHOR" --output "$FEEDBACK_FILE" \
       --targets-output "$FEEDBACK_TARGETS_FILE"); then
+    set_result failed FEEDBACK_COLLECTION_FAILED "$PR_URL"
     pr_comment -b "The agent could not collect this feedback. See job \`${PROW_JOB_ID:-unknown}\` for details."
     exit 1
   fi
   echo "$SCRIPT_NAME][INFO] collected $FEEDBACK_COUNT feedback item(s) into $FEEDBACK_FILE"
   if [ "$FEEDBACK_COUNT" = "0" ]; then
     echo "$SCRIPT_NAME][INFO] no unresolved feedback from team members; nothing to do"
+    set_result completed_no_change NO_FEEDBACK "$PR_URL"
     pr_comment -b "The agent found no unresolved feedback from team members to address."
     exit 0
   fi
@@ -278,6 +364,7 @@ else
   if ! gh repo fork "$GITHUB_ORG/$SERVICE_REPO" --clone=true >/dev/null; then
   echo ""
   echo "$SCRIPT_NAME][ERROR] failed to fork and clone $GITHUB_ORG/$SERVICE_REPO. Exiting "
+  set_result failed FORK_FAILED
   exit 1
   fi
   echo "ok"
@@ -332,6 +419,7 @@ if [ "${RUN_E2E,,}" = "true" ]; then
   until docker ps -q >/dev/null 2>&1; do
     if [ "$WAIT_N" -ge 5 ]; then
       echo "$SCRIPT_NAME][ERROR] Docker daemon did not become ready; e2e cannot run"
+      set_result failed E2E_SETUP_FAILED
       exit 1
     fi
     WAIT_N=$((WAIT_N + 1))
@@ -348,6 +436,7 @@ if [ "${RUN_E2E,,}" = "true" ]; then
   ASSUMED_ROLE_ARN=$(aws ssm get-parameter --name /ack/prow/agent-e2e-role \
     --query Parameter.Value --output text) || {
     echo "$SCRIPT_NAME][ERROR] could not read /ack/prow/agent-e2e-role from SSM; e2e cannot run"
+    set_result failed E2E_SETUP_FAILED
     exit 1
   }
   export ASSUMED_ROLE_ARN
@@ -359,6 +448,7 @@ if [ "${RUN_E2E,,}" = "true" ]; then
   # authenticate; the harness then assumes ASSUMED_ROLE_ARN from them for the tests.
   CREDS_ENV=$(aws configure export-credentials --format env) || {
     echo "$SCRIPT_NAME][ERROR] could not export static AWS credentials for daws; e2e cannot run"
+    set_result failed E2E_SETUP_FAILED
     exit 1
   }
   eval "$CREDS_ENV"
@@ -408,13 +498,16 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo "$SCRIPT_NAME][INFO] Pushing to $HEAD_OWNER/$HEAD_REPO:$HEAD_REF..."
     if ! git push "https://github.com/$HEAD_OWNER/$HEAD_REPO.git" \
          "HEAD:refs/heads/$HEAD_REF"; then
+      set_result failed PUSH_FAILED "$PR_URL"
       pr_comment -b "The agent addressed this feedback but could not push the changes. See job \`${PROW_JOB_ID:-unknown}\` for details, then submit a new review to try again."
       exit 1
     fi
     PUSHED_SHA=$(git rev-parse HEAD)
     STATUS_LINE="Pushed $PUSHED_SHA to address this feedback."
+    FEEDBACK_OUTCOME=(pr_updated "" "$PR_URL")
   else
     STATUS_LINE="No code changes were needed for this feedback."
+    FEEDBACK_OUTCOME=(completed_no_change NO_CODE_CHANGE "$PR_URL")
   fi
 
   # Reply in the review threads this run addressed. Reached only after a
@@ -441,6 +534,9 @@ if [ "$WORKFLOW_NAME" = "address-feedback" ]; then
     echo
     echo "<!-- ack-agent:feedback-reply -->"
   } > "$REPLY_FILE"
+  # Record the outcome before commenting: a failed comment exits the job under
+  # set -e, and the outcome must already be in agent-result.json by then.
+  set_result "${FEEDBACK_OUTCOME[@]}"
   pr_comment -F "$REPLY_FILE"
   echo "$SCRIPT_NAME][INFO] Posted the reply on $PR_URL"
   exit 0
@@ -450,21 +546,36 @@ python -m workflows "${WORKFLOW_ARGS[@]}"
 echo "$SCRIPT_NAME][INFO] $WORKFLOW_LABEL workflow completed successfully"
 
 cd "$SERVICE_REPO_DIR"
+regenerate_attribution
+
+# Same rule as the address-feedback path above and roles/e2e.py
+# controller_has_changes: files regeneration always rewrites are not a change.
+CHANGES=$(git status --porcelain | cut -c4- \
+  | grep -vE '^(apis/[^/]+/ack-generate-metadata\.yaml|pkg/version/version\.go)$' || true)
+if [ -z "$CHANGES" ]; then
+  echo "$SCRIPT_NAME][INFO] the workflow made no controller changes; no pull request to open"
+  set_result completed_no_change NO_CODE_CHANGE
+  exit 0
+fi
 
 # Create a new branch
 echo "$SCRIPT_NAME][INFO] Creating a new branch..."
 git checkout -b "$LOCAL_GIT_BRANCH" >/dev/null
 
 # Commit changes
-regenerate_attribution
 echo "$SCRIPT_NAME][INFO] Committing changes..."
-git add -A  >/dev/null
-git commit -am "$COMMIT_MSG" >/dev/null
+git add -A >/dev/null
+COMMIT_ARGS=(-m "$COMMIT_MSG")
+[ -n "$TRAILERS" ] && COMMIT_ARGS+=(-m "$TRAILERS")
+git commit "${COMMIT_ARGS[@]}" >/dev/null
 
 # Push changes to the forked repository
 echo "$SCRIPT_NAME][INFO] Pushing changes to the forked repository..."
-git push --force "https://github.com/$GITHUB_ACTOR/$SERVICE_REPO.git" \
-   "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH"
+if ! git push --force "https://github.com/$GITHUB_ACTOR/$SERVICE_REPO.git" \
+     "$LOCAL_GIT_BRANCH:$PR_SOURCE_BRANCH"; then
+  set_result failed PUSH_FAILED
+  exit 1
+fi
 
 # fetch all remotes to bring changes locally
 git fetch --all >/dev/null
@@ -474,23 +585,40 @@ git branch "$LOCAL_GIT_BRANCH" --set-upstream-to origin/"$PR_SOURCE_BRANCH" >/de
 # prompts for user input
 git pull --rebase >/dev/null
 
-echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch... "
 # Prefer the workflow-composed PR description (summary + key design decisions);
 # fall back to a static body if it wasn't produced.
-if [ -s "$PR_BODY_FILE" ]; then
-  PR_BODY_ARGS=(-F "$PR_BODY_FILE")
-else
+if [ ! -s "$PR_BODY_FILE" ]; then
   if [ -n "$FIELD" ]; then
-    FALLBACK_BODY="ACK Agent changes adding $FIELD to $RESOURCE in $SERVICE-controller"
+    echo "ACK Agent changes adding $FIELD to $RESOURCE in $SERVICE-controller" > "$PR_BODY_FILE"
   else
-    FALLBACK_BODY="ACK Agent changes adding $RESOURCE to $SERVICE-controller"
+    echo "ACK Agent changes adding $RESOURCE to $SERVICE-controller" > "$PR_BODY_FILE"
   fi
-  PR_BODY_ARGS=(-b "$FALLBACK_BODY")
 fi
-if ! gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" "${PR_BODY_ARGS[@]}" -B "$PR_TARGET_BRANCH" >/dev/null ; then
-  echo ""
-  echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
-  exit 1
-fi
-echo "ok"
+# The blank line ends the paragraph before it (the harness body has no
+# trailing newline), so git interpret-trailers finds the block.
+[ -n "$TRAILERS" ] && printf '\n\n%s\n' "$TRAILERS" >> "$PR_BODY_FILE"
 
+# A retried run pushes to the same branch, whose pull request may still be
+# open: reuse it rather than fail on "a pull request already exists".
+# A failed lookup falls back to creating one (which then fails visibly if a
+# pull request does exist) rather than killing the job after the push.
+PR_URL=$(gh pr list -R "$ORG_REPO" --head "$PR_SOURCE_BRANCH" --base "$PR_TARGET_BRANCH" \
+  --author "$GITHUB_ACTOR" --state open --json url --jq '.[0].url // ""') || PR_URL=""
+if [ -n "$PR_URL" ]; then
+  echo "$SCRIPT_NAME][INFO] Reusing the open pull request $PR_URL"
+  # The reused PR keeps the body from the run that opened it; refresh it so
+  # the squash merge carries this run's description and trailers.
+  gh pr edit "$PR_URL" -R "$ORG_REPO" -F "$PR_BODY_FILE" >/dev/null \
+    || echo "$SCRIPT_NAME][WARN] could not refresh the body of $PR_URL" >&2
+else
+  echo "$SCRIPT_NAME][INFO] Creating a new pull request for $ORG_REPO , from $PR_SOURCE_BRANCH -> $PR_TARGET_BRANCH branch... "
+  if ! PR_URL=$(gh pr create -R "$ORG_REPO" -t "$COMMIT_MSG" -F "$PR_BODY_FILE" \
+       -B "$PR_TARGET_BRANCH" --head "$GITHUB_ACTOR:$PR_SOURCE_BRANCH"); then
+    echo ""
+    echo "gh.sh][ERROR] Failed to create pull request. Exiting... "
+    set_result failed PR_CREATE_FAILED
+    exit 1
+  fi
+fi
+echo "ok: $PR_URL"
+set_result pr_opened "" "$PR_URL"

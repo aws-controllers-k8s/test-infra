@@ -642,3 +642,31 @@ func TestPRInRepo(t *testing.T) {
 	assert.False(t, PRInRepo("", "https://github.com//pull/1"))
 	assert.False(t, PRInRepo("", "https://github.com/pull/1"))
 }
+
+func TestUsageRoundTripAndLint(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("api-change|s3|Bucket|Spec.X|needs-config")
+	w.Usage = &Usage{Tokens: 1280000, E2ERuns: 1}
+	b, err := Marshal(w)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"usage": {`)
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	got, err := Load(root)
+	require.NoError(t, err)
+	assert.Equal(t, w.Usage, got[w.Key].Usage)
+	assert.Empty(t, Lint(root))
+}
+
+func TestLintNegativeUsage(t *testing.T) {
+	root := t.TempDir()
+	w := sampleItem("api-change|s3|Bucket|Spec.Y|needs-config")
+	w.Usage = &Usage{Tokens: -1}
+	dir, _ := w.State.Dir()
+	b, err := Marshal(w)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems", dir), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workitems", dir, w.FileName()), b, 0o644))
+	errs := Lint(root)
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "usage tokens=-1")
+}

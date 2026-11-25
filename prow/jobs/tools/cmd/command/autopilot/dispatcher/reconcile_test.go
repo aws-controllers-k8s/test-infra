@@ -16,6 +16,7 @@ package dispatcher
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,14 @@ func TestReconcileUnknownOutcomeKeptVerbatim(t *testing.T) {
 	w, _ := runWith(t, 1, 3, finished("wont_fix:bogus", "", ""))
 	assert.Equal(t, ledger.Escalated, w.State)
 	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: `UNKNOWN_VERDICT "wont_fix:bogus"`}, w.Verdict)
+}
+
+// pr_updated is a valid run outcome (address-feedback) but not a work-item
+// verdict, so the Dispatcher escalates it verbatim rather than accept it.
+func TestReconcilePRUpdatedEscalates(t *testing.T) {
+	w, _ := runWith(t, 1, 3, finished("pr_updated", "", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"))
+	assert.Equal(t, ledger.Escalated, w.State)
+	assert.Equal(t, &ledger.Verdict{Outcome: "needs_human", Reason: `UNKNOWN_VERDICT "pr_updated"`}, w.Verdict)
 }
 
 func TestReconcileFailedRequeuesThenEscalates(t *testing.T) {
@@ -239,4 +248,39 @@ func TestReconcileFailedWithoutAttempts(t *testing.T) {
 	reconcile(context.Background(), ledgerOf(w), f, testPolicy(t).Budgets, now)
 	assert.Equal(t, ledger.Escalated, w.State)
 	assert.Equal(t, "ATTEMPTS_EXHAUSTED", last(w).Reason)
+}
+
+func TestReconcileRecordsUsage(t *testing.T) {
+	st := &Status{Phase: PhaseFinished, Result: &RunResult{Outcome: "failed", Reason: "E2E_FAIL", Tokens: 900, E2ERuns: 2}}
+	w, _ := runWith(t, 1, 3, st)
+	require.NotNil(t, w.Usage)
+	assert.Equal(t, int64(900), w.Usage.Tokens)
+	assert.Equal(t, 2, w.Usage.E2ERuns)
+}
+
+func TestReconcileAccumulatesUsage(t *testing.T) {
+	w := running(item(bumpKey, "SDK-bump", ledger.Queued), "2026-11-12T08:30:00Z", 1, 3)
+	w.Usage = &ledger.Usage{Tokens: 1000, E2ERuns: 1}
+	f := &fakeLauncher{statuses: map[string]Status{w.Claim.LaunchID: {Phase: PhaseFinished, Result: &RunResult{Outcome: "failed", Reason: "E2E_FAIL", Tokens: 900, E2ERuns: 2}}}}
+	items := ledgerOf(w)
+	reconcile(context.Background(), items, f, testPolicy(t).Budgets, now)
+	assertLints(t, items)
+	require.NotNil(t, w.Usage)
+	assert.Equal(t, int64(1900), w.Usage.Tokens)
+	assert.Equal(t, 3, w.Usage.E2ERuns)
+}
+
+func TestAddUsageSaturates(t *testing.T) {
+	w := &ledger.WorkItem{Usage: &ledger.Usage{Tokens: math.MaxInt64 - 10, E2ERuns: math.MaxInt - 1}}
+	addUsage(w, RunResult{Tokens: 1 << 40, E2ERuns: 1000})
+	assert.Equal(t, int64(math.MaxInt64), w.Usage.Tokens)
+	assert.Equal(t, math.MaxInt, w.Usage.E2ERuns)
+	addUsage(w, RunResult{Tokens: 5, E2ERuns: 5})
+	assert.Equal(t, int64(math.MaxInt64), w.Usage.Tokens)
+	assert.Equal(t, math.MaxInt, w.Usage.E2ERuns)
+}
+
+func TestReconcileNoUsageLeavesFieldUnset(t *testing.T) {
+	w, _ := runWith(t, 1, 3, finished("completed_no_change", "", ""))
+	assert.Nil(t, w.Usage)
 }

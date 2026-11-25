@@ -150,6 +150,14 @@ type Attempts struct {
 	MaxRuns int `json:"max_runs"`
 }
 
+// Usage is what the item's runs have spent so far, summed from their
+// agent-result.json files (design 8: tokens_used and aws_e2e_runs_used are
+// ledger fields from day 1). Budgets are not enforced yet.
+type Usage struct {
+	Tokens  int64 `json:"tokens"`
+	E2ERuns int   `json:"e2e_runs"`
+}
+
 // Claim is the workflow run working on the item now. The Dispatcher sets it
 // when it launches a run and clears it when it reconciles the run's result.
 // Only an item in an ActiveRun state holds one.
@@ -194,6 +202,7 @@ type WorkItem struct {
 	Evidence     Evidence     `json:"evidence"`
 	DependsOn    []string     `json:"depends_on,omitempty"`
 	Attempts     *Attempts    `json:"attempts,omitempty"`
+	Usage        *Usage       `json:"usage,omitempty"`
 	State        State        `json:"state"`
 	Links        Links        `json:"links"`
 	Claim        *Claim       `json:"claim,omitempty"`

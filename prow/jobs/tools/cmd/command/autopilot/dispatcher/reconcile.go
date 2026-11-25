@@ -16,6 +16,7 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -74,6 +75,7 @@ func reconcile(ctx context.Context, items map[string]*ledger.WorkItem, l Launche
 }
 
 func apply(w *ledger.WorkItem, r RunResult, ts string) {
+	addUsage(w, r)
 	// A terminal outcome with no reason records the outcome itself as the
 	// token, e.g. COMPLETED_NO_CHANGE or WONT_FIX_NOT_REAL.
 	outcomeToken := strings.ToUpper(strings.ReplaceAll(r.Outcome, ":", "_"))
@@ -143,4 +145,30 @@ func cleanReason(s, fallback string) string {
 func overdue(c *ledger.Claim, grace time.Duration, now time.Time) bool {
 	d, err := time.Parse(time.RFC3339, c.Deadline)
 	return err != nil || now.After(d.Add(grace))
+}
+
+// addUsage adds what a finished run spent to the item. apply runs once per
+// run, because it clears the claim. The sums saturate rather than wrap:
+// ParseResult bounds each run, and this is the backstop.
+func addUsage(w *ledger.WorkItem, r RunResult) {
+	if r.Tokens <= 0 && r.E2ERuns <= 0 {
+		return
+	}
+	if w.Usage == nil {
+		w.Usage = &ledger.Usage{}
+	}
+	if r.Tokens > 0 {
+		if w.Usage.Tokens > math.MaxInt64-r.Tokens {
+			w.Usage.Tokens = math.MaxInt64
+		} else {
+			w.Usage.Tokens += r.Tokens
+		}
+	}
+	if r.E2ERuns > 0 {
+		if w.Usage.E2ERuns > math.MaxInt-r.E2ERuns {
+			w.Usage.E2ERuns = math.MaxInt
+		} else {
+			w.Usage.E2ERuns += r.E2ERuns
+		}
+	}
 }

@@ -1058,6 +1058,306 @@ def test_generator_templates_helmignored():
         check(f"{rel} in .helmignore", rel in ignored, True)
 
 
+RESULT_FIXTURE = (
+    _PKG_ROOT.parents[1] / "jobs/tools/cmd/command/autopilot/dispatcher/testdata/agent-result-v1.json"
+)
+
+
+def test_result_contract():
+    """agent-result.json: what prow-job.sh and the harness write matches the Go fixture."""
+    print("result contract:")
+    import json
+    import tempfile
+    from workflows import result
+
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "out" / "agent-result.json"
+        old = os.environ.get("PROW_JOB_ID")
+        os.environ["PROW_JOB_ID"] = "autopilot-0123456789abcdef-g1-r1"
+        try:
+            result.write(result.new("add-field", "sha256:0123456789abcdef"), path)
+        finally:
+            if old is None:
+                os.environ.pop("PROW_JOB_ID", None)
+            else:
+                os.environ["PROW_JOB_ID"] = old
+        fresh = json.loads(path.read_text())
+        check("fresh outcome", (fresh["outcome"], fresh["reason"]), ("failed", "JOB_INCOMPLETE"))
+
+        result.update(
+            path,
+            tokens={"input": 1200000, "output": 80000, "total": 1280000},
+            iterations={"impl": 2, "replan": 0},
+            e2e={"status": "PASS", "attempts": 1},
+        )
+        result.update(path, outcome="pr_opened", reason="",
+                      pr="https://github.com/aws-controllers-k8s/s3-controller/pull/240")
+        check("matches the Go fixture", json.loads(path.read_text()), json.loads(RESULT_FIXTURE.read_text()))
+
+        # A partial nested update keeps the other keys.
+        result.update(path, e2e={"attempts": 2})
+        check("nested merge", json.loads(path.read_text())["e2e"], {"status": "PASS", "attempts": 2})
+
+        # Invalid values are refused and the file is left as it was.
+        before = path.read_text()
+        for bad in (
+            {"outcome": "merged"},
+            {"reason": "not snake"},
+            {"pr": "https://example.com/pull/1"},
+            {"outcome": "pr_opened", "pr": ""},
+            {"tokens": {"total": -1}},
+            {"tokens": {"total": True}},
+            # Counts past the Go reader's bounds are refused here first.
+            {"tokens": {"total": 2**40 + 1}},
+            {"tokens": {"input": 2**40 + 1}},
+            {"iterations": {"impl": 1001}},
+            {"iterations": {"replan": 1001}},
+            {"e2e": {"attempts": 1001}},
+            {"work_item": "sha256:XYZ"},
+            {"e2e": {"status": "GREEN"}},
+            {"prow_job_id": "a b"},
+            # Unhashable values are a problem, not a TypeError.
+            {"outcome": []},
+            {"outcome": {}},
+            {"workflow": []},
+            {"workflow": {"a": 1}},
+            {"e2e": {"status": {}}},
+            {"e2e": {"status": []}},
+            # Keys outside v1 are refused.
+            {"extra": 1},
+            {"tokens": {"cache": 1}},
+            {"iterations": {"review": 1}},
+            {"e2e": {"log": "x"}},
+        ):
+            try:
+                result.update(path, **bad)
+                raised = False
+            except ValueError:
+                raised = True
+            check(f"rejects {bad}", raised, True)
+        check("file unchanged after rejects", path.read_text(), before)
+
+        # The bounds themselves are allowed, and the message names the problem.
+        at_limit = {**json.loads(before), "tokens": {"input": 2**40, "output": 0, "total": 2**40},
+                    "iterations": {"impl": 1000, "replan": 1000}, "e2e": {"status": "PASS", "attempts": 1000}}
+        check("counts at the limit", result.validate(at_limit), [])
+        over = {**at_limit, "e2e": {"status": "PASS", "attempts": 1001}}
+        check("out of range message", result.validate(over), ["e2e.attempts out of range (max 1000)"])
+
+        # The Prow upload sidecar may run as another uid: the file is 0644.
+        check("file mode", path.stat().st_mode & 0o777, 0o644)
+
+        # validate() reports problems for a non-object and never raises.
+        check("validate non-object", len(result.validate([])) > 0, True)
+
+        # A file that does not hold an object is a ValueError, not a TypeError.
+        for content in ("[]", "null", "3", '"x"', "{not json"):
+            path.write_text(content)
+            try:
+                result.update(path, outcome="failed")
+                raised = None
+            except ValueError:
+                raised = "ValueError"
+            except Exception as exc:  # noqa: BLE001
+                raised = type(exc).__name__
+            check(f"update of {content!r} file", raised, "ValueError")
+
+
+def test_result_cli():
+    """prow-job.sh's calls: init, then set; a bad value exits 2 and writes nothing."""
+    print("result CLI:")
+    import json
+    import subprocess
+    import tempfile
+
+    script = _PKG_ROOT / "workflows" / "result.py"
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "agent-result.json"
+        env = {**os.environ, "AGENT_RESULT_FILE": str(path)}
+        env.pop("PROW_JOB_ID", None)
+
+        def run(*args):
+            return subprocess.run([sys.executable, str(script), *args], env=env,
+                                  capture_output=True, text=True).returncode
+
+        check("init", run("init", "--workflow", "address-feedback"), 0)
+        check("set work item", run("set", "--work-item", "sha256:0123456789abcdef"), 0)
+        check("set outcome", run("set", "--outcome", "completed_no_change", "--reason", "NO_FEEDBACK"), 0)
+        doc = json.loads(path.read_text())
+        check("cli doc", (doc["workflow"], doc["work_item"], doc["outcome"], doc["reason"], doc["prow_job_id"]),
+              ("address-feedback", "sha256:0123456789abcdef", "completed_no_change", "NO_FEEDBACK", ""))
+        # A new outcome without --reason clears the old reason, so a stale
+        # JOB_INCOMPLETE never survives an outcome change.
+        check("re-init", run("init", "--workflow", "address-feedback"), 0)
+        check("outcome without reason", run("set", "--outcome", "pr_updated",
+                                            "--pr", "https://github.com/aws-controllers-k8s/s3-controller/pull/1"), 0)
+        check("reason reset", json.loads(path.read_text())["reason"], "")
+        check("reason only", run("set", "--reason", "NO_FEEDBACK"), 0)
+        check("reason-only keeps outcome", json.loads(path.read_text())["outcome"], "pr_updated")
+        check("pr-only keeps reason", (run("set", "--pr", "https://github.com/aws-controllers-k8s/s3-controller/pull/2"),
+                                       json.loads(path.read_text())["reason"]), (0, "NO_FEEDBACK"))
+        before = path.read_text()
+        check("bad outcome exits 2", run("set", "--outcome", "merged"), 2)
+        check("bad workflow exits 2", run("init", "--workflow", "deploy"), 2)
+        check("file unchanged", path.read_text(), before)
+
+        # A malformed file exits 2 with a message, never a traceback.
+        for content in ("[]", "null", '{"outcome": []}', '{"e2e": {"status": {}}}', "{not json"):
+            path.write_text(content)
+            proc = subprocess.run([sys.executable, str(script), "set", "--outcome", "failed"], env=env,
+                                  capture_output=True, text=True)
+            check(f"malformed {content!r} exits 2", proc.returncode, 2)
+            check(f"malformed {content!r} no traceback", "Traceback" in proc.stderr, False)
+            check(f"malformed {content!r} unchanged", path.read_text(), content)
+
+        # ARTIFACTS is the default directory when AGENT_RESULT_FILE is unset.
+        env.pop("AGENT_RESULT_FILE")
+        env["ARTIFACTS"] = d + "/artifacts"
+        check("init under ARTIFACTS", run("init", "--workflow", "add-field"), 0)
+        check("file under ARTIFACTS", (Path(d) / "artifacts" / "agent-result.json").exists(), True)
+
+
+def test_token_accounting():
+    """Graph usage plus the direct implementer/pr_writer calls after it."""
+    print("token accounting:")
+    from types import SimpleNamespace
+    from roles import orchestrator as orch
+
+    check("tokens of None", orch._tokens(None), {"input": 0, "output": 0, "total": 0})
+    check("tokens of usage",
+          orch._tokens({"inputTokens": 10, "outputTokens": 2, "totalTokens": 12, "cacheReadInputTokens": 5}),
+          {"input": 10, "output": 2, "total": 12})
+    check("tokens never negative",
+          orch._tokens({"inputTokens": -5, "outputTokens": 2, "totalTokens": -1}),
+          {"input": 0, "output": 2, "total": 0})
+    check("tokens non-numeric are 0",
+          orch._tokens({"inputTokens": "lots", "outputTokens": [1], "totalTokens": {"a": 1}}),
+          {"input": 0, "output": 0, "total": 0})
+    check("tokens numeric strings", orch._tokens({"inputTokens": "4", "outputTokens": 2.7}),
+          {"input": 4, "output": 2, "total": 0})
+    check("tokens of a non-dict", orch._tokens(["inputTokens"]), {"input": 0, "output": 0, "total": 0})
+    agent = SimpleNamespace(event_loop_metrics=SimpleNamespace(
+        accumulated_usage={"inputTokens": 7, "outputTokens": 3, "totalTokens": 10}))
+    check("agent tokens", orch._agent_tokens(agent), {"input": 7, "output": 3, "total": 10})
+    check("agent without metrics", orch._agent_tokens(object()), {"input": 0, "output": 0, "total": 0})
+    check("add", orch._add_tokens({"input": 1, "output": 2, "total": 3}, {"input": 10, "output": 20, "total": 30}),
+          {"input": 11, "output": 22, "total": 33})
+    # A counter that went backwards (an agent rebuilt mid-run) adds nothing.
+    check("delta clamps at zero",
+          orch._delta_tokens({"input": 5, "output": 5, "total": 10}, {"input": 9, "output": 1, "total": 10}),
+          {"input": 4, "output": 0, "total": 0})
+    rr = orch.RunResult(cfg=None)
+    check("RunResult default tokens", rr.tokens, {"input": 0, "output": 0, "total": 0})
+
+
+def test_harness_result_fields():
+    """The harness's part of agent-result.json, by how the run ended."""
+    print("harness result fields:")
+    from roles import orchestrator as orch
+    from roles.e2e import E2EAttempt, E2EResult
+    from roles.verdict import Decision
+    from workflows.ack_workflow import result_fields
+
+    def rr(decision, e2e=None, reviewer_ran=True):
+        r = orch.RunResult(cfg=None)
+        r.impl_decision = decision
+        r.impl_reviewer_ran = reviewer_ran
+        r.impl_iterations, r.replan_attempts = 3, 1
+        r.tokens = {"input": 10, "output": 5, "total": 15}
+        r.e2e = e2e
+        return r
+
+    passed = E2EResult(status="PASS", attempts_detail=[E2EAttempt(number=1, status="FAIL"),
+                                                       E2EAttempt(number=2, status="PASS")])
+    ok = result_fields(rr(Decision.APPROVE, passed), run_e2e=True)
+    check("success leaves the outcome to prow-job.sh", "outcome" in ok, False)
+    check("success counts", (ok["tokens"]["total"], ok["iterations"], ok["e2e"]),
+          (15, {"impl": 3, "replan": 1}, {"status": "PASS", "attempts": 2}))
+    check("no e2e", result_fields(rr(Decision.APPROVE), run_e2e=False)["e2e"], {"status": "NOT_RUN", "attempts": 0})
+
+    def ending(fields):
+        return fields.get("outcome"), fields.get("reason")
+
+    check("no verdict", ending(result_fields(rr(None, reviewer_ran=False), run_e2e=False)),
+          ("failed", "REVIEWER_NO_VERDICT"))
+    check("revise", ending(result_fields(rr(Decision.REVISE), run_e2e=False)), ("failed", "REVIEW_NOT_APPROVED"))
+    check("e2e fail", ending(result_fields(rr(Decision.APPROVE, E2EResult(status="FAIL")), run_e2e=True)),
+          ("failed", "E2E_FAIL"))
+    check("e2e skipped", ending(result_fields(rr(Decision.APPROVE, E2EResult(status="SKIPPED")), run_e2e=True)),
+          ("failed", "E2E_SKIPPED"))
+    check("e2e never ran", ending(result_fields(rr(Decision.APPROVE), run_e2e=True)), ("failed", "E2E_NOT_RUN"))
+    check("e2e not needed", "outcome" in result_fields(rr(Decision.APPROVE, E2EResult(status="NOT_NEEDED")),
+                                                       run_e2e=True), False)
+
+
+def test_record_result():
+    """The harness's write: a no-op outside prow-job.sh and never fatal."""
+    print("record result:")
+    import json
+    import logging
+    import tempfile
+    from workflows import ack_workflow, result
+
+    saved = {k: os.environ.get(k) for k in ("AGENT_RESULT_FILE", "ARTIFACTS")}
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "agent-result.json"
+
+            # Unset: writes nothing, even where $ARTIFACTS would put the file.
+            os.environ.pop("AGENT_RESULT_FILE", None)
+            os.environ["ARTIFACTS"] = d
+            ack_workflow._record_result(outcome="failed", reason="HARNESS_ERROR")
+            check("unset writes nothing", path.exists(), False)
+
+            # Set but prow-job.sh never created it: still nothing.
+            os.environ["AGENT_RESULT_FILE"] = str(path)
+            ack_workflow._record_result(outcome="failed", reason="HARNESS_ERROR")
+            check("missing file stays missing", path.exists(), False)
+
+            result.write(result.new("add-field"), path)
+            ack_workflow._record_result(outcome="needs_human", reason="INVALID_INPUT")
+            doc = json.loads(path.read_text())
+            check("valid update written", (doc["outcome"], doc["reason"]), ("needs_human", "INVALID_INPUT"))
+
+            def warns(**fields):
+                before = path.read_text()
+                with patch.object(ack_workflow.logger, "warning") as warning:
+                    ack_workflow._record_result(**fields)
+                return warning.called, path.read_text() == before
+
+            check("invalid value only warns", warns(outcome="merged"), (True, True))
+            check("unhashable value only warns", warns(outcome=[]), (True, True))
+            for content in ("{not json", "[]", '{"e2e": {"status": {}}}'):
+                path.write_text(content)
+                check(f"corrupt {content!r} only warns", warns(outcome="failed"), (True, True))
+            # Anything else that goes wrong is logged too, never raised.
+            path.write_text(json.dumps(result.new("add-field")))
+            with patch.object(result, "update", side_effect=RuntimeError("boom")):
+                check("unexpected error only warns", warns(outcome="failed")[0], True)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_autopilot_arg_validation():
+    """--work-item and --change-class come together and are checked."""
+    print("autopilot args:")
+    from workflows.validation import validate_inputs
+
+    def problems(**kw):
+        return validate_inputs(service="s3", resource="Bucket", **kw)
+
+    check("neither", problems(), [])
+    check("both", problems(work_item="sha256:0123456789abcdef", change_class="config-only"), [])
+    check("work item alone", len(problems(work_item="sha256:0123456789abcdef")), 1)
+    check("class alone", len(problems(change_class="config-only")), 1)
+    check("bad hash", len(problems(work_item="sha256:0123", change_class="config-only")), 1)
+    check("bad class", len(problems(work_item="sha256:0123456789abcdef", change_class="C2")), 1)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1077,7 +1377,11 @@ def main():
                test_ensure_test_config_field_selector,
                test_e2e_timeout_preserves_output,
                test_workflow_timeout_budget,
-               test_generator_templates_helmignored):
+               test_generator_templates_helmignored,
+               test_result_contract, test_result_cli,
+               test_token_accounting, test_harness_result_fields,
+               test_record_result,
+               test_autopilot_arg_validation):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 

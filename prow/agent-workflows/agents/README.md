@@ -1,267 +1,81 @@
-# AWS Controllers for Kubernetes (ACK) Agents
+# ACK agent workflows
 
-## Overview
-
-The ACK Agents provide conversational interfaces to help you work with AWS Controllers for Kubernetes. The system consists of specialized agents that can work independently or be orchestrated through workflows.
-
-## Architecture
-
-The ACK Agents system follows a workflow-based architecture where different agents collaborate to analyze, generate, and build ACK controllers:
-
-```mermaid
-graph TB
-    DevTrigger[DevTrigger]
-    DevTrigger --> Workflow
-    
-    Workflow --> ModelAgent[Model Agent Call]
-    Workflow --> GeneratorAgent[Generator Agent Call]
-    Workflow --> TagAgent[Tag Agent Call]
-    
-    ModelAgent --> ModelAgentOrch[Model Agent]
-    GeneratorAgent --> GeneratorAgentOrch[Generator Agent]
-    TagAgent --> TagAgentOrch[Tag Agent]
-    
-    %% Separate Data Pipeline (Setup Process)
-    AWSOrchestratorSDK[AWS API Models] --> S3Bucket[S3 Bucket]
-    S3Bucket --> FoundationModel[Foundation Model<br/>Parse]
-    FoundationModel --> ChunkedData[Chunked Data]
-    ChunkedData --> TitanEmbeddings[Titan Embeddings]
-    TitanEmbeddings --> VectorStoreOpenSearch[Vector Store OpenSearch]
-    
-    %% Model Agent queries the knowledge base and produces analysis files
-    VectorStoreOpenSearch --> ModelAgentOrch
-    ModelAgentOrch --> AnalysisFiles[Resource Analysis Files<br/>Model Logs]
-    
-    GeneratorAgentOrch --> BuilderAgent[Builder Agent]
-    GeneratorAgentOrch --> MemoryAgent[Memory Agent]
-    
-    MemoryAgent --> ErrorSolutionMemory[Error/Solution Memory<br/>OpenSearch Vector DB]
-    
-    TagAgentOrch --> BuilderAgent
-    
-    BuilderAgent --> ACKRepositories[ACK Repositories<br/>Code Generator, Runtime, Service<br/>Controller]
-    GeneratorAgentOrch --> ControllerResource[Controller with<br/>Resource]
-    BuilderAgent --> BuildLogs[Build logs]
-    GeneratorAgentOrch --> GeneratorYaml[generator.yaml<br/>Service Config]
-    
-    AnalysisFiles -.-> ControllerResource
-    BuildLogs -.-> ControllerResource
-    GeneratorYaml -.-> ControllerResource
-```
-
-## Agents
-
-### ACK Builder Agent
-- Clone and manage ACK repositories (code-generator, runtime, service controllers)
-- Build service controllers for AWS services
-- Read build logs and check build status
-
-### ACK Generator Agent  
-- Examine service controller configurations and API operations
-- Generate code and configurations for ACK controllers
-- Work with ACK generator.yaml files
-- Manage error/solution memory for build troubleshooting
-
-### ACK Model Agent
-- Analyze AWS API models from the official AWS API models repository
-- Extract comprehensive CRUD operation information for resources
-- Provide detailed analysis for ACK controller implementation
-- Generate structured analysis files for resources
-
-### ACK Tag Agent
-- Write custom hook code to support editing AWS resource tags
-- Generate Go code for tagging operations (create, update, read hooks)
+Role-based agent workflows that change ACK service controllers. They run as
+Prow jobs started by the agent-plugin (`/agent` comments and review events),
+or locally from this directory.
 
 ## Workflows
 
-### ACK Resource Addition Workflow
-An automated workflow that orchestrates multiple agents to add a new resource to an existing ACK service controller:
+| Workflow | CLI command | What it does |
+|---|---|---|
+| add-resource | `resource-addition` | Adds a new resource to an existing service controller |
+| add-field | `field-addition` | Adds one field (identifier or dotted path) to an existing resource |
+| address-feedback | `address-feedback` | Addresses team members' review feedback on an agent pull request (started by the agent-plugin from a review, never by `/agent`) |
 
-1. **Service Validation**: Validate if the requested resource has been bootstapped for ACK
-2. **Model Agent Phase**: Analyzes AWS API models to extract resource information
-3. **Generator Agent Phase**: Updates generator.yaml configuration and builds the controller
-4. **Tag Agent Phase**: Adds tagging support if the resource supports tags
-5. **Validation Phase**: Ensures the controller builds successfully
+All three run one Strands graph (`roles/`):
 
-## Prerequisites
+1. **Planner** writes a plan from the AWS API model and the ack-dev-skills SOPs.
+2. **Plan reviewer** approves it or asks for a revision (at most 1 re-plan).
+3. **Implementer** applies the plan and builds the controller (at most 4 iterations).
+4. **Implementation reviewer** returns `## Decision: APPROVE` or `## Decision: REVISE`. Anything unclear counts as REVISE (`roles/verdict.py`).
+5. **E2E** runs `make kind-test` when `RUN_E2E=true`, with at most 2 fix attempts. SKIPPED counts as a failure (`roles/e2e.py`).
+6. **PR writer** composes the pull request description.
 
-1. Python 3.10 or higher
-2. [uv](https://github.com/astral-sh/uv) - Modern Python package manager
-3. AWS account with access to Amazon Bedrock
-4. Claude 3.7 Sonnet model access enabled in your AWS account
-5. AWS credentials configured in your environment
-6. Opensearch Vector Database for memory agent
-7. Bedrock Knowledgebase (with ACK Codegen)
-8. Bedrock Knowledgebase (AWS API Models)
+The role prompts come from ack-dev-skills (`roles/*.md`), delivered to the
+job as a Prow extra_ref.
 
-## Setup
+## Run result
 
-### API Models KB Configuration
+Every Prow run writes `$ARTIFACTS/agent-result.json` (schema
+`ack.autopilot.result/v1`, `workflows/result.py`): outcome, reason, pull
+request, model tokens, iterations and the e2e result. ACK Autopilot's
+Dispatcher reads it. When `prow-job.sh` gets `--work-item` and
+`--change-class` (the agent-plugin passes them from the workflow's
+`optional_args` when the Dispatcher sets them; they are not
+`python -m workflows` options), the run also adds `Producer`, `Work-Item`
+and `Change-Class` trailers to its commit and pull request body. The
+trailers record what the run was given, not where it came from: a team
+member's `/agent` comment can pass the same arguments, so the ledger's link
+to the pull request is the authoritative record.
 
-#### 1. Data Source Preparation
-```bash
-# Upload AWS API model JSON files to S3 (auto-generates bucket name)
-./utils/scripts/extract_api_models.sh
+## Running locally
 
-# Or use environment variable to specify existing bucket
-export S3_BUCKET_NAME=my-existing-bucket-name
-./utils/scripts/extract_api_models.sh
-```
-
-#### 2. Knowledge Base Settings
-- **Name**: `api-models-knowledge-base`
-- **Data Source**: S3 bucket with AWS API model JSON files
-- **Parsing Strategy**: Foundation Model-based with Claude 3.5 Sonnet
-- **Chunking Strategy**: Hierarchical
-  - Parent chunks: 4000 tokens
-  - Child chunks: 600 tokens  
-  - Overlap: 120 tokens
-- **Embedding Model**: Amazon Titan Text Embeddings V2 (1024 dimensions)
-- **Vector Store**: OpenSearch Serverless
-
-#### 3. Environment Variables
-```bash
-export MODEL_AGENT_KB_ID=your-knowledge-base-id
-```
-
-Note: Sync knowledgebase data source
-
-## Installation
-
-This project uses `uv` for dependency management. If you don't have `uv` installed, you can install it following the [official installation instructions](https://github.com/astral-sh/uv#installation).
-
-### Install Development Dependencies (Optional)
-```bash
-uv sync --extra dev 
-```
-
-To run the dev tool you can use
+Prerequisites: Python 3.10+ (the job image uses 3.12), [uv](https://github.com/astral-sh/uv), AWS
+credentials with Amazon Bedrock access to the configured model, and
+checkouts of code-generator, the service controller and ack-dev-skills.
 
 ```bash
-uv run <tool-name> <args>
-
-# For example
-uv run black .
-```
-
-### Setting up the project
-
-#### AWS Resources
-
-1. OpenSearch Vector Store
-
-## Usage
-
-### Individual Agents
-
-Run the builder agent:
-
-```bash
-# Using make
-make run-builder
-
-# Or directly
-uv run python -m ack_builder_agent
-```
-
-Run the generator agent:
-
-```bash
-# Using make
-make run-generator
-
-# Or directly
-uv run python -m ack_generator_agent
-```
-
-Run the model agent:
-
-```bash
-# Using make
-make run-model
-
-# Or directly
-uv run python -m ack_model_agent
-```
-
-Run the tag agent:
-
-```bash
-# Using make
-make run-tag
-
-# Or directly
-uv run python -m ack_tag_agent
-```
-
-You can provide command-line arguments:
-
-```bash
-uv run python -m ack_generator_agent --region us-east-1 --temperature 0.5 --debug
-```
-
-### Workflows
-
-#### List Available Workflows
-
-```bash
-# Using make
+uv sync
 make list-workflows
-
-# Or directly
-uv run python -m workflows list
-```
-
-#### ACK Resource Addition Workflow
-
-Add a new resource to an existing ACK service controller:
-
-```bash
-# Using make
 make workflow-add-resource SERVICE=s3 RESOURCE=AccessPoint
-
-# Or directly
-uv run python -m workflows resource-addition --service s3 --resource AccessPoint
+make workflow-add-field SERVICE=s3 RESOURCE=Bucket FIELD=BucketKeyEnabled
 ```
 
-#### ACK Field Addition Workflow
+### Arguments
 
-Add one field to an existing resource in an ACK service controller:
+- `--service`, `--resource`, `--field` (add-field; optional for address-feedback)
+- `--model`: Bedrock model ID (default `us.anthropic.claude-opus-5-5`, `config/defaults.py`)
+- `--aws-sdk-version`: aws-sdk-go-v2 version for `make build-controller` (default: detected from the controller)
+- `--debug`: debug logging
+
+### Environment variables
+
+| Variable | Use |
+|---|---|
+| `CONTROLLER_DIR`, `CODEGEN_DIR`, `ACK_DEV_SKILLS_DIR`, `TEST_INFRA_DIR` | Checkouts the workflow reads and edits |
+| `RUN_E2E` | `true` runs the e2e phase |
+| `AGENT_MODEL_ID`, `AGENT_PLANNER_MODEL_ID`, `AGENT_IMPLEMENTER_MODEL_ID`, `AGENT_REVIEWER_MODEL_ID` | Model overrides |
+| `AGENT_TEMPERATURE`, `AGENT_MAX_TOKENS`, `AGENT_SHELL_TIMEOUT` | Sampling, output cap and shell-command timeout |
+| `AWS_REGION`, `AWS_DEFAULT_REGION` | Bedrock region, in that order (default `us-west-2`) |
+| `AWS_SDK_GO_VERSION` | Fallback for `--aws-sdk-version` |
+| `ARTIFACTS`, `AGENT_RESULT_FILE` | Where logs and `agent-result.json` go. `prow-job.sh` sets `AGENT_RESULT_FILE` to `${ARTIFACTS:-/tmp/ack-test-logs}/agent-result.json` and creates the file; the workflow only updates an existing file, so a local `python -m workflows` run writes no result |
+
+## Tests
 
 ```bash
-# Using make
-make workflow-add-field SERVICE=s3 RESOURCE=Bucket FIELD=BucketKeyEnabled
-
-# Or directly
-uv run python -m workflows field-addition \
-  --service s3 --resource Bucket --field BucketKeyEnabled
+make test-offline   # no AWS and no model calls
 ```
-
-The field workflow reuses the add-resource Planner, Reviewer, Implementer, and
-E2E graph. It substitutes the dedicated field planner plus the field-specific
-plan schema and `field-addition.md` guidance at runtime.
-
-### Available Arguments
-
-- `--region`: AWS region for Bedrock (default: us-west-2)
-- `--model`: Model ID for Claude on Bedrock (default: us.anthropic.claude-3-7-sonnet-20250219-v1:0)
-- `--temperature`: Temperature for model generation (default: 0.2)
-- `--debug`: Enable debug logging
-
-### Available Environment Variables
-
-- `OPENSEARCH_HOST`: OpenSearch Endpoint URL for memory storage and retrieval
-- `MODEL_AGENT_KB_ID`: Knowledge Base ID for AWS API models
-- `ack_root`: Path to root of ACK Git repos. Defaults to `~/aws-controllers-k8s`.
-- `ack_org_url`: URL for the aws-controller-k8s org. Defaults to `https://github.com/aws-controllers-k8s`.
-- `code_generator_url`: URL for the code-generator Git repo. Defaults to `{ack_org_url}/code-generator`.
-- `code_generator_path_override`: Overrides path to code-generator Git repo. If not set `{ack_root}/code-generator` is used.
-- `runtime_url`: URL for the runtime Git repo. Defaults to `{ack_org_url}/runtime`.
-- `runtime_path_override`: Overrides path to the runtime Git repo. If not set `{ack_root}/runtime` is used.
-- `aws_sdk_go_v2_url`: URL for the aws-sdk-go-v2 Git repo. Defaults to `https://github.com/aws/aws-sdk-go-v2.git`.
-- `aws_sdk_go_v2_path_override`: Overrides path to the aws-sdk-go-v2 Git repo. If not set `{ack_root}/aws-sdk-go-v2` is used.
-- `build_logs_dir_override`: Overrides path directory where build logs should be saved. If not set `{ack_root}/build_logs` is used.
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details. 
+This project is licensed under the Apache License 2.0.

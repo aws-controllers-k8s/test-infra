@@ -174,6 +174,11 @@ func init() {
 		_ = postStatusCmd.MarkFlagRequired(name)
 	}
 	Command.AddCommand(dispatchCmd, postStatusCmd)
+
+	readResultCmd.Flags().StringVar(&resultFile, "file", "", "path of an agent-result.json")
+	readResultCmd.Flags().StringVar(&resultWorkItem, "work-item", "", "key hash the result must be for (empty: any)")
+	_ = readResultCmd.MarkFlagRequired("file")
+	Command.AddCommand(readResultCmd)
 }
 
 // ingest reads issues and the team from GitHub, reconciles the ledger at
@@ -470,4 +475,31 @@ func changedKeys(before map[string]string, items map[string]*ledger.WorkItem) ([
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+var (
+	resultFile     string
+	resultWorkItem string
+)
+
+var readResultCmd = &cobra.Command{
+	Use:   "read-result",
+	Short: "parse a run's agent-result.json as the Dispatcher does and print it",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return readResult(resultFile, resultWorkItem, cmd.OutOrStdout())
+	},
+}
+
+// readResult prints one result line: what reconcile would be handed.
+func readResult(path, workItem string, out io.Writer) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	r, err := dispatcher.ParseResult(data, workItem)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "result outcome=%q reason=%q pr=%q tokens=%d e2e_runs=%d\n", r.Outcome, r.Reason, r.PR, r.Tokens, r.E2ERuns)
+	return err
 }

@@ -115,10 +115,47 @@ class RunResult:
     # Per-feedback-item replies (F2 -> text) from the address-feedback reply
     # writer. Empty for other workflows.
     item_replies: dict[str, str] = field(default_factory=dict)
+    # Model tokens the run used: the graph plus the direct implementer (e2e
+    # fixes) and pr_writer calls. Keys input, output, total.
+    tokens: dict[str, int] = field(default_factory=lambda: _tokens(None))
 
     @property
     def approved(self) -> bool:
         return self.impl_decision == Decision.APPROVE
+
+
+def _token_count(v) -> int:
+    """A reported count as a non-negative int; anything unusable is 0."""
+    try:
+        return max(0, int(v or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _tokens(usage) -> dict[str, int]:
+    """A Strands Usage dict as {input, output, total}. Never raises: missing,
+    non-numeric and negative counts are 0."""
+    if not isinstance(usage, dict):
+        usage = {}
+    return {
+        "input": _token_count(usage.get("inputTokens")),
+        "output": _token_count(usage.get("outputTokens")),
+        "total": _token_count(usage.get("totalTokens")),
+    }
+
+
+def _agent_tokens(agent) -> dict[str, int]:
+    """An agent's cumulative usage across all its calls so far."""
+    metrics = getattr(agent, "event_loop_metrics", None)
+    return _tokens(getattr(metrics, "accumulated_usage", None))
+
+
+def _add_tokens(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
+    return {k: a[k] + b[k] for k in ("input", "output", "total")}
+
+
+def _delta_tokens(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+    return {k: max(0, after[k] - before[k]) for k in ("input", "output", "total")}
 
 
 def _latest_text(result: GraphResult, node_id: str) -> str:
@@ -187,6 +224,11 @@ def run(
     run_result.final_review_text = _latest_text(gres, graphmod.IMPL_REVIEWER)
     run_result.impl_iterations = _count_runs(gres, graphmod.IMPLEMENTER)
     run_result.replan_attempts = max(0, _count_runs(gres, graphmod.PLANNER) - 1)
+    run_result.tokens = _tokens(getattr(gres, "accumulated_usage", None))
+    # Calls made outside the graph (e2e fixes, the PR body) are counted as
+    # the growth of those agents' own counters from here on.
+    direct = [a for a in (agents.implementer, agents.pr_writer) if a is not None]
+    direct_before = [_agent_tokens(a) for a in direct]
 
     # Distinguish "reviewer never ran" from "reviewer said REVISE". Only parse a
     # decision when the impl reviewer actually produced output.
@@ -233,6 +275,8 @@ def run(
     if run_result.approved and e2e_ok:
         run_result.pr_body, run_result.item_replies = generate_pr_body(cfg, run_result, agents)
 
+    for agent, before in zip(direct, direct_before):
+        run_result.tokens = _add_tokens(run_result.tokens, _delta_tokens(before, _agent_tokens(agent)))
     return run_result
 
 
@@ -311,6 +355,8 @@ def completion_report(rr: RunResult) -> str:
     lines.append(f"- Graph status: {rr.graph_status}")
     lines.append(f"- Implementer iterations: {rr.impl_iterations} (max {cfg.max_impl_iterations})")
     lines.append(f"- Re-plan attempts: {rr.replan_attempts} (max {cfg.max_replan_attempts})")
+    t = rr.tokens
+    lines.append(f"- Tokens: {t['total']} (input {t['input']}, output {t['output']})")
     if rr.e2e is not None:
         lines.append(f"- E2E status: **{rr.e2e.status}**")
     else:

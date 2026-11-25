@@ -56,8 +56,10 @@ func TestLaneArgs(t *testing.T) {
 		lanes["SDK-bump"].args(bump))
 	field := item("api-change|s3|Bucket|spec:Mode|needs-config", "config-only", ledger.Queued)
 	field.Resource, field.FieldPath = "Bucket", "Mode"
-	assert.Equal(t, map[string]string{"service": "s3", "resource": "Bucket", "field": "Mode"},
-		lanes["config-only"].args(field))
+	assert.Equal(t, map[string]string{
+		"service": "s3", "resource": "Bucket", "field": "Mode",
+		"work-item": field.KeyHash, "change-class": "config-only",
+	}, lanes["config-only"].args(field))
 	assert.True(t, lanes["config-only"].LLM)
 	assert.False(t, lanes["SDK-bump"].LLM)
 }
