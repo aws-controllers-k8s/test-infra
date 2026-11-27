@@ -35,6 +35,6 @@
             "--exclude-author", "ack-bot",
             "--exclude-author", "backlog-burndown-bot",
             "--exclude-author", "backlog-burndown-agent",
-            "--exclude-author", "dependabot[bot]"]
-            "--exclude-author", "tchenlin"]
+            "--exclude-author", "dependabot[bot]"
+            "--exclude-author", "tchenlin"
             "--exclude-author", "gobos12"]
