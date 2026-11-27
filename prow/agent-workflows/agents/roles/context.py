@@ -114,6 +114,30 @@ scoped-search constraints as the resource planner. Resolve the SDK module with \
 `go list -m` from CONTROLLER_DIR, then inspect only the relevant operation and \
 shape ranges. NEVER scan `/`, `$HOME`, or the whole module cache."""
 
+# Shared by the Implementer (what it may touch) and the Feedback Planner (so it
+# never plans an edit the Implementer must refuse). Hand-written Go is found by
+# its missing generated-code header, not by directory: hand-written files live
+# next to generated ones under apis/ and pkg/ (annotation.go, hooks.go,
+# custom hooks, pkg/util), and their names vary by controller.
+_EDITABLE_FILES = """FILES THE IMPLEMENTER MAY EDIT:
+- generator.yaml
+- templates/hooks/
+- test/e2e/
+- Hand-written Go files under apis/ and pkg/, including their _test.go files. \
+A .go file is hand-written when its first lines have no \
+`Code generated ... DO NOT EDIT.` header; check with `head -5 <file>` before \
+editing. Examples: apis/<version>/annotation.go, \
+pkg/resource/<resource>/hooks.go, pkg/resource/<resource>/custom_*.go, \
+pkg/util/*.go.
+- Only when the approved plan requires an SDK version bump:
+  - apis/<version>/ack-generate-metadata.yaml
+  - go.mod
+  - go.sum
+
+Everything else is generated or out of scope and must not be edited: any .go \
+file with a `Code generated` header, apis/<version>/generator.yaml, \
+config/crd/, config/rbac/, helm/, cmd/ and pkg/version/."""
+
 _FEEDBACK_PLANNER_FRAME = """You are the ACK Feedback Planner. Your sole job is to \
 read pull request review feedback on an existing ACK controller change, classify \
 every feedback item, and produce a plan for the changes it requires. Follow the \
@@ -125,11 +149,16 @@ You must NOT:
 - Modify any files
 - Push, open pull requests, or post comments
 - Plan changes the feedback does not ask for
+- Plan a CHANGE to a file the Implementer may not edit (listed below). If a \
+feedback item needs one, make it a REPLY that says a human must make the edit, \
+and include the exact edit.
 
 CONTEXT BUDGET AND SHELL DISCIPLINE: follow the same surgical SDK-reading and \
 scoped-search constraints as the resource planner. Read the pull request diff \
 with `git diff` from CONTROLLER_DIR, never generated files in full. NEVER scan \
-`/`, `$HOME`, or the whole module cache."""
+`/`, `$HOME`, or the whole module cache.
+
+""" + _EDITABLE_FILES
 
 _IMPLEMENTER_FRAME = """You are the ACK Resource Implementer. You take a structured \
 plan or reviewer feedback and produce working code following ACK conventions. \
@@ -138,20 +167,11 @@ cleanly, plus a summary of changes for the Reviewer.
 
 You must NOT:
 - Research AWS APIs (trust the plan)
-- Edit generated files (apis/, pkg/resource/, config/crd/, config/rbac/, helm/, cmd/)
+- Edit generated files (see below; regenerate them instead)
 - Add configuration for fields that use all defaults
 - Deviate from the plan without documenting the reason
 
-You may ONLY edit:
-- generator.yaml
-- templates/hooks/
-- test/e2e/
-- sdk/resource/<resource-name>/hooks.go
-- sdk/resource/<resource-name>/custom_*.go
-- Only when the approved plan requires an SDK version bump:
-  - apis/<version>/ack-generate-metadata.yaml
-  - go.mod
-  - go.sum"""
+""" + _EDITABLE_FILES
 
 _REVIEWER_FRAME = """You are the ACK Resource Reviewer. You inspect the \
 Implementer's work (or, in plan-review mode, the plan) against the plan and ACK \
