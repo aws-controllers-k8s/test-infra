@@ -1,0 +1,400 @@
+// Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"). You may
+// not use this file except in compliance with the License. A copy of the
+// License is located at
+//
+//     http://aws.amazon.com/apache2.0/
+//
+// or in the "license" file accompanying this file. This file is distributed
+// on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+// express or implied. See the License for the specific language governing
+// permissions and limitations under the License.
+
+package issuefinder
+
+import (
+	"fmt"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/findingsblock"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/apichanges/issueregion"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
+)
+
+const (
+	apiChangeLabel = "ack/api-change-detected"
+	actor          = "issue-finder"
+)
+
+var wontfixRE = regexp.MustCompile(`(?m)^/autopilot wontfix (sha256:[0-9a-f]{16})[ \t\r]*$`)
+
+type Comment struct {
+	Author, Body string
+}
+
+// Issue is the part of a GitHub issue the finder reads. Comments are fetched
+// for open issues only.
+type Issue struct {
+	Number   int
+	URL      string
+	Open     bool
+	Author   string
+	Labels   []string
+	Body     string
+	Comments []Comment
+}
+
+type Config struct {
+	// BotLogin is the account detect-api-changes files issues as. When empty,
+	// no issue is trusted.
+	BotLogin string
+	// Team holds the logins whose /autopilot commands count. A comment with
+	// an empty Author never counts, whatever Team holds.
+	Team map[string]bool
+	// Now stamps new history entries (RFC 3339, UTC).
+	Now string
+}
+
+type Result struct {
+	// Changed lists the keys of items created or modified, sorted.
+	Changed []string
+	// Skipped explains each issue that was not read, each finding Classify
+	// could not turn into an item, each finding that names a SUPERSEDED item
+	// linked to a different issue (once per key per run), and each team
+	// /autopilot wontfix that matches neither a finder-owned item nor an item
+	// in a terminal state on this issue, prefixed with "#<issue number>: ".
+	// Ingest changes no state for any of them.
+	Skipped []string
+}
+
+// parsed is one trusted issue as read in Ingest's first pass.
+type parsed struct {
+	is Issue
+	// why is set when the issue must not be read; nothing else is then.
+	why string
+	// Open issues only.
+	desired  []*ledger.WorkItem
+	skipped  []string
+	complete bool
+}
+
+// parse reads one issue's generated region and findings block.
+func parse(cfg Config, is Issue) parsed {
+	p := parsed{is: is}
+	svc, why := trusted(cfg, is)
+	if why != "" || !is.Open {
+		p.why = why
+		return p
+	}
+	region, ok := issueregion.Region(is.Body)
+	if !ok {
+		p.why = fmt.Sprintf("no single well-formed generated region (%s ... %s)", issueregion.Begin, issueregion.End)
+		return p
+	}
+	b, found, err := findingsblock.Parse(region)
+	switch {
+	case err != nil:
+		p.why = err.Error()
+		return p
+	case !found:
+		p.why = "no findings block"
+		return p
+	case b.Service != svc:
+		p.why = fmt.Sprintf("block service %q != label service %q", b.Service, svc)
+		return p
+	}
+	p.desired, p.skipped = Classify(b, is.URL)
+	p.complete = b.Omitted == 0 && len(p.skipped) == 0
+	return p
+}
+
+// Ingest reconciles items with issues in place and reports what changed.
+//
+// The finder only touches items it still owns (ledger.WorkItem.FinderOwned):
+// in a pre-dispatch state and never dispatched. An item a workflow has picked
+// up, even one since returned to BLOCKED or QUEUED, is left exactly as it is.
+//
+// Only the bot's generated region of the body is parsed, so a maintainer's note
+// quoting a findings block cannot be read as the bot's. A body without exactly
+// one well-formed region is skipped.
+//
+// A block is incomplete when it omitted lines or Classify skipped some. For an
+// incomplete block, items missing from it are not superseded, and an existing
+// item's Evidence.Findings is the union of what it had and what the block
+// lists, so truncation (which drops regen lines first) never shrinks the bump.
+// A complete block replaces Evidence.Findings outright.
+//
+// An item missing from its issue's complete block is superseded only when no
+// open issue in this run lists its key. Every issue is read before any item is
+// superseded, so the result cannot depend on which issue happens to come
+// first; an issue that still lists the key refreshes the item instead.
+//
+// Refreshing an existing item rewrites Evidence, Links, DependsOn,
+// DetectorWork, Resource and FieldPath. Its classification (ChangeClass,
+// GapClass, AutonomyLevel, PriorityBand) is rewritten only while the item is
+// DETECTED. Finder-owned also covers TRIAGED, QUEUED, BLOCKED and PLAN_PENDING,
+// and from TRIAGED on the classification holds the Dispatcher's triage
+// verdict, which may only be stricter than the detector's; the block must not
+// loosen it. The one exception is a detector reclassification: when the
+// detector's Work for a non-DETECTED item differs from the stored DetectorWork
+// (Work is not part of the key, so create-only can become hook), the stored
+// classification may be looser than the detector's current verdict. The item
+// then returns to DETECTED with a DETECTOR_RECLASSIFIED history entry and takes
+// the fresh classification, for the Dispatcher to triage again.
+//
+// The result does not depend on the order of issues; see byPrecedence.
+func Ingest(cfg Config, issues []Issue, items map[string]*ledger.WorkItem) Result {
+	before := snapshot(items)
+	var res Result
+
+	// First pass: read every issue, and collect the keys any trusted open
+	// issue lists.
+	var all []parsed
+	listed := map[string]bool{}
+	for _, is := range byPrecedence(issues) {
+		p := parse(cfg, is)
+		all = append(all, p)
+		for _, w := range p.desired {
+			listed[w.Key] = true
+		}
+	}
+
+	// Keys already reported as terminal this run.
+	reported := map[string]bool{}
+	for _, p := range all {
+		is := p.is
+		skip := func(format string, args ...any) {
+			res.Skipped = append(res.Skipped, fmt.Sprintf("#%d: ", is.Number)+fmt.Sprintf(format, args...))
+		}
+		if p.why != "" {
+			skip("%s", p.why)
+			continue
+		}
+		if !is.Open {
+			for _, w := range fromIssue(items, is.URL) {
+				move(w, ledger.WontFix, cfg.Now, "wont_fix:product_decision", "ISSUE_CLOSED")
+			}
+			continue
+		}
+		for _, s := range p.skipped {
+			skip("%s", s)
+		}
+
+		for _, w := range p.desired {
+			cur, ok := items[w.Key]
+			if !ok {
+				w.State = ledger.Detected
+				w.History = []ledger.Transition{{TS: cfg.Now, To: ledger.Detected, By: actor, Reason: fmt.Sprintf("issue #%d", is.Number)}}
+				items[w.Key] = w
+				continue
+			}
+			if cur.State.Terminal() {
+				// The same issue still listing a dismissed finding is the
+				// steady state; only a different issue is a reappearance.
+				// Only a SUPERSEDED one is reported: the detector dropped
+				// the finding and brought it back. WONT_FIX is a person's
+				// deliberate dismissal, and repeating it every run is noise.
+				if cur.State == ledger.Superseded && cur.Links.ViewIssue != is.URL && !reported[w.Key] {
+					reported[w.Key] = true
+					skip("%s: finding reappeared but item is %s; not reopened", w.Key, cur.State)
+				}
+				continue
+			}
+			if !cur.FinderOwned() {
+				continue
+			}
+			ev := w.Evidence
+			if !p.complete {
+				ev.Findings = union(cur.Evidence.Findings, ev.Findings)
+			}
+			// ChangeClass comes from (bucket, Work) and Work is not part of the
+			// key, so a changed DetectorWork means Classify now derives a
+			// different classification for this key.
+			reclassified := cur.State != ledger.Detected && cur.DetectorWork != w.DetectorWork
+			cur.Evidence, cur.Links.ViewIssue, cur.DependsOn, cur.DetectorWork = ev, w.Links.ViewIssue, w.DependsOn, w.DetectorWork
+			cur.Resource, cur.FieldPath = w.Resource, w.FieldPath
+			if reclassified {
+				cur.State = ledger.Detected
+				cur.History = append(cur.History, ledger.Transition{TS: cfg.Now, To: ledger.Detected, By: actor, Reason: "DETECTOR_RECLASSIFIED"})
+			}
+			if cur.State == ledger.Detected {
+				cur.ChangeClass, cur.GapClass, cur.AutonomyLevel, cur.PriorityBand = w.ChangeClass, w.GapClass, w.AutonomyLevel, w.PriorityBand
+			}
+		}
+		if p.complete {
+			for _, w := range fromIssue(items, is.URL) {
+				// listed covers this block's own keys too. A key another
+				// open issue lists is refreshed by that issue instead.
+				if !listed[w.Key] {
+					move(w, ledger.Superseded, cfg.Now, "superseded", "FINDING_GONE")
+				}
+			}
+		}
+		for _, c := range is.Comments {
+			// An empty Author (a deleted account, say) is nobody's.
+			if c.Author == "" || !cfg.Team[c.Author] {
+				continue
+			}
+			for _, m := range wontfixRE.FindAllStringSubmatch(outsideFences(c.Body), -1) {
+				handled := false
+				for _, w := range items {
+					if w.Source != source || w.Links.ViewIssue != is.URL || w.KeyHash != m[1] {
+						continue
+					}
+					switch {
+					case w.FinderOwned():
+						handled = true
+						move(w, ledger.WontFix, cfg.Now, "wont_fix:product_decision", "MAINTAINER_WONTFIX by "+c.Author)
+					case w.State.Terminal():
+						// Already finished (DONE, SUPERSEDED or WONT_FIX):
+						// the comment stays on the issue.
+						handled = true
+					}
+				}
+				if !handled {
+					skip("/autopilot wontfix %s by %s matches no finder-owned item on this issue", m[1], c.Author)
+				}
+			}
+		}
+	}
+	res.Changed = changed(before, items)
+	return res
+}
+
+// byPrecedence returns issues in the order Ingest applies them: closed issues
+// first, then open ones, each group by ascending Number.
+//
+// Closed first: a maintainer closing an issue dismisses its items (WONT_FIX is
+// terminal) before a newer open issue re-listing the same findings can move
+// them to itself by rewriting Links.ViewIssue, which the close path matches on.
+// Ascending Number among open issues: when two issues for one service list the
+// same key, the newest is applied last and ends up as the item's ViewIssue.
+func byPrecedence(issues []Issue) []Issue {
+	out := slices.Clone(issues)
+	slices.SortStableFunc(out, func(a, b Issue) int {
+		if a.Open != b.Open {
+			if !a.Open {
+				return -1
+			}
+			return 1
+		}
+		return a.Number - b.Number
+	})
+	return out
+}
+
+// outsideFences returns body without the lines of fenced code blocks (``` or
+// ~~~, CommonMark rules: up to three spaces of indent, closed by a fence of
+// the same character at least as long, unclosed runs to the end), so a
+// command quoted as an example is not run.
+func outsideFences(body string) string {
+	var out []string
+	var fence string // the open fence's run of ` or ~, or "" outside one
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		run := ""
+		if len(line)-len(trimmed) <= 3 && len(trimmed) > 0 && (trimmed[0] == '`' || trimmed[0] == '~') {
+			n := len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
+			if n >= 3 {
+				run = trimmed[:n]
+			}
+		}
+		switch {
+		case fence == "" && run != "":
+			// An info string after a backtick fence may not hold a backtick.
+			if run[0] == '~' || !strings.Contains(trimmed[len(run):], "`") {
+				fence = run
+				continue
+			}
+		case fence != "":
+			if run != "" && run[0] == fence[0] && len(run) >= len(fence) && strings.TrimSpace(trimmed[len(run):]) == "" {
+				fence = ""
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// union returns the sorted, de-duplicated union of a and b, or nil when both
+// are empty.
+func union(a, b []string) []string {
+	out := append(slices.Clone(a), b...)
+	if len(out) == 0 {
+		return nil
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// trusted returns the issue's service, or why the issue must not be read.
+// An empty cfg.BotLogin trusts nothing, so an authorless issue cannot match it.
+func trusted(cfg Config, is Issue) (string, string) {
+	if cfg.BotLogin == "" {
+		return "", "no bot login configured"
+	}
+	if is.Author != cfg.BotLogin {
+		return "", fmt.Sprintf("author %q is not %q", is.Author, cfg.BotLogin)
+	}
+	labelled := false
+	var services []string
+	for _, l := range is.Labels {
+		if l == apiChangeLabel {
+			labelled = true
+		}
+		if s, ok := strings.CutPrefix(l, "service/"); ok {
+			services = append(services, s)
+		}
+	}
+	if !labelled {
+		return "", "missing label " + apiChangeLabel
+	}
+	if len(services) != 1 {
+		return "", fmt.Sprintf("want exactly one service/ label, got %d", len(services))
+	}
+	return services[0], ""
+}
+
+// fromIssue lists this finder's items for one issue that it still owns, sorted
+// by key so changes apply in a fixed order.
+func fromIssue(items map[string]*ledger.WorkItem, url string) []*ledger.WorkItem {
+	var out []*ledger.WorkItem
+	for _, w := range items {
+		if w.Source == source && w.Links.ViewIssue == url && w.FinderOwned() {
+			out = append(out, w)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
+func move(w *ledger.WorkItem, to ledger.State, now, outcome, reason string) {
+	w.State = to
+	w.Verdict = &ledger.Verdict{Outcome: outcome, Reason: reason}
+	w.History = append(w.History, ledger.Transition{TS: now, To: to, By: actor, Reason: reason})
+}
+
+func snapshot(items map[string]*ledger.WorkItem) map[string]string {
+	out := make(map[string]string, len(items))
+	for k, w := range items {
+		b, _ := ledger.Marshal(w)
+		out[k] = string(b)
+	}
+	return out
+}
+
+func changed(before map[string]string, items map[string]*ledger.WorkItem) []string {
+	var out []string
+	for k, v := range snapshot(items) {
+		if before[k] != v {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
