@@ -21,18 +21,23 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/go-github/v63/github"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/dispatcher"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/issuefinder"
 	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/ledger"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/policy"
+	"github.com/aws-controllers-k8s/test-infra/prow/jobs/tools/cmd/command/autopilot/viewstatus"
 )
 
 const (
-	ingestTimeout  = 10 * time.Minute
+	githubTimeout  = 10 * time.Minute
 	requestTimeout = 60 * time.Second
 )
 
@@ -106,25 +111,24 @@ nothing. The GitHub token is read from GITHUB_TOKEN.`,
 		if err := ingestOpts.validate(); err != nil {
 			return err
 		}
-		token := os.Getenv("GITHUB_TOKEN")
-		if token == "" {
-			return errors.New("environment variable GITHUB_TOKEN is not provided")
+		client, err := githubClient()
+		if err != nil {
+			return err
 		}
-		ctx, cancel := context.WithTimeout(cmd.Context(), ingestTimeout)
+		ctx, cancel := context.WithTimeout(cmd.Context(), githubTimeout)
 		defer cancel()
-		client := github.NewClient(&http.Client{Timeout: requestTimeout}).WithAuthToken(token)
 		return ingest(ctx, client, ingestOpts, time.Now().UTC().Format(time.RFC3339), cmd.OutOrStdout())
 	},
 }
 
 var lintCmd = &cobra.Command{
 	Use:   "lint-ledger",
-	Short: "check every work item file in a ledger",
+	Short: "check every work item file and the policy files in a ledger",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := requireDir(lintDir); err != nil {
 			return err
 		}
-		errs := ledger.Lint(lintDir)
+		errs := append(ledger.Lint(lintDir), policy.Lint(lintDir)...)
 		for _, err := range errs {
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
 		}
@@ -135,21 +139,41 @@ var lintCmd = &cobra.Command{
 	},
 }
 
+// bindIngestFlags registers the flags ingest-issues and dispatch share.
+func bindIngestFlags(fs *pflag.FlagSet, o *ingestOptions, dryRunHelp string) {
+	fs.StringVar(&o.Owner, "issues-owner", "aws-controllers-k8s", "owner of the issues repo (and of the team, unless --team-owner is set)")
+	fs.StringVar(&o.Repo, "issues-repo", "ack-private", "repo where detect-api-changes files issues")
+	fs.StringVar(&o.BotLogin, "bot-login", "", "account detect-api-changes files issues as; other authors are ignored")
+	fs.StringVar(&o.TeamSlug, "team-slug", "", "team whose members' /autopilot commands count")
+	fs.StringVar(&o.TeamOwner, "team-owner", "", "org that owns --team-slug (default: the value of --issues-owner)")
+	fs.StringVar(&o.LedgerDir, "ledger-dir", "", "the autopilot/ directory of an ack-private checkout")
+	fs.BoolVar(&o.DryRun, "dry-run", false, dryRunHelp)
+}
+
 func init() {
-	f := ingestCmd.Flags()
-	f.StringVar(&ingestOpts.Owner, "issues-owner", "aws-controllers-k8s", "owner of the issues repo (and of the team, unless --team-owner is set)")
-	f.StringVar(&ingestOpts.Repo, "issues-repo", "ack-private", "repo where detect-api-changes files issues")
-	f.StringVar(&ingestOpts.BotLogin, "bot-login", "", "account detect-api-changes files issues as; other authors are ignored")
-	f.StringVar(&ingestOpts.TeamSlug, "team-slug", "", "team whose members' /autopilot commands count")
-	f.StringVar(&ingestOpts.TeamOwner, "team-owner", "", "org that owns --team-slug (default: the value of --issues-owner)")
-	f.StringVar(&ingestOpts.LedgerDir, "ledger-dir", "", "the autopilot/ directory of an ack-private checkout")
-	f.BoolVar(&ingestOpts.DryRun, "dry-run", false, "report changes without writing the ledger")
+	bindIngestFlags(ingestCmd.Flags(), &ingestOpts, "report changes without writing the ledger")
 	for _, name := range []string{"bot-login", "team-slug", "ledger-dir"} {
 		_ = ingestCmd.MarkFlagRequired(name)
 	}
 	lintCmd.Flags().StringVar(&lintDir, "ledger-dir", "", "the autopilot/ directory of an ack-private checkout")
 	_ = lintCmd.MarkFlagRequired("ledger-dir")
 	Command.AddCommand(ingestCmd, lintCmd)
+
+	bindIngestFlags(dispatchCmd.Flags(), &dispatchOpts, "report the tick without writing the ledger or starting any run")
+	for _, name := range []string{"bot-login", "team-slug", "ledger-dir"} {
+		_ = dispatchCmd.MarkFlagRequired(name)
+	}
+	s := postStatusCmd.Flags()
+	s.StringVar(&statusOpts.Owner, "issues-owner", "aws-controllers-k8s", "owner of the issues repo")
+	s.StringVar(&statusOpts.Repo, "issues-repo", "ack-private", "repo with the api-change issues")
+	s.StringVar(&statusOpts.LedgerDir, "ledger-dir", "", "the autopilot/ directory of an ack-private checkout")
+	s.StringVar(&statusOpts.BotLogin, "bot-login", "", "account detect-api-changes files issues as; other authors' issues get no status comment")
+	s.StringVar(&statusOpts.CommentLogin, "comment-login", "", "account the token comments as; only its marked comments are edited")
+	s.BoolVar(&statusOpts.DryRun, "dry-run", false, "print the planned comment edits without making them")
+	for _, name := range []string{"ledger-dir", "comment-login", "bot-login"} {
+		_ = postStatusCmd.MarkFlagRequired(name)
+	}
+	Command.AddCommand(dispatchCmd, postStatusCmd)
 }
 
 // ingest reads issues and the team from GitHub, reconciles the ledger at
@@ -208,4 +232,242 @@ func ingest(ctx context.Context, client *github.Client, o ingestOptions, now str
 		return fmt.Errorf("ledger written but does not lint clean: %w", errors.Join(errs...))
 	}
 	return nil
+}
+
+type statusOptions struct {
+	Owner, Repo, LedgerDir, CommentLogin, BotLogin string
+	DryRun                                         bool
+}
+
+func (o statusOptions) validate() error {
+	for _, f := range []struct{ name, value string }{
+		{"issues-owner", o.Owner}, {"issues-repo", o.Repo},
+		{"ledger-dir", o.LedgerDir}, {"comment-login", o.CommentLogin},
+		{"bot-login", o.BotLogin},
+	} {
+		if strings.TrimSpace(f.value) == "" {
+			return fmt.Errorf("--%s must not be empty", f.name)
+		}
+	}
+	return nil
+}
+
+var (
+	dispatchOpts ingestOptions
+	statusOpts   statusOptions
+)
+
+func githubClient() (*github.Client, error) {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return nil, errors.New("environment variable GITHUB_TOKEN is not provided")
+	}
+	return github.NewClient(&http.Client{Timeout: requestTimeout}).WithAuthToken(token), nil
+}
+
+var dispatchCmd = &cobra.Command{
+	Use:   "dispatch",
+	Short: "run one Dispatcher tick: ingest api-change issues, then reconcile, route and launch work items",
+	Long: `Ingests detect-api-changes issues (read-only, as ingest-issues does), then
+reconciles finished runs, routes items through the state machine, applies the
+caps in policy/budgets.yaml and launches with the launcher policy/autopilot.yaml
+names (only "shadow", which starts nothing). Saves and lints the ledger unless
+--dry-run. The GitHub token is read from GITHUB_TOKEN.`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		client, err := githubClient()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(cmd.Context(), githubTimeout)
+		defer cancel()
+		return dispatch(ctx, client, dispatchOpts, time.Now().UTC(), cmd.OutOrStdout())
+	},
+}
+
+var postStatusCmd = &cobra.Command{
+	Use:   "post-status",
+	Short: "create or update the Dispatcher's status comment on each open api-change issue",
+	Long: `Reads the ledger and the open api-change issues and keeps one comment per issue
+(by --comment-login, starting with the status marker) listing that issue's work
+items. Never edits the issue body or anyone else's comment. --dry-run prints the
+planned edits. The GitHub token is read from GITHUB_TOKEN.`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		client, err := githubClient()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(cmd.Context(), githubTimeout)
+		defer cancel()
+		return postStatus(ctx, client, statusOpts, cmd.OutOrStdout())
+	},
+}
+
+// dispatch is one Dispatcher tick: read GitHub, ingest, Tick, then (unless
+// o.DryRun) save and lint the ledger and its policy.
+func dispatch(ctx context.Context, client *github.Client, o ingestOptions, now time.Time, out io.Writer) error {
+	if err := o.validate(); err != nil {
+		return err
+	}
+	if !o.DryRun {
+		if err := requireDir(o.LedgerDir); err != nil {
+			return err
+		}
+	}
+	team, err := issuefinder.FetchTeam(ctx, client, o.teamOwner(), o.TeamSlug)
+	if err != nil {
+		return err
+	}
+	issues, err := issuefinder.FetchIssues(ctx, client, o.Owner, o.Repo)
+	if err != nil {
+		return err
+	}
+	items, err := ledger.Load(o.LedgerDir)
+	if err != nil {
+		return err
+	}
+	cfg := dispatcher.Config{Now: now, DryRun: o.DryRun}
+	if pol, perr := policy.Load(o.LedgerDir); perr != nil {
+		cfg.PolicyErr = perr
+	} else if l, lerr := dispatcher.NewLauncher(pol); lerr != nil {
+		cfg.PolicyErr = lerr
+	} else {
+		cfg.Policy, cfg.Launcher = &pol, l
+	}
+
+	before, err := snapshot(items)
+	if err != nil {
+		return err
+	}
+	ts := now.UTC().Format(time.RFC3339)
+	ing := issuefinder.Ingest(issuefinder.Config{BotLogin: o.BotLogin, Team: team, Now: ts}, issues, items)
+	tick := dispatcher.Tick(ctx, cfg, items)
+
+	for _, s := range ing.Skipped {
+		fmt.Fprintf(out, "skipped %s\n", s)
+	}
+	changed, err := changedKeys(before, items)
+	if err != nil {
+		return err
+	}
+	for _, k := range changed {
+		kind := "new"
+		if _, ok := before[k]; ok {
+			kind = "updated"
+		}
+		fmt.Fprintf(out, "changed %s %s %s (%s)\n", items[k].KeyHash, items[k].State, k, kind)
+	}
+	for _, l := range tick.Launched {
+		mode := "started"
+		if l.Shadow {
+			mode = "shadow"
+		}
+		fmt.Fprintf(out, "launch %s %s %s %s (%s)\n", l.KeyHash, l.Workflow, l.LaunchID, l.Key, mode)
+	}
+	for _, w := range tick.Waiting {
+		fmt.Fprintf(out, "waiting %s %s %s\n", w.KeyHash, w.Cap, w.Key)
+	}
+	reasons := make([]string, 0, len(tick.Held))
+	held := 0
+	for r, n := range tick.Held {
+		reasons = append(reasons, r)
+		held += n
+	}
+	sort.Strings(reasons)
+	for _, r := range reasons {
+		fmt.Fprintf(out, "held %s %d\n", r, tick.Held[r])
+	}
+	for _, p := range tick.Problems {
+		fmt.Fprintf(out, "problem %s\n", p)
+	}
+	fmt.Fprintf(out, "%d issue(s) read, %d skipped, %d item(s) changed, %d launch(es), %d waiting, %d held, %d problem(s)\n",
+		len(issues), len(ing.Skipped), len(changed), len(tick.Launched), len(tick.Waiting), held, len(tick.Problems))
+	if o.DryRun {
+		fmt.Fprintln(out, "dry run: ledger not written")
+		return nil
+	}
+	if cfg.PolicyErr != nil {
+		return fmt.Errorf("policy: %w; ledger not written", cfg.PolicyErr)
+	}
+	if err := ledger.Save(o.LedgerDir, items); err != nil {
+		return err
+	}
+	if errs := append(ledger.Lint(o.LedgerDir), policy.Lint(o.LedgerDir)...); len(errs) > 0 {
+		return fmt.Errorf("ledger written but does not lint clean: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
+// postStatus keeps the status comment on every open issue that some item
+// names as its view issue.
+func postStatus(ctx context.Context, client *github.Client, o statusOptions, out io.Writer) error {
+	if err := o.validate(); err != nil {
+		return err
+	}
+	if !o.DryRun {
+		if err := requireDir(o.LedgerDir); err != nil {
+			return err
+		}
+	}
+	items, err := ledger.Load(o.LedgerDir)
+	if err != nil {
+		return err
+	}
+	byIssue := map[string][]*ledger.WorkItem{}
+	for _, w := range items {
+		if w.Links.ViewIssue != "" {
+			byIssue[w.Links.ViewIssue] = append(byIssue[w.Links.ViewIssue], w)
+		}
+	}
+	issues, err := issuefinder.FetchIssues(ctx, client, o.Owner, o.Repo)
+	if err != nil {
+		return err
+	}
+	sort.Slice(issues, func(i, j int) bool { return issues[i].Number < issues[j].Number })
+	for _, is := range issues {
+		if !is.Open || is.Author != o.BotLogin || len(byIssue[is.URL]) == 0 {
+			continue
+		}
+		a := viewstatus.Plan(is, o.CommentLogin, viewstatus.Render(byIssue[is.URL]))
+		fmt.Fprintf(out, "status #%d %s\n", is.Number, a.Kind)
+		for _, id := range a.Duplicates {
+			fmt.Fprintf(out, "status #%d duplicate %d\n", is.Number, id)
+		}
+		if o.DryRun {
+			continue
+		}
+		if err := viewstatus.Apply(ctx, client, o.Owner, o.Repo, a); err != nil {
+			return err
+		}
+	}
+	if o.DryRun {
+		fmt.Fprintln(out, "dry run: no comments written")
+	}
+	return nil
+}
+
+func snapshot(items map[string]*ledger.WorkItem) (map[string]string, error) {
+	out := make(map[string]string, len(items))
+	for k, w := range items {
+		b, err := ledger.Marshal(w)
+		if err != nil {
+			return nil, fmt.Errorf("marshal %s: %w", k, err)
+		}
+		out[k] = string(b)
+	}
+	return out, nil
+}
+
+func changedKeys(before map[string]string, items map[string]*ledger.WorkItem) ([]string, error) {
+	now, err := snapshot(items)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for k, v := range now {
+		if before[k] != v {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }

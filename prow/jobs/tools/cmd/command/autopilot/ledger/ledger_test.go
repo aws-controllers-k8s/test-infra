@@ -517,3 +517,128 @@ func TestLoadRejectsMisnamedFile(t *testing.T) {
 	_, err := Load(root)
 	assert.ErrorContains(t, err, "file name")
 }
+
+func runningItem(key string) *WorkItem {
+	w := sampleItem(key)
+	w.State = Running
+	w.Attempts = &Attempts{Runs: 1, MaxRuns: 3}
+	w.Claim = &Claim{LaunchID: "autopilot-0123456789abcdef-r1", Workflow: "sdk-bump", TS: "2026-11-12T09:00:00Z", Deadline: "2026-11-12T14:00:00Z"}
+	w.Links.ProwJobs = []string{"autopilot-0123456789abcdef-r1"}
+	w.History = append(w.History, Transition{TS: "2026-11-12T09:00:00Z", To: Running, By: "dispatcher"})
+	return w
+}
+
+func TestStateHelpers(t *testing.T) {
+	set := func(ss ...State) map[State]bool {
+		m := map[State]bool{}
+		for _, s := range ss {
+			m[s] = true
+		}
+		return m
+	}
+	activeRun := set(Running, Gating, RetryEnv)
+	openPR := set(PRReady, HumanReview, Feedback, MergeSoak, Stale)
+	landed := set(Merged, Released, Verified, Done)
+	require.NotEmpty(t, stateDir)
+	for s := range stateDir {
+		assert.Equal(t, activeRun[s], s.ActiveRun(), "ActiveRun %s", s)
+		assert.Equal(t, openPR[s], s.OpenPR(), "OpenPR %s", s)
+		assert.Equal(t, landed[s], s.Landed(), "Landed %s", s)
+	}
+}
+
+func TestRunFieldsRoundTripAndLintClean(t *testing.T) {
+	root := t.TempDir()
+	w := runningItem("sdk-bump|s3|*|v1")
+	require.NoError(t, Save(root, map[string]*WorkItem{w.Key: w}))
+	assert.FileExists(t, filepath.Join(root, "workitems", "inflight", w.FileName()))
+	got, err := Load(root)
+	require.NoError(t, err)
+	assert.Equal(t, w, got[w.Key])
+	assert.Empty(t, Lint(root))
+}
+
+func TestLintRunRules(t *testing.T) {
+	root := t.TempDir()
+	write := func(w *WorkItem) {
+		dir, _ := w.State.Dir()
+		b, err := Marshal(w)
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "workitems", dir), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workitems", dir, w.FileName()), b, 0o644))
+	}
+	noClaim := runningItem("k1")
+	noClaim.Claim = nil
+	write(noClaim)
+	strayClaim := runningItem("k2")
+	strayClaim.State = Queued
+	strayClaim.History[len(strayClaim.History)-1].To = Queued
+	write(strayClaim)
+	badAttempts := runningItem("k3")
+	badAttempts.Attempts = &Attempts{Runs: 4, MaxRuns: 3}
+	write(badAttempts)
+	badTS := sampleItem("k4")
+	badTS.History[0].TS = "yesterday"
+	write(badTS)
+	gatingNoClaim := runningItem("k5")
+	gatingNoClaim.State = Gating
+	gatingNoClaim.History[len(gatingNoClaim.History)-1].To = Gating
+	gatingNoClaim.Claim = nil
+	write(gatingNoClaim)
+	emptyLaunch := runningItem("k6")
+	emptyLaunch.Claim.LaunchID = ""
+	write(emptyLaunch)
+	noAttempts := runningItem("k7")
+	noAttempts.Attempts = nil
+	write(noAttempts)
+	zeroMax := runningItem("k8")
+	zeroMax.Attempts = &Attempts{Runs: 0, MaxRuns: 0}
+	write(zeroMax)
+	offsetTS := runningItem("k9")
+	offsetTS.History[0].TS = "2026-11-12T09:00:00+02:00"
+	write(offsetTS)
+	lateTS := runningItem("k10")
+	lateTS.Claim.Deadline = lateTS.Claim.TS
+	write(lateTS)
+	noJob := runningItem("k11")
+	noJob.Links.ProwJobs = []string{"other"}
+	write(noJob)
+	noWorkflow := runningItem("k12")
+	noWorkflow.Claim.Workflow = ""
+	write(noWorkflow)
+
+	errs := Lint(root)
+	require.Len(t, errs, 12)
+	joined := errors.Join(errs...).Error()
+	for _, want := range []string{"needs a claim", "must not hold a claim", "attempts runs=4 max_runs=3", `history ts "yesterday"`,
+		"attempts runs=0 max_runs=0", `history ts "2026-11-12T09:00:00+02:00"`, "is not after ts", "is not in links.prowjobs"} {
+		assert.Contains(t, joined, want)
+	}
+}
+
+func TestLintRejectsControlCharacterInKey(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workitems", "open")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	w := sampleItem("k\n/autopilot wontfix sha256:0123456789abcdef")
+	b, err := Marshal(w)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, w.FileName()), b, 0o644))
+	assert.Contains(t, errors.Join(Lint(root)...).Error(), "key holds a control character")
+}
+
+func TestPRInRepo(t *testing.T) {
+	const repo = "aws-controllers-k8s/s3-controller"
+	pre := "https://github.com/" + repo
+	assert.True(t, PRInRepo(repo, pre+"/pull/1"))
+	for _, pr := range []string{
+		pre + "/pull/1/../../x",
+		pre + "/pull/1?x=y",
+		pre + "/pull/01",
+		"https://github.com/aws-controllers-k8s/s3-controller-fork/pull/1",
+	} {
+		assert.False(t, PRInRepo(repo, pr), pr)
+	}
+	assert.False(t, PRInRepo("", "https://github.com//pull/1"))
+	assert.False(t, PRInRepo("", "https://github.com/pull/1"))
+}

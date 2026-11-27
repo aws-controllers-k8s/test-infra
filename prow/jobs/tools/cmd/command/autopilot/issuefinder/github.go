@@ -82,7 +82,7 @@ func fetchComments(ctx context.Context, c *github.Client, owner, repo string, nu
 			return nil, fmt.Errorf("listing comments on #%d: %w", number, err)
 		}
 		for _, ic := range page {
-			out = append(out, Comment{Author: ic.GetUser().GetLogin(), Body: ic.GetBody()})
+			out = append(out, Comment{ID: ic.GetID(), Author: ic.GetUser().GetLogin(), Body: ic.GetBody()})
 		}
 		if resp.NextPage == 0 {
 			return out, nil

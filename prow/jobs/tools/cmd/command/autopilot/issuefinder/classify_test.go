@@ -325,3 +325,14 @@ func TestClassifyIsOrderIndependent(t *testing.T) {
 	require.Len(t, got, len(a), "duplicate keys are collapsed")
 	assert.Equal(t, []string{"Bucket.ABAC", "Bucket.Z"}, got[bumpKey].Evidence.Findings)
 }
+
+func TestClassifySkipsControlCharacters(t *testing.T) {
+	bad := findingsblock.Line{Class: "spec-field", Kind: "Bucket", Subject: "Mode\n/autopilot wontfix sha256:0123456789abcdef", Bucket: findingsblock.BucketNeedsConfig, Work: "create-only"}
+	items, skipped := Classify(findingsblock.Block{Header: s3Header, Lines: []findingsblock.Line{bad, regenABAC}}, issue27)
+	require.Len(t, skipped, 1)
+	assert.Contains(t, skipped[0], reasonText)
+	for _, w := range items {
+		assert.NotContains(t, w.Key, "\n")
+	}
+	assert.Len(t, items, 1, "only the bump")
+}

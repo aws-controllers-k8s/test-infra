@@ -1,0 +1,10 @@
+# ACK Autopilot switches. Change by pull request; jobs only read this file.
+# paused: true stops every launch. Ingest and reconcile still run.
+paused: false
+# Repos (owner/name) whose items are never launched.
+paused_repos: []
+# shadow: log what would be launched and start nothing. The only launcher
+# this version accepts.
+launcher: shadow
+# Services whose items may be launched (Phase 1: the monitored five).
+services: [s3, iam, rds, ec2, eks]

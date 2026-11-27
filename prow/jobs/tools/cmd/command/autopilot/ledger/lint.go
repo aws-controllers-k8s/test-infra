@@ -16,7 +16,10 @@ package ledger
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -55,6 +58,8 @@ func Lint(root string) []error {
 		// catches a key that held invalid bytes. ValidString stays as a guard.
 		case !utf8.ValidString(w.Key) || strings.ContainsRune(w.Key, utf8.RuneError):
 			fail("key is not valid UTF-8")
+		case strings.IndexFunc(w.Key, unicode.IsControl) >= 0:
+			fail("key holds a control character")
 		}
 		if w.Service == "" || w.Source == "" {
 			fail("service and source are required")
@@ -67,10 +72,48 @@ func Lint(root string) []error {
 		if n := len(w.History); n == 0 || w.History[n-1].To != w.State {
 			fail("last history entry must move the item to its state %s", w.State)
 		}
+		for _, h := range w.History {
+			if !utcRFC3339(h.TS) {
+				fail("history ts %q is not RFC 3339 UTC", h.TS)
+				break
+			}
+		}
+		switch {
+		case w.State.ActiveRun() && (w.Claim == nil || w.Claim.LaunchID == "" || w.Claim.Workflow == "" || w.Attempts == nil):
+			fail("state %s needs a claim with a launch_id and workflow, and attempts", w.State)
+		case !w.State.ActiveRun() && w.Claim != nil:
+			fail("state %s must not hold a claim; only RUNNING, GATING and RETRY_ENV do", w.State)
+		}
+		if c := w.Claim; c != nil {
+			tsOK, dlOK := utcRFC3339(c.TS), utcRFC3339(c.Deadline)
+			if !tsOK {
+				fail("claim ts %q is not RFC 3339 UTC", c.TS)
+			}
+			if !dlOK {
+				fail("claim deadline %q is not RFC 3339 UTC", c.Deadline)
+			}
+			if tsOK && dlOK && c.Deadline <= c.TS {
+				fail("claim deadline %s is not after ts %s", c.Deadline, c.TS)
+			}
+			if c.LaunchID != "" && !slices.Contains(w.Links.ProwJobs, c.LaunchID) {
+				fail("claim launch_id %q is not in links.prowjobs", c.LaunchID)
+			}
+		}
+		if a := w.Attempts; a != nil && (a.MaxRuns < 1 || a.Runs < 0 || a.Runs > a.MaxRuns) {
+			fail("attempts runs=%d max_runs=%d out of range", a.Runs, a.MaxRuns)
+		}
 		if other, dup := seen[w.Key]; dup {
 			fail("duplicate key %q (also in %s)", w.Key, other)
 		}
 		seen[w.Key] = p
 	}
 	return errs
+}
+
+// utcRFC3339 reports whether s is a UTC timestamp in the exact form
+// time.RFC3339 produces. The scheduler compares these strings directly, so an
+// offset or fractional seconds would break the ordering.
+func utcRFC3339(s string) bool {
+	t, err := time.Parse(time.RFC3339, s)
+	return err == nil && t.UTC().Format(time.RFC3339) == s
 }

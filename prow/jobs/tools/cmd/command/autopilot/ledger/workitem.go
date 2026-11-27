@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -80,6 +81,33 @@ func (s State) Terminal() bool {
 	return s == Done || s == Superseded || s == WontFix
 }
 
+// ActiveRun reports whether a workflow run is working on the item, so the item
+// holds a Claim.
+func (s State) ActiveRun() bool {
+	return s == Running || s == Gating || s == RetryEnv
+}
+
+// OpenPR reports whether the item has a pull request that is not merged yet.
+// It deliberately excludes GATING: a gating run's PR counts through ActiveRun.
+// ESCALATED is neither OpenPR nor Landed.
+func (s State) OpenPR() bool {
+	switch s {
+	case PRReady, HumanReview, Feedback, MergeSoak, Stale:
+		return true
+	}
+	return false
+}
+
+// Landed reports whether the item's change is on main (or needed no change),
+// so items that depend on it may start. ESCALATED is not Landed.
+func (s State) Landed() bool {
+	switch s {
+	case Merged, Released, Verified, Done:
+		return true
+	}
+	return false
+}
+
 // EverDispatched reports whether any history entry moved the item into an
 // in-flight state (one whose Dir is "inflight"). Under design 5.4 the only edge
 // into in-flight is QUEUED->RUNNING, so this means a workflow picked the item
@@ -110,6 +138,28 @@ type Evidence struct {
 
 type Links struct {
 	ViewIssue string `json:"view_issue,omitempty"`
+	// PR is the pull request a workflow run opened for the item.
+	PR string `json:"pr,omitempty"`
+	// ProwJobs lists every launch id started for the item, oldest first.
+	ProwJobs []string `json:"prowjobs,omitempty"`
+}
+
+// Attempts counts the workflow runs charged to the item.
+type Attempts struct {
+	Runs    int `json:"runs"`
+	MaxRuns int `json:"max_runs"`
+}
+
+// Claim is the workflow run working on the item now. The Dispatcher sets it
+// when it launches a run and clears it when it reconciles the run's result.
+// Only an item in an ActiveRun state holds one.
+type Claim struct {
+	LaunchID string `json:"launch_id"`
+	Workflow string `json:"workflow"`
+	TS       string `json:"ts"`
+	// Deadline is TS plus the job timeout; the reaper acts after Deadline
+	// plus the reaper grace.
+	Deadline string `json:"deadline"`
 }
 
 type Verdict struct {
@@ -143,8 +193,10 @@ type WorkItem struct {
 	DetectorWork string       `json:"detector_work,omitempty"`
 	Evidence     Evidence     `json:"evidence"`
 	DependsOn    []string     `json:"depends_on,omitempty"`
+	Attempts     *Attempts    `json:"attempts,omitempty"`
 	State        State        `json:"state"`
 	Links        Links        `json:"links"`
+	Claim        *Claim       `json:"claim,omitempty"`
 	Verdict      *Verdict     `json:"verdict"`
 	History      []Transition `json:"history"`
 }
@@ -174,4 +226,16 @@ func Marshal(w *WorkItem) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+var prNumberRE = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
+
+// PRInRepo reports whether pr is a pull request URL in repo. An empty repo
+// matches nothing.
+func PRInRepo(repo, pr string) bool {
+	if repo == "" {
+		return false
+	}
+	n, ok := strings.CutPrefix(pr, "https://github.com/"+repo+"/pull/")
+	return ok && prNumberRE.MatchString(n)
 }
