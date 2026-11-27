@@ -1058,6 +1058,32 @@ def test_generator_templates_helmignored():
         check(f"{rel} in .helmignore", rel in ignored, True)
 
 
+def test_editable_files_allow_hand_written_go():
+    """The Implementer may edit hand-written Go under apis/ and pkg/, and the
+    Feedback Planner sees the same list.
+
+    A directory-wide ban on apis/ once made the Implementer refuse a
+    review-requested comment edit to the hand-written apis/v1alpha1/annotation.go
+    on every iteration, failing the address-feedback run (fsx-controller#14).
+    """
+    print("editable files:")
+    from roles import context
+    for role, frame in (("implementer", context._IMPLEMENTER_FRAME),
+                        ("feedback planner", context._FEEDBACK_PLANNER_FRAME)):
+        check(f"{role} gets the editable-files list",
+              context._EDITABLE_FILES in frame, True)
+    allow = context._EDITABLE_FILES
+    for path in ("apis/<version>/annotation.go",
+                 "pkg/resource/<resource>/hooks.go",
+                 "pkg/util/*.go"):
+        check(f"{path} editable", path in allow, True)
+    check("generated header is the test", "Code generated" in allow, True)
+    # The old list named a path that exists in no controller.
+    check("no sdk/resource path", "sdk/resource/" in allow, False)
+    check("directory-wide apis/ ban gone",
+          "Edit generated files (apis/" in context._IMPLEMENTER_FRAME, False)
+
+
 def main():
     for fn in (test_bedrock_sampling_config,
                test_verdict, test_snake, test_e2e_classify, test_conditions,
@@ -1077,7 +1103,8 @@ def main():
                test_ensure_test_config_field_selector,
                test_e2e_timeout_preserves_output,
                test_workflow_timeout_budget,
-               test_generator_templates_helmignored):
+               test_generator_templates_helmignored,
+               test_editable_files_allow_hand_written_go):
         fn()
     print("\nALL OFFLINE TESTS PASSED")
 
